@@ -25,8 +25,12 @@ test.describe('Authentication and Authorization', () => {
     // 3. Attempt to navigate to TopoMojo UI again
     await page.goto(Services.TopoMojo.UI);
 
-    // expect: User is redirected to Keycloak login page
-    // expect: User must authenticate again
-    await expect(page).toHaveURL(/localhost:8443.*realms\/crucible/, { timeout: 70000 });
+    // expect: User sees the landing page with login button
+    // expect: User must authenticate again (TopoMojo shows landing page, not auto-redirect to Keycloak)
+    await page.waitForLoadState('domcontentloaded');
+    const loginButton = page.getByRole('button', { name: 'identity provider' });
+    await expect(loginButton).toBeVisible({ timeout: 10000 });
+    const loginText = page.locator('text=Please login to continue');
+    await expect(loginText).toBeVisible({ timeout: 5000 });
   });
 });

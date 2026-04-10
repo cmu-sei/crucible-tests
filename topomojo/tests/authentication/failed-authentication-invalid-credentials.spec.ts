@@ -15,8 +15,16 @@ test.describe('Authentication and Authorization', () => {
     // 1. Navigate to TopoMojo UI at http://localhost:4201
     await page.goto(Services.TopoMojo.UI);
 
+    // expect: TopoMojo landing page is displayed with login button
+    await page.waitForLoadState('domcontentloaded');
+    const loginButton = page.getByRole('button', { name: 'identity provider' });
+    await expect(loginButton).toBeVisible({ timeout: 10000 });
+
+    // 1b. Click the login button to redirect to Keycloak
+    await loginButton.click();
+
     // expect: User is redirected to Keycloak login page
-    await expect(page).toHaveURL(/.*localhost:8443.*realms\/crucible/, { timeout: 70000 });
+    await expect(page).toHaveURL(/.*localhost:8443.*realms\/crucible/, { timeout: 30000 });
 
     // 2. Enter invalid username 'invaliduser' in the username field
     const usernameField = page.locator('#username');

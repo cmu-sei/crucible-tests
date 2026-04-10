@@ -25,17 +25,17 @@ test.describe('Gamespace Management', () => {
       await page.waitForTimeout(500);
     }
 
-    // expect: Gamespace list displays
-    const gamespaceList = page.locator('[class*="gamespace"], [class*="browser"], mat-sidenav, mat-list').first();
-    await expect(gamespaceList).toBeVisible({ timeout: 10000 });
+    // expect: Workspace browser (which shows gamespaces when gamespace filter is active) is visible
+    const workspaceBrowser = page.locator('app-workspace-browser, section.sidebar').first();
+    await expect(workspaceBrowser).toBeVisible({ timeout: 10000 });
 
-    // expect: Active gamespaces show status and metadata or empty state
-    const gamespaceItems = page.locator('[class*="gamespace-card"], [class*="item-card"], mat-list-item');
-    const noGamespaces = page.locator('text=/no gamespace/i, text=/nothing/i, text=/empty/i').first();
+    // expect: Workspace cards (which represent both workspaces and gamespaces) display or empty state
+    const workspaceCards = page.locator('app-workspace-card, div.card.shadow-sm');
+    const noItems = page.locator('text=/no workspace/i, text=/no gamespace/i, text=/nothing/i, text=/empty/i').first();
 
-    const listVisible = await gamespaceItems.first().isVisible({ timeout: 3000 }).catch(() => false);
-    const noGamespacesVisible = await noGamespaces.isVisible({ timeout: 3000 }).catch(() => false);
+    const cardsVisible = await workspaceCards.first().isVisible({ timeout: 3000 }).catch(() => false);
+    const noItemsVisible = await noItems.isVisible({ timeout: 3000 }).catch(() => false);
 
-    expect(listVisible || noGamespacesVisible || true).toBe(true);
+    expect(cardsVisible || noItemsVisible || true).toBe(true);
   });
 });

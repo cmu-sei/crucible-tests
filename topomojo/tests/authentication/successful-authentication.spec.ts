@@ -15,8 +15,16 @@ test.describe('Authentication and Authorization', () => {
     // 1. Navigate to TopoMojo UI at http://localhost:4201
     await page.goto(Services.TopoMojo.UI);
 
+    // expect: TopoMojo landing page is displayed with login button
+    await page.waitForLoadState('domcontentloaded');
+    const loginButton = page.getByRole('button', { name: 'identity provider' });
+    await expect(loginButton).toBeVisible({ timeout: 10000 });
+
+    // 1b. Click the login button to redirect to Keycloak
+    await loginButton.click();
+
     // expect: User is redirected to Keycloak login page at https://localhost:8443
-    await expect(page).toHaveURL(/.*localhost:8443.*realms\/crucible/, { timeout: 70000 });
+    await expect(page).toHaveURL(/.*localhost:8443.*realms\/crucible/, { timeout: 30000 });
 
     // expect: Keycloak login form is displayed with username and password fields
     const usernameField = page.locator('#username');
@@ -46,8 +54,10 @@ test.describe('Authentication and Authorization', () => {
     // expect: TopoMojo home page displays
     await page.waitForLoadState('domcontentloaded');
 
-    // expect: User profile/menu is visible in top navigation
-    const topNav = page.locator('mat-toolbar, [class*="topbar"], nav, header').first();
-    await expect(topNav).toBeVisible({ timeout: 10000 });
+    // expect: User is authenticated - Admin and Logout buttons are visible
+    const adminButton = page.getByRole('button', { name: 'Admin' });
+    await expect(adminButton).toBeVisible({ timeout: 10000 });
+    const logoutButton = page.getByRole('button', { name: 'Logout' });
+    await expect(logoutButton).toBeVisible({ timeout: 5000 });
   });
 });

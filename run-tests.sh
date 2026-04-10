@@ -5,6 +5,40 @@
 
 set -e
 
+# Load service URLs from .env
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$SCRIPT_DIR/.env" ]; then
+    set -a
+    source "$SCRIPT_DIR/.env"
+    set +a
+fi
+
+# Resolve infrastructure URLs (with defaults)
+KEYCLOAK_URL="${KEYCLOAK_URL:-https://localhost:8443}"
+ASPIRE_DASHBOARD_URL="${ASPIRE_DASHBOARD_URL:-http://localhost:18888}"
+
+# All supported apps
+ALL_APPS="keycloak blueprint player cite gameboard topomojo steamfitter moodle alloy caster gallery"
+
+# Map app name to its UI URL from .env
+get_app_url() {
+    local app="$1"
+    case "$app" in
+        keycloak)    echo "${KEYCLOAK_URL}";;
+        blueprint)   echo "${BLUEPRINT_UI_URL:-http://localhost:4725}";;
+        player)      echo "${PLAYER_UI_URL:-http://localhost:4301}";;
+        cite)        echo "${CITE_UI_URL:-http://localhost:4721}";;
+        gameboard)   echo "${GAMEBOARD_UI_URL:-http://localhost:4202}";;
+        topomojo)    echo "${TOPOMOJO_UI_URL:-http://localhost:4201}";;
+        steamfitter) echo "${STEAMFITTER_UI_URL:-http://localhost:4401}";;
+        moodle)      echo "${MOODLE_URL:-http://localhost:8081}";;
+        alloy)       echo "${ALLOY_UI_URL:-http://localhost:4403}";;
+        caster)      echo "${CASTER_UI_URL:-http://localhost:4310}";;
+        gallery)     echo "${GALLERY_UI_URL:-http://localhost:4723}";;
+        *) echo "";;
+    esac
+}
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -32,33 +66,50 @@ print_error() {
 }
 
 # Check if services are running
+# Usage: check_services [app ...]
+# With no args, checks Keycloak + Aspire only.
+# With app names, also checks each app's UI URL.
 check_services() {
     echo -e "${BLUE}Checking required services...${NC}"
-    
+
     local all_ok=true
-    
-    if curl -s http://localhost:4725 > /dev/null 2>&1; then
-        print_success "Blueprint UI (http://localhost:4725)"
+
+    # Keycloak is always required (handles auth for all apps)
+    if curl -k -s "$KEYCLOAK_URL" > /dev/null 2>&1; then
+        print_success "Keycloak ($KEYCLOAK_URL)"
     else
-        print_error "Blueprint UI not accessible"
+        print_error "Keycloak not accessible at $KEYCLOAK_URL"
         all_ok=false
     fi
-    
-    if curl -k -s https://localhost:8443 > /dev/null 2>&1; then
-        print_success "Keycloak (https://localhost:8443)"
-    else
-        print_error "Keycloak not accessible"
-        all_ok=false
-    fi
-    
-    if curl -s http://localhost:18888 > /dev/null 2>&1; then
-        print_success "Aspire Dashboard (http://localhost:18888)"
+
+    # Aspire dashboard is optional
+    if curl -s "$ASPIRE_DASHBOARD_URL" > /dev/null 2>&1; then
+        print_success "Aspire Dashboard ($ASPIRE_DASHBOARD_URL)"
     else
         print_warning "Aspire Dashboard not accessible (optional)"
     fi
-    
+
+    # Check each requested app
+    for app in "$@"; do
+        [ "$app" = "keycloak" ] && continue  # already checked above
+        local url
+        url=$(get_app_url "$app")
+        if [ -z "$url" ]; then
+            print_warning "Unknown app: $app (skipping health check)"
+            continue
+        fi
+        local curl_flags="-s"
+        [[ "$url" == https://* ]] && curl_flags="-k -s"
+        if curl $curl_flags "$url" > /dev/null 2>&1; then
+            print_success "$app ($url)"
+        else
+            print_error "$app not accessible at $url"
+            all_ok=false
+        fi
+    done
+
     echo ""
-    
+
     if [ "$all_ok" = false ]; then
         print_error "Required services are not running!"
         echo ""
@@ -135,21 +186,36 @@ while [[ $# -gt 0 ]]; do
             APP="$2"
             shift 2
             ;;
-        keycloak|blueprint|player|cite|gameboard|topomojo|steamfitter|moodle|alloy|caster|gallery)
-            APP="$1"
-            shift
-            ;;
         *)
-            echo "Unknown option: $1"
-            show_usage
-            exit 1
+            # Check if it's a known app name
+            if echo "$ALL_APPS" | grep -qw "$1"; then
+                APP="$1"
+                shift
+            else
+                echo "Unknown option: $1"
+                show_usage
+                exit 1
+            fi
             ;;
     esac
 done
 
+# Determine which app(s) to health-check
+TARGET_APP=""
+if [ -n "$APP" ]; then
+    TARGET_APP="$APP"
+elif echo "$ALL_APPS" | grep -qw "$COMMAND"; then
+    TARGET_APP="$COMMAND"
+fi
+
 # Check services unless --no-check is specified
 if [ "$NO_CHECK" = false ] && [ "$COMMAND" != "help" ] && [ "$COMMAND" != "report" ]; then
-    check_services
+    if [ -n "$TARGET_APP" ]; then
+        check_services "$TARGET_APP"
+    else
+        # Running all apps or no specific app - just check infrastructure
+        check_services
+    fi
 fi
 
 # Execute command
@@ -172,24 +238,14 @@ case $COMMAND in
         fi
         ;;
 
-    keycloak|blueprint|player|cite|gameboard|topomojo|steamfitter|moodle|alloy|caster|gallery)
-        print_header "Running $COMMAND Tests"
-        if [ -n "$FILTER" ]; then
-            npx playwright test "$COMMAND/" --grep "$FILTER"
-        else
-            npx playwright test "$COMMAND/"
-        fi
-        ;;
-
     quick)
         print_header "Running Quick Smoke Tests"
         if [ -n "$APP" ]; then
             print_warning "Running smoke tests for: $APP"
             npx playwright test "$APP/tests/" --grep "login|home"
         else
-            print_warning "Running smoke tests for Blueprint (default)"
-            npx playwright test blueprint/tests/authentication-and-authorization/user-login-flow.spec.ts
-            npx playwright test blueprint/tests/home-page-and-navigation/home-page-initial-load.spec.ts
+            print_warning "Running smoke tests for all apps"
+            npx playwright test --grep "login|home"
         fi
         print_success "Smoke tests complete!"
         ;;
@@ -246,10 +302,20 @@ case $COMMAND in
         ;;
 
     *)
-        echo -e "${RED}Unknown command: $COMMAND${NC}"
-        echo ""
-        show_usage
-        exit 1
+        # Check if the command is a known app name
+        if echo "$ALL_APPS" | grep -qw "$COMMAND"; then
+            print_header "Running $COMMAND Tests"
+            if [ -n "$FILTER" ]; then
+                npx playwright test "$COMMAND/" --grep "$FILTER"
+            else
+                npx playwright test "$COMMAND/"
+            fi
+        else
+            echo -e "${RED}Unknown command: $COMMAND${NC}"
+            echo ""
+            show_usage
+            exit 1
+        fi
         ;;
 esac
 

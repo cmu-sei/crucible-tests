@@ -2,6 +2,11 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 import { defineConfig, devices } from '@playwright/test';
+import dotenv from 'dotenv';
+import path from 'path';
+
+// Load .env from the crucible-tests root
+dotenv.config({ path: path.resolve(__dirname, '.env') });
 
 /**
  * Playwright configuration for Crucible applications
@@ -41,8 +46,8 @@ export default defineConfig({
 
   // Shared settings for all the projects below
   use: {
-    // Base URL can be overridden per-test using fixtures
-    baseURL: 'http://localhost:4725',
+    // Base URL read from .env (defaults to Blueprint UI)
+    baseURL: process.env.BLUEPRINT_UI_URL || 'http://localhost:4725',
     
     // Collect trace when retrying the failed test
     trace: 'on-first-retry',

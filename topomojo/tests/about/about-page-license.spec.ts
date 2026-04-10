@@ -14,19 +14,16 @@ test.describe('About Page', () => {
     await page.waitForLoadState('domcontentloaded');
 
     // expect: License section is visible
+    const licenseHeading = page.getByRole('heading', { name: 'License' });
+    await expect(licenseHeading).toBeVisible({ timeout: 10000 });
+
     // 2. Review license information
     // expect: Copyright notice displays
-    const copyrightNotice = page.locator('text=/Carnegie Mellon University/i, text=/Copyright/i, text=/All Rights Reserved/i').first();
-    const hasCopyright = await copyrightNotice.isVisible({ timeout: 10000 }).catch(() => false);
-
-    if (hasCopyright) {
-      await expect(copyrightNotice).toBeVisible();
-    }
+    const copyrightNotice = page.getByText(/©.*Carnegie Mellon University.*All Rights Reserved/i);
+    await expect(copyrightNotice).toBeVisible();
 
     // expect: License summary describes redistribution terms
-    const licenseSummary = page.locator('text=/redistribution/i, text=/license/i').first();
-    const hasLicense = await licenseSummary.isVisible({ timeout: 5000 }).catch(() => false);
-
-    expect(hasCopyright || hasLicense).toBe(true);
+    const licenseSummary = page.getByText(/Redistribution and use in source and binary forms/i);
+    await expect(licenseSummary).toBeVisible();
   });
 });

@@ -77,52 +77,87 @@ After a test fails, click the **Show trace** link in the test results to open th
 
 #### Selecting a Browser Project
 
-The extension reads browser projects from `playwright.config.ts`. Click the **Select Default Profile** dropdown in the Testing panel to choose between configured projects (e.g., `chromium`). By default, tests run on Chromium only.
+The extension reads browser projects from `playwright.config.ts`. Click the **Select Default Profile** dropdown in the Testing panel to choose between configured projects (Chromium or Firefox). Only Chromium is installed by default in the dev container — to use Firefox, run `npx playwright install firefox` first.
 
 ### Using the Command Line
 
 ```bash
-cd /mnt/data/crucible-tests
+cd /mnt/data/crucible/crucible-tests
 
 # Run tests for a specific application
+./run-tests.sh topomojo
 ./run-tests.sh blueprint
+./run-tests.sh player
 
 # Run all tests
 ./run-tests.sh all
 
-# Smoke tests
-./run-tests.sh quick --app blueprint
+# Run all tests for a specific app (equivalent to the app shorthand above)
+./run-tests.sh all --app cite
+
+# Smoke tests (matches tests with "login" or "home" in the name)
+./run-tests.sh quick --app gameboard
+./run-tests.sh quick                   # all apps
 
 # Interactive UI mode
-./run-tests.sh ui blueprint
+./run-tests.sh ui caster
 
 # Headed mode (see browser)
-./run-tests.sh headed blueprint
+./run-tests.sh headed alloy
 
 # Debug mode
-./run-tests.sh debug blueprint
+./run-tests.sh debug steamfitter
 
 # Filter tests by pattern
-./run-tests.sh all --filter login --app blueprint
+./run-tests.sh gallery --filter "home"
+./run-tests.sh all --filter login --app player
+
+# Skip service health checks
+./run-tests.sh topomojo --no-check
 
 # View test report
 ./run-tests.sh report
 
 # Direct Playwright commands
-npx playwright test --project=chromium blueprint/tests/
+npx playwright test --project=chromium topomojo/tests/
+```
+
+The script automatically checks that **Keycloak** and the **target application** are reachable before running tests. Use `--no-check` to skip these checks.
+
+**Supported applications:** `alloy`, `blueprint`, `caster`, `cite`, `gallery`, `gameboard`, `keycloak`, `moodle`, `player`, `steamfitter`, `topomojo`
+
+## Configuring Service URLs
+
+All service URLs are defined in a single file at the root of this repository:
+
+```
+.env
+```
+
+Edit this file to change ports or hostnames for your environment. The `.env` file is loaded by:
+- **Shell scripts** (`run-tests.sh`, `setup.sh`) via `source`
+- **Playwright config and fixtures** via `dotenv`
+
+If the file is missing, all URLs fall back to their default `localhost` values.
+
+Example entries:
+```bash
+TOPOMOJO_UI_URL=http://localhost:4201
+KEYCLOAK_URL=https://localhost:8443
+BLUEPRINT_UI_URL=http://localhost:4725
 ```
 
 ## Directory Structure
 
 ```
 crucible-tests/
+├── .env                       # Service URLs (single source of truth)
 ├── playwright.config.ts       # Global Playwright config
 ├── shared-fixtures.ts         # Shared auth helpers and service URL map
 ├── package.json
 ├── setup.sh                   # Manual setup (if needed outside the dev container)
 ├── run-tests.sh               # Test runner with app targeting
-├── tests/
-│   └── seed.setup.ts          # Centralized auth setup for ALL apps
+├── seed.spec.ts               # Seed template for agent test generation
 └── {app}/                     # Per-application test directory
     ├── {app}-test-plan.md     # Test plan documentation
     ├── fixtures.ts            # App-specific auth fixtures (optional)
@@ -145,7 +180,7 @@ import { Services, authenticateWithKeycloak } from '../shared-fixtures';
 
 test('should access application', async ({ page }) => {
   await authenticateWithKeycloak(page, Services.Blueprint.UI);
-  await expect(page).toHaveURL(/.*localhost:4725.*/);
+  await expect(page).toHaveURL(new RegExp(Services.Blueprint.UI));
 });
 ```
 
@@ -179,17 +214,19 @@ export { expect } from '@playwright/test';
 
 ## Adding Tests for a New Application
 
-1. Create the app directory: `mkdir -p {app}/tests`
-2. Write a test plan: `{app}/{app}-test-plan.md`
-3. Add service URLs to `shared-fixtures.ts` (if not already present)
-4. Create `{app}/fixtures.ts` with an app-specific auth fixture (optional)
-5. Add feature directories and spec files following the test plan
+1. Add service URLs to `.env` (e.g., `MYAPP_UI_URL=http://localhost:XXXX`)
+2. Add the corresponding `process.env` entry in `shared-fixtures.ts`
+3. Create the app directory: `mkdir -p {app}/tests`
+4. Write a test plan: `{app}/{app}-test-plan.md`
+5. Create `{app}/fixtures.ts` with an app-specific auth fixture (optional)
+6. Add feature directories and spec files following the test plan
 
-**Note:** Authentication is handled by the centralized `tests/seed.setup.ts` which works for all apps. No need to create per-app seed files.
+**Note:** Authentication is handled by `authenticateWithKeycloak()` in `shared-fixtures.ts`, which works for all apps. No need to create per-app auth setup files.
 
 ## Troubleshooting
 
 - **Services not running** — Start Aspire first via a VS Code launch profile or `aspire run`
-- **Auth failures** — Verify Keycloak is running at https://localhost:8443 (ignore cert warning)
-- **Timeouts** — Check the Aspire dashboard at http://localhost:18888 for service health
+- **Auth failures** — Verify Keycloak is running at the URL configured in `.env` (ignore cert warning)
+- **Timeouts** — Check the Aspire dashboard for service health (URL in `.env`)
+- **Wrong URLs** — Edit `.env` to match your environment; all scripts and fixtures read from it
 - **Browser issues** — Run `npx playwright install --force` to reinstall browsers

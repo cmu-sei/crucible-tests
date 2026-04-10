@@ -13,14 +13,21 @@ test.describe('Authentication and Authorization', () => {
     // expect: User is authenticated
 
     // 2. Navigate to /admin route
-    await page.goto(Services.TopoMojo.UI + '/admin');
+    // Click the Admin button instead of using goto() since TopoMojo is a SPA
+    const adminButton = page.getByRole('button', { name: 'Admin' });
+    await expect(adminButton).toBeVisible({ timeout: 10000 });
+    await adminButton.click();
 
     // expect: Admin page loads successfully
-    await page.waitForLoadState('domcontentloaded');
+    await page.waitForURL(/\/admin/, { timeout: 15000 });
 
-    // expect: Admin navigation menu is visible
-    const adminContent = page.locator('[class*="admin"], [class*="Admin"], mat-sidenav-container, mat-tab-group').first();
-    await expect(adminContent).toBeVisible({ timeout: 15000 });
+    // expect: Admin dashboard heading is visible
+    const adminHeading = page.getByRole('heading', { name: 'Admin Dashboard' });
+    await expect(adminHeading).toBeVisible({ timeout: 15000 });
+
+    // expect: Admin navigation menu with links is visible
+    const adminNavLinks = page.getByRole('link', { name: 'Dashboard' });
+    await expect(adminNavLinks).toBeVisible({ timeout: 15000 });
 
     // expect: Admin dashboard displays
     await expect(page).toHaveURL(/\/admin/);
