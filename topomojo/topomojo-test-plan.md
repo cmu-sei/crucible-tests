@@ -1,18 +1,20 @@
-# TopoMojo Comprehensive Test Plan
+# TopoMojo Comprehensive Test Plan (Updated)
 
 ## Application Overview
 
 TopoMojo is a virtual lab builder and player application that enables users to create, manage, and deploy network topology simulations for cybersecurity training. The application consists of workspaces (lab templates), gamespaces (active lab instances), templates (VM configurations), virtual machines, and administrative features. Users can create training content with virtual machines, publish workspaces, deploy gamespaces for hands-on training, and manage the entire lifecycle of virtual lab environments. The application integrates with Keycloak for authentication and supports role-based access control with creator, admin, and observer roles.
 
+This updated test plan covers recent feature additions including: configurable background images, enhanced sidebar with pin functionality, favorites for workspaces/gamespaces/templates, sortable admin table headers, IDP role assignment warnings, enhanced About page with version info and external links, and various UI improvements.
+
 ## Test Scenarios
 
 ### 1. Authentication and Authorization
 
-**Seed:** `tests/seed.setup.ts`
+**Seed:** `seed.spec.ts`
 
 #### 1.1. Successful Authentication Flow
 
-**File:** `tests/authentication/successful-authentication.spec.ts`
+**File:** `topomojo/tests/authentication/successful-authentication.spec.ts`
 
 **Steps:**
   1. Navigate to TopoMojo UI at http://localhost:4201
@@ -29,7 +31,7 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 1.2. Failed Authentication - Invalid Credentials
 
-**File:** `tests/authentication/failed-authentication-invalid-credentials.spec.ts`
+**File:** `topomojo/tests/authentication/failed-authentication-invalid-credentials.spec.ts`
 
 **Steps:**
   1. Navigate to TopoMojo UI at http://localhost:4201
@@ -45,7 +47,7 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 1.3. Session Persistence After Refresh
 
-**File:** `tests/authentication/session-persistence.spec.ts`
+**File:** `topomojo/tests/authentication/session-persistence.spec.ts`
 
 **Steps:**
   1. Log in with valid credentials (admin/admin)
@@ -57,25 +59,22 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 1.4. Logout Functionality
 
-**File:** `tests/authentication/logout.spec.ts`
+**File:** `topomojo/tests/authentication/logout.spec.ts`
 
 **Steps:**
   1. Log in with valid credentials (admin/admin)
     - expect: User is successfully authenticated
-  2. Click on user profile menu in top navigation
-    - expect: User menu dropdown opens
-    - expect: Logout option is visible
-  3. Click 'Logout' or 'Sign Out' option
+  2. Click 'Logout' button in top navigation
     - expect: User is logged out
     - expect: User is redirected to login or home page
     - expect: Authentication session is terminated
-  4. Attempt to navigate to TopoMojo UI again
+  3. Attempt to navigate to TopoMojo UI again
     - expect: User is redirected to Keycloak login page
     - expect: User must authenticate again
 
 #### 1.5. Unauthorized Access Protection
 
-**File:** `tests/authentication/unauthorized-access.spec.ts`
+**File:** `topomojo/tests/authentication/unauthorized-access.spec.ts`
 
 **Steps:**
   1. Clear all cookies and local storage to simulate unauthenticated state
@@ -86,7 +85,7 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 1.6. Role-Based Access - Admin Access
 
-**File:** `tests/authentication/admin-access-authorized.spec.ts`
+**File:** `topomojo/tests/authentication/admin-access-authorized.spec.ts`
 
 **Steps:**
   1. Log in as user with admin role (admin/admin)
@@ -98,7 +97,7 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 1.7. Role-Based Access - Non-Admin Restricted
 
-**File:** `tests/authentication/admin-access-unauthorized.spec.ts`
+**File:** `topomojo/tests/authentication/admin-access-unauthorized.spec.ts`
 
 **Steps:**
   1. Log in as user without admin role
@@ -110,67 +109,94 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 ### 2. Home Page and Navigation
 
-**Seed:** `tests/seed.setup.ts`
+**Seed:** `seed.spec.ts`
 
 #### 2.1. Home Page Display
 
-**File:** `tests/home/home-page-display.spec.ts`
+**File:** `topomojo/tests/home/home-page-display.spec.ts`
 
 **Steps:**
   1. Log in and land on home page
     - expect: Home page displays with TopoMojo branding
     - expect: Navigation bar is visible at top
-    - expect: Workspace browser component is visible
+    - expect: Workspace browser component is visible or can be opened via sidebar
 
 #### 2.2. Navigation Bar Elements
 
-**File:** `tests/home/navigation-bar-elements.spec.ts`
+**File:** `topomojo/tests/home/navigation-bar-elements.spec.ts`
 
 **Steps:**
   1. Log in and observe top navigation bar
-    - expect: Navigation bar contains TopoMojo logo/title
-    - expect: User menu is visible in top right
-    - expect: Search functionality is accessible
-    - expect: Theme toggle is available if supported
+    - expect: Navigation bar contains TopoMojo branding
+    - expect: Home button is visible
+    - expect: About button is visible
+    - expect: Admin button is visible for admin users
+    - expect: Logout button is visible
 
-#### 2.3. Sidebar Toggle
+#### 2.3. Sidebar Toggle and Pin
 
-**File:** `tests/home/sidebar-toggle.spec.ts`
+**File:** `topomojo/tests/home/sidebar-toggle-and-pin.spec.ts`
 
 **Steps:**
   1. Log in and navigate to home page
-    - expect: Sidebar is visible or toggleable
-  2. Click sidebar toggle button
-    - expect: Sidebar opens or closes
-    - expect: Toggle state persists when navigating between pages
+    - expect: Sidebar hamburger menu button is visible at top of sidebar
+    - expect: Hamburger button has proper aria-label for accessibility
+  2. Click hamburger menu button to toggle sidebar open
+    - expect: Sidebar opens showing workspace browser
+    - expect: Hamburger button remains visible at top
+  3. Click hamburger menu button again to close sidebar
+    - expect: Sidebar closes
+    - expect: Hamburger button still visible and accessible
+  4. Open sidebar and click pin button in sidebar footer
+    - expect: Sidebar is pinned open
+    - expect: Pin icon changes to indicate pinned state
+    - expect: Sidebar remains open when clicking outside
+  5. Click pin button again to unpin
+    - expect: Sidebar is unpinned
+    - expect: Pin icon changes to unpinned state
+  6. With sidebar unpinned, open sidebar and click outside sidebar area
+    - expect: Sidebar closes automatically
+    - expect: Main content area is clickable
+
+#### 2.4. Sidebar Hamburger Button Accessibility
+
+**File:** `topomojo/tests/home/sidebar-hamburger-accessibility.spec.ts`
+
+**Steps:**
+  1. Log in and observe sidebar hamburger button
+    - expect: Hamburger button is a proper <button> element (not a div)
+    - expect: Button has aria-label='Toggle sidebar'
+    - expect: Button is always visible regardless of sidebar state
+  2. Use keyboard to focus on hamburger button and press Enter
+    - expect: Sidebar toggles open/closed via keyboard
+    - expect: Button is fully keyboard accessible
 
 ### 3. Workspace Management
 
-**Seed:** `tests/seed.setup.ts`
+**Seed:** `seed.spec.ts`
 
 #### 3.1. Workspace List Display
 
-**File:** `tests/workspace/workspace-list-display.spec.ts`
+**File:** `topomojo/tests/workspace/workspace-list-display.spec.ts`
 
 **Steps:**
-  1. Log in and navigate to home page
+  1. Log in and open sidebar to view workspace browser
     - expect: Workspace browser displays list of workspaces
-    - expect: Workspace cards show name, description, and metadata
-    - expect: Each workspace has action buttons
+    - expect: Workspace cards show name and metadata
+    - expect: Each workspace has action links when hovered or selected
 
 #### 3.2. Workspace List - Empty State
 
-**File:** `tests/workspace/workspace-list-empty-state.spec.ts`
+**File:** `topomojo/tests/workspace/workspace-list-empty-state.spec.ts`
 
 **Steps:**
   1. Log in as user with no workspaces
-    - expect: Empty state message is displayed
-    - expect: Message indicates no workspaces are available
+    - expect: Empty state message is displayed or workspace list is empty
     - expect: Create workspace button is visible if user has creator role
 
 #### 3.3. Workspace Search
 
-**File:** `tests/workspace/workspace-search.spec.ts`
+**File:** `topomojo/tests/workspace/workspace-search.spec.ts`
 
 **Steps:**
   1. Navigate to workspace browser with multiple workspaces
@@ -185,7 +211,7 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 3.4. Workspace Filter Toggle
 
-**File:** `tests/workspace/workspace-filter.spec.ts`
+**File:** `topomojo/tests/workspace/workspace-filter.spec.ts`
 
 **Steps:**
   1. Navigate to workspace browser
@@ -193,17 +219,17 @@ TopoMojo is a virtual lab builder and player application that enables users to c
   2. Click on different filter options
     - expect: Workspace list updates based on selected filter
     - expect: Filter selection is highlighted
-    - expect: Filter preference is saved
+    - expect: Filter preference may be saved
 
 #### 3.5. Create Workspace - Authorized Creator
 
-**File:** `tests/workspace/create-workspace-authorized.spec.ts`
+**File:** `topomojo/tests/workspace/create-workspace-authorized.spec.ts`
 
 **Steps:**
   1. Log in as user with creator role
     - expect: User is on home page
     - expect: Create workspace button is visible
-  2. Click 'Create Workspace' or '+' button
+  2. Click 'Create Workspace' button
     - expect: Create workspace dialog opens
     - expect: Form fields for workspace name and description are displayed
   3. Enter workspace name 'Test Lab'
@@ -217,7 +243,7 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 3.6. Create Workspace - Unauthorized User
 
-**File:** `tests/workspace/create-workspace-unauthorized.spec.ts`
+**File:** `topomojo/tests/workspace/create-workspace-unauthorized.spec.ts`
 
 **Steps:**
   1. Log in as user without creator role
@@ -227,7 +253,7 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 3.7. Create Workspace - Validation - Required Fields
 
-**File:** `tests/workspace/create-workspace-validation-required.spec.ts`
+**File:** `topomojo/tests/workspace/create-workspace-validation-required.spec.ts`
 
 **Steps:**
   1. Open create workspace dialog
@@ -240,7 +266,7 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 3.8. Clone Workspace
 
-**File:** `tests/workspace/clone-workspace.spec.ts`
+**File:** `topomojo/tests/workspace/clone-workspace.spec.ts`
 
 **Steps:**
   1. Navigate to workspace list with existing workspaces
@@ -255,44 +281,47 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 3.9. Navigate to Workspace Editor
 
-**File:** `tests/workspace/navigate-to-workspace-editor.spec.ts`
+**File:** `topomojo/tests/workspace/navigate-to-workspace-editor.spec.ts`
 
 **Steps:**
   1. Navigate to workspace list
     - expect: Workspace list displays
-  2. Click on a workspace card or 'Edit' button
+  2. Click on a workspace card or 'Settings' link when hovering
     - expect: User is navigated to workspace editor page
     - expect: URL changes to /topo/:id/settings format
     - expect: Workspace editor interface loads
 
 #### 3.10. Workspace Favorites - Add Favorite
 
-**File:** `tests/workspace/workspace-favorite-add.spec.ts`
+**File:** `topomojo/tests/workspace/workspace-favorite-add.spec.ts`
 
 **Steps:**
-  1. Navigate to workspace list
+  1. Navigate to workspace list in sidebar
     - expect: Workspace list displays
-    - expect: Favorite/star icon is visible on workspace cards
-  2. Click favorite/star icon on a workspace
+  2. Hover over a workspace card
+    - expect: Favorite star icon appears (outline/regular style)
+    - expect: Star icon is clickable
+  3. Click the star icon to favorite the workspace
     - expect: Workspace is marked as favorite
-    - expect: Favorite icon changes to indicate favorited state
-    - expect: Workspace moves to top of list or favorites section
+    - expect: Star icon changes to filled/solid style with 'favorite-on' styling
+    - expect: Workspace is pinned to top of list even when sorting
 
 #### 3.11. Workspace Favorites - Remove Favorite
 
-**File:** `tests/workspace/workspace-favorite-remove.spec.ts`
+**File:** `topomojo/tests/workspace/workspace-favorite-remove.spec.ts`
 
 **Steps:**
-  1. Navigate to workspace list with favorited workspace
-    - expect: Favorited workspace displays with filled/highlighted star icon
-  2. Click favorite/star icon on favorited workspace
+  1. Navigate to workspace list with previously favorited workspace
+    - expect: Favorited workspace displays with filled/solid star icon
+    - expect: Favorited workspace is pinned to top
+  2. Click the filled star icon on favorited workspace
     - expect: Workspace is removed from favorites
-    - expect: Favorite icon changes to unfavorited state
-    - expect: Workspace position may change in list
+    - expect: Star icon changes to outline/regular style
+    - expect: Workspace position changes based on current sort order
 
 #### 3.12. Workspace Mode Toggle - Workspace vs Gamespace View
 
-**File:** `tests/workspace/workspace-mode-toggle.spec.ts`
+**File:** `topomojo/tests/workspace/workspace-mode-toggle.spec.ts`
 
 **Steps:**
   1. Navigate to home page workspace browser
@@ -300,31 +329,32 @@ TopoMojo is a virtual lab builder and player application that enables users to c
   2. Click on 'Gamespaces' mode
     - expect: View switches to gamespace mode
     - expect: Active and playable gamespaces are displayed
-    - expect: Mode preference is saved
+    - expect: Mode preference may be saved
   3. Click on 'Workspaces' mode
     - expect: View switches back to workspace mode
     - expect: Workspace list is displayed
 
 ### 4. Workspace Editor
 
-**Seed:** `tests/seed.setup.ts`
+**Seed:** `seed.spec.ts`
 
 #### 4.1. Workspace Editor - Settings Tab
 
-**File:** `tests/workspace-editor/settings-tab.spec.ts`
+**File:** `topomojo/tests/workspace-editor/settings-tab.spec.ts`
 
 **Steps:**
   1. Navigate to workspace editor for an existing workspace
     - expect: Workspace editor page loads
-    - expect: Tabs or sections are visible (Settings, Templates, Document, etc.)
+    - expect: Tabs or sections are visible (Settings, Templates, Document, Challenge, Files, Play)
     - expect: Settings tab is selected by default
   2. Observe settings form
     - expect: Settings form displays fields for workspace name, description, audience, etc.
     - expect: Form fields are populated with current workspace data
+    - expect: Workspace ID is displayed in text-muted style
 
 #### 4.2. Workspace Editor - Update Settings
 
-**File:** `tests/workspace-editor/update-settings.spec.ts`
+**File:** `topomojo/tests/workspace-editor/update-settings.spec.ts`
 
 **Steps:**
   1. Navigate to workspace editor settings tab
@@ -340,7 +370,7 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 4.3. Workspace Editor - Audience Configuration
 
-**File:** `tests/workspace-editor/audience-configuration.spec.ts`
+**File:** `topomojo/tests/workspace-editor/audience-configuration.spec.ts`
 
 **Steps:**
   1. Navigate to workspace editor settings
@@ -353,7 +383,7 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 4.4. Workspace Editor - Templates Tab
 
-**File:** `tests/workspace-editor/templates-tab.spec.ts`
+**File:** `topomojo/tests/workspace-editor/templates-tab.spec.ts`
 
 **Steps:**
   1. Navigate to workspace editor
@@ -365,7 +395,7 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 4.5. Workspace Editor - Add Template
 
-**File:** `tests/workspace-editor/add-template.spec.ts`
+**File:** `topomojo/tests/workspace-editor/add-template.spec.ts`
 
 **Steps:**
   1. Navigate to workspace editor templates tab
@@ -384,7 +414,7 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 4.6. Workspace Editor - Edit Template
 
-**File:** `tests/workspace-editor/edit-template.spec.ts`
+**File:** `topomojo/tests/workspace-editor/edit-template.spec.ts`
 
 **Steps:**
   1. Navigate to workspace editor templates tab with existing templates
@@ -400,7 +430,7 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 4.7. Workspace Editor - Delete Template
 
-**File:** `tests/workspace-editor/delete-template.spec.ts`
+**File:** `topomojo/tests/workspace-editor/delete-template.spec.ts`
 
 **Steps:**
   1. Navigate to workspace editor templates tab
@@ -415,18 +445,18 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 4.8. Workspace Editor - Document Tab
 
-**File:** `tests/workspace-editor/document-tab.spec.ts`
+**File:** `topomojo/tests/workspace-editor/document-tab.spec.ts`
 
 **Steps:**
   1. Navigate to workspace editor
     - expect: Workspace editor tabs are visible
-  2. Click on 'Document' or 'Instructions' tab
+  2. Click on 'Document' tab
     - expect: Document tab is selected
     - expect: Markdown editor or document display is shown
 
 #### 4.9. Workspace Editor - Edit Document
 
-**File:** `tests/workspace-editor/edit-document.spec.ts`
+**File:** `topomojo/tests/workspace-editor/edit-document.spec.ts`
 
 **Steps:**
   1. Navigate to workspace document tab
@@ -442,18 +472,18 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 4.10. Workspace Editor - Challenge Tab
 
-**File:** `tests/workspace-editor/challenge-tab.spec.ts`
+**File:** `topomojo/tests/workspace-editor/challenge-tab.spec.ts`
 
 **Steps:**
   1. Navigate to workspace editor
     - expect: Workspace editor tabs are visible
-  2. Click on 'Challenge' or 'Quiz' tab if available
+  2. Click on 'Challenge' tab
     - expect: Challenge tab is selected
     - expect: Challenge editor or list is displayed
 
 #### 4.11. Workspace Editor - Create Challenge
 
-**File:** `tests/workspace-editor/create-challenge.spec.ts`
+**File:** `topomojo/tests/workspace-editor/create-challenge.spec.ts`
 
 **Steps:**
   1. Navigate to workspace challenge tab
@@ -471,12 +501,12 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 4.12. Workspace Editor - Invite Collaborators
 
-**File:** `tests/workspace-editor/invite-collaborators.spec.ts`
+**File:** `topomojo/tests/workspace-editor/invite-collaborators.spec.ts`
 
 **Steps:**
   1. Navigate to workspace editor
     - expect: Workspace editor loads
-  2. Look for 'Invite' or 'Share' button/tab
+  2. Look for 'Invite' or 'Share' button
     - expect: Invite functionality is available
   3. Click invite button
     - expect: Invite dialog opens
@@ -487,7 +517,7 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 4.13. Workspace Editor - Publish Workspace
 
-**File:** `tests/workspace-editor/publish-workspace.spec.ts`
+**File:** `topomojo/tests/workspace-editor/publish-workspace.spec.ts`
 
 **Steps:**
   1. Navigate to workspace editor settings
@@ -500,7 +530,7 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 4.14. Workspace Editor - Delete Workspace
 
-**File:** `tests/workspace-editor/delete-workspace.spec.ts`
+**File:** `topomojo/tests/workspace-editor/delete-workspace.spec.ts`
 
 **Steps:**
   1. Navigate to workspace editor
@@ -518,21 +548,21 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 ### 5. Gamespace Management
 
-**Seed:** `tests/seed.setup.ts`
+**Seed:** `seed.spec.ts`
 
 #### 5.1. Gamespace List Display
 
-**File:** `tests/gamespace/gamespace-list-display.spec.ts`
+**File:** `topomojo/tests/gamespace/gamespace-list-display.spec.ts`
 
 **Steps:**
-  1. Log in and switch to gamespace mode on home page
+  1. Log in and switch to gamespace mode in sidebar
     - expect: Gamespace list displays
     - expect: Active gamespaces show status and metadata
     - expect: Playable workspaces are available
 
 #### 5.2. Preview Gamespace
 
-**File:** `tests/gamespace/preview-gamespace.spec.ts`
+**File:** `topomojo/tests/gamespace/preview-gamespace.spec.ts`
 
 **Steps:**
   1. Navigate to gamespace list with available workspaces
@@ -544,7 +574,7 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 5.3. Deploy Gamespace
 
-**File:** `tests/gamespace/deploy-gamespace.spec.ts`
+**File:** `topomojo/tests/gamespace/deploy-gamespace.spec.ts`
 
 **Steps:**
   1. Navigate to gamespace preview for a published workspace
@@ -560,7 +590,7 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 5.4. Active Gamespace Display
 
-**File:** `tests/gamespace/active-gamespace-display.spec.ts`
+**File:** `topomojo/tests/gamespace/active-gamespace-display.spec.ts`
 
 **Steps:**
   1. Navigate to an active gamespace
@@ -570,7 +600,7 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 5.5. Gamespace VM Console Access
 
-**File:** `tests/gamespace/vm-console-access.spec.ts`
+**File:** `topomojo/tests/gamespace/vm-console-access.spec.ts`
 
 **Steps:**
   1. Navigate to active gamespace with running VMs
@@ -578,11 +608,12 @@ TopoMojo is a virtual lab builder and player application that enables users to c
   2. Click console button for a VM
     - expect: VM console opens in new window/tab or embedded view
     - expect: Console shows VM screen
-    - expect: Keyboard and mouse input work in console
+    - expect: Console uses correct URL path with path-based routing support
+    - expect: Console authentication works without requiring separate auth guard
 
 #### 5.6. Gamespace VM Power Operations
 
-**File:** `tests/gamespace/vm-power-operations.spec.ts`
+**File:** `topomojo/tests/gamespace/vm-power-operations.spec.ts`
 
 **Steps:**
   1. Navigate to active gamespace
@@ -594,7 +625,7 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 5.7. Gamespace Document View
 
-**File:** `tests/gamespace/gamespace-document-view.spec.ts`
+**File:** `topomojo/tests/gamespace/gamespace-document-view.spec.ts`
 
 **Steps:**
   1. Navigate to active gamespace
@@ -605,7 +636,7 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 5.8. Gamespace Challenge View
 
-**File:** `tests/gamespace/gamespace-challenge-view.spec.ts`
+**File:** `topomojo/tests/gamespace/gamespace-challenge-view.spec.ts`
 
 **Steps:**
   1. Navigate to active gamespace with challenges
@@ -616,7 +647,7 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 5.9. Gamespace Challenge Submission
 
-**File:** `tests/gamespace/gamespace-challenge-submission.spec.ts`
+**File:** `topomojo/tests/gamespace/gamespace-challenge-submission.spec.ts`
 
 **Steps:**
   1. Navigate to gamespace challenge section
@@ -630,7 +661,7 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 5.10. Gamespace Join via Invite Code
 
-**File:** `tests/gamespace/gamespace-join-invite.spec.ts`
+**File:** `topomojo/tests/gamespace/gamespace-join-invite.spec.ts`
 
 **Steps:**
   1. Navigate to gamespace join URL with invite code (e.g., /mojo/:id/:slug/:code)
@@ -643,7 +674,7 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 5.11. Gamespace Extended Duration
 
-**File:** `tests/gamespace/gamespace-extend-duration.spec.ts`
+**File:** `topomojo/tests/gamespace/gamespace-extend-duration.spec.ts`
 
 **Steps:**
   1. Navigate to active gamespace nearing expiration
@@ -655,7 +686,7 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 5.12. Gamespace Cleanup/Delete
 
-**File:** `tests/gamespace/gamespace-cleanup.spec.ts`
+**File:** `topomojo/tests/gamespace/gamespace-cleanup.spec.ts`
 
 **Steps:**
   1. Navigate to active gamespace
@@ -668,22 +699,50 @@ TopoMojo is a virtual lab builder and player application that enables users to c
     - expect: User is redirected to home page
     - expect: Gamespace no longer appears in active list
 
+#### 5.13. Gamespace Favorites - Add Favorite
+
+**File:** `topomojo/tests/gamespace/gamespace-favorite-add.spec.ts`
+
+**Steps:**
+  1. Navigate to gamespace list in sidebar
+    - expect: Gamespace list displays
+  2. Hover over a gamespace card
+    - expect: Favorite star icon appears (outline/regular style) if user can favorite
+    - expect: Star icon is clickable
+  3. Click the star icon to favorite the gamespace
+    - expect: Gamespace is marked as favorite
+    - expect: Star icon changes to filled/solid style with 'favorite-on' styling
+    - expect: Gamespace is pinned to top of list
+
+#### 5.14. Gamespace Favorites - Remove Favorite
+
+**File:** `topomojo/tests/gamespace/gamespace-favorite-remove.spec.ts`
+
+**Steps:**
+  1. Navigate to gamespace list with previously favorited gamespace
+    - expect: Favorited gamespace displays with filled/solid star icon
+    - expect: Favorited gamespace is pinned to top
+  2. Click the filled star icon on favorited gamespace
+    - expect: Gamespace is removed from favorites
+    - expect: Star icon changes to outline/regular style
+    - expect: Gamespace position may change in list
+
 ### 6. Template Management
 
-**Seed:** `tests/seed.setup.ts`
+**Seed:** `seed.spec.ts`
 
 #### 6.1. Template List Display
 
-**File:** `tests/template/template-list-display.spec.ts`
+**File:** `topomojo/tests/template/template-list-display.spec.ts`
 
 **Steps:**
-  1. Navigate to templates section (if separate route exists or within workspace editor)
+  1. Navigate to templates section (within workspace editor templates tab)
     - expect: Template list displays
     - expect: Templates show name, description, and metadata
 
 #### 6.2. Template Details View
 
-**File:** `tests/template/template-details-view.spec.ts`
+**File:** `topomojo/tests/template/template-details-view.spec.ts`
 
 **Steps:**
   1. Click on a template from list
@@ -693,7 +752,7 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 6.3. Template Edit Configuration
 
-**File:** `tests/template/template-edit-configuration.spec.ts`
+**File:** `topomojo/tests/template/template-edit-configuration.spec.ts`
 
 **Steps:**
   1. Open template editor for existing template
@@ -707,7 +766,7 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 6.4. Template ISO Management
 
-**File:** `tests/template/template-iso-management.spec.ts`
+**File:** `topomojo/tests/template/template-iso-management.spec.ts`
 
 **Steps:**
   1. Open template editor
@@ -721,7 +780,7 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 6.5. Template Network Configuration
 
-**File:** `tests/template/template-network-configuration.spec.ts`
+**File:** `topomojo/tests/template/template-network-configuration.spec.ts`
 
 **Steps:**
   1. Open template editor
@@ -735,7 +794,7 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 6.6. Template Link to Parent
 
-**File:** `tests/template/template-link-parent.spec.ts`
+**File:** `topomojo/tests/template/template-link-parent.spec.ts`
 
 **Steps:**
   1. Create or select a template
@@ -748,7 +807,7 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 6.7. Template Unlink from Parent
 
-**File:** `tests/template/template-unlink-parent.spec.ts`
+**File:** `topomojo/tests/template/template-unlink-parent.spec.ts`
 
 **Steps:**
   1. Open template that is linked to parent
@@ -759,11 +818,11 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 ### 7. File Management
 
-**Seed:** `tests/seed.setup.ts`
+**Seed:** `seed.spec.ts`
 
 #### 7.1. File Browser Access
 
-**File:** `tests/files/file-browser-access.spec.ts`
+**File:** `topomojo/tests/files/file-browser-access.spec.ts`
 
 **Steps:**
   1. Navigate to workspace editor
@@ -774,7 +833,7 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 7.2. File Upload
 
-**File:** `tests/files/file-upload.spec.ts`
+**File:** `topomojo/tests/files/file-upload.spec.ts`
 
 **Steps:**
   1. Navigate to file browser
@@ -791,19 +850,19 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 7.3. File Upload - Invalid File Type
 
-**File:** `tests/files/file-upload-invalid-type.spec.ts`
+**File:** `topomojo/tests/files/file-upload-invalid-type.spec.ts`
 
 **Steps:**
   1. Navigate to file browser
     - expect: Upload interface is available
-  2. Attempt to upload invalid file type (e.g., .exe)
+  2. Attempt to upload invalid file type
     - expect: Validation error is displayed
     - expect: Error indicates invalid file type
     - expect: Upload is prevented
 
 #### 7.4. File Upload - Oversized File
 
-**File:** `tests/files/file-upload-oversized.spec.ts`
+**File:** `topomojo/tests/files/file-upload-oversized.spec.ts`
 
 **Steps:**
   1. Navigate to file browser
@@ -815,7 +874,7 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 #### 7.5. File Delete
 
-**File:** `tests/files/file-delete.spec.ts`
+**File:** `topomojo/tests/files/file-delete.spec.ts`
 
 **Steps:**
   1. Navigate to file browser with existing files
@@ -829,11 +888,11 @@ TopoMojo is a virtual lab builder and player application that enables users to c
 
 ### 8. Admin Panel
 
-**Seed:** `tests/seed.setup.ts`
+**Seed:** `seed.spec.ts`
 
 #### 8.1. Admin Dashboard Access
 
-**File:** `tests/admin/admin-dashboard-access.spec.ts`
+**File:** `topomojo/tests/admin/admin-dashboard-access.spec.ts`
 
 **Steps:**
   1. Log in as admin user
@@ -841,50 +900,148 @@ TopoMojo is a virtual lab builder and player application that enables users to c
   2. Navigate to /admin route
     - expect: Admin dashboard loads
     - expect: Admin navigation menu is visible
-    - expect: Dashboard shows system statistics or overview
+    - expect: Dashboard shows admin sections (Users, Workspaces, Gamespaces, Templates, VMs, Settings)
 
 #### 8.2. Admin - User Browser
 
-**File:** `tests/admin/admin-user-browser.spec.ts`
+**File:** `topomojo/tests/admin/admin-user-browser.spec.ts`
 
 **Steps:**
   1. Navigate to admin dashboard
     - expect: Admin menu is visible
-  2. Click on 'Users' or user management section
+  2. Click on 'Users' section
     - expect: User browser page loads
-    - expect: List of users is displayed
-    - expect: User details include name, role, and status
+    - expect: List of users is displayed in table format
+    - expect: User details include name, role, and created date
 
-#### 8.3. Admin - Edit User Role
+#### 8.3. Admin - User Browser Sortable Headers
 
-**File:** `tests/admin/admin-edit-user-role.spec.ts`
+**File:** `topomojo/tests/admin/admin-user-browser-sorting.spec.ts`
+
+**Steps:**
+  1. Navigate to admin user browser
+    - expect: User list displays with table headers
+    - expect: Headers for 'Name' and 'Created' are visible and clickable
+  2. Click on 'Name' column header
+    - expect: Users are sorted by name in ascending order (A-Z)
+    - expect: Sort indicator (up arrow icon) appears on Name column
+  3. Click on 'Name' column header again
+    - expect: Users are sorted by name in descending order (Z-A)
+    - expect: Sort indicator changes to down arrow icon
+  4. Click on 'Created' column header
+    - expect: Users are sorted by creation date
+    - expect: Sort indicator appears on Created column
+    - expect: Sort field switches from Name to Created
+
+#### 8.4. Admin - Edit User Role
+
+**File:** `topomojo/tests/admin/admin-edit-user-role.spec.ts`
 
 **Steps:**
   1. Navigate to admin user browser
     - expect: User list displays
-  2. Click on a user or edit button
+  2. Click on a user or view user details
     - expect: User details form opens
-  3. Modify user role (e.g., grant creator or admin role)
+    - expect: User role badge is displayed showing current role
+  3. Modify user appRole (e.g., grant creator or admin role)
     - expect: Role selection accepts changes
+    - expect: Role change updates the user's appRole field
   4. Save changes
     - expect: User role is updated
     - expect: Changes are reflected in user list
 
-#### 8.4. Admin - Workspace Browser
+#### 8.5. Admin - User Role Badge and IDP Conflict Warning
 
-**File:** `tests/admin/admin-workspace-browser.spec.ts`
+**File:** `topomojo/tests/admin/admin-user-role-idp-conflict.spec.ts`
+
+**Steps:**
+  1. Navigate to admin user browser
+    - expect: User list displays with role information
+  2. Observe a user where IDP-assigned role differs from app role
+    - expect: User role badge displays both IDP role and app role
+    - expect: Effective role (highest permission) is shown
+    - expect: Warning indicator appears for role mismatch
+  3. Click on the effective role badge or warning indicator
+    - expect: Modal opens explaining the role conflict
+    - expect: Modal shows IDP role vs app role
+    - expect: Modal explains that effective role is the higher permission level
+  4. Close the modal
+    - expect: Modal closes
+    - expect: User returns to user browser view
+
+#### 8.6. Admin - Workspace Browser
+
+**File:** `topomojo/tests/admin/admin-workspace-browser.spec.ts`
 
 **Steps:**
   1. Navigate to admin dashboard
     - expect: Admin menu is visible
   2. Click on 'Workspaces' section
     - expect: Admin workspace browser loads
-    - expect: All workspaces are listed
-    - expect: Workspaces show owner and status
+    - expect: All workspaces are listed in table format
+    - expect: Workspaces show name, owner, created date, and activity
 
-#### 8.5. Admin - Gamespace Browser
+#### 8.7. Admin - Workspace Browser Sortable Headers
 
-**File:** `tests/admin/admin-gamespace-browser.spec.ts`
+**File:** `topomojo/tests/admin/admin-workspace-browser-sorting.spec.ts`
+
+**Steps:**
+  1. Navigate to admin workspace browser
+    - expect: Workspace list displays with table headers
+    - expect: Headers for 'Name', 'Created', and 'Activity' are clickable
+  2. Click on 'Name' column header
+    - expect: Workspaces are sorted by name alphabetically
+    - expect: Sort indicator appears on Name column
+    - expect: Favorited workspaces remain pinned to top
+  3. Click on 'Created' column header
+    - expect: Workspaces are sorted by creation date
+    - expect: Sort indicator appears on Created column
+    - expect: Favorited workspaces remain pinned to top
+  4. Click on 'Activity' column header
+    - expect: Workspaces are sorted by last activity date
+    - expect: Sort indicator appears on Activity column
+
+#### 8.8. Admin - Workspace Browser Favorites
+
+**File:** `topomojo/tests/admin/admin-workspace-browser-favorites.spec.ts`
+
+**Steps:**
+  1. Navigate to admin workspace browser
+    - expect: Workspace list displays
+  2. Click the star icon on a workspace to favorite it
+    - expect: Workspace is favorited
+    - expect: Star icon changes to filled/solid style
+    - expect: Workspace is pinned to top of list even when sorting
+  3. Apply different sort orders (by name, created, activity)
+    - expect: Favorited workspaces remain at the top
+    - expect: Non-favorited workspaces are sorted below favorites
+  4. Click the filled star icon to unfavorite
+    - expect: Workspace is unfavorited
+    - expect: Star icon changes to outline style
+    - expect: Workspace moves based on current sort order
+
+#### 8.9. Admin - Delete Workspace from Browser
+
+**File:** `topomojo/tests/admin/admin-workspace-browser-delete.spec.ts`
+
+**Steps:**
+  1. Navigate to admin workspace browser
+    - expect: Workspace list displays
+  2. Click on a workspace to view details
+    - expect: Workspace details are displayed in side panel or detail view
+    - expect: Delete button is visible
+  3. Click 'Delete' button
+    - expect: Confirmation dialog appears
+    - expect: Disabled confirm button is hidden via CSS (.confirm-wrap > button[disabled] { display: none; })
+  4. Confirm deletion
+    - expect: Workspace is deleted
+    - expect: Viewed workspace state is cleared
+    - expect: Workspace is removed from list
+    - expect: List refreshes to show updated workspaces
+
+#### 8.10. Admin - Gamespace Browser
+
+**File:** `topomojo/tests/admin/admin-gamespace-browser.spec.ts`
 
 **Steps:**
   1. Navigate to admin dashboard
@@ -892,11 +1049,23 @@ TopoMojo is a virtual lab builder and player application that enables users to c
   2. Click on 'Gamespaces' section
     - expect: Admin gamespace browser loads
     - expect: All active gamespaces are listed
-    - expect: Gamespaces show user, status, and VMs
+    - expect: Gamespaces show workspace name, user, status, and VMs
 
-#### 8.6. Admin - Gamespace Details
+#### 8.11. Admin - Gamespace Browser Sortable Headers
 
-**File:** `tests/admin/admin-gamespace-details.spec.ts`
+**File:** `topomojo/tests/admin/admin-gamespace-browser-sorting.spec.ts`
+
+**Steps:**
+  1. Navigate to admin gamespace browser
+    - expect: Gamespace list displays with table headers
+    - expect: Sortable column headers are clickable
+  2. Click on column headers to sort gamespaces
+    - expect: Gamespaces are sorted based on selected column
+    - expect: Sort indicators (up/down arrows) appear on active column
+
+#### 8.12. Admin - Gamespace Details
+
+**File:** `topomojo/tests/admin/admin-gamespace-details.spec.ts`
 
 **Steps:**
   1. Navigate to admin gamespace browser
@@ -906,9 +1075,9 @@ TopoMojo is a virtual lab builder and player application that enables users to c
     - expect: VM list and statuses are shown
     - expect: User information is displayed
 
-#### 8.7. Admin - Forcefully End Gamespace
+#### 8.13. Admin - Forcefully End Gamespace
 
-**File:** `tests/admin/admin-end-gamespace.spec.ts`
+**File:** `topomojo/tests/admin/admin-end-gamespace.spec.ts`
 
 **Steps:**
   1. Navigate to admin gamespace details
@@ -920,9 +1089,9 @@ TopoMojo is a virtual lab builder and player application that enables users to c
     - expect: VMs are cleaned up
     - expect: Gamespace is removed from active list
 
-#### 8.8. Admin - Template Browser
+#### 8.14. Admin - Template Browser
 
-**File:** `tests/admin/admin-template-browser.spec.ts`
+**File:** `topomojo/tests/admin/admin-template-browser.spec.ts`
 
 **Steps:**
   1. Navigate to admin dashboard
@@ -930,34 +1099,80 @@ TopoMojo is a virtual lab builder and player application that enables users to c
   2. Click on 'Templates' section
     - expect: Admin template browser loads
     - expect: All templates are listed
-    - expect: Templates show name, workspace, and status
+    - expect: Templates show name, workspace, and configuration
 
-#### 8.9. Admin - VM Browser
+#### 8.15. Admin - Template Browser Sortable Headers
 
-**File:** `tests/admin/admin-vm-browser.spec.ts`
+**File:** `topomojo/tests/admin/admin-template-browser-sorting.spec.ts`
+
+**Steps:**
+  1. Navigate to admin template browser
+    - expect: Template list displays with table headers
+    - expect: Column headers are clickable for sorting
+  2. Click on 'Name' column header to sort templates by name
+    - expect: Templates are sorted alphabetically by name
+    - expect: Sort indicator appears on Name column
+    - expect: Favorited templates remain pinned to top
+
+#### 8.16. Admin - Template Favorites
+
+**File:** `topomojo/tests/admin/admin-template-favorites.spec.ts`
+
+**Steps:**
+  1. Navigate to admin template browser
+    - expect: Template list displays
+  2. Click the star icon on a template to favorite it
+    - expect: Template is favorited
+    - expect: Star icon changes to filled/solid style
+    - expect: Template is pinned to top of list
+    - expect: Tooltip shows 'Favorite (pin)' or 'Unfavorite (pin)'
+  3. Apply sorting by name or other criteria
+    - expect: Favorited templates remain at the top
+    - expect: Non-favorited templates are sorted below
+  4. Click the filled star icon to unfavorite
+    - expect: Template is unfavorited
+    - expect: Star icon changes to outline style
+    - expect: Template moves based on current sort order
+
+#### 8.17. Admin - VM Browser
+
+**File:** `topomojo/tests/admin/admin-vm-browser.spec.ts`
 
 **Steps:**
   1. Navigate to admin dashboard
     - expect: Admin menu is visible
-  2. Click on 'VMs' or virtual machines section
+  2. Click on 'VMs' section
     - expect: VM browser loads
     - expect: All VMs are listed
     - expect: VMs show name, status, gamespace, and resource usage
 
-#### 8.10. Admin - Settings Browser
+#### 8.18. Admin - VM Browser Sortable Headers
 
-**File:** `tests/admin/admin-settings-browser.spec.ts`
+**File:** `topomojo/tests/admin/admin-vm-browser-sorting.spec.ts`
+
+**Steps:**
+  1. Navigate to admin VM browser
+    - expect: VM list displays with table headers
+    - expect: Column headers are clickable for sorting
+  2. Click on column headers to sort VMs
+    - expect: VMs are sorted based on selected column
+    - expect: Sort indicators appear on active column
+
+#### 8.19. Admin - Settings Browser
+
+**File:** `topomojo/tests/admin/admin-settings-browser.spec.ts`
 
 **Steps:**
   1. Navigate to admin dashboard
     - expect: Admin menu is visible
   2. Click on 'Settings' section
     - expect: Settings page loads
-    - expect: System configuration options are displayed
+    - expect: Setting browser component is displayed
+    - expect: System configuration options are available
 
-#### 8.11. Admin - Modify System Settings
+#### 8.20. Admin - Modify System Settings
 
-**File:** `tests/admin/admin-modify-settings.spec.ts`
+**File:** `topomojo/tests/admin/admin-modify-settings.spec.ts`
 
 **Steps:**
   1. Navigate to admin settings
@@ -969,9 +1184,59 @@ TopoMojo is a virtual lab builder and player application that enables users to c
     - expect: Success notification appears
     - expect: New settings take effect
 
-#### 8.12. Admin - API Keys Management
+#### 8.21. Admin - Configure Background Image
 
-**File:** `tests/admin/admin-apikeys-management.spec.ts`
+**File:** `topomojo/tests/admin/admin-configure-background-image.spec.ts`
+
+**Steps:**
+  1. Navigate to admin settings/setting-browser section
+    - expect: Setting browser component loads
+    - expect: Background image configuration section is visible
+    - expect: Current background preview is shown (if any)
+  2. Click 'Choose File' or file input to select background image
+    - expect: File selection dialog opens
+    - expect: Only image files are accepted
+  3. Select a valid image file under 5MB
+    - expect: File is validated for type (must be image/*) and size (max 5MB)
+    - expect: Upload begins with uploading indicator
+    - expect: Preview updates to show selected image
+  4. Wait for upload to complete
+    - expect: Background image is uploaded successfully
+    - expect: Image is applied to application background via CSS custom property --app-bg-image
+    - expect: Document root has 'has-bg-image' class applied
+    - expect: Preview shows uploaded image
+
+#### 8.22. Admin - Configure Background Image - Validation
+
+**File:** `topomojo/tests/admin/admin-background-image-validation.spec.ts`
+
+**Steps:**
+  1. Navigate to admin setting browser background image section
+    - expect: Background image upload interface is visible
+  2. Attempt to upload non-image file
+    - expect: Validation error appears: 'Please choose an image file.'
+    - expect: Upload is prevented
+  3. Attempt to upload image larger than 5MB
+    - expect: Validation error appears: 'Image is too large. Please use an image under 5MB.'
+    - expect: Upload is prevented
+
+#### 8.23. Admin - Clear Background Image
+
+**File:** `topomojo/tests/admin/admin-clear-background-image.spec.ts`
+
+**Steps:**
+  1. Navigate to admin setting browser with background image configured
+    - expect: Current background image is displayed in preview
+    - expect: Clear button is visible
+  2. Click 'Clear' or 'Remove' background button
+    - expect: Background image is cleared
+    - expect: Preview shows no background image
+    - expect: Application background reverts to default (--app-bg-image: none)
+    - expect: 'has-bg-image' class is removed from document root
+
+#### 8.24. Admin - API Keys Management
+
+**File:** `topomojo/tests/admin/admin-apikeys-management.spec.ts`
 
 **Steps:**
   1. Navigate to admin dashboard
@@ -980,9 +1245,9 @@ TopoMojo is a virtual lab builder and player application that enables users to c
     - expect: API keys page loads
     - expect: List of API keys is displayed
 
-#### 8.13. Admin - Create API Key
+#### 8.25. Admin - Create API Key
 
-**File:** `tests/admin/admin-create-apikey.spec.ts`
+**File:** `topomojo/tests/admin/admin-create-apikey.spec.ts`
 
 **Steps:**
   1. Navigate to admin API keys page
@@ -996,9 +1261,9 @@ TopoMojo is a virtual lab builder and player application that enables users to c
     - expect: API key value is displayed
     - expect: User can copy API key
 
-#### 8.14. Admin - Revoke API Key
+#### 8.26. Admin - Revoke API Key
 
-**File:** `tests/admin/admin-revoke-apikey.spec.ts`
+**File:** `topomojo/tests/admin/admin-revoke-apikey.spec.ts`
 
 **Steps:**
   1. Navigate to admin API keys page with existing keys
@@ -1009,9 +1274,9 @@ TopoMojo is a virtual lab builder and player application that enables users to c
     - expect: API key is revoked
     - expect: API key is removed from list or marked as revoked
 
-#### 8.15. Admin - Log Viewer
+#### 8.27. Admin - Log Viewer
 
-**File:** `tests/admin/admin-log-viewer.spec.ts`
+**File:** `topomojo/tests/admin/admin-log-viewer.spec.ts`
 
 **Steps:**
   1. Navigate to admin dashboard
@@ -1021,9 +1286,9 @@ TopoMojo is a virtual lab builder and player application that enables users to c
     - expect: System logs are displayed
     - expect: Logs show timestamp, level, and message
 
-#### 8.16. Admin - Observer Mode
+#### 8.28. Admin - Observer Mode
 
-**File:** `tests/admin/admin-observer-mode.spec.ts`
+**File:** `topomojo/tests/admin/admin-observer-mode.spec.ts`
 
 **Steps:**
   1. Log in as user with observer role
@@ -1033,24 +1298,111 @@ TopoMojo is a virtual lab builder and player application that enables users to c
     - expect: Observer can view gamespaces without interacting
     - expect: Read-only view is enforced
 
-### 9. Search and Filtering
+### 9. About Page
 
-**Seed:** `tests/seed.setup.ts`
+**Seed:** `seed.spec.ts`
 
-#### 9.1. Search - Keyboard Shortcut
+#### 9.1. About Page Display
 
-**File:** `tests/search/search-keyboard-shortcut.spec.ts`
+**File:** `topomojo/tests/about/about-page-display.spec.ts`
+
+**Steps:**
+  1. Log in and navigate to About page via navigation button
+    - expect: About page loads at /about route
+    - expect: Page displays 'TopoMojo' heading
+    - expect: Tagline/description is visible: 'Cybersecurity training labs and exercises in isolated, secure virtual environments.'
+
+#### 9.2. About Page - Version Information
+
+**File:** `topomojo/tests/about/about-page-version-info.spec.ts`
+
+**Steps:**
+  1. Navigate to About page
+    - expect: About page loads
+  2. Observe version information section
+    - expect: UI version is displayed
+    - expect: API version is displayed
+    - expect: Version info is retrieved from /api/health/version endpoint
+
+#### 9.3. About Page - Content Sections
+
+**File:** `topomojo/tests/about/about-page-content.spec.ts`
+
+**Steps:**
+  1. Navigate to About page
+    - expect: About page loads
+  2. Scroll through page content
+    - expect: 'About' section describes TopoMojo's purpose and features
+    - expect: 'Workspace and Gamespace' section explains the difference between workspaces and gamespaces
+    - expect: 'Hotkeys' section displays keyboard shortcuts in a table format
+    - expect: 'License' section shows copyright and license information
+
+#### 9.4. About Page - External Links
+
+**File:** `topomojo/tests/about/about-page-external-links.spec.ts`
+
+**Steps:**
+  1. Navigate to About page
+    - expect: About page loads
+    - expect: Resources sidebar is visible if external links are not disabled
+  2. Observe Resources section in sidebar
+    - expect: 'Source code (GitHub)' link is visible and opens in new tab
+    - expect: 'Documentation' link is visible and opens in new tab
+    - expect: 'License' link is visible and opens in new tab
+    - expect: All links have target='_blank' and rel='noopener noreferrer'
+
+#### 9.5. About Page - Hotkeys Table
+
+**File:** `topomojo/tests/about/about-page-hotkeys.spec.ts`
+
+**Steps:**
+  1. Navigate to About page and locate Hotkeys section
+    - expect: Hotkeys table is displayed
+  2. Review hotkey information
+    - expect: General hotkeys include: Ctrl-O (Open workspace), Ctrl-L (Toggle left panel), Ctrl-H (Navigate home)
+    - expect: Workspace hotkeys include: Ctrl-1 through Ctrl-6 for various workspace tabs
+    - expect: All hotkeys are documented with group, key, and action
+
+#### 9.6. About Page - License Information
+
+**File:** `topomojo/tests/about/about-page-license.spec.ts`
+
+**Steps:**
+  1. Navigate to About page and locate License section
+    - expect: License section is visible
+  2. Review license information
+    - expect: Copyright notice displays: '© 2025 Carnegie Mellon University. All Rights Reserved.'
+    - expect: License summary describes redistribution terms
+    - expect: Link to full license is available if external links are enabled
+
+#### 9.7. About Page - Health Check Error Handling
+
+**File:** `topomojo/tests/about/about-page-health-error.spec.ts`
+
+**Steps:**
+  1. Navigate to About page when API health endpoint is unavailable
+    - expect: About page loads
+    - expect: Error message is displayed for version information
+    - expect: Page remains functional despite version fetch failure
+
+### 10. Search and Filtering
+
+**Seed:** `seed.spec.ts`
+
+#### 10.1. Search - Keyboard Shortcut
+
+**File:** `topomojo/tests/search/search-keyboard-shortcut.spec.ts`
 
 **Steps:**
   1. Navigate to home page
     - expect: Home page is displayed
   2. Press Ctrl+O keyboard shortcut
-    - expect: Search field is focused
+    - expect: Search field is focused or sidebar opens
     - expect: Search input is highlighted
 
-#### 9.2. Search - Real-time Results
+#### 10.2. Search - Real-time Results
 
-**File:** `tests/search/search-realtime-results.spec.ts`
+**File:** `topomojo/tests/search/search-realtime-results.spec.ts`
 
 **Steps:**
   1. Navigate to workspace browser
@@ -1059,9 +1411,9 @@ TopoMojo is a virtual lab builder and player application that enables users to c
     - expect: Results update in real-time as user types
     - expect: Matching workspaces are highlighted or filtered
 
-#### 9.3. Filter - My Workspaces
+#### 10.3. Filter - My Workspaces
 
-**File:** `tests/search/filter-my-workspaces.spec.ts`
+**File:** `topomojo/tests/search/filter-my-workspaces.spec.ts`
 
 **Steps:**
   1. Navigate to workspace browser
@@ -1070,9 +1422,9 @@ TopoMojo is a virtual lab builder and player application that enables users to c
     - expect: Only workspaces owned by current user are displayed
     - expect: Other workspaces are hidden
 
-#### 9.4. Filter - All Workspaces
+#### 10.4. Filter - All Workspaces
 
-**File:** `tests/search/filter-all-workspaces.spec.ts`
+**File:** `topomojo/tests/search/filter-all-workspaces.spec.ts`
 
 **Steps:**
   1. Navigate to workspace browser as admin
@@ -1081,13 +1433,13 @@ TopoMojo is a virtual lab builder and player application that enables users to c
     - expect: All workspaces in system are displayed
     - expect: Workspaces from all users are shown
 
-### 10. Real-time Updates and Notifications
+### 11. Real-time Updates and Notifications
 
-**Seed:** `tests/seed.setup.ts`
+**Seed:** `seed.spec.ts`
 
-#### 10.1. Real-time Workspace Updates
+#### 11.1. Real-time Workspace Updates
 
-**File:** `tests/realtime/workspace-updates.spec.ts`
+**File:** `topomojo/tests/realtime/workspace-updates.spec.ts`
 
 **Steps:**
   1. Open workspace in two browser windows for same user
@@ -1095,9 +1447,9 @@ TopoMojo is a virtual lab builder and player application that enables users to c
   2. Make change in one window (e.g., update description)
     - expect: Change is reflected in second window in real-time via SignalR
 
-#### 10.2. Real-time Gamespace Status Updates
+#### 11.2. Real-time Gamespace Status Updates
 
-**File:** `tests/realtime/gamespace-status-updates.spec.ts`
+**File:** `topomojo/tests/realtime/gamespace-status-updates.spec.ts`
 
 **Steps:**
   1. Open active gamespace
@@ -1106,9 +1458,9 @@ TopoMojo is a virtual lab builder and player application that enables users to c
     - expect: VM status updates in real-time
     - expect: Status indicator changes without page refresh
 
-#### 10.3. Presence Indicator
+#### 11.3. Presence Indicator
 
-**File:** `tests/realtime/presence-indicator.spec.ts`
+**File:** `topomojo/tests/realtime/presence-indicator.spec.ts`
 
 **Steps:**
   1. Open workspace with collaboration features
@@ -1117,13 +1469,13 @@ TopoMojo is a virtual lab builder and player application that enables users to c
     - expect: Other user's presence is shown
     - expect: User count or avatars update in real-time
 
-### 11. Error Handling and Edge Cases
+### 12. Error Handling and Edge Cases
 
-**Seed:** `tests/seed.setup.ts`
+**Seed:** `seed.spec.ts`
 
-#### 11.1. Network Failure Handling
+#### 12.1. Network Failure Handling
 
-**File:** `tests/error-handling/network-failure.spec.ts`
+**File:** `topomojo/tests/error-handling/network-failure.spec.ts`
 
 **Steps:**
   1. Log in successfully
@@ -1135,9 +1487,9 @@ TopoMojo is a virtual lab builder and player application that enables users to c
     - expect: User is notified of network issue
     - expect: Application remains stable
 
-#### 11.2. API Error - Server Error 500
+#### 12.2. API Error - Server Error 500
 
-**File:** `tests/error-handling/server-error-500.spec.ts`
+**File:** `topomojo/tests/error-handling/server-error-500.spec.ts`
 
 **Steps:**
   1. Trigger API call that returns 500 error
@@ -1145,9 +1497,9 @@ TopoMojo is a virtual lab builder and player application that enables users to c
     - expect: Error message is displayed to user
     - expect: No uncaught exceptions in console
 
-#### 11.3. Invalid Workspace ID
+#### 12.3. Invalid Workspace ID
 
-**File:** `tests/error-handling/invalid-workspace-id.spec.ts`
+**File:** `topomojo/tests/error-handling/invalid-workspace-id.spec.ts`
 
 **Steps:**
   1. Navigate to /topo/invalid-id-12345
@@ -1155,18 +1507,18 @@ TopoMojo is a virtual lab builder and player application that enables users to c
     - expect: User is notified workspace does not exist
     - expect: User can navigate back to home
 
-#### 11.4. Invalid Gamespace ID
+#### 12.4. Invalid Gamespace ID
 
-**File:** `tests/error-handling/invalid-gamespace-id.spec.ts`
+**File:** `topomojo/tests/error-handling/invalid-gamespace-id.spec.ts`
 
 **Steps:**
   1. Navigate to /mojo/invalid-id-12345
     - expect: Error page is displayed
     - expect: User is notified gamespace does not exist or is not accessible
 
-#### 11.5. Session Expiration
+#### 12.5. Session Expiration
 
-**File:** `tests/error-handling/session-expiration.spec.ts`
+**File:** `topomojo/tests/error-handling/session-expiration.spec.ts`
 
 **Steps:**
   1. Log in successfully
@@ -1177,9 +1529,9 @@ TopoMojo is a virtual lab builder and player application that enables users to c
     - expect: User is notified of session expiration
     - expect: User is redirected to login page
 
-#### 11.6. Browser Back Button Navigation
+#### 12.6. Browser Back Button Navigation
 
-**File:** `tests/error-handling/back-button-navigation.spec.ts`
+**File:** `topomojo/tests/error-handling/back-button-navigation.spec.ts`
 
 **Steps:**
   1. Navigate through multiple pages (home -> workspace editor -> gamespace)
@@ -1189,9 +1541,9 @@ TopoMojo is a virtual lab builder and player application that enables users to c
     - expect: Page state is preserved or reloaded correctly
     - expect: No errors occur
 
-#### 11.7. Concurrent Workspace Edits
+#### 12.7. Concurrent Workspace Edits
 
-**File:** `tests/error-handling/concurrent-workspace-edits.spec.ts`
+**File:** `topomojo/tests/error-handling/concurrent-workspace-edits.spec.ts`
 
 **Steps:**
   1. Open same workspace in two browser windows
@@ -1201,9 +1553,9 @@ TopoMojo is a virtual lab builder and player application that enables users to c
     - expect: Changes are synchronized or conflict is detected
     - expect: No data corruption occurs
 
-#### 11.8. Gamespace Deployment Failure
+#### 12.8. Gamespace Deployment Failure
 
-**File:** `tests/error-handling/gamespace-deployment-failure.spec.ts`
+**File:** `topomojo/tests/error-handling/gamespace-deployment-failure.spec.ts`
 
 **Steps:**
   1. Attempt to deploy gamespace with insufficient resources or configuration error
@@ -1211,9 +1563,9 @@ TopoMojo is a virtual lab builder and player application that enables users to c
     - expect: Error message explains failure reason
     - expect: User can retry or modify configuration
 
-#### 11.9. VM Console Connection Failure
+#### 12.9. VM Console Connection Failure
 
-**File:** `tests/error-handling/vm-console-connection-failure.spec.ts`
+**File:** `topomojo/tests/error-handling/vm-console-connection-failure.spec.ts`
 
 **Steps:**
   1. Attempt to open VM console that is unavailable
@@ -1221,9 +1573,9 @@ TopoMojo is a virtual lab builder and player application that enables users to c
     - expect: Error message is displayed
     - expect: User can retry connection
 
-#### 11.10. Form Validation - Duplicate Workspace Name
+#### 12.10. Form Validation - Duplicate Workspace Name
 
-**File:** `tests/error-handling/duplicate-workspace-name.spec.ts`
+**File:** `topomojo/tests/error-handling/duplicate-workspace-name.spec.ts`
 
 **Steps:**
   1. Attempt to create workspace with name that already exists
@@ -1231,13 +1583,13 @@ TopoMojo is a virtual lab builder and player application that enables users to c
     - expect: Error indicates name is already in use
     - expect: User can modify name
 
-### 12. Accessibility
+### 13. Accessibility
 
-**Seed:** `tests/seed.setup.ts`
+**Seed:** `seed.spec.ts`
 
-#### 12.1. Keyboard Navigation - Tab Order
+#### 13.1. Keyboard Navigation - Tab Order
 
-**File:** `tests/accessibility/keyboard-tab-order.spec.ts`
+**File:** `topomojo/tests/accessibility/keyboard-tab-order.spec.ts`
 
 **Steps:**
   1. Navigate to home page
@@ -1247,9 +1599,9 @@ TopoMojo is a virtual lab builder and player application that enables users to c
     - expect: All interactive elements are reachable
     - expect: Focus indicator is visible
 
-#### 12.2. Keyboard Navigation - Form Submission
+#### 13.2. Keyboard Navigation - Form Submission
 
-**File:** `tests/accessibility/keyboard-form-submission.spec.ts`
+**File:** `topomojo/tests/accessibility/keyboard-form-submission.spec.ts`
 
 **Steps:**
   1. Navigate to create workspace form
@@ -1259,9 +1611,9 @@ TopoMojo is a virtual lab builder and player application that enables users to c
   3. Press Enter to submit form
     - expect: Form submits without requiring mouse click
 
-#### 12.3. Screen Reader - Form Labels
+#### 13.3. Screen Reader - Form Labels
 
-**File:** `tests/accessibility/screen-reader-form-labels.spec.ts`
+**File:** `topomojo/tests/accessibility/screen-reader-form-labels.spec.ts`
 
 **Steps:**
   1. Navigate to any form
@@ -1269,40 +1621,41 @@ TopoMojo is a virtual lab builder and player application that enables users to c
     - expect: Labels are programmatically linked to inputs
     - expect: Screen reader would announce labels correctly
 
-#### 12.4. Screen Reader - Button Descriptions
+#### 13.4. Screen Reader - Button Descriptions
 
-**File:** `tests/accessibility/screen-reader-button-descriptions.spec.ts`
+**File:** `topomojo/tests/accessibility/screen-reader-button-descriptions.spec.ts`
 
 **Steps:**
   1. Navigate to page with icon buttons
     - expect: All icon buttons have aria-labels or titles
     - expect: Button purposes are clear for screen readers
+    - expect: Hamburger menu button has aria-label='Toggle sidebar'
 
-#### 12.5. Color Contrast Compliance
+#### 13.5. Color Contrast Compliance
 
-**File:** `tests/accessibility/color-contrast.spec.ts`
+**File:** `topomojo/tests/accessibility/color-contrast.spec.ts`
 
 **Steps:**
   1. Run automated accessibility audit on pages
     - expect: Text meets WCAG contrast requirements
     - expect: No critical contrast violations are reported
 
-### 13. Performance
+### 14. Performance
 
-**Seed:** `tests/seed.setup.ts`
+**Seed:** `seed.spec.ts`
 
-#### 13.1. Home Page Load Time
+#### 14.1. Home Page Load Time
 
-**File:** `tests/performance/home-page-load-time.spec.ts`
+**File:** `topomojo/tests/performance/home-page-load-time.spec.ts`
 
 **Steps:**
   1. Measure time from navigation to home page until fully loaded
     - expect: Home page loads within acceptable time (e.g., under 3 seconds)
     - expect: No blocking resources delay rendering
 
-#### 13.2. Workspace List Load Performance
+#### 14.2. Workspace List Load Performance
 
-**File:** `tests/performance/workspace-list-load.spec.ts`
+**File:** `topomojo/tests/performance/workspace-list-load.spec.ts`
 
 **Steps:**
   1. Navigate to workspace browser with large number of workspaces
@@ -1310,9 +1663,9 @@ TopoMojo is a virtual lab builder and player application that enables users to c
     - expect: Pagination or virtual scrolling is used for large datasets
     - expect: UI remains responsive
 
-#### 13.3. Gamespace Deployment Performance
+#### 14.3. Gamespace Deployment Performance
 
-**File:** `tests/performance/gamespace-deployment-performance.spec.ts`
+**File:** `topomojo/tests/performance/gamespace-deployment-performance.spec.ts`
 
 **Steps:**
   1. Deploy gamespace and measure deployment time
@@ -1320,9 +1673,9 @@ TopoMojo is a virtual lab builder and player application that enables users to c
     - expect: Deployment completes within expected timeframe
     - expect: No timeouts occur
 
-#### 13.4. VM Console Loading Performance
+#### 14.4. VM Console Loading Performance
 
-**File:** `tests/performance/vm-console-loading.spec.ts`
+**File:** `topomojo/tests/performance/vm-console-loading.spec.ts`
 
 **Steps:**
   1. Open VM console and measure load time
