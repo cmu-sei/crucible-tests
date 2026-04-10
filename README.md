@@ -32,12 +32,52 @@ Before running tests, start the Crucible services using one of the VS Code launc
 
 ### Using the VS Code Playwright Extension
 
-The dev container includes the [Playwright Test for VS Code](https://marketplace.visualstudio.com/items?itemName=ms-playwright.playwright) extension, pre-configured to use this test suite. From the **Testing** panel in VS Code you can:
+The dev container includes the [Playwright Test for VS Code](https://marketplace.visualstudio.com/items?itemName=ms-playwright.playwright) extension, pre-configured to use this test suite.
 
-- Browse and run individual tests or entire application suites
-- Run tests in headed mode to watch the browser
-- Debug tests with breakpoints
-- View test results and traces
+#### Opening the Test Explorer
+
+1. Click the **Testing** icon (beaker) in the VS Code Activity Bar, or press `Ctrl+Shift+T`
+2. The test tree shows all applications and their spec files — expand any app to see individual tests
+
+#### Running Tests
+
+- **Run a single test** — hover over a test name and click the **Run** (▶) button
+- **Run a file or suite** — click **Run** on a parent node (e.g., an app folder or `describe` block)
+- **Run all tests** — click **Run** at the top of the test tree
+- **Keyboard shortcut** — select a test and press `Ctrl+Shift+R` to run it
+
+#### Watching the Browser (Headed Mode)
+
+Check **Show browser** at the top of the Testing panel to launch a visible Chromium window when tests run. This is useful for understanding what a test does or diagnosing failures.
+
+#### Debugging Tests
+
+1. Set breakpoints in any `.spec.ts` file by clicking the gutter
+2. Right-click a test in the test tree and choose **Debug Test**, or click the **Debug** icon next to the test name
+3. The test pauses at your breakpoints — use the VS Code debug toolbar to step through code
+4. The browser stays open while paused, so you can inspect the page in DevTools
+
+#### Picking a Locator
+
+The extension includes a **Pick locator** tool that helps you find robust selectors:
+
+1. Check **Show browser** and run any test so a browser window opens
+2. Click **Pick locator** in the Testing panel toolbar
+3. Hover over elements in the browser — the extension generates a recommended Playwright locator
+4. Click an element to copy the locator to your clipboard for use in test code
+
+#### Viewing Traces
+
+After a test fails, click the **Show trace** link in the test results to open the [Playwright Trace Viewer](https://playwright.dev/docs/trace-viewer). The trace shows a timeline of every action with DOM snapshots, network requests, and console logs.
+
+#### Filtering and Searching
+
+- Use the **Filter** text box at the top of the test tree to search tests by name (e.g., type `login` to show only login-related tests)
+- Use the **@failed** filter to re-display only tests that failed on the last run
+
+#### Selecting a Browser Project
+
+The extension reads browser projects from `playwright.config.ts`. Click the **Select Default Profile** dropdown in the Testing panel to choose between configured projects (e.g., `chromium`). By default, tests run on Chromium only.
 
 ### Using the Command Line
 
