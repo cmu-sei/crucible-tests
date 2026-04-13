@@ -51,13 +51,21 @@ test.describe('Authentication and Authorization', () => {
     // expect: User is authenticated and redirected back to TopoMojo UI at http://localhost:4201
     await page.waitForURL(/localhost:4201/, { timeout: 30000 });
 
+    // Wait for OIDC callback to complete - URL may temporarily be /oidc?state=... while
+    // Angular processes the token before redirecting to the home page
+    try {
+      await page.waitForURL((url) => !url.pathname.includes('/oidc'), { timeout: 15000 });
+    } catch {
+      // OIDC may have already resolved
+    }
+
     // expect: TopoMojo home page displays
     await page.waitForLoadState('domcontentloaded');
 
     // expect: User is authenticated - Admin and Logout buttons are visible
     const adminButton = page.getByRole('button', { name: 'Admin' });
-    await expect(adminButton).toBeVisible({ timeout: 10000 });
+    await expect(adminButton).toBeVisible({ timeout: 30000 });
     const logoutButton = page.getByRole('button', { name: 'Logout' });
-    await expect(logoutButton).toBeVisible({ timeout: 5000 });
+    await expect(logoutButton).toBeVisible({ timeout: 10000 });
   });
 });

@@ -12,15 +12,22 @@ test.describe('Performance', () => {
     // 1. Navigate to workspace browser with workspaces
     const startTime = Date.now();
 
-    const sidebarToggle = page.locator('button[aria-label="Toggle sidebar"], button:has(mat-icon:text("menu"))').first();
+    const sidebarToggle = page.locator('button[aria-label="Toggle sidebar"]').first();
     const hasSidebarToggle = await sidebarToggle.isVisible({ timeout: 10000 }).catch(() => false);
+
     if (hasSidebarToggle) {
-      await sidebarToggle.click();
-      await page.waitForTimeout(500);
+      // Only open the sidebar if it's not already open (check for workspace browser visibility)
+      const workspaceBrowserContent = page.locator('app-workspace-browser');
+      const isAlreadyOpen = await workspaceBrowserContent.isVisible().catch(() => false);
+      if (!isAlreadyOpen) {
+        await sidebarToggle.click();
+        await page.waitForTimeout(500);
+      }
     }
 
-    // Wait for workspace list to appear
-    const workspaceList = page.locator('[class*="workspace"], [class*="browser"], mat-sidenav, mat-list').first();
+    // Wait for workspace browser content to be visible (search input inside the workspace browser)
+    // The app-workspace-browser element is shown/hidden based on sidebar state
+    const workspaceList = page.locator('app-workspace-browser');
     await expect(workspaceList).toBeVisible({ timeout: 15000 });
 
     const loadTime = Date.now() - startTime;

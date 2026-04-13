@@ -10,15 +10,20 @@ test.describe('Workspace Management', () => {
   test('Workspace List Display', async ({ topomojoAuthenticatedPage: page }) => {
 
     // 1. Log in and open sidebar to view workspace browser
-    const sidebarToggle = page.locator('button[aria-label="Toggle sidebar"], button:has(mat-icon:text("menu"))').first();
+    const sidebarToggle = page.locator('button[aria-label="Toggle sidebar"]').first();
     const hasSidebarToggle = await sidebarToggle.isVisible({ timeout: 10000 }).catch(() => false);
     if (hasSidebarToggle) {
-      await sidebarToggle.click();
-      await page.waitForTimeout(500);
+      // Only open the sidebar if it's not already open
+      const workspaceBrowserContent = page.locator('app-workspace-browser');
+      const isAlreadyOpen = await workspaceBrowserContent.isVisible().catch(() => false);
+      if (!isAlreadyOpen) {
+        await sidebarToggle.click();
+        await page.waitForTimeout(500);
+      }
     }
 
-    // expect: Workspace browser displays list of workspaces
-    const workspaceBrowser = page.locator('[class*="workspace"], [class*="browser"], mat-sidenav, mat-drawer').first();
+    // expect: Workspace browser displays (the app-workspace-browser element is visible when sidebar is open)
+    const workspaceBrowser = page.locator('app-workspace-browser');
     await expect(workspaceBrowser).toBeVisible({ timeout: 10000 });
 
     // expect: Workspace cards show name and metadata

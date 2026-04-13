@@ -17,21 +17,24 @@ test.describe('About Page', () => {
     await expect(page).toHaveURL(/\/about/);
 
     // 2. Scroll through page content
+    // Wait for the page to fully render before checking sections
+    // Use expect().toBeVisible() with timeout to properly retry until content appears
+
     // expect: 'About' section describes TopoMojo's purpose and features
-    const aboutSection = page.locator('text=/About/i').first();
-    const hasAbout = await aboutSection.isVisible({ timeout: 5000 }).catch(() => false);
+    const aboutSection = page.locator('h3:has-text("About"), h1:has-text("About")').first();
+    const hasAbout = await aboutSection.waitFor({ state: 'visible', timeout: 5000 }).then(() => true).catch(() => false);
 
     // expect: 'Workspace and Gamespace' section explains the difference
-    const workspaceSection = page.locator('text=/Workspace.*Gamespace/i, text=/Gamespace/i').first();
-    const hasWorkspaceSection = await workspaceSection.isVisible({ timeout: 5000 }).catch(() => false);
+    const workspaceSection = page.locator('h3:has-text("Workspace"), h4:has-text("Workspace"), h2:has-text("Workspace")').first();
+    const hasWorkspaceSection = await workspaceSection.waitFor({ state: 'visible', timeout: 5000 }).then(() => true).catch(() => false);
 
     // expect: 'Hotkeys' section displays keyboard shortcuts in a table format
-    const hotkeysSection = page.locator('text=/Hotkey/i, text=/Keyboard/i').first();
-    const hasHotkeys = await hotkeysSection.isVisible({ timeout: 5000 }).catch(() => false);
+    const hotkeysSection = page.locator('h3:has-text("Hotkey"), h4:has-text("Hotkey"), h2:has-text("Hotkey")').first();
+    const hasHotkeys = await hotkeysSection.waitFor({ state: 'visible', timeout: 5000 }).then(() => true).catch(() => false);
 
     // expect: 'License' section shows copyright and license information
-    const licenseSection = page.locator('text=/License/i, text=/Copyright/i').first();
-    const hasLicense = await licenseSection.isVisible({ timeout: 5000 }).catch(() => false);
+    const licenseSection = page.locator('h3:has-text("License"), h4:has-text("License"), p:has-text("Copyright")').first();
+    const hasLicense = await licenseSection.waitFor({ state: 'visible', timeout: 5000 }).then(() => true).catch(() => false);
 
     // At least some content sections should be present
     expect(hasAbout || hasWorkspaceSection || hasHotkeys || hasLicense).toBe(true);

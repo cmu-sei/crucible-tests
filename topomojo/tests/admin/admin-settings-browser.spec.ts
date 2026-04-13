@@ -13,37 +13,14 @@ test.describe('Admin Panel', () => {
     await page.goto(Services.TopoMojo.UI);
     await page.waitForLoadState('domcontentloaded');
 
-    // Wait for either login button or Admin button to appear
-    const loginButton = page.locator('button:has-text("Login"), button:has-text("identity provider")');
+    // Wait for Admin button to confirm authentication (fixture already authenticated)
+    // The Admin button only appears after auth state is set - wait generously to avoid race conditions
     const adminButton = page.getByRole('button', { name: 'Admin' });
 
     try {
-      // Check which one appears first
-      const result = await Promise.race([
-        loginButton.waitFor({ state: 'visible', timeout: 5000 }).then(() => 'login'),
-        adminButton.waitFor({ state: 'visible', timeout: 5000 }).then(() => 'admin'),
-      ]);
-
-      if (result === 'login') {
-        // Need to log in
-        await loginButton.click();
-
-        // Fill in Keycloak credentials
-        await page.waitForSelector('input[name="username"]', { timeout: 10000 });
-        await page.fill('input[name="username"]', 'admin');
-        await page.fill('input[name="password"]', 'admin');
-        await page.click('button:has-text("Sign In")');
-
-        // Wait for redirect back to TopoMojo
-        await page.waitForURL(/localhost:4201/, { timeout: 30000 });
-        await page.waitForLoadState('domcontentloaded');
-
-        // Wait for Admin button to appear after authentication
-        await adminButton.waitFor({ state: 'visible', timeout: 15000 });
-      }
+      await adminButton.waitFor({ state: 'visible', timeout: 30000 });
     } catch (e) {
-      // If neither appeared, throw an error
-      throw new Error('Neither login button nor admin button appeared on the page');
+      throw new Error(`Admin button did not appear within 30 seconds. Current URL: ${page.url()}`);
     }
 
     // 2. Click on Admin button in navigation

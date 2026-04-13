@@ -10,11 +10,16 @@ test.describe('Workspace Management', () => {
   test('Workspace Search', async ({ topomojoAuthenticatedPage: page }) => {
 
     // 1. Navigate to workspace browser with multiple workspaces
-    const sidebarToggle = page.locator('button[aria-label="Toggle sidebar"], button:has(mat-icon:text("menu"))').first();
+    const sidebarToggle = page.locator('button[aria-label="Toggle sidebar"]').first();
     const hasSidebarToggle = await sidebarToggle.isVisible({ timeout: 10000 }).catch(() => false);
     if (hasSidebarToggle) {
-      await sidebarToggle.click();
-      await page.waitForTimeout(500);
+      // Only open the sidebar if it's not already open
+      const workspaceBrowserContent = page.locator('app-workspace-browser');
+      const isAlreadyOpen = await workspaceBrowserContent.isVisible().catch(() => false);
+      if (!isAlreadyOpen) {
+        await sidebarToggle.click();
+        await page.waitForTimeout(500);
+      }
     }
 
     // expect: Search input field is visible

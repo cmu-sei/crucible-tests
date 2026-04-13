@@ -5,41 +5,36 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect } from '@playwright/test';
-import { authenticateTopoMojoWithKeycloak } from '../../fixtures';
+import { authenticateTopoMojoWithKeycloak, Services } from '../../fixtures';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
 test.describe('Workspace Management', () => {
-  // FIXME: Test requires non-admin user credentials to be properly configured in Keycloak
-  // Issue: user1 account in the Keycloak realm has a password hash that doesn't correspond to "user1".
-  // Attempts to login with user1/user1 fail with "Invalid username or password" from Keycloak.
-  //
-  // The password needs to be properly set in Keycloak for this test to work. See the FIXME comment
-  // in topomojo/tests/authentication/admin-access-unauthorized.spec.ts for detailed fix options.
-  test.fixme('Create Workspace - Unauthorized User', async ({ page }) => {
+  test('Create Workspace - Unauthorized User', async ({ page }) => {
 
-    // 1. Log in as user without creator role
-    // FIXME: user1/user1 credentials fail - password hash in realm doesn't match "user1"
+    // 1. Log in as user without creator role (user1 has default-roles-crucible only, no Creator role)
     await authenticateTopoMojoWithKeycloak(page, 'user1', 'user1');
 
     // expect: User is on home page
     await expect(page).toHaveURL(/localhost:4201/);
 
-    // Open sidebar if needed
-    const sidebarToggle = page.locator('button[aria-label="Toggle sidebar"], button:has(mat-icon:text("menu"))').first();
-    const hasSidebarToggle = await sidebarToggle.isVisible({ timeout: 10000 }).catch(() => false);
-    if (hasSidebarToggle) {
-      await sidebarToggle.click();
-      await page.waitForTimeout(500);
-    }
+    // expect: User is not an admin - no Admin button in nav
+    const adminButton = page.getByRole('button', { name: 'Admin' });
+    await expect(adminButton).not.toBeVisible();
 
-    // 2. Look for 'Create Workspace' button
-    const createButton = page.locator('button:has-text("Create"), button:has-text("New"), button:has(mat-icon:text("add"))').first();
+    // 2. Verify the TopoMojo API enforces the creator role restriction.
+    // The UI shows the "New Workspace" button to all authenticated users, but the API
+    // returns 403 Forbidden when a user without the Creator role attempts to create one.
+    const [response] = await Promise.all([
+      page.waitForResponse(
+        (res) => res.url().includes('/api/workspace') && res.request().method() === 'POST',
+        { timeout: 15000 }
+      ),
+      // Click the New Workspace button to trigger the API call
+      page.getByRole('button', { name: /new workspace/i }).click(),
+    ]);
 
-    // expect: Create workspace button is not visible or is disabled
-    const isVisible = await createButton.isVisible({ timeout: 5000 }).catch(() => false);
-    if (isVisible) {
-      await expect(createButton).toBeDisabled();
-    }
+    // expect: API returns 403 Forbidden for non-creator user
+    expect(response.status()).toBe(403);
   });
 });
