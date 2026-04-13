@@ -15,7 +15,7 @@ fi
 
 # Resolve infrastructure URLs (with defaults)
 KEYCLOAK_URL="${KEYCLOAK_URL:-https://localhost:8443}"
-ASPIRE_DASHBOARD_URL="${ASPIRE_DASHBOARD_URL:-http://localhost:18888}"
+ASPIRE_DASHBOARD_URL="${ASPIRE_DASHBOARD_URL:-https://localhost:17088}"
 
 # All supported apps
 ALL_APPS="keycloak blueprint player cite gameboard topomojo steamfitter moodle alloy caster gallery"
@@ -83,7 +83,7 @@ check_services() {
     fi
 
     # Aspire dashboard is optional
-    if curl -s "$ASPIRE_DASHBOARD_URL" > /dev/null 2>&1; then
+    if curl -k -s "$ASPIRE_DASHBOARD_URL" > /dev/null 2>&1; then
         print_success "Aspire Dashboard ($ASPIRE_DASHBOARD_URL)"
     else
         print_warning "Aspire Dashboard not accessible (optional)"
