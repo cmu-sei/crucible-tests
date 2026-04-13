@@ -43,9 +43,14 @@ test.describe('Admin Panel', () => {
     await expect(adminHeading).toBeVisible({ timeout: 10000 });
 
     // 2. Click on 'Users' section
+    // Start listening for the users API response before clicking, so we don't miss it
+    const usersApiResponse = page.waitForResponse(
+      resp => resp.url().includes('/users') && resp.status() === 200,
+      { timeout: 15000 }
+    );
     const usersLink = page.getByRole('link', { name: 'Users' });
     await usersLink.click();
-    await page.waitForLoadState('domcontentloaded');
+    await usersApiResponse;
 
     // expect: User browser page loads
     await expect(page).toHaveURL(/\/admin\/users/);
