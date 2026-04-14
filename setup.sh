@@ -5,8 +5,20 @@
 
 set -e
 
+# Load service URLs from .env
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$SCRIPT_DIR/.env" ]; then
+    set -a
+    source "$SCRIPT_DIR/.env"
+    set +a
+fi
+
+KEYCLOAK_URL="${KEYCLOAK_URL:-https://localhost:8443}"
+ASPIRE_DASHBOARD_URL="${ASPIRE_DASHBOARD_URL:-http://localhost:18888}"
+BLUEPRINT_UI_URL="${BLUEPRINT_UI_URL:-http://localhost:4725}"
+
 echo "=========================================="
-echo "Blueprint Playwright Test Setup"
+echo "Crucible Playwright Test Setup"
 echo "=========================================="
 echo ""
 
@@ -63,10 +75,10 @@ echo ""
 
 # Check if Aspire is running
 echo "Checking Aspire services..."
-if curl -s http://localhost:18888 > /dev/null 2>&1; then
-    echo "✓ Aspire dashboard is accessible at http://localhost:18888"
+if curl -s "$ASPIRE_DASHBOARD_URL" > /dev/null 2>&1; then
+    echo "✓ Aspire dashboard is accessible at $ASPIRE_DASHBOARD_URL"
 else
-    echo "⚠ Warning: Aspire dashboard is not accessible at http://localhost:18888"
+    echo "⚠ Warning: Aspire dashboard is not accessible at $ASPIRE_DASHBOARD_URL"
     echo "  Please start Aspire services before running tests:"
     echo "  cd ../Crucible.AppHost && dotnet run"
 fi
@@ -74,20 +86,20 @@ echo ""
 
 # Check if Blueprint is accessible
 echo "Checking Blueprint service..."
-if curl -s http://localhost:4725 > /dev/null 2>&1; then
-    echo "✓ Blueprint UI is accessible at http://localhost:4725"
+if curl -s "$BLUEPRINT_UI_URL" > /dev/null 2>&1; then
+    echo "✓ Blueprint UI is accessible at $BLUEPRINT_UI_URL"
 else
-    echo "⚠ Warning: Blueprint UI is not accessible at http://localhost:4725"
+    echo "⚠ Warning: Blueprint UI is not accessible at $BLUEPRINT_UI_URL"
     echo "  Make sure Aspire services are running."
 fi
 echo ""
 
 # Check if Keycloak is accessible
 echo "Checking Keycloak service..."
-if curl -k -s https://localhost:8443 > /dev/null 2>&1; then
-    echo "✓ Keycloak is accessible at https://localhost:8443"
+if curl -k -s "$KEYCLOAK_URL" > /dev/null 2>&1; then
+    echo "✓ Keycloak is accessible at $KEYCLOAK_URL"
 else
-    echo "⚠ Warning: Keycloak is not accessible at https://localhost:8443"
+    echo "⚠ Warning: Keycloak is not accessible at $KEYCLOAK_URL"
     echo "  Make sure Aspire services are running."
 fi
 echo ""
