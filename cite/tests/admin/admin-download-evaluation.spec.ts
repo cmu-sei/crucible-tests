@@ -5,34 +5,38 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
+import { navigateToAdminSection, deleteEvaluationByName, createEvaluation } from '../../test-helpers';
 
 test.describe('Administration - Evaluations', () => {
+
+  const TEST_EVAL_NAME = 'Test Evaluation For Download';
+
   test('Download Evaluation', async ({ citeAuthenticatedPage: page }) => {
 
-    // 1. Navigate to admin evaluations section
-    await page.goto(`${Services.Cite.UI}/admin`);
-    await page.waitForLoadState('domcontentloaded');
+    // 1. Create an evaluation to download
+    await createEvaluation(page, TEST_EVAL_NAME);
 
-    const evaluationsLink = page.locator('text=Evaluations, a:has-text("Evaluations"), mat-list-item:has-text("Evaluations")').first();
-    await expect(evaluationsLink).toBeVisible({ timeout: 10000 });
-    await evaluationsLink.click();
+    // 2. Navigate to the evaluations list and wait for the evaluation to appear
+    await navigateToAdminSection(page, 'Evaluations');
+    await page.waitForTimeout(2000);
 
-    // expect: Evaluations list displays
-    const rows = page.locator('mat-row, tbody tr');
-    await expect(rows.first()).toBeVisible({ timeout: 10000 });
+    const evalRow = page.locator('tbody tr').filter({ hasText: TEST_EVAL_NAME }).first();
+    await expect(evalRow).toBeVisible({ timeout: 15000 });
 
-    // 2. Click download button for an evaluation
-    const downloadButton = page.locator('button:has(mat-icon:has-text("download")), button:has(mat-icon:has-text("file_download")), button:has(mat-icon:has-text("cloud_download")), button[aria-label*="download"]').first();
-    if (await downloadButton.isVisible({ timeout: 5000 }).catch(() => false)) {
-      const downloadPromise = page.waitForEvent('download', { timeout: 10000 }).catch(() => null);
-      await downloadButton.click();
+    // 3. Click the download button on the evaluation row
+    const downloadButton = evalRow.locator(`button[title^="Download"]`);
+    await expect(downloadButton).toBeVisible({ timeout: 5000 });
 
-      // expect: Download begins
-      // expect: JSON file is downloaded containing evaluation data
-      const download = await downloadPromise;
-      if (download) {
-        expect(download.suggestedFilename()).toContain('.json');
-      }
-    }
+    const downloadPromise = page.waitForEvent('download', { timeout: 15000 });
+    await downloadButton.click();
+
+    // 4. Verify the download completes with a JSON file
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toContain('.json');
+    expect(download.suggestedFilename()).toContain('evaluation');
+  });
+
+  test.afterEach(async ({ citeAuthenticatedPage: page }) => {
+    await deleteEvaluationByName(page, TEST_EVAL_NAME);
   });
 });

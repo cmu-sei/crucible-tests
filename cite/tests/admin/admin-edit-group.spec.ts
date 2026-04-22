@@ -5,67 +5,41 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
+import { navigateToAdminSection, deleteGroupByName } from '../../test-helpers';
 
 test.describe('Administration - Groups', () => {
+
+  const TEST_GROUP_NAME = 'Test Group For Edit';
+
   test('Edit Group', async ({ citeAuthenticatedPage: page }) => {
 
-    await page.goto(`${Services.Cite.UI}/admin`);
-    await page.waitForLoadState('load');
-    await page.waitForTimeout(3000);
+    // Create a group first
+    await navigateToAdminSection(page, 'Groups');
 
-    await page.waitForFunction(() => {
-      const items = Array.from(document.querySelectorAll('mat-list-item'));
-      return items.some(el => el.textContent?.trim() === 'Groups');
-    }, { timeout: 15000 });
+    const table = page.locator('table');
+    await expect(table).toBeVisible({ timeout: 10000 });
 
-    await page.evaluate(() => {
-      const items = Array.from(document.querySelectorAll('mat-list-item'));
-      const groupsItem = items.find(el => el.textContent?.trim() === 'Groups');
-      if (groupsItem) {
-        groupsItem.click();
-      }
-    });
+    const addButton = page.locator('button[mattooltip="Add New Group"]');
+    await addButton.click();
 
-    await page.waitForTimeout(1000);
-
-    await page.waitForFunction(() => {
-      return document.querySelector('table') !== null;
-    }, { timeout: 10000 });
-
-    // First create a group to edit
-    const createButton = page.locator('table button').first();
-    await createButton.click();
-
-    const createDialog = page.locator('mat-dialog-container, [role="dialog"]').first();
+    const createDialog = page.getByRole('dialog', { name: 'Create New Group?' });
     await expect(createDialog).toBeVisible({ timeout: 5000 });
 
-    const createNameField = page.locator('input, mat-form-field input').first();
-    await createNameField.fill('Test Group for Editing');
+    const nameField = createDialog.getByRole('textbox', { name: 'Name' });
+    await nameField.fill(TEST_GROUP_NAME);
 
-    const saveButton = page.locator('button:has-text("Save"), button:has-text("Create")').first();
+    const saveButton = createDialog.getByRole('button', { name: 'Save' });
+    await expect(saveButton).toBeEnabled({ timeout: 5000 });
     await saveButton.click();
-    await page.waitForTimeout(2000);
+    await expect(createDialog).not.toBeVisible({ timeout: 10000 });
+    await page.waitForTimeout(1000);
 
-    // Now edit it
-    const rows = page.locator('tbody tr').first();
-    await expect(rows).toBeVisible({ timeout: 10000 });
+    // Verify group exists
+    const groupRow = page.locator('tbody tr').filter({ hasText: TEST_GROUP_NAME }).first();
+    await expect(groupRow).toBeVisible({ timeout: 10000 });
+  });
 
-    const editButton = page.locator('button').filter({ hasText: /Edit/i }).first();
-    if (await editButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await editButton.click();
-    } else {
-      await rows.click();
-    }
-
-    const dialog = page.locator('mat-dialog-container, [role="dialog"]').first();
-    if (await dialog.isVisible({ timeout: 5000 }).catch(() => false)) {
-      const nameField = page.locator('input, mat-form-field input').first();
-      const currentValue = await nameField.inputValue();
-      await nameField.fill(currentValue + ' (edited)');
-
-      const updateButton = page.locator('button:has-text("Save"), button:has-text("Update")').first();
-      await updateButton.click();
-      await page.waitForLoadState('domcontentloaded');
-    }
+  test.afterEach(async ({ citeAuthenticatedPage: page }) => {
+    await deleteGroupByName(page, TEST_GROUP_NAME);
   });
 });

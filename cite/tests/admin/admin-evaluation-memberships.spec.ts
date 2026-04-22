@@ -5,36 +5,42 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
+import { navigateToAdminSection, deleteEvaluationByName, createEvaluation } from '../../test-helpers';
 
 test.describe('Administration - Evaluations', () => {
+
+  const TEST_EVAL_NAME = 'Test Evaluation For Memberships';
+
   test('Manage Evaluation Memberships', async ({ citeAuthenticatedPage: page }) => {
 
-    // 1. Navigate to admin evaluations section and expand an evaluation
-    await page.goto(`${Services.Cite.UI}/admin`);
-    await page.waitForLoadState('domcontentloaded');
+    // 1. Create an evaluation
+    await createEvaluation(page, TEST_EVAL_NAME);
 
-    const evaluationsLink = page.locator('text=Evaluations, a:has-text("Evaluations"), mat-list-item:has-text("Evaluations")').first();
-    await expect(evaluationsLink).toBeVisible({ timeout: 10000 });
-    await evaluationsLink.click();
+    // 2. Navigate to the evaluations list and wait for the evaluation to appear
+    await navigateToAdminSection(page, 'Evaluations');
+    await page.waitForTimeout(2000);
 
-    const rows = page.locator('mat-row, tbody tr, [class*="evaluation-row"]');
-    await expect(rows.first()).toBeVisible({ timeout: 10000 });
-    await rows.first().click();
+    const evalRow = page.locator('tbody tr').filter({ hasText: TEST_EVAL_NAME }).first();
+    await expect(evalRow).toBeVisible({ timeout: 15000 });
+    await evalRow.click();
+    await page.waitForTimeout(2000);
 
-    // 2. Expand the 'Memberships' section
-    const membershipsPanel = page.locator('mat-expansion-panel-header:has-text("Memberships"), text=Memberships').first();
-    if (await membershipsPanel.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await membershipsPanel.click();
+    // 3. Find and expand the Memberships panel
+    const membershipsPanel = page.locator('mat-expansion-panel').filter({ hasText: 'Memberships' }).first();
+    await expect(membershipsPanel).toBeVisible({ timeout: 10000 });
+    await membershipsPanel.locator('mat-expansion-panel-header').click();
+    await page.waitForTimeout(1000);
 
-      // expect: Memberships management interface displays
-      // expect: List of users with evaluation access is shown
-      // expect: Add membership button is available
-      const addButton = page.locator('button:has(mat-icon:has-text("add")), button[aria-label*="add member"]').first();
-      if (await addButton.isVisible({ timeout: 5000 }).catch(() => false)) {
-        await addButton.click();
-        const dialog = page.locator('mat-dialog-container, [role="dialog"]').first();
-        await expect(dialog).toBeVisible({ timeout: 5000 });
-      }
-    }
+    // 4. Verify membership management UI is displayed (two-column layout: non-members and members)
+    const membershipContent = membershipsPanel.locator('.mat-expansion-panel-body, mat-expansion-panel-body').first();
+    await expect(membershipContent).toBeVisible({ timeout: 5000 });
+
+    // The membership panel shows available users and current members
+    const membersList = membershipsPanel.locator('app-admin-evaluation-member-list, app-admin-evaluation-membership-list').first();
+    await expect(membersList).toBeVisible({ timeout: 10000 });
+  });
+
+  test.afterEach(async ({ citeAuthenticatedPage: page }) => {
+    await deleteEvaluationByName(page, TEST_EVAL_NAME);
   });
 });

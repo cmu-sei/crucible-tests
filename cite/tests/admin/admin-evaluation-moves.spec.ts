@@ -5,41 +5,57 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
+import { navigateToAdminSection, deleteEvaluationByName, createEvaluation } from '../../test-helpers';
 
 test.describe('Administration - Evaluations', () => {
+
+  const TEST_EVAL_NAME = 'Test Evaluation For Moves';
+
   test('Manage Evaluation Moves', async ({ citeAuthenticatedPage: page }) => {
 
-    // 1. Navigate to admin evaluations section and expand an evaluation
-    await page.goto(`${Services.Cite.UI}/admin`);
-    await page.waitForLoadState('domcontentloaded');
+    // 1. Create an evaluation
+    await createEvaluation(page, TEST_EVAL_NAME);
 
-    const evaluationsLink = page.locator('text=Evaluations, a:has-text("Evaluations"), mat-list-item:has-text("Evaluations")').first();
-    await expect(evaluationsLink).toBeVisible({ timeout: 10000 });
-    await evaluationsLink.click();
+    // 2. Navigate to the evaluations list and wait for the evaluation to appear
+    await navigateToAdminSection(page, 'Evaluations');
+    await page.waitForTimeout(2000);
 
-    const rows = page.locator('mat-row, tbody tr, [class*="evaluation-row"]');
-    await expect(rows.first()).toBeVisible({ timeout: 10000 });
-    await rows.first().click();
+    const evalRow = page.locator('tbody tr').filter({ hasText: TEST_EVAL_NAME }).first();
+    await expect(evalRow).toBeVisible({ timeout: 15000 });
+    await evalRow.click();
+    await page.waitForTimeout(2000);
 
-    // expect: Evaluation details are expanded
+    // 3. Find and expand the Moves panel
+    const movesPanel = page.locator('mat-expansion-panel').filter({ hasText: 'Moves' }).first();
+    await expect(movesPanel).toBeVisible({ timeout: 10000 });
+    // Use direct child selector to avoid selecting nested panel headers
+    await movesPanel.locator('> mat-expansion-panel-header').click();
+    await page.waitForTimeout(1000);
 
-    // 2. Expand the 'Moves' section
-    const movesPanel = page.locator('mat-expansion-panel-header:has-text("Moves"), text=Moves').first();
-    if (await movesPanel.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await movesPanel.click();
+    // 4. Add a move
+    const addMoveButton = movesPanel.locator('button[title="Add Move"]');
+    await expect(addMoveButton).toBeVisible({ timeout: 5000 });
+    await addMoveButton.click();
 
-      // expect: Moves management interface displays
-      // expect: List of moves is shown
-      // expect: Add move button is available
-      const addButton = page.locator('button:has(mat-icon:has-text("add")), button[aria-label*="add move"]').first();
-      if (await addButton.isVisible({ timeout: 5000 }).catch(() => false)) {
-        // 3. Click add move button
-        await addButton.click();
+    const moveDialog = page.getByRole('dialog');
+    await expect(moveDialog).toBeVisible({ timeout: 5000 });
 
-        // expect: Create move dialog opens
-        const dialog = page.locator('mat-dialog-container, [role="dialog"]').first();
-        await expect(dialog).toBeVisible({ timeout: 5000 });
-      }
-    }
+    // Fill the Move Description field (not the Move Number field)
+    const moveDescField = moveDialog.getByRole('textbox', { name: 'Move Description' });
+    await moveDescField.fill('Move 1 Description');
+
+    const moveSaveButton = moveDialog.getByRole('button', { name: 'Save' });
+    await expect(moveSaveButton).toBeEnabled({ timeout: 5000 });
+    await moveSaveButton.click();
+    await expect(moveDialog).not.toBeVisible({ timeout: 10000 });
+    await page.waitForTimeout(1000);
+
+    // 5. Verify the move appears in the list
+    const moveItem = movesPanel.locator('text=Move 1 Description');
+    await expect(moveItem).toBeVisible({ timeout: 10000 });
+  });
+
+  test.afterEach(async ({ citeAuthenticatedPage: page }) => {
+    await deleteEvaluationByName(page, TEST_EVAL_NAME);
   });
 });

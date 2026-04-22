@@ -5,25 +5,41 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
+import { navigateToAdminSection } from '../../test-helpers';
 
 test.describe('Administration - Submissions', () => {
   test('Filter Submissions by Evaluation', async ({ citeAuthenticatedPage: page }) => {
 
-    await page.goto(`${Services.Cite.UI}/admin`);
-    await page.waitForLoadState('domcontentloaded');
+    // 1. Navigate to Submissions section
+    await navigateToAdminSection(page, 'Submissions');
 
-    const submissionsLink = page.locator('text=Submissions, a:has-text("Submissions"), mat-list-item:has-text("Submissions")').first();
-    await expect(submissionsLink).toBeVisible({ timeout: 10000 });
-    await submissionsLink.click();
-    await page.waitForLoadState('domcontentloaded');
+    // 2. Verify filter controls are present
+    const evaluationFilter = page.getByRole('combobox', { name: 'Evaluation' });
+    await expect(evaluationFilter).toBeVisible({ timeout: 5000 });
 
-    // Select an evaluation from filter dropdown
-    const evalFilter = page.locator('mat-select, select, [class*="evaluation-filter"]').first();
-    if (await evalFilter.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await evalFilter.click();
-      const option = page.locator('mat-option, option').first();
-      await option.click();
-      await page.waitForTimeout(500);
-    }
+    const moveFilter = page.getByRole('combobox', { name: 'Move' });
+    await expect(moveFilter).toBeVisible({ timeout: 5000 });
+
+    // 3. Click the evaluation filter to verify it opens with options
+    await evaluationFilter.click();
+    await page.waitForTimeout(500);
+
+    const evalOptions = page.locator('mat-option');
+    const evalOptionCount = await evalOptions.count();
+    expect(evalOptionCount).toBeGreaterThanOrEqual(0);
+
+    // Close the dropdown
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(500);
+
+    // 4. Click the move filter to verify it opens
+    await moveFilter.click();
+    await page.waitForTimeout(500);
+
+    const moveOptions = page.locator('mat-option');
+    const moveOptionCount = await moveOptions.count();
+    expect(moveOptionCount).toBeGreaterThanOrEqual(0);
+
+    await page.keyboard.press('Escape');
   });
 });

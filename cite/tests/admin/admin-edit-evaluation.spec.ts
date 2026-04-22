@@ -5,47 +5,58 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
+import { navigateToAdminSection, deleteEvaluationByName, createEvaluation } from '../../test-helpers';
 
 test.describe('Administration - Evaluations', () => {
+
+  const TEST_EVAL_NAME = 'Test Evaluation For Edit';
+  const EDITED_EVAL_NAME = 'Edited Evaluation Automation';
+
   test('Edit Evaluation', async ({ citeAuthenticatedPage: page }) => {
 
-    // 1. Navigate to admin evaluations section with existing evaluations
-    await page.goto(`${Services.Cite.UI}/admin`);
-    await page.waitForLoadState('domcontentloaded');
+    // 1. Create an evaluation to edit
+    await createEvaluation(page, TEST_EVAL_NAME);
 
-    const evaluationsLink = page.locator('text=Evaluations, a:has-text("Evaluations"), mat-list-item:has-text("Evaluations")').first();
-    await expect(evaluationsLink).toBeVisible({ timeout: 10000 });
-    await evaluationsLink.click();
+    // 2. Navigate to the evaluations list and wait for the evaluation to appear
+    await navigateToAdminSection(page, 'Evaluations');
+    await page.waitForTimeout(2000);
 
-    // expect: Evaluations list displays
-    const rows = page.locator('mat-row, tbody tr, [class*="evaluation-row"]');
-    await expect(rows.first()).toBeVisible({ timeout: 10000 });
+    const evalRow = page.locator('tbody tr').filter({ hasText: TEST_EVAL_NAME }).first();
+    await expect(evalRow).toBeVisible({ timeout: 15000 });
 
-    // 2. Click on an evaluation row or its edit button
-    const editButton = page.locator('button:has(mat-icon:has-text("edit")), button[aria-label*="edit"]').first();
-    if (await editButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await editButton.click();
-    } else {
-      await rows.first().click();
-    }
+    // 3. Click edit button
+    const editButton = evalRow.locator('button[title="Edit Evaluation"]');
+    await expect(editButton).toBeVisible({ timeout: 5000 });
+    await editButton.click();
 
-    // expect: Evaluation edit dialog/page opens
-    // expect: Current evaluation details are populated in form
-    const dialog = page.locator('mat-dialog-container, [role="dialog"], [class*="dialog"], [class*="edit"]').first();
-    await expect(dialog).toBeVisible({ timeout: 5000 });
+    const editDialog = page.getByRole('dialog');
+    await expect(editDialog).toBeVisible({ timeout: 5000 });
 
-    // 3. Modify evaluation description or settings
-    const descriptionField = page.locator('input[placeholder*="description"], input[placeholder*="name"], textarea, mat-form-field input').first();
-    if (await descriptionField.isVisible({ timeout: 3000 }).catch(() => false)) {
-      const currentValue = await descriptionField.inputValue();
-      await descriptionField.fill(currentValue + ' (edited)');
-    }
+    // 4. Verify the description is pre-populated and modify it
+    const editDescField = editDialog.getByRole('textbox', { name: 'Evaluation Description' });
+    await expect(editDescField).toBeVisible({ timeout: 5000 });
+    const currentValue = await editDescField.inputValue();
+    expect(currentValue).toContain(TEST_EVAL_NAME);
 
-    // 4. Click 'Save' or 'Update' button
-    const saveButton = page.locator('button:has-text("Save"), button:has-text("Update")').first();
-    if (await saveButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await saveButton.click();
-      await page.waitForLoadState('domcontentloaded');
-    }
+    await editDescField.clear();
+    await editDescField.fill(EDITED_EVAL_NAME);
+
+    // 5. Save the edit
+    const editSaveButton = editDialog.getByRole('button', { name: 'Save' });
+    await expect(editSaveButton).toBeEnabled({ timeout: 5000 });
+    await editSaveButton.click();
+    await expect(editDialog).not.toBeVisible({ timeout: 15000 });
+    await page.waitForTimeout(2000);
+
+    // 6. Verify the edit is reflected
+    await navigateToAdminSection(page, 'Evaluations');
+
+    const editedRow = page.locator('tbody tr').filter({ hasText: EDITED_EVAL_NAME }).first();
+    await expect(editedRow).toBeVisible({ timeout: 10000 });
+  });
+
+  test.afterEach(async ({ citeAuthenticatedPage: page }) => {
+    await deleteEvaluationByName(page, EDITED_EVAL_NAME);
+    await deleteEvaluationByName(page, TEST_EVAL_NAME);
   });
 });

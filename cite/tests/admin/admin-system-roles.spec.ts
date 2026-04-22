@@ -5,25 +5,18 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
+import { navigateToAdminSection } from '../../test-helpers';
 
 test.describe('Administration - Roles', () => {
   test('View System Roles', async ({ citeAuthenticatedPage: page }) => {
 
-    await page.goto(`${Services.Cite.UI}/admin`);
-    await page.waitForLoadState('domcontentloaded');
+    await navigateToAdminSection(page, 'Roles');
 
-    const rolesLink = page.locator('text=Roles, a:has-text("Roles"), mat-list-item:has-text("Roles")').first();
-    await expect(rolesLink).toBeVisible({ timeout: 10000 });
-    await rolesLink.click();
+    const rolesTab = page.getByRole('tab', { name: 'Roles', exact: true });
+    await expect(rolesTab).toBeVisible({ timeout: 10000 });
+    await rolesTab.click();
 
-    // Click on 'Roles' tab (system roles)
-    const systemRolesTab = page.locator('[role="tab"]:has-text("Roles")').first();
-    await expect(systemRolesTab).toBeVisible({ timeout: 10000 });
-    await systemRolesTab.click();
-
-    // expect: System roles are displayed
-    await page.waitForLoadState('domcontentloaded');
-    const content = page.locator('mat-table, table, [class*="role"], [class*="list"]').first();
-    await expect(content).toBeVisible({ timeout: 10000 });
+    const table = page.locator('table');
+    await expect(table).toBeVisible({ timeout: 10000 });
   });
 });
