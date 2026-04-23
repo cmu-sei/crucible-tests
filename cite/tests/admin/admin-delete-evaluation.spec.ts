@@ -16,32 +16,23 @@ test.describe('Administration - Evaluations', () => {
     // 1. Create an evaluation to delete
     await createEvaluation(page, TEST_EVAL_NAME);
 
-    // 2. Navigate to the evaluations list and wait for the evaluation to appear
+    // 2. Navigate to the evaluations list and verify the evaluation exists
     await navigateToAdminSection(page, 'Evaluations');
     await page.waitForTimeout(2000);
 
     const evalRow = page.locator('tbody tr').filter({ hasText: TEST_EVAL_NAME }).first();
     await expect(evalRow).toBeVisible({ timeout: 15000 });
 
-    // 3. Delete the evaluation
-    let deleteButton = evalRow.locator(`button[title*="Delete ${TEST_EVAL_NAME}"]`);
-    if (!(await deleteButton.isVisible({ timeout: 1000 }).catch(() => false))) {
-      deleteButton = evalRow.getByRole('button', { name: 'Delete Evaluation' });
-    }
-    await expect(deleteButton).toBeVisible({ timeout: 5000 });
-    await deleteButton.click();
+    // 3. Delete the evaluation using the robust helper that handles row selection,
+    //    button enable polling, and confirmation. The delete button only becomes
+    //    enabled after the row is selected/expanded; the helper handles this.
+    const deletedCount = await deleteEvaluationByName(page, TEST_EVAL_NAME);
+    expect(deletedCount).toBeGreaterThanOrEqual(1);
 
-    const confirmDialog = page.getByRole('dialog', { name: 'Delete this evaluation?' });
-    await expect(confirmDialog).toBeVisible({ timeout: 5000 });
-
-    const yesButton = confirmDialog.getByRole('button', { name: 'Yes' });
-    await yesButton.click();
-    await expect(confirmDialog).not.toBeVisible({ timeout: 5000 });
-    await page.waitForTimeout(1000);
-
-    // 4. Verify the evaluation is gone
+    // 4. Verify the evaluation is gone from the table
+    await navigateToAdminSection(page, 'Evaluations');
     const deletedRow = page.locator('tbody tr').filter({ hasText: TEST_EVAL_NAME });
-    await expect(deletedRow).toHaveCount(0, { timeout: 10000 });
+    await expect(deletedRow).toHaveCount(0, { timeout: 15000 });
   });
 
   test.afterEach(async ({ citeAuthenticatedPage: page }) => {

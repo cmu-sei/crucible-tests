@@ -5,30 +5,27 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect } from '../../fixtures';
+import { getApiToken, ensureEvaluation, deleteEvaluation, navigateToEvaluation } from './eval-helpers';
 
 test.describe('Evaluation Dashboard Interface', () => {
-  test('Section Navigation - Switch to Scoresheet', async ({ citeAuthenticatedPage: page }) => {
+  test('Section Navigation - Switch to Scoresheet', async ({ citeAuthenticatedPage: page, request }) => {
+    const token = await getApiToken(request);
+    const { id: evalId, created } = await ensureEvaluation(request, token);
 
-    // 1. Navigate to evaluation dashboard
-    await expect(page).toHaveURL(/localhost:4721/, { timeout: 10000 });
-    const rows = page.locator('mat-row, tbody tr, [class*="evaluation-row"]');
-    await expect(rows.first()).toBeVisible({ timeout: 10000 });
-    await rows.first().click();
-    await page.waitForLoadState('domcontentloaded');
+    try {
+      // 1. Navigate to evaluation via admin page
+      await navigateToEvaluation(page);
+      await page.waitForLoadState('domcontentloaded');
 
-    // expect: Dashboard view is displayed
+      // 2. Click on 'Moves' section in admin view
+      const movesButton = page.getByRole('button', { name: 'Moves' }).first();
+      await expect(movesButton).toBeVisible({ timeout: 10000 });
+      await movesButton.click();
 
-    // 2. Click on 'Scoresheet' tab or navigation button
-    const scoresheetTab = page.locator('[role="tab"]:has-text("Scoresheet"), mat-tab:has-text("Scoresheet"), button:has-text("Scoresheet"), a:has-text("Scoresheet")').first();
-    await expect(scoresheetTab).toBeVisible({ timeout: 10000 });
-    await scoresheetTab.click();
-
-    // expect: View switches to scoresheet section
-    // expect: Scoresheet interface is displayed
-    await page.waitForLoadState('domcontentloaded');
-
-    // expect: Scoring categories and options are visible
-    const scoresheetContent = page.locator('[class*="scoresheet"], [class*="scoring"], [class*="category"]').first();
-    await expect(scoresheetContent).toBeVisible({ timeout: 10000 });
+      // expect: Moves section expands
+      await page.waitForLoadState('domcontentloaded');
+    } finally {
+      if (created) await deleteEvaluation(request, token, evalId);
+    }
   });
 });

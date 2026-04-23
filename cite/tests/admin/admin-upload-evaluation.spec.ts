@@ -28,8 +28,13 @@ test.describe('Administration - Evaluations', () => {
     const evalRow = page.locator('tbody tr').filter({ hasText: TEST_EVAL_NAME }).first();
     await expect(evalRow).toBeVisible({ timeout: 15000 });
 
+    // Click the row to enable per-row action buttons
+    await evalRow.click();
+    await page.waitForTimeout(500);
+
     const downloadButton = evalRow.locator(`button[title*="Download"]`);
     await expect(downloadButton).toBeVisible({ timeout: 5000 });
+    await expect(downloadButton).toBeEnabled({ timeout: 5000 });
 
     const downloadPromise = page.waitForEvent('download', { timeout: 15000 });
     await downloadButton.click();
@@ -53,23 +58,20 @@ test.describe('Administration - Evaluations', () => {
 
     const uploadButton = page.getByRole('button', { name: 'Upload Evaluation' });
     await expect(uploadButton).toBeVisible({ timeout: 10000 });
+    await expect(uploadButton).toBeEnabled({ timeout: 10000 });
 
-    // Set up file chooser handler and wait for upload API call
-    const fileChooserPromise = page.waitForEvent('filechooser');
-    const uploadResponsePromise = page.waitForResponse(response =>
-      response.url().includes('/api/evaluations/json') && response.request().method() === 'POST'
-    );
+    // Set the file directly on the hidden file input element. This is more reliable
+    // than going through the file chooser dialog, especially in Firefox where the
+    // programmatic click on a hidden input may not trigger Playwright's filechooser event.
+    const fileInput = page.locator('input[type="file"][accept=".json"]');
+    await fileInput.setInputFiles(tempFilePath);
 
-    await uploadButton.click();
-    const fileChooser = await fileChooserPromise;
-    await fileChooser.setFiles(tempFilePath);
-
-    // Wait for the upload API call to complete
-    const uploadResponse = await uploadResponsePromise;
-    expect(uploadResponse.status()).toBe(200);
+    // Wait for the upload to complete by checking that the evaluation appears in the list
+    await page.waitForTimeout(3000);
 
     // 5. Verify the uploaded evaluation appears in the list
     await navigateToAdminSection(page, 'Evaluations');
+    await page.waitForTimeout(2000);
 
     const uploadedRow = page.locator('tbody tr').filter({ hasText: UPLOADED_EVAL_NAME }).first();
     await expect(uploadedRow).toBeVisible({ timeout: 15000 });

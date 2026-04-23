@@ -72,12 +72,14 @@ export async function navigateToAdminSection(page: Page, section?: string): Prom
 }
 
 /**
- * Delete an evaluation by name
+ * Delete an evaluation by name - deletes ALL evaluations matching the name
  * @param page - Playwright Page object
  * @param evaluationName - Name/description of the evaluation to delete
- * @returns true if deleted, false if not found
+ * @returns number of evaluations deleted
  */
-export async function deleteEvaluationByName(page: Page, evaluationName: string): Promise<boolean> {
+export async function deleteEvaluationByName(page: Page, evaluationName: string): Promise<number> {
+  let deletedCount = 0;
+
   try {
     // Close any open dialogs first
     const openDialog = page.getByRole('dialog').first();
@@ -98,47 +100,68 @@ export async function deleteEvaluationByName(page: Page, evaluationName: string)
       await navigateToAdminSection(page, 'Evaluations');
     }
 
-    const evaluationRow = page.locator('tbody tr').filter({ hasText: evaluationName }).first();
-    if (!(await evaluationRow.isVisible({ timeout: 2000 }).catch(() => false))) {
-      return false;
-    }
+    // Loop to delete all evaluations with matching name
+    while (true) {
+      const evaluationRow = page.locator('tbody tr').filter({ hasText: evaluationName }).first();
+      if (!(await evaluationRow.isVisible({ timeout: 2000 }).catch(() => false))) {
+        break;
+      }
 
-    // Click the row to enable action buttons
-    await evaluationRow.click();
-    await page.waitForTimeout(500);
+      // Try to find delete button by title attribute first, fallback to role
+      let deleteButton = evaluationRow.locator(`button[title*="Delete ${evaluationName}"]`);
+      if (!(await deleteButton.isVisible({ timeout: 1000 }).catch(() => false))) {
+        deleteButton = evaluationRow.getByRole('button', { name: 'Delete Evaluation' });
+      }
 
-    // Try to find delete button by title attribute first, fallback to role
-    let deleteButton = evaluationRow.locator(`button[title*="Delete ${evaluationName}"]`);
-    if (!(await deleteButton.isVisible({ timeout: 1000 }).catch(() => false))) {
-      deleteButton = evaluationRow.getByRole('button', { name: 'Delete Evaluation' });
-    }
+      if (!(await deleteButton.isVisible({ timeout: 1000 }).catch(() => false))) {
+        break;
+      }
 
-    if (!(await deleteButton.isVisible({ timeout: 1000 }).catch(() => false))) {
-      return false;
-    }
+      // The delete button enables only when the row is "selected" (expanded).
+      // Clicking the row toggles its expanded state, so poll until the button
+      // becomes enabled rather than blindly clicking multiple times.
+      let buttonEnabled = false;
+      for (let attempt = 0; attempt < 6; attempt++) {
+        if (await deleteButton.isEnabled({ timeout: 500 }).catch(() => false)) {
+          buttonEnabled = true;
+          break;
+        }
+        await evaluationRow.click();
+        await page.waitForTimeout(800);
+      }
 
-    // Check if the button is enabled, if not, click the row again to select it
-    if (!(await deleteButton.isEnabled({ timeout: 1000 }).catch(() => false))) {
-      await evaluationRow.click();
+      if (!buttonEnabled) {
+        // One more strict wait; if this fails, exit rather than throw to allow cleanup
+        // to surface the original test failure instead of the cleanup error.
+        if (!(await deleteButton.isEnabled({ timeout: 2000 }).catch(() => false))) {
+          console.log(`Delete button remained disabled for "${evaluationName}"; skipping`);
+          break;
+        }
+      }
+
+      await deleteButton.click();
+
+      const confirmDialog = page.getByRole('dialog', { name: 'Delete this evaluation?' });
+      await expect(confirmDialog).toBeVisible({ timeout: 5000 });
+
+      const yesButton = confirmDialog.getByRole('button', { name: 'Yes' });
+      await yesButton.click();
+
+      await expect(confirmDialog).not.toBeVisible({ timeout: 5000 });
+
+      // Wait for the row to actually disappear before looking for the next one,
+      // otherwise we may find a stale row whose delete button is still disabled.
+      await expect(evaluationRow).not.toBeVisible({ timeout: 10000 }).catch(() => {});
       await page.waitForTimeout(500);
+
+      deletedCount++;
+      console.log(`Deleted evaluation "${evaluationName}" (${deletedCount})`);
     }
 
-    // Wait for the button to be enabled before clicking
-    await expect(deleteButton).toBeEnabled({ timeout: 5000 });
-    await deleteButton.click();
-
-    const confirmDialog = page.getByRole('dialog', { name: 'Delete this evaluation?' });
-    await expect(confirmDialog).toBeVisible({ timeout: 5000 });
-
-    const yesButton = confirmDialog.getByRole('button', { name: 'Yes' });
-    await yesButton.click();
-
-    await expect(confirmDialog).not.toBeVisible({ timeout: 5000 });
-    await page.waitForTimeout(1000);
-
-    return true;
+    return deletedCount;
   } catch (error) {
-    return false;
+    console.log(`Error deleting evaluations "${evaluationName}":`, error);
+    return deletedCount;
   }
 }
 
@@ -403,6 +426,55 @@ export async function createEvaluation(page: Page, evaluationName: string): Prom
   // Note: Due to known timing/refresh issues in the CITE UI, evaluations may not immediately
   // appear in the list after creation. The tests that use this helper should verify
   // the evaluation exists when they need to interact with it.
+}
+
+/**
+ * Add the admin user as a member of an evaluation
+ * @param page - Playwright Page object
+ * @param evaluationName - Description of the evaluation to add member to
+ */
+export async function addAdminUserToEvaluation(page: Page, evaluationName: string): Promise<void> {
+  await navigateToAdminSection(page, 'Evaluations');
+  await page.waitForTimeout(2000);
+
+  // Find and click the evaluation row
+  const evalRow = page.locator('tbody tr').filter({ hasText: evaluationName }).first();
+  await expect(evalRow).toBeVisible({ timeout: 15000 });
+  await evalRow.click();
+  await page.waitForTimeout(2000);
+
+  // Find and expand the Memberships panel
+  const membershipsPanel = page.locator('mat-expansion-panel').filter({ hasText: 'Memberships' }).first();
+  await expect(membershipsPanel).toBeVisible({ timeout: 10000 });
+
+  // Check if panel is already expanded, if not expand it
+  const panelHeader = membershipsPanel.locator('mat-expansion-panel-header');
+  const isExpanded = await membershipsPanel.locator('.mat-expanded').isVisible({ timeout: 1000 }).catch(() => false);
+
+  if (!isExpanded) {
+    await panelHeader.click();
+    await page.waitForTimeout(1000);
+  }
+
+  // Wait for memberships content to load
+  const membershipContent = membershipsPanel.locator('.mat-expansion-panel-body, mat-expansion-panel-body').first();
+  await expect(membershipContent).toBeVisible({ timeout: 5000 });
+
+  // Look for Admin User in the available users list (left side) and click to add
+  // The structure has two panels - non-members on left, members on right
+  const adminUserRow = membershipsPanel.locator('tr, mat-row, .user-row').filter({ hasText: 'Admin User' }).first();
+
+  if (await adminUserRow.isVisible({ timeout: 5000 }).catch(() => false)) {
+    await adminUserRow.click();
+    await page.waitForTimeout(1000);
+
+    // Look for add button (right arrow or plus icon)
+    const addButton = membershipsPanel.locator('button').filter({ hasText: /add|→|>|\+/i }).first();
+    if (await addButton.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await addButton.click();
+      await page.waitForTimeout(2000);
+    }
+  }
 }
 
 /**

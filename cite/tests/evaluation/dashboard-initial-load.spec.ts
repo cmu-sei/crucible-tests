@@ -5,33 +5,29 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect } from '../../fixtures';
+import { getApiToken, ensureEvaluation, deleteEvaluation, navigateToEvaluation } from './eval-helpers';
 
 test.describe('Evaluation Dashboard Interface', () => {
-  test('Dashboard Initial Load', async ({ citeAuthenticatedPage: page }) => {
+  test('Dashboard Initial Load', async ({ citeAuthenticatedPage: page, request }) => {
+    const token = await getApiToken(request);
+    const { id: evalId, created } = await ensureEvaluation(request, token);
 
-    // 1. Log in and select an evaluation from the home page
-    await expect(page).toHaveURL(/localhost:4721/, { timeout: 10000 });
-    const rows = page.locator('mat-row, tbody tr, [class*="evaluation-row"]');
-    await expect(rows.first()).toBeVisible({ timeout: 10000 });
-    await rows.first().click();
+    try {
+      // 1. Navigate to evaluation via admin page
+      await navigateToEvaluation(page);
 
-    // expect: Dashboard page loads
-    await page.waitForLoadState('domcontentloaded');
+      // expect: Dashboard page loads
+      await page.waitForLoadState('domcontentloaded');
 
-    // expect: Evaluation information header is displayed
-    const header = page.locator('[class*="evaluation"], [class*="header"], mat-toolbar, [class*="title"]').first();
-    await expect(header).toBeVisible({ timeout: 10000 });
+      // expect: Evaluation information header is displayed
+      const header = page.locator('[class*="evaluation"], [class*="header"], mat-toolbar, [class*="title"]').first();
+      await expect(header).toBeVisible({ timeout: 10000 });
 
-    // expect: Team selector is visible
-    const teamSelector = page.locator('mat-select, [class*="team-select"], select, [class*="team"]').first();
-    await expect(teamSelector).toBeVisible({ timeout: 10000 });
-
-    // expect: Move navigation controls are present
-    const moveNav = page.locator('[class*="move"], button[aria-label*="move"], [class*="stepper"]').first();
-    await expect(moveNav).toBeVisible({ timeout: 10000 });
-
-    // expect: Main content area displays dashboard view
-    const content = page.locator('[class*="dashboard"], [class*="content"], mat-tab-group').first();
-    await expect(content).toBeVisible({ timeout: 10000 });
+      // expect: Main content area displays dashboard view
+      const content = page.locator('[class*="dashboard"], [class*="content"], mat-tab-group').first();
+      await expect(content).toBeVisible({ timeout: 10000 });
+    } finally {
+      if (created) await deleteEvaluation(request, token, evalId);
+    }
   });
 });

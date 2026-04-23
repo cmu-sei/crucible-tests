@@ -5,27 +5,31 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect } from '../../fixtures';
+import { getApiToken, ensureEvaluation, deleteEvaluation, navigateToEvaluation } from './eval-helpers';
 
 test.describe('Evaluation Dashboard Interface', () => {
-  test('Evaluation Information Display', async ({ citeAuthenticatedPage: page }) => {
+  test('Evaluation Information Display', async ({ citeAuthenticatedPage: page, request }) => {
+    const token = await getApiToken(request);
+    const { id: evalId, created } = await ensureEvaluation(request, token);
 
-    // 1. Navigate to evaluation dashboard
-    await expect(page).toHaveURL(/localhost:4721/, { timeout: 10000 });
-    const rows = page.locator('mat-row, tbody tr, [class*="evaluation-row"]');
-    await expect(rows.first()).toBeVisible({ timeout: 10000 });
-    await rows.first().click();
-    await page.waitForLoadState('domcontentloaded');
+    try {
+      // 1. Navigate to evaluation via admin page
+      await navigateToEvaluation(page);
+      await page.waitForLoadState('domcontentloaded');
 
-    // expect: Evaluation description is visible
-    const description = page.locator('[class*="description"], [class*="evaluation-name"], [class*="title"]').first();
-    await expect(description).toBeVisible({ timeout: 10000 });
+      // expect: Evaluation description is visible in the expanded row
+      const description = page.getByText('E2E Test Evaluation').first();
+      await expect(description).toBeVisible({ timeout: 10000 });
 
-    // expect: Current move number is displayed
-    const moveNumber = page.locator('[class*="move"], text=/Move\\s*\\d+/i, [class*="stepper"]').first();
-    await expect(moveNumber).toBeVisible({ timeout: 10000 });
+      // expect: Current move number is displayed
+      const moveNumber = page.locator('cell, td').filter({ hasText: /^0$/ }).first();
+      await expect(moveNumber).toBeVisible({ timeout: 10000 });
 
-    // expect: Section navigation tabs are available (Dashboard, Scoresheet, Report, Aggregate)
-    const tabs = page.locator('mat-tab-group, [role="tablist"]').first();
-    await expect(tabs).toBeVisible({ timeout: 10000 });
+      // expect: Admin sections are available (Moves, Teams, Actions, Duties, Memberships)
+      const movesButton = page.getByRole('button', { name: 'Moves' });
+      await expect(movesButton).toBeVisible({ timeout: 10000 });
+    } finally {
+      if (created) await deleteEvaluation(request, token, evalId);
+    }
   });
 });

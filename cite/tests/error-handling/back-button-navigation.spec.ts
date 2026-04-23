@@ -9,14 +9,14 @@ import { test, expect, Services } from '../../fixtures';
 test.describe('Error Handling and Edge Cases', () => {
   test('Browser Back Button Navigation', async ({ citeAuthenticatedPage: page }) => {
 
-    // 1. Navigate through multiple pages (home -> evaluation)
+    // 1. Navigate through multiple pages (home -> admin)
     await expect(page).toHaveURL(/localhost:4721/, { timeout: 10000 });
 
-    // Navigate to an evaluation
-    const rows = page.locator('mat-row, tbody tr, [class*="evaluation-row"]');
-    await expect(rows.first()).toBeVisible({ timeout: 10000 });
-    await rows.first().click();
-    await page.waitForLoadState('domcontentloaded');
+    // Navigate to the Administration page
+    const adminButton = page.getByRole('button', { name: 'Show Administration Page' });
+    await expect(adminButton).toBeVisible({ timeout: 10000 });
+    await adminButton.click();
+    await expect(page).toHaveURL(/\/admin/, { timeout: 10000 });
 
     // expect: Navigation history is recorded
 
@@ -24,11 +24,10 @@ test.describe('Error Handling and Edge Cases', () => {
     await page.goBack();
 
     // expect: User navigates back to previous page
-    await page.waitForLoadState('domcontentloaded');
+    await expect(page).toHaveURL(/localhost:4721\/$/, { timeout: 10000 });
 
     // expect: Page state is preserved or reloaded correctly
     // expect: No errors occur
-    const body = page.locator('body');
-    await expect(body).toBeVisible();
+    await expect(page.locator('body')).toBeVisible();
   });
 });

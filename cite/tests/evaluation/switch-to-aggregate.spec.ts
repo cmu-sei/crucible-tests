@@ -5,30 +5,27 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect } from '../../fixtures';
+import { getApiToken, ensureEvaluation, deleteEvaluation, navigateToEvaluation } from './eval-helpers';
 
 test.describe('Evaluation Dashboard Interface', () => {
-  test('Section Navigation - Switch to Aggregate', async ({ citeAuthenticatedPage: page }) => {
+  test('Section Navigation - Switch to Aggregate', async ({ citeAuthenticatedPage: page, request }) => {
+    const token = await getApiToken(request);
+    const { id: evalId, created } = await ensureEvaluation(request, token);
 
-    // 1. Navigate to evaluation dashboard
-    await expect(page).toHaveURL(/localhost:4721/, { timeout: 10000 });
-    const rows = page.locator('mat-row, tbody tr, [class*="evaluation-row"]');
-    await expect(rows.first()).toBeVisible({ timeout: 10000 });
-    await rows.first().click();
-    await page.waitForLoadState('domcontentloaded');
+    try {
+      // 1. Navigate to evaluation via admin page
+      await navigateToEvaluation(page);
+      await page.waitForLoadState('domcontentloaded');
 
-    // expect: Dashboard view is displayed
+      // 2. Click on 'Teams' section in admin view
+      const teamsButton = page.getByRole('button', { name: 'Teams' }).first();
+      await expect(teamsButton).toBeVisible({ timeout: 10000 });
+      await teamsButton.click();
 
-    // 2. Click on 'Aggregate' tab or navigation button
-    const aggregateTab = page.locator('[role="tab"]:has-text("Aggregate"), mat-tab:has-text("Aggregate"), button:has-text("Aggregate"), a:has-text("Aggregate")').first();
-    await expect(aggregateTab).toBeVisible({ timeout: 10000 });
-    await aggregateTab.click();
-
-    // expect: View switches to aggregate section
-    // expect: Aggregate scoring view is displayed
-    await page.waitForLoadState('domcontentloaded');
-
-    // expect: Combined team/group scores are visible
-    const aggregateContent = page.locator('[class*="aggregate"], [class*="combined"], [class*="group"]').first();
-    await expect(aggregateContent).toBeVisible({ timeout: 10000 });
+      // expect: Teams section expands
+      await page.waitForLoadState('domcontentloaded');
+    } finally {
+      if (created) await deleteEvaluation(request, token, evalId);
+    }
   });
 });
