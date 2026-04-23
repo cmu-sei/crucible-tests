@@ -2,6 +2,11 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 import { test as base, expect as baseExpect, Page } from '@playwright/test';
+import dotenv from 'dotenv';
+import path from 'path';
+
+// Load .env from the crucible-tests root
+dotenv.config({ path: path.resolve(__dirname, '.env') });
 
 /**
  * Shared fixtures for all Crucible applications
@@ -10,58 +15,60 @@ import { test as base, expect as baseExpect, Page } from '@playwright/test';
 
 /**
  * Crucible service URLs
+ * Values are read from the .env file at the root of crucible-tests.
+ * Edit that file to change URLs for your environment.
  */
 export const Services = {
-  AspireDashboard: 'http://localhost:18888',
-  Keycloak: 'https://localhost:8443',
-  KeycloakRealm: 'https://localhost:8443/realms/crucible',
+  AspireDashboard: process.env.ASPIRE_DASHBOARD_URL || 'http://localhost:18888',
+  Keycloak: process.env.KEYCLOAK_URL || 'https://localhost:8443',
+  KeycloakRealm: process.env.KEYCLOAK_REALM_URL || 'https://localhost:8443/realms/crucible',
   Player: {
-    UI: 'http://localhost:4301',
-    API: 'http://localhost:4302',
+    UI: process.env.PLAYER_UI_URL || 'http://localhost:4301',
+    API: process.env.PLAYER_API_URL || 'http://localhost:4302',
   },
   PlayerVM: {
-    UI: 'http://localhost:4303',
-    API: 'http://localhost:4304',
+    UI: process.env.PLAYERVM_UI_URL || 'http://localhost:4303',
+    API: process.env.PLAYERVM_API_URL || 'http://localhost:4304',
   },
   Console: {
-    UI: 'http://localhost:4305',
+    UI: process.env.CONSOLE_UI_URL || 'http://localhost:4305',
   },
   Caster: {
-    UI: 'http://localhost:4310',
-    API: 'http://localhost:4311',
+    UI: process.env.CASTER_UI_URL || 'http://localhost:4310',
+    API: process.env.CASTER_API_URL || 'http://localhost:4311',
   },
   Alloy: {
-    UI: 'http://localhost:4403',
-    API: 'http://localhost:4402',
+    UI: process.env.ALLOY_UI_URL || 'http://localhost:4403',
+    API: process.env.ALLOY_API_URL || 'http://localhost:4402',
   },
   TopoMojo: {
-    UI: 'http://localhost:4201',
-    API: 'http://localhost:5000',
+    UI: process.env.TOPOMOJO_UI_URL || 'http://localhost:4201',
+    API: process.env.TOPOMOJO_API_URL || 'http://localhost:5000',
   },
   Steamfitter: {
-    UI: 'http://localhost:4401',
-    API: 'http://localhost:4400',
+    UI: process.env.STEAMFITTER_UI_URL || 'http://localhost:4401',
+    API: process.env.STEAMFITTER_API_URL || 'http://localhost:4400',
   },
   Cite: {
-    UI: 'http://localhost:4721',
-    API: 'http://localhost:4720',
+    UI: process.env.CITE_UI_URL || 'http://localhost:4721',
+    API: process.env.CITE_API_URL || 'http://localhost:4720',
   },
   Gallery: {
-    UI: 'http://localhost:4723',
-    API: 'http://localhost:4722',
+    UI: process.env.GALLERY_UI_URL || 'http://localhost:4723',
+    API: process.env.GALLERY_API_URL || 'http://localhost:4722',
   },
   Blueprint: {
-    UI: 'http://localhost:4725',
-    API: 'http://localhost:4724',
+    UI: process.env.BLUEPRINT_UI_URL || 'http://localhost:4725',
+    API: process.env.BLUEPRINT_API_URL || 'http://localhost:4724',
   },
   Gameboard: {
-    UI: 'http://localhost:4202',
-    API: 'http://localhost:4203',
+    UI: process.env.GAMEBOARD_UI_URL || 'http://localhost:4202',
+    API: process.env.GAMEBOARD_API_URL || 'http://localhost:4203',
   },
-  Moodle: 'http://localhost:8081',
-  Lrsql: 'http://localhost:9274',
-  Misp: 'https://localhost:8444',
-} as const;
+  Moodle: process.env.MOODLE_URL || 'http://localhost:8081',
+  Lrsql: process.env.LRSQL_URL || 'http://localhost:9274',
+  Misp: process.env.MISP_URL || 'https://localhost:8444',
+};
 
 /**
  * Generic Keycloak authentication helper
@@ -106,9 +113,9 @@ export async function authenticateWithKeycloak(
   }
 
   // Check if we got redirected to Keycloak immediately
-  // Keycloak URLs will contain 'localhost:8443' or the realm path
+  const keycloakHost = new URL(Services.Keycloak).host;
   const currentUrl = page.url();
-  const isOnKeycloak = currentUrl.includes(':8443') || currentUrl.includes('/realms/crucible');
+  const isOnKeycloak = currentUrl.includes(keycloakHost) || currentUrl.includes('/realms/crucible');
 
   if (isOnKeycloak) {
     console.log(`Redirected to Keycloak at ${currentUrl}`);
@@ -126,7 +133,7 @@ export async function authenticateWithKeycloak(
     page.on('framenavigated', (frame) => {
       if (frame === page.mainFrame()) {
         const url = frame.url();
-        if (url.includes(':8443') || url.includes('/realms/crucible')) {
+        if (url.includes(keycloakHost) || url.includes('/realms/crucible')) {
           console.log(`Detected redirect to Keycloak: ${url}`);
           redirectedToKeycloak = true;
         }
