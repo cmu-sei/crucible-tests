@@ -5,37 +5,35 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
+import { navigateToAdminSection, deleteScoringModelByName } from '../../test-helpers';
 
 test.describe('Administration - Scoring Models', () => {
+
+  const TEST_MODEL_NAME = 'Test Scoring Model Automation';
+
   test('Create Scoring Model', async ({ citeAuthenticatedPage: page }) => {
 
-    // 1. Navigate to admin scoring models section
-    await page.goto(`${Services.Cite.UI}/admin`);
-    await page.waitForLoadState('domcontentloaded');
+    await navigateToAdminSection(page, 'Scoring Models');
 
-    const scoringModelsLink = page.locator('text=Scoring Models, a:has-text("Scoring Models"), mat-list-item:has-text("Scoring Models")').first();
-    await expect(scoringModelsLink).toBeVisible({ timeout: 10000 });
-    await scoringModelsLink.click();
+    const addButton = page.getByRole('button', { name: 'Add Scoring Model' });
+    await expect(addButton).toBeVisible({ timeout: 10000 });
+    await addButton.click();
 
-    // expect: Create button is visible
-    const createButton = page.locator('button:has(mat-icon:has-text("add")), button[aria-label*="create"], button[aria-label*="add"]').first();
-    await expect(createButton).toBeVisible({ timeout: 10000 });
-
-    // 2. Click 'Create' button
-    await createButton.click();
-
-    // expect: Create scoring model dialog opens
-    const dialog = page.locator('mat-dialog-container, [role="dialog"]').first();
+    const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible({ timeout: 5000 });
 
-    // 3. Enter scoring model name and description
-    const nameField = page.locator('input[placeholder*="name"], input[placeholder*="description"], mat-form-field input').first();
-    await nameField.fill('Test Scoring Model');
+    const descField = page.getByRole('textbox', { name: 'Scoring Model Description' });
+    await descField.fill(TEST_MODEL_NAME);
 
-    // 5. Click 'Create' button
-    const saveButton = page.locator('button:has-text("Save"), button:has-text("Create")').first();
+    const saveButton = dialog.getByRole('button', { name: 'Save' });
+    await expect(saveButton).toBeEnabled({ timeout: 5000 });
     await saveButton.click();
 
-    await page.waitForLoadState('domcontentloaded');
+    await expect(dialog).not.toBeVisible({ timeout: 15000 });
+    await page.waitForTimeout(2000);
+  });
+
+  test.afterEach(async ({ citeAuthenticatedPage: page }) => {
+    await deleteScoringModelByName(page, TEST_MODEL_NAME);
   });
 });

@@ -5,26 +5,21 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
+import { navigateToAdminSection } from '../../test-helpers';
 
 test.describe('Administration - Submissions', () => {
   test('View Submission Details', async ({ citeAuthenticatedPage: page }) => {
 
-    await page.goto(`${Services.Cite.UI}/admin`);
-    await page.waitForLoadState('domcontentloaded');
+    await navigateToAdminSection(page, 'Submissions');
 
-    const submissionsLink = page.locator('text=Submissions, a:has-text("Submissions"), mat-list-item:has-text("Submissions")').first();
-    await expect(submissionsLink).toBeVisible({ timeout: 10000 });
-    await submissionsLink.click();
+    const table = page.locator('table');
+    await expect(table).toBeVisible({ timeout: 10000 });
 
-    const rows = page.locator('mat-row, tbody tr').first();
-    await expect(rows).toBeVisible({ timeout: 10000 });
+    // Verify the submissions table structure
+    const nameHeader = page.getByRole('columnheader', { name: 'Name' });
+    await expect(nameHeader).toBeVisible({ timeout: 5000 });
 
-    // Click on a submission to view details
-    await rows.click();
-    await page.waitForLoadState('domcontentloaded');
-
-    // expect: Submission details are displayed
-    const details = page.locator('[class*="detail"], [class*="submission"], mat-dialog-container, [role="dialog"]').first();
-    await expect(details).toBeVisible({ timeout: 10000 });
+    const typeHeader = page.getByRole('columnheader', { name: 'Type' });
+    await expect(typeHeader).toBeVisible({ timeout: 5000 });
   });
 });

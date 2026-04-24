@@ -5,41 +5,35 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
+import { navigateToAdminSection, deleteTeamTypeByName } from '../../test-helpers';
 
 test.describe('Administration - Team Types', () => {
+
+  const TEST_TEAM_TYPE = 'Test Team Type Automation';
+
   test('Create Team Type', async ({ citeAuthenticatedPage: page }) => {
 
-    await page.goto(`${Services.Cite.UI}/admin`);
-    await page.waitForLoadState('load');
-    await page.waitForTimeout(3000);
+    await navigateToAdminSection(page, 'Team Types');
 
-    await page.waitForFunction(() => {
-      const items = Array.from(document.querySelectorAll('mat-list-item'));
-      return items.some(el => el.textContent?.trim() === 'Team Types');
-    }, { timeout: 15000 });
+    const addButton = page.getByRole('button', { name: 'Add TeamType' });
+    await expect(addButton).toBeVisible({ timeout: 10000 });
+    await addButton.click();
 
-    await page.evaluate(() => {
-      const items = Array.from(document.querySelectorAll('mat-list-item'));
-      const teamTypesItem = items.find(el => el.textContent?.trim() === 'Team Types');
-      if (teamTypesItem) {
-        teamTypesItem.click();
-      }
-    });
-
-    await page.waitForTimeout(1000);
-
-    const createButton = page.locator('button').filter({ hasText: /Add|Create/i }).first();
-    await expect(createButton).toBeVisible({ timeout: 10000 });
-    await createButton.click();
-
-    const dialog = page.locator('mat-dialog-container, [role="dialog"]').first();
+    const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible({ timeout: 5000 });
 
-    const nameField = page.locator('input, mat-form-field input').first();
-    await nameField.fill('Test Team Type');
+    const nameField = dialog.getByRole('textbox').first();
+    await nameField.fill(TEST_TEAM_TYPE);
 
-    const saveButton = page.locator('button:has-text("Save"), button:has-text("Create")').first();
+    const saveButton = dialog.getByRole('button', { name: 'Save' });
+    await expect(saveButton).toBeEnabled({ timeout: 5000 });
     await saveButton.click();
-    await page.waitForLoadState('domcontentloaded');
+
+    await expect(dialog).not.toBeVisible({ timeout: 10000 });
+    await page.waitForTimeout(1000);
+  });
+
+  test.afterEach(async ({ citeAuthenticatedPage: page }) => {
+    await deleteTeamTypeByName(page, TEST_TEAM_TYPE);
   });
 });

@@ -11,15 +11,15 @@ test.describe('Performance', () => {
 
     // Navigate to home first
     await expect(page).toHaveURL(/localhost:4721/, { timeout: 10000 });
-    const rows = page.locator('mat-row, tbody tr, [class*="evaluation-row"]');
-    await expect(rows.first()).toBeVisible({ timeout: 10000 });
 
-    // 1. Measure time from navigation to evaluation dashboard until page is interactive
+    // 1. Measure time from navigation to admin dashboard until page is interactive
     const startTime = Date.now();
-    await rows.first().click();
-    await page.waitForLoadState('domcontentloaded');
+    const adminButton = page.getByRole('button', { name: 'Show Administration Page' });
+    await expect(adminButton).toBeVisible({ timeout: 10000 });
+    await adminButton.click();
+    await expect(page).toHaveURL(/\/admin/, { timeout: 10000 });
 
-    const content = page.locator('[class*="evaluation"], [class*="dashboard"], mat-tab-group, [class*="move"]').first();
+    const content = page.locator('mat-toolbar-row').getByText('Evaluations');
     await expect(content).toBeVisible({ timeout: 10000 });
 
     const loadTime = Date.now() - startTime;

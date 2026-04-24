@@ -5,34 +5,80 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
+import { navigateToAdminSection, deleteEvaluationByName, createEvaluation } from '../../test-helpers';
 
 test.describe('Administration - Evaluations', () => {
+
+  const TEST_EVAL_NAME = 'Test Evaluation For Move Increment';
+
   test('Increment Evaluation Move', async ({ citeAuthenticatedPage: page }) => {
 
-    // 1. Log in as user with ManageEvaluations permission
-    // 2. Navigate to admin evaluations section
-    await page.goto(`${Services.Cite.UI}/admin`);
-    await page.waitForLoadState('domcontentloaded');
+    // 1. Create an evaluation
+    await createEvaluation(page, TEST_EVAL_NAME);
 
-    const evaluationsLink = page.locator('text=Evaluations, a:has-text("Evaluations"), mat-list-item:has-text("Evaluations")').first();
-    await expect(evaluationsLink).toBeVisible({ timeout: 10000 });
-    await evaluationsLink.click();
+    // 2. Navigate to the evaluations list and wait for the evaluation to appear, then expand it
+    await navigateToAdminSection(page, 'Evaluations');
+    await page.waitForTimeout(2000);
 
-    // expect: Evaluations list displays
-    const rows = page.locator('mat-row, tbody tr, [class*="evaluation-row"]');
-    await expect(rows.first()).toBeVisible({ timeout: 10000 });
+    const evalRow = page.locator('tbody tr').filter({ hasText: TEST_EVAL_NAME }).first();
+    await expect(evalRow).toBeVisible({ timeout: 15000 });
+    await evalRow.click();
+    await page.waitForTimeout(2000);
 
-    // 3. Locate an active evaluation with current move controls
-    // expect: Evaluation details are visible with current move number and increment/decrement buttons
+    // 3. Expand Moves panel and add two moves
+    const movesPanel = page.locator('mat-expansion-panel').filter({ hasText: 'Moves' }).first();
+    await expect(movesPanel).toBeVisible({ timeout: 10000 });
+    await movesPanel.locator('> mat-expansion-panel-header').click();
+    await page.waitForTimeout(1000);
 
-    // 4. Click increment move button (right arrow)
-    const incrementButton = page.locator('button:has(mat-icon:has-text("chevron_right")), button:has(mat-icon:has-text("arrow_forward")), button[aria-label*="increment"], button[aria-label*="next move"]').first();
-    if (await incrementButton.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await incrementButton.click();
+    // Add first move
+    const addMoveButton = movesPanel.locator('button[title="Add Move"]');
+    await addMoveButton.click();
+    let moveDialog = page.getByRole('dialog');
+    await expect(moveDialog).toBeVisible({ timeout: 5000 });
+    await moveDialog.getByRole('textbox', { name: 'Move Description' }).fill('First Move');
+    await moveDialog.getByRole('button', { name: 'Save' }).click();
+    await expect(moveDialog).not.toBeVisible({ timeout: 10000 });
+    await page.waitForTimeout(1000);
 
-      // expect: Current move number increments by one
-      // expect: Evaluation status updates
-      await page.waitForLoadState('domcontentloaded');
-    }
+    // Add second move
+    await addMoveButton.click();
+    moveDialog = page.getByRole('dialog');
+    await expect(moveDialog).toBeVisible({ timeout: 5000 });
+    await moveDialog.getByRole('textbox', { name: 'Move Description' }).fill('Second Move');
+    await moveDialog.getByRole('button', { name: 'Save' }).click();
+    await expect(moveDialog).not.toBeVisible({ timeout: 10000 });
+    await page.waitForTimeout(1000);
+
+    // 4. Go back to the evaluations list to use the increment/decrement buttons
+    await navigateToAdminSection(page, 'Evaluations');
+
+    const evalRow2 = page.locator('tbody tr').filter({ hasText: TEST_EVAL_NAME }).first();
+    await expect(evalRow2).toBeVisible({ timeout: 10000 });
+
+    // 5. Find the current move display and increment button
+    const incrementButton = evalRow2.locator('button[title="Increment Move"]');
+    await expect(incrementButton).toBeVisible({ timeout: 5000 });
+
+    // Record the current move number
+    const moveDisplay = evalRow2.locator('td').filter({ hasText: /^\d+$/ }).first();
+    const initialMove = await moveDisplay.textContent();
+
+    // 6. Click increment
+    await incrementButton.click();
+    await page.waitForTimeout(2000);
+
+    // 7. Verify the move number increased
+    await navigateToAdminSection(page, 'Evaluations');
+    const evalRow3 = page.locator('tbody tr').filter({ hasText: TEST_EVAL_NAME }).first();
+    await expect(evalRow3).toBeVisible({ timeout: 10000 });
+
+    const updatedMoveDisplay = evalRow3.locator('td').filter({ hasText: /^\d+$/ }).first();
+    const updatedMove = await updatedMoveDisplay.textContent();
+    expect(Number(updatedMove?.trim())).toBeGreaterThan(Number(initialMove?.trim()));
+  });
+
+  test.afterEach(async ({ citeAuthenticatedPage: page }) => {
+    await deleteEvaluationByName(page, TEST_EVAL_NAME);
   });
 });

@@ -18,7 +18,7 @@ test.describe('Authentication and Authorization', () => {
     await userMenuButton.click();
 
     // expect: User menu dropdown opens
-    const menuPanel = page.locator('mat-menu, .mat-menu-panel, [role="menu"]');
+    const menuPanel = page.locator('div[role="menu"]');
     await expect(menuPanel).toBeVisible({ timeout: 5000 });
 
     // 3. Click 'Logout' or 'Sign Out' option

@@ -156,7 +156,24 @@ export async function authenticateWithKeycloak(
         console.log(`Keycloak login form appeared`);
         await keycloakLogin();
       } else {
-        console.log(`App content appeared - already authenticated`);
+        console.log(`App content appeared - checking if OIDC will redirect...`);
+        // App content is visible, but the Angular OIDC client may still be initializing.
+        // Wait to see if it redirects to Keycloak (this happens if there's no valid token).
+        // We'll wait for up to 15 seconds for either:
+        // 1. A redirect to Keycloak to start (URL changes to include :8443 or /realms/crucible)
+        // 2. The wait to timeout (meaning we're stable and authenticated)
+        try {
+          await page.waitForURL((url) => url.toString().includes(':8443') || url.toString().includes('/realms/crucible'), {
+            timeout: 15000
+          });
+          console.log(`OIDC initiated redirect to Keycloak after app content appeared`);
+          // Now wait for Keycloak login form
+          await keycloakField.waitFor({ state: 'visible', timeout: 30000 });
+          await keycloakLogin();
+        } catch {
+          // No redirect happened - we're already authenticated
+          console.log(`No redirect occurred - already authenticated`);
+        }
       }
     } catch (error: any) {
       console.error(`Timeout waiting for Keycloak or app content. Current URL: ${page.url()}`);
@@ -179,6 +196,20 @@ export async function authenticateWithKeycloak(
   }
 
   await page.waitForLoadState('domcontentloaded', { timeout: 30000 });
+
+  // After Keycloak login, Angular apps may redirect to /auth-callback then back to the main page.
+  // Wait for this to complete to ensure authentication is fully stabilized.
+  const finalUrl = page.url();
+  if (finalUrl.includes('/auth-callback')) {
+    console.log(`On auth-callback page, waiting for redirect to complete...`);
+    const appHost = new URL(appUrl).host;
+    await page.waitForURL((url) => url.host === appHost && !url.pathname.includes('/auth-callback'), {
+      timeout: 30000
+    });
+    await page.waitForLoadState('domcontentloaded', { timeout: 30000 });
+    console.log(`Auth callback redirect completed, now at ${page.url()}`);
+  }
+
   console.log(`Successfully authenticated and returned to ${appUrl}`);
 }
 

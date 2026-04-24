@@ -5,6 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
+import { navigateToAdminSection } from '../../test-helpers';
 
 test.describe('Administration - Evaluations', () => {
   test('Evaluations Section Navigation', async ({ citeAuthenticatedPage: page }) => {
@@ -13,22 +14,21 @@ test.describe('Administration - Evaluations', () => {
     await page.goto(`${Services.Cite.UI}/admin`);
     await page.waitForLoadState('domcontentloaded');
 
+    // expect: Evaluations management section displays by default
+    // Wait for the evaluations table to load first
+    const evaluationsTable = page.locator('table');
+    await expect(evaluationsTable).toBeVisible({ timeout: 15000 });
+
     // expect: Admin page loads with sidebar
-
-    // 2. Click on 'Evaluations' section in sidebar
-    const evaluationsLink = page.locator('text=Evaluations, a:has-text("Evaluations"), mat-list-item:has-text("Evaluations"), button:has-text("Evaluations")').first();
-    await expect(evaluationsLink).toBeVisible({ timeout: 10000 });
-    await evaluationsLink.click();
-
-    // expect: Evaluations management section displays
-    await page.waitForLoadState('domcontentloaded');
-
-    // expect: List of all evaluations is shown
-    const evaluationsList = page.locator('mat-table, table, [class*="evaluation-list"]').first();
-    await expect(evaluationsList).toBeVisible({ timeout: 10000 });
+    const adminSidebar = page.locator('mat-list-item').filter({ hasText: 'Evaluations' });
+    await expect(adminSidebar).toBeVisible({ timeout: 5000 });
 
     // expect: Search and filter options are available
-    const searchField = page.locator('input[type="text"], input[placeholder*="search"], input[placeholder*="Search"], input[placeholder*="filter"]').first();
+    const searchField = page.getByRole('textbox', { name: 'Search' });
     await expect(searchField).toBeVisible({ timeout: 5000 });
+
+    // expect: Status filter dropdown is available
+    const statusFilter = page.getByRole('combobox', { name: 'Statuses' });
+    await expect(statusFilter).toBeVisible({ timeout: 5000 });
   });
 });

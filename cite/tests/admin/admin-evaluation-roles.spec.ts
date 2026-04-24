@@ -5,25 +5,26 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
+import { navigateToAdminSection } from '../../test-helpers';
 
 test.describe('Administration - Roles', () => {
   test('View Evaluation Roles', async ({ citeAuthenticatedPage: page }) => {
 
-    await page.goto(`${Services.Cite.UI}/admin`);
-    await page.waitForLoadState('domcontentloaded');
+    // 1. Navigate to Roles section
+    await navigateToAdminSection(page, 'Roles');
 
-    const rolesLink = page.locator('text=Roles, a:has-text("Roles"), mat-list-item:has-text("Roles")').first();
-    await expect(rolesLink).toBeVisible({ timeout: 10000 });
-    await rolesLink.click();
+    // 2. Click the Evaluation Roles tab
+    const evaluationRolesTab = page.getByRole('tab', { name: 'Evaluation Roles' });
+    await expect(evaluationRolesTab).toBeVisible({ timeout: 10000 });
+    await evaluationRolesTab.click();
+    await page.waitForTimeout(1000);
 
-    // Click on 'Evaluation Roles' tab
-    const evalRolesTab = page.locator('[role="tab"]:has-text("Evaluation Roles"), [role="tab"]:has-text("Evaluation")').first();
-    if (await evalRolesTab.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await evalRolesTab.click();
-      await page.waitForLoadState('domcontentloaded');
+    // 3. Verify evaluation roles content is displayed
+    const rolesTable = page.locator('table, mat-table, mat-list').first();
+    await expect(rolesTable).toBeVisible({ timeout: 10000 });
 
-      const content = page.locator('mat-table, table, [class*="role"], [class*="list"]').first();
-      await expect(content).toBeVisible({ timeout: 10000 });
-    }
+    // 4. Verify at least one role entry is present
+    const roleEntries = page.locator('tbody tr, mat-list-item, mat-row').first();
+    await expect(roleEntries).toBeVisible({ timeout: 10000 });
   });
 });
