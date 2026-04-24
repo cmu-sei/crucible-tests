@@ -2,7 +2,28 @@
 
 ## Application Overview
 
-Blueprint is a collaborative MSEL (Master Scenario Events List) creation application within the Crucible cybersecurity training and simulation platform. It enables teams to design, manage, and execute training scenario events through a structured interface. The application features a modern dashboard-style homepage called "Event Dashboard" that organizes MSELs into three user workflows: Join (participate in active events), Launch (start new events), and Build (design and manage events). Blueprint integrates with Player, Gallery, CITE, Player-VM, and Steamfitter services to provide comprehensive scenario management. The application supports event creation with customizable data fields, delivery methods, team/organization assignments, and timeline management. It features role-based access control, real-time collaboration, and visual scenario planning with color-coded event types. MSELs have a lifecycle with statuses: Pending, Entered, Approved, Complete, Deployed, and Archived. MSELs can be marked as reusable templates. The application includes a MSEL Playbook view for printable event summaries, MSEL Pages for rich-text content associated with a MSEL, an Event Detail page for viewing individual scenario events, and a Contributors section for managing unit access and per-MSEL roles. Integration management is done through Push/Pull Integrations. The Admin section includes Units, Data Fields, Inject Types, Catalogs, Organizations, Gallery Cards, CITE Actions, CITE Duties, Users, Roles, and Groups.
+Blueprint is a collaborative MSEL (Master Scenario Events List) creation application within the Crucible cybersecurity training and simulation platform. It enables teams to design, manage, and execute training scenario events through a structured interface. The application features a modern dashboard-style homepage called "Event Dashboard" that organizes MSELs into three user workflows: Join (participate in active events), Launch (start new events), and Build (design and manage events).
+
+Blueprint integrates with Player, Gallery, CITE, Player-VM, Steamfitter, and LRsql (xAPI Learning Record Store) services to provide comprehensive scenario management and learning analytics. The application supports event creation with customizable data fields, delivery methods, team/organization assignments, and timeline management. It features role-based access control, real-time collaboration via SignalR, and visual scenario planning with color-coded event types.
+
+### MSEL Hierarchy
+
+Blueprint uses a three-level hierarchy for organizing scenario events:
+- **Move** - Top level organizational unit (e.g., "Phase 1: Reconnaissance")
+- **Group** - Mid level grouping within a Move (e.g., "Initial Scans")
+- **Inject** - Individual scenario event (the actual training activity)
+
+### Lifecycle States
+
+MSELs progress through statuses: Pending, Entered, Approved, Complete, Deployed, and Archived. MSELs can be marked as reusable templates. The application includes a MSEL Playbook view for printable event summaries, MSEL Pages for rich-text content associated with a MSEL, an Event Detail page for viewing individual scenario events, and a Contributors section for managing unit access and per-MSEL roles.
+
+### Integration Points
+
+Integration management is done through Push/Pull Integrations. The Admin section includes Units, Data Fields, Inject Types, Catalogs, Organizations, Gallery Cards, CITE Actions, CITE Duties, Users, Roles, Groups, and Teams.
+
+### xAPI Integration
+
+Blueprint now integrates with LRsql (Learning Record Store) to track user actions and generate xAPI statements. This enables learning analytics, competency tracking, and compliance with PCTE/TLA standards. xAPI statements capture user interactions such as MSEL creation, event launches, content viewing, and competency assertions.
 
 ## Test Scenarios
 
@@ -1065,3 +1086,508 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
   2. Wait for action to complete
     - expect: Loading indicator disappears
     - expect: Success or error message is displayed
+
+### 17. xAPI Integration and Learning Analytics
+
+**Seed:** `/mnt/data/crucible-tests/blueprint/tests/seed.setup.ts`
+
+#### 17.1. xAPI Configuration and Health Check
+
+**File:** `blueprint/tests/xapi-integration/xapi-configuration-and-health-check.spec.ts`
+
+**Steps:**
+  1. Start Blueprint API with LRsql enabled
+    - expect: Blueprint API starts successfully with xAPI configuration
+    - expect: Environment variables show XApiOptions__Endpoint = "http://localhost:9274/xapi"
+    - expect: XApiOptions__Platform = "blueprint"
+  2. Check API health endpoint at /api/health/ready
+    - expect: Health check returns 200 OK
+    - expect: xAPI configuration is loaded without errors
+  3. Navigate to LRsql UI at http://localhost:9274
+    - expect: LRsql web interface loads
+    - expect: Admin credentials 'admin' / 'admin' work for authentication
+
+#### 17.2. xAPI Statement Generation for MSEL Actions
+
+**File:** `blueprint/tests/xapi-integration/xapi-statement-generation-for-msel-actions.spec.ts`
+
+**Steps:**
+  1. Log in as admin user and create a new MSEL
+    - expect: MSEL is created successfully
+  2. Query LRsql xAPI endpoint for recent statements
+    - expect: An xAPI statement is generated with verb 'http://adlnet.gov/exprs/verbs/created'
+    - expect: Statement object.id contains the MSEL identifier
+    - expect: Statement context.platform = 'blueprint'
+    - expect: Actor is identified by admin user
+  3. Edit the MSEL and save changes
+    - expect: xAPI statement generated with verb 'http://adlnet.gov/exprs/verbs/updated'
+  4. Delete a scenario event
+    - expect: xAPI statement generated with verb 'http://adlnet.gov/exprs/verbs/deleted'
+
+#### 17.3. xAPI Statement Generation for Launch Event
+
+**File:** `blueprint/tests/xapi-integration/xapi-statement-generation-for-launch-event.spec.ts`
+
+**Steps:**
+  1. Navigate to Event Dashboard and launch a MSEL
+    - expect: MSEL launches successfully
+  2. Query LRsql for statements related to the launch action
+    - expect: xAPI statement generated with verb 'http://adlnet.gov/exprs/verbs/launched'
+    - expect: Statement includes MSEL details in object
+    - expect: Actor matches the launching user
+    - expect: Timestamp is accurate to the launch time
+
+#### 17.4. xAPI Statement Query and Filtering
+
+**File:** `blueprint/tests/xapi-integration/xapi-statement-query-and-filtering.spec.ts`
+
+**Steps:**
+  1. Perform multiple actions in Blueprint (create, edit, launch, view)
+    - expect: Multiple xAPI statements are generated
+  2. Query LRsql API with filter for actor = admin user
+    - expect: Only statements for admin user are returned
+  3. Query LRsql API with filter for verb = 'created'
+    - expect: Only create action statements are returned
+  4. Query LRsql API with since parameter for last hour
+    - expect: Only recent statements are returned
+
+#### 17.5. xAPI Statement for Competency Assertion
+
+**File:** `blueprint/tests/xapi-integration/xapi-statement-for-competency-assertion.spec.ts`
+
+**Steps:**
+  1. Complete a scenario event that has competency mappings
+    - expect: Scenario event is marked complete
+  2. Query LRsql for statements with PCTE competency extension
+    - expect: xAPI statement includes competency assertion extension
+    - expect: Statement includes NICE/DCWF competency ID
+    - expect: Statement includes proficiency level if configured
+    - expect: Statement context indicates Blueprint as the asserting platform
+
+#### 17.6. xAPI Error Handling when LRsql Unavailable
+
+**File:** `blueprint/tests/xapi-integration/xapi-error-handling-when-lrsql-unavailable.spec.ts`
+
+**Steps:**
+  1. Stop LRsql service
+    - expect: LRsql is no longer reachable at http://localhost:9274
+  2. Perform actions in Blueprint (create MSEL, edit event)
+    - expect: Blueprint actions complete successfully
+    - expect: Blueprint does not block user actions due to xAPI failure
+    - expect: API logs show xAPI statement submission errors (graceful degradation)
+  3. Restart LRsql and perform another action
+    - expect: xAPI statements are successfully submitted again
+
+---
+
+### 18. Moves Management
+
+**Seed:** `/mnt/data/crucible-tests/blueprint/tests/seed.setup.ts`
+
+#### 18.1. View Moves in MSEL
+
+**File:** `blueprint/tests/moves-management/view-moves-in-msel.spec.ts`
+
+**Steps:**
+  1. Navigate to a MSEL and click 'Moves' in the sidebar navigation
+    - expect: Moves section loads displaying the move hierarchy
+    - expect: Each move shows: Move Number, Name, Description
+    - expect: Moves are displayed in chronological order
+    - expect: An 'Add Move' button is visible if user has edit permissions
+    - expect: Each move can be expanded to show its groups
+
+#### 18.2. Create New Move
+
+**File:** `blueprint/tests/moves-management/create-new-move.spec.ts`
+
+**Steps:**
+  1. Navigate to Moves section and click 'Add Move' button
+    - expect: A new move creation form appears
+    - expect: Form includes fields: Move Number, Name, Description
+  2. Enter move details: Move Number '3', Name 'Phase 3: Exploitation', Description 'Exploitation and privilege escalation phase'
+    - expect: Fields accept input
+  3. Click 'Save' button
+    - expect: Move is created successfully
+    - expect: New move appears in the moves list
+    - expect: Move is positioned according to its move number
+
+#### 18.3. Edit Move Details
+
+**File:** `blueprint/tests/moves-management/edit-move-details.spec.ts`
+
+**Steps:**
+  1. Navigate to Moves section and click edit icon for an existing move
+    - expect: Edit form displays with current move details populated
+  2. Modify the Name field to 'Updated Phase Name'
+    - expect: Field accepts the change
+  3. Click 'Save' button
+    - expect: Move is updated successfully
+    - expect: Updated name is reflected in the moves list
+
+#### 18.4. Delete Move
+
+**File:** `blueprint/tests/moves-management/delete-move.spec.ts`
+
+**Steps:**
+  1. Navigate to Moves section and click delete icon for a move without groups
+    - expect: A confirmation dialog appears: 'Are you sure you want to delete this move?'
+  2. Click 'Cancel'
+    - expect: Dialog closes and move is not deleted
+  3. Click delete icon again and confirm deletion
+    - expect: Move is deleted successfully
+    - expect: Move is removed from the list
+  4. Attempt to delete a move that contains groups
+    - expect: Warning message: 'Cannot delete move with existing groups. Remove all groups first.'
+    - expect: Delete action is blocked
+
+#### 18.5. Reorder Moves
+
+**File:** `blueprint/tests/moves-management/reorder-moves.spec.ts`
+
+**Steps:**
+  1. Navigate to Moves section with multiple moves
+    - expect: Moves are displayed in order by Move Number
+  2. Edit a move and change its Move Number from 2 to 4
+    - expect: After saving, moves are automatically reordered
+    - expect: The move now appears in position 4
+  3. Check that scenario events maintain their move associations
+    - expect: Events remain associated with their original move
+    - expect: Event timeline reflects the new move order
+
+#### 18.6. Move with Timeline Visualization
+
+**File:** `blueprint/tests/moves-management/move-with-timeline-visualization.spec.ts`
+
+**Steps:**
+  1. Navigate to a MSEL with multiple moves containing scenario events
+    - expect: Timeline view shows visual indicators of move boundaries
+    - expect: Different moves are color-coded or visually separated
+    - expect: Clicking a move expands to show its groups and events
+
+---
+
+### 19. Groups Management
+
+**Seed:** `/mnt/data/crucible-tests/blueprint/tests/seed.setup.ts`
+
+#### 19.1. View Groups within Move
+
+**File:** `blueprint/tests/groups-management/view-groups-within-move.spec.ts`
+
+**Steps:**
+  1. Navigate to Moves section and expand a move
+    - expect: Groups within the move are displayed
+    - expect: Each group shows: Group Number, Name, Description
+    - expect: Groups are ordered within the move
+    - expect: An 'Add Group' button is visible within the move if user has permissions
+
+#### 19.2. Create New Group in Move
+
+**File:** `blueprint/tests/groups-management/create-new-group-in-move.spec.ts`
+
+**Steps:**
+  1. Expand a move and click 'Add Group' button
+    - expect: Group creation form appears
+    - expect: Form includes: Group Number, Name, Description
+    - expect: Move association is pre-filled and read-only
+  2. Enter group details: Group Number '2', Name 'Network Scanning', Description 'Execute network discovery scans'
+    - expect: Fields accept input
+  3. Click 'Save'
+    - expect: Group is created within the selected move
+    - expect: Group appears in the move's group list
+
+#### 19.3. Edit Group Details
+
+**File:** `blueprint/tests/groups-management/edit-group-details.spec.ts`
+
+**Steps:**
+  1. Expand a move and click edit icon for a group
+    - expect: Edit form displays with current group details
+  2. Modify the Name to 'Updated Group Name'
+    - expect: Change is accepted
+  3. Click 'Save'
+    - expect: Group is updated
+    - expect: Updated name displays in the group list
+
+#### 19.4. Delete Group
+
+**File:** `blueprint/tests/groups-management/delete-group.spec.ts`
+
+**Steps:**
+  1. Click delete icon for a group without scenario events
+    - expect: Confirmation dialog appears: 'Are you sure you want to delete this group?'
+  2. Confirm deletion
+    - expect: Group is deleted
+    - expect: Group is removed from the move
+  3. Attempt to delete a group containing scenario events
+    - expect: Warning: 'Cannot delete group with existing scenario events. Remove all events first.'
+    - expect: Delete action is blocked
+
+#### 19.5. Move Group to Different Move
+
+**File:** `blueprint/tests/groups-management/move-group-to-different-move.spec.ts`
+
+**Steps:**
+  1. Edit a group and change its Move association from Move 1 to Move 2
+    - expect: Move dropdown shows available moves
+  2. Save the change
+    - expect: Group is reassigned to the new move
+    - expect: All scenario events in the group move with it
+    - expect: Timeline view reflects the new organization
+
+#### 19.6. Assign Scenario Events to Group
+
+**File:** `blueprint/tests/groups-management/assign-scenario-events-to-group.spec.ts`
+
+**Steps:**
+  1. Create a new scenario event
+    - expect: Event form includes Move and Group selectors
+  2. Select a Move, then select a Group within that Move
+    - expect: Group dropdown populates with groups from the selected move only
+  3. Save the scenario event
+    - expect: Event is assigned to the selected group
+    - expect: Event appears in the group's event list when the group is expanded
+
+---
+
+### 20. Teams Management
+
+**Seed:** `/mnt/data/crucible-tests/blueprint/tests/seed.setup.ts`
+
+#### 20.1. View Teams in MSEL
+
+**File:** `blueprint/tests/teams-management/view-teams-in-msel.spec.ts`
+
+**Steps:**
+  1. Navigate to a MSEL and click 'Teams' in the sidebar navigation
+    - expect: Teams section loads
+    - expect: Table displays teams with columns: Name, Short Name, CITE Team Type, Users
+    - expect: An 'Add Team' button is visible if user has permissions
+    - expect: Each team row can be expanded to show team members
+
+#### 20.2. Create New Team
+
+**File:** `blueprint/tests/teams-management/create-new-team.spec.ts`
+
+**Steps:**
+  1. Navigate to Teams section and click 'Add Team' button
+    - expect: Team creation form appears
+    - expect: Form includes: Name, Short Name, CITE Team Type dropdown
+  2. Enter team details: Name 'Red Team', Short Name 'RED'
+    - expect: Fields accept input
+  3. Select 'Red' from CITE Team Type dropdown
+    - expect: CITE Team Type is assigned
+  4. Click 'Save'
+    - expect: Team is created successfully
+    - expect: Team appears in the teams table
+
+#### 20.3. Edit Team and Assign CITE Team Type
+
+**File:** `blueprint/tests/teams-management/edit-team-and-assign-cite-team-type.spec.ts`
+
+**Steps:**
+  1. Click edit icon for an existing team
+    - expect: Edit form displays with current team details
+  2. Change CITE Team Type from 'None' to 'Blue'
+    - expect: CITE Team Type dropdown shows options: None, Red, Blue, Gold, White
+  3. Click 'Save'
+    - expect: Team is updated with CITE Team Type
+    - expect: CITE Team Type column reflects the change
+
+#### 20.4. Delete Team
+
+**File:** `blueprint/tests/teams-management/delete-team.spec.ts`
+
+**Steps:**
+  1. Click delete icon for a team not assigned to any users or scenario events
+    - expect: Confirmation dialog: 'Are you sure you want to delete this team?'
+  2. Confirm deletion
+    - expect: Team is deleted
+    - expect: Team is removed from the table
+  3. Attempt to delete a team with assigned users
+    - expect: Warning: 'Cannot delete team with assigned users'
+    - expect: Delete action is blocked
+
+#### 20.5. Add Users to Team
+
+**File:** `blueprint/tests/teams-management/add-users-to-team.spec.ts`
+
+**Steps:**
+  1. Expand a team row to view team members section
+    - expect: Team members are listed if any exist
+    - expect: An 'Add User' button or user selector is visible
+  2. Click 'Add User' and select a user from the dropdown
+    - expect: User selector shows available users not already in the team
+  3. Confirm user addition
+    - expect: User is added to the team
+    - expect: User appears in the team members list
+
+#### 20.6. Remove User from Team
+
+**File:** `blueprint/tests/teams-management/remove-user-from-team.spec.ts`
+
+**Steps:**
+  1. Expand a team row with existing members
+    - expect: Team members are displayed with remove buttons
+  2. Click remove icon for a user
+    - expect: Confirmation dialog: 'Remove [username] from [team name]?'
+  3. Confirm removal
+    - expect: User is removed from the team
+    - expect: User no longer appears in team members list
+
+#### 20.7. CITE Integration Team Validation
+
+**File:** `blueprint/tests/teams-management/cite-integration-team-validation.spec.ts`
+
+**Steps:**
+  1. Create a MSEL with CITE integration enabled
+    - expect: CITE checkbox is checked on Config tab
+  2. Navigate to Teams section and verify team configurations
+    - expect: If teams exist without CITE Team Types, validation warning appears
+  3. Attempt to Push Integrations with teams missing CITE Team Types
+    - expect: Warning message: '** ERROR: [N] team(s) are missing a CITE Team Type **'
+    - expect: Push Integrations button is disabled or shows error
+  4. Assign CITE Team Types to all teams and push again
+    - expect: Push Integrations proceeds successfully
+    - expect: Teams are created in CITE with correct team types
+
+---
+
+### 21. Organizations Management (Admin)
+
+**Seed:** `/mnt/data/crucible-tests/blueprint/tests/seed.setup.ts`
+
+#### 21.1. View Organizations List
+
+**File:** `blueprint/tests/admin-organizations-management/view-organizations-list.spec.ts`
+
+**Steps:**
+  1. Navigate to Admin section and select 'Organizations'
+    - expect: Organizations list displays in table format
+    - expect: Columns show: Name, Short Name, Description
+    - expect: Search functionality is available
+    - expect: Pagination controls are visible if many organizations exist
+    - expect: Add, Edit, and Delete action buttons are shown
+
+#### 21.2. Create New Organization
+
+**File:** `blueprint/tests/admin-organizations-management/create-new-organization.spec.ts`
+
+**Steps:**
+  1. Click 'Add Organization' button
+    - expect: Organization creation form appears
+    - expect: Form includes: Name, Short Name, Description fields
+  2. Enter organization details: Name 'Acme Corporation', Short Name 'ACME', Description 'External organization partner'
+    - expect: Fields accept input
+  3. Click 'Save'
+    - expect: Organization is created successfully
+    - expect: New organization appears in the table
+
+#### 21.3. Edit Organization
+
+**File:** `blueprint/tests/admin-organizations-management/edit-organization.spec.ts`
+
+**Steps:**
+  1. Click edit icon for an existing organization
+    - expect: Edit form displays with current organization details
+  2. Modify the Description field
+    - expect: Field accepts changes
+  3. Click 'Save'
+    - expect: Organization is updated successfully
+    - expect: Changes are reflected in the table
+
+#### 21.4. Delete Organization
+
+**File:** `blueprint/tests/admin-organizations-management/delete-organization.spec.ts`
+
+**Steps:**
+  1. Click delete icon for an organization not referenced by scenario events
+    - expect: Confirmation dialog: 'Are you sure you want to delete [organization name]?'
+  2. Confirm deletion
+    - expect: Organization is deleted
+    - expect: Organization is removed from the table
+  3. Attempt to delete an organization referenced in scenario events
+    - expect: Warning: 'Cannot delete organization used in scenario events'
+    - expect: Delete action is blocked or shows error
+
+#### 21.5. Search and Filter Organizations
+
+**File:** `blueprint/tests/admin-organizations-management/search-and-filter-organizations.spec.ts`
+
+**Steps:**
+  1. Enter search term in the organizations search field
+    - expect: Table filters to show matching organizations by Name, Short Name, or Description
+  2. Clear the search
+    - expect: All organizations are displayed again
+
+#### 21.6. Assign Organizations to Scenario Events
+
+**File:** `blueprint/tests/admin-organizations-management/assign-organizations-to-scenario-events.spec.ts`
+
+**Steps:**
+  1. Navigate to Scenario Events and create a new event
+    - expect: Event form includes 'From Org' and 'To Org' dropdowns
+  2. Select organizations from the dropdowns
+    - expect: Dropdowns show all available organizations
+  3. Save the event
+    - expect: Organizations are assigned to the event
+    - expect: Event displays 'From Org' and 'To Org' values
+
+---
+
+## Testing Strategy
+
+### Test Execution Order
+
+1. **Infrastructure** - Authentication, Authorization, Dashboard Navigation (Sections 1-2)
+2. **Core MSEL Management** - MSEL CRUD, Templates, Status Lifecycle (Section 3)
+3. **MSEL Hierarchy** - Moves, Groups, Scenario Events (Sections 18, 19, 11)
+4. **MSEL Content** - Pages, Playbook, Event Detail (Sections 4, 6, 7)
+5. **Collaboration** - Contributors, Teams, Real-time Updates (Sections 5, 20, 13)
+6. **Admin Configuration** - Units, Inject Types, Catalogs, Organizations, Data Fields (Sections 9, 10, 21)
+7. **Integrations** - Player, Gallery, CITE, Steamfitter, Push/Pull (Section 12)
+8. **xAPI and Analytics** - xAPI statement generation, LRsql integration (Section 17)
+9. **Workflows** - Launch, Join, Manage Events (Section 8)
+10. **Data Management** - Export, Import (Section 15)
+11. **Quality Assurance** - Error Handling, Validation, Accessibility (Sections 14, 16)
+
+### Prerequisites
+
+- Crucible services running via Aspire (launch profile or `aspire run`)
+- Keycloak accessible at https://localhost:8443
+- Blueprint UI at http://localhost:4725
+- Blueprint API at http://localhost:4724
+- LRsql at http://localhost:9274 (for xAPI tests)
+- Admin credentials: username 'admin', password 'admin'
+
+### Test Data Requirements
+
+- Seed database with sample MSELs, moves, groups, teams, units, organizations
+- At least one MSEL in each status (Pending, Entered, Approved, Complete, Deployed, Archived)
+- Sample scenario events with various data fields, delivery methods, and integration types
+- Sample users with different permission levels (admin, editor, viewer, owner, evaluator)
+- Sample teams with and without CITE Team Types
+- Sample units with assigned users
+
+### Coverage Goals
+
+- **Functional Coverage** - All user-facing features and admin functions
+- **Integration Coverage** - All external service integrations (Player, Gallery, CITE, Steamfitter, LRsql)
+- **Permission Coverage** - Role-based access control for all user types
+- **Error Coverage** - Validation, error messages, graceful degradation
+- **Workflow Coverage** - End-to-end user workflows (build, launch, join, manage)
+
+---
+
+## Test Plan Maintenance
+
+This test plan should be updated when:
+- New features are added to Blueprint
+- Integration points change
+- xAPI profile or PCTE compliance requirements evolve
+- Admin configuration options expand
+- UI/UX patterns change
+
+**Last Updated:** 2026-04-24
+**Blueprint API Version:** 1.6.1+
+**Test Plan Version:** 2.0
