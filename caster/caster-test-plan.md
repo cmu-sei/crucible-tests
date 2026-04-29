@@ -2,7 +2,7 @@
 
 ## Application Overview
 
-Caster is an infrastructure orchestration application within the Crucible cybersecurity training and simulation platform. It provides Terraform-based infrastructure-as-code capabilities, enabling users to manage infrastructure through Directories (templates), Workspaces (isolated environments), Projects (organizational units), and Runs (plan/apply/destroy operations). Caster integrates with other Crucible services, particularly Alloy, to dynamically provision and tear down infrastructure for training exercises.
+Caster is an infrastructure orchestration application within the Crucible cybersecurity training and simulation platform. It provides Terraform-based infrastructure-as-code capabilities, enabling users to manage infrastructure through Projects, Directories (templates), Workspaces (isolated environments), Files, Runs (plan/apply/destroy operations), Modules, VLANs, Roles, Groups, and Users. Caster integrates with other Crucible services, particularly Alloy, to dynamically provision and tear down infrastructure for training exercises.
 
 ## Test Scenarios
 
@@ -92,7 +92,7 @@ Caster is an infrastructure orchestration application within the Crucible cybers
   2. Navigate to http://localhost:4310/admin
     - expect: The admin interface loads
     - expect: A sidebar navigation menu is visible
-    - expect: The sidebar contains sections: Users, Permissions, Host Machines, Projects
+    - expect: The sidebar contains sections: Users, Permissions, Host Machines, Projects, VLANs, Roles, Groups, Workspaces
 
 #### 2.3. Sidebar Navigation Toggle
 
@@ -1603,3 +1603,547 @@ Caster is an infrastructure orchestration application within the Crucible cybers
     - expect: User can navigate to other pages while run is in progress
     - expect: Progress indicators show the operation is ongoing
     - expect: Real-time updates continue to work
+
+### 19. VLANs Management
+
+**Seed:** `tests/seed.spec.ts`
+
+#### 19.1. View VLAN Pools
+
+**File:** `tests/vlans-management/view-vlan-pools.spec.ts`
+
+**Steps:**
+  1. Navigate to Admin section and click on VLANs in the sidebar
+    - expect: VLANs page loads at http://localhost:4310/admin?section=VLANs
+    - expect: Two tabs are visible: Pools and Projects
+    - expect: Pools tab is selected by default
+    - expect: Pools section displays heading and action buttons
+    - expect: If no pools exist, an appropriate empty state is shown
+
+#### 19.2. Create VLAN Pool
+
+**File:** `tests/vlans-management/create-vlan-pool.spec.ts`
+
+**Steps:**
+  1. Navigate to VLANs admin section - Pools tab
+    - expect: Pools section is visible with create button
+  2. Click the create/add pool button
+    - expect: A pool creation dialog is displayed
+  3. Enter pool name and VLAN range details in the form
+    - expect: Form fields accept input
+    - expect: VLAN range validation is applied
+  4. Click Save or Create button
+    - expect: The VLAN pool is created successfully
+    - expect: A success notification is displayed
+    - expect: The new pool appears in the pools list
+
+#### 19.3. Edit VLAN Pool
+
+**File:** `tests/vlans-management/edit-vlan-pool.spec.ts`
+
+**Steps:**
+  1. Navigate to VLANs admin section - Pools tab with existing pools
+    - expect: Pools list is visible with at least one pool
+  2. Click on a pool or its edit icon
+    - expect: Pool edit dialog is displayed
+    - expect: Form fields are populated with current pool values
+  3. Modify pool details such as name or VLAN range
+    - expect: Fields accept new values
+  4. Click Save button
+    - expect: The pool is updated successfully
+    - expect: A success notification is displayed
+    - expect: Updated values are reflected in the pools list
+
+#### 19.4. Delete VLAN Pool
+
+**File:** `tests/vlans-management/delete-vlan-pool.spec.ts`
+
+**Steps:**
+  1. Navigate to VLANs admin section - Pools tab
+    - expect: Pools list is visible
+  2. Click delete icon for a specific pool
+    - expect: A confirmation dialog appears asking to confirm deletion
+  3. Click Cancel in the confirmation dialog
+    - expect: Dialog closes
+    - expect: Pool is not deleted
+  4. Click delete icon again and click Confirm
+    - expect: The pool is deleted successfully
+    - expect: A success notification is displayed
+    - expect: The pool is removed from the list
+    - expect: If pool is in use by projects, appropriate error message is shown preventing deletion
+
+#### 19.5. View Project VLAN Assignments
+
+**File:** `tests/vlans-management/view-project-vlans.spec.ts`
+
+**Steps:**
+  1. Navigate to VLANs admin section
+    - expect: VLANs page loads with Pools and Projects tabs
+  2. Click on the Projects tab
+    - expect: Projects tab is displayed
+    - expect: List of projects with their VLAN assignments is shown
+    - expect: Each project shows its assigned VLAN pool or range
+    - expect: Projects without VLAN assignments are also visible
+
+#### 19.6. Assign VLAN Pool to Project
+
+**File:** `tests/vlans-management/assign-vlan-pool-to-project.spec.ts`
+
+**Steps:**
+  1. Navigate to VLANs admin section - Projects tab
+    - expect: Projects list is visible
+  2. Select a project and click assign or edit VLAN button
+    - expect: VLAN assignment dialog opens with pool selection
+  3. Select a VLAN pool from the dropdown
+    - expect: Available VLAN pools are listed
+    - expect: A pool can be selected
+  4. Click Save or Assign button
+    - expect: VLAN pool is assigned to the project
+    - expect: Success notification is displayed
+    - expect: Project shows the assigned VLAN pool in the list
+
+#### 19.7. VLAN Permissions Enforcement
+
+**File:** `tests/vlans-management/vlan-permissions-enforcement.spec.ts`
+
+**Steps:**
+  1. Log in as a user with ViewVLANs but not ManageVLANs permission
+    - expect: User is authenticated with limited VLAN permissions
+  2. Navigate to VLANs admin section
+    - expect: VLANs page is accessible
+    - expect: Pools and project assignments are visible
+    - expect: User can view but not modify VLANs
+  3. Attempt to create a new VLAN pool
+    - expect: Create button is disabled or hidden
+    - expect: Clicking it shows permission error if accessible
+  4. Attempt to edit or delete an existing pool
+    - expect: Edit and delete buttons are disabled or hidden
+    - expect: Appropriate permission denied message appears if attempted
+
+### 20. Roles and Permissions Management
+
+**Seed:** `tests/seed.spec.ts`
+
+#### 20.1. View System Roles and Permissions Matrix
+
+**File:** `tests/roles-management/view-system-roles.spec.ts`
+
+**Steps:**
+  1. Navigate to Admin section and click on Roles in the sidebar
+    - expect: Roles page loads at http://localhost:4310/admin?section=Roles
+    - expect: Two tabs are visible: Roles and Project Roles
+    - expect: Roles tab is selected by default showing system roles
+    - expect: Permissions matrix displays with roles as columns: Administrator, Content Developer, Observer
+    - expect: All permissions are listed as rows including: All, CreateProjects, ViewProjects, EditProjects, ManageProjects, ImportProjects, LockFiles, ImportResources, ViewUsers, ManageUsers, ViewWorkspaces, ManageWorkspaces, ViewVLANs, ManageVLANs, ViewRoles, ManageRoles, ViewGroups, ManageGroups, ViewHosts, ManageHosts, ViewModules, ManageModules
+
+#### 20.2. Verify Default Role Permissions
+
+**File:** `tests/roles-management/verify-default-role-permissions.spec.ts`
+
+**Steps:**
+  1. Navigate to Roles admin section - Roles tab
+    - expect: Permissions matrix is fully displayed
+  2. Check Administrator role permissions
+    - expect: Administrator has All permission checked and disabled
+    - expect: Administrator cannot be modified
+  3. Check Content Developer role permissions
+    - expect: Content Developer has CreateProjects permission checked
+    - expect: Content Developer has appropriate create/edit permissions but not all manage permissions
+  4. Check Observer role permissions
+    - expect: Observer has ViewProjects, ViewUsers, ViewWorkspaces, ViewVLANs, ViewRoles, ViewGroups, ViewHosts, ViewModules permissions checked
+    - expect: Observer has no Create, Edit, Manage, or Delete permissions
+
+#### 20.3. Create New System Role
+
+**File:** `tests/roles-management/create-new-system-role.spec.ts`
+
+**Steps:**
+  1. Navigate to Roles admin section - Roles tab
+    - expect: Roles matrix is visible with create button
+  2. Click Add Permission or Add Role button
+    - expect: Role creation dialog or inline input is displayed
+  3. Enter Test Custom Role as the role name
+    - expect: Role name field accepts input
+  4. Click Save or confirm to create the role
+    - expect: New role is created successfully
+    - expect: Success notification is displayed
+    - expect: New role column appears in the permissions matrix
+    - expect: New role has no permissions assigned by default (all unchecked)
+
+#### 20.4. Assign and Revoke Permissions
+
+**File:** `tests/roles-management/assign-revoke-permissions.spec.ts`
+
+**Steps:**
+  1. Navigate to Roles admin section with a custom role
+    - expect: Permissions matrix shows the custom role
+  2. Click on the ViewProjects permission checkbox for the custom role
+    - expect: Checkbox changes to checked state
+    - expect: ViewProjects permission is assigned to the role
+    - expect: Change is persisted automatically or after clicking save
+  3. Click on the ManageProjects permission checkbox for the same role
+    - expect: Checkbox changes to checked state
+    - expect: ManageProjects permission is assigned to the role
+  4. Click on the ViewProjects checkbox again to uncheck it
+    - expect: Checkbox changes to unchecked state
+    - expect: ViewProjects permission is revoked from the role
+    - expect: Success notification may appear
+
+#### 20.5. Rename System Role
+
+**File:** `tests/roles-management/rename-system-role.spec.ts`
+
+**Steps:**
+  1. Navigate to Roles admin section with a custom role (not Administrator)
+    - expect: Roles matrix displays with custom role
+  2. Click on the Rename Role icon (pencil icon) for the custom role
+    - expect: Rename dialog or inline edit field is displayed
+    - expect: Current role name is shown in the input field
+  3. Enter Renamed Custom Role as the new name
+    - expect: Name field accepts the new input
+  4. Click Save or confirm
+    - expect: Role is renamed successfully
+    - expect: Success notification is displayed
+    - expect: Updated role name appears in the permissions matrix column header
+
+#### 20.6. Delete System Role
+
+**File:** `tests/roles-management/delete-system-role.spec.ts`
+
+**Steps:**
+  1. Navigate to Roles admin section with a custom role
+    - expect: Roles matrix displays with deleteable custom role
+  2. Click the Delete Role icon (trash icon) for the custom role
+    - expect: Confirmation dialog appears asking to confirm role deletion
+  3. Click Cancel
+    - expect: Dialog closes
+    - expect: Role is not deleted
+  4. Click delete icon again and confirm deletion
+    - expect: Role is deleted successfully
+    - expect: Success notification is displayed
+    - expect: Role column is removed from the permissions matrix
+    - expect: If users are currently assigned this role, appropriate warning or error is shown
+
+#### 20.7. Administrator Role Protection
+
+**File:** `tests/roles-management/administrator-role-protection.spec.ts`
+
+**Steps:**
+  1. Navigate to Roles admin section
+    - expect: Roles matrix is visible
+    - expect: Administrator role column is displayed
+  2. Check Administrator role header for rename icon
+    - expect: Rename icon is not present for Administrator role
+    - expect: Administrator role name cannot be changed
+  3. Check Administrator role header for delete icon
+    - expect: Delete icon is not present for Administrator role
+    - expect: Administrator role cannot be deleted
+  4. Check Administrator All permission checkbox
+    - expect: All permission is checked and disabled for Administrator
+    - expect: Administrator permissions cannot be modified
+    - expect: Clicking the checkbox has no effect
+
+#### 20.8. View Project Roles Tab
+
+**File:** `tests/roles-management/view-project-roles.spec.ts`
+
+**Steps:**
+  1. Navigate to Roles admin section
+    - expect: Roles page loads with two tabs
+  2. Click on the Project Roles tab
+    - expect: Project Roles tab is displayed
+    - expect: Project-specific roles interface is shown
+    - expect: Project roles are separate from system roles
+    - expect: Interface for managing project-level role assignments is visible
+
+#### 20.9. Role Permissions Enforcement
+
+**File:** `tests/roles-management/role-permissions-enforcement.spec.ts`
+
+**Steps:**
+  1. Log in as a user with ViewRoles but not ManageRoles permission
+    - expect: User is authenticated with view-only role access
+  2. Navigate to Roles admin section
+    - expect: Roles page is accessible
+    - expect: Permissions matrix is visible
+    - expect: User can view all roles and their permissions
+  3. Attempt to create a new role
+    - expect: Create role button is disabled or hidden
+    - expect: Attempting to create shows permission error
+  4. Attempt to modify permissions or rename/delete a role
+    - expect: Permission checkboxes are disabled
+    - expect: Rename and delete icons are hidden or disabled
+    - expect: Appropriate permission denied message is shown if attempted
+
+### 21. Groups Management
+
+**Seed:** `tests/seed.spec.ts`
+
+#### 21.1. View Groups List
+
+**File:** `tests/groups-management/view-groups-list.spec.ts`
+
+**Steps:**
+  1. Navigate to Admin section and click on Groups in the sidebar
+    - expect: Groups page loads at http://localhost:4310/admin?section=Groups
+    - expect: Groups table is displayed with columns: selection checkbox, Group Name
+    - expect: Search Groups textbox is available at the top
+    - expect: Create group button is visible
+    - expect: If no groups exist, an appropriate empty state is shown
+
+#### 21.2. Create New Group
+
+**File:** `tests/groups-management/create-new-group.spec.ts`
+
+**Steps:**
+  1. Navigate to Groups admin section
+    - expect: Groups list is visible with create button
+  2. Click the Create Group or add button
+    - expect: Group creation dialog is displayed with form fields
+  3. Enter Test Infrastructure Group in the group name field
+    - expect: Name field accepts input
+  4. Fill in any additional group details if required
+    - expect: Optional form fields accept input
+  5. Click Save or Create button
+    - expect: Group is created successfully
+    - expect: Success notification is displayed
+    - expect: New group appears in the groups table
+    - expect: Group name is displayed correctly
+
+#### 21.3. Search Groups
+
+**File:** `tests/groups-management/search-groups.spec.ts`
+
+**Steps:**
+  1. Navigate to Groups admin section with multiple groups
+    - expect: Groups list is visible with several groups
+    - expect: Search Groups textbox is displayed
+  2. Enter a search term (e.g., Infrastructure) in the Search Groups textbox
+    - expect: The groups table filters to show only matching groups
+    - expect: Search works on group name
+    - expect: Results update in real-time as user types
+  3. Clear the search box
+    - expect: All groups are displayed again
+    - expect: Filter is removed
+
+#### 21.4. Sort Groups
+
+**File:** `tests/groups-management/sort-groups.spec.ts`
+
+**Steps:**
+  1. Navigate to Groups admin section with multiple groups
+    - expect: Groups table is visible
+  2. Click on the Group Name column header
+    - expect: Groups are sorted alphabetically by name
+    - expect: Sort indicator shows the sort direction (ascending/descending)
+  3. Click on the Group Name column header again
+    - expect: Groups are sorted in reverse alphabetical order
+    - expect: Sort indicator shows reversed direction
+
+#### 21.5. Select Multiple Groups
+
+**File:** `tests/groups-management/select-multiple-groups.spec.ts`
+
+**Steps:**
+  1. Navigate to Groups admin section with multiple groups
+    - expect: Groups table is visible
+    - expect: Each row has a selection checkbox
+  2. Click the checkbox for one group
+    - expect: Checkbox is checked
+    - expect: Group is selected
+  3. Click the checkbox for another group
+    - expect: Second checkbox is checked
+    - expect: Multiple groups are now selected
+    - expect: Bulk action buttons may appear (if available)
+
+#### 21.6. Edit Group
+
+**File:** `tests/groups-management/edit-group.spec.ts`
+
+**Steps:**
+  1. Navigate to Groups admin section with existing groups
+    - expect: Groups list is visible with at least one group
+  2. Click on a group row or its edit icon
+    - expect: Group edit dialog is displayed
+    - expect: Form fields are populated with current group values
+  3. Modify the group name to Updated Group Name
+    - expect: Name field accepts the new value
+  4. Click Save button
+    - expect: Group is updated successfully
+    - expect: Success notification is displayed
+    - expect: Updated group name is reflected in the groups table
+
+#### 21.7. Delete Group
+
+**File:** `tests/groups-management/delete-group.spec.ts`
+
+**Steps:**
+  1. Navigate to Groups admin section
+    - expect: Groups list is visible
+  2. Click delete icon for a specific group
+    - expect: Confirmation dialog appears asking to confirm group deletion
+  3. Click Cancel
+    - expect: Dialog closes
+    - expect: Group is not deleted
+  4. Click delete icon again and click Confirm or Delete
+    - expect: Group is deleted successfully
+    - expect: Success notification is displayed
+    - expect: Group is removed from the table
+    - expect: If group has members or is used in projects, appropriate warning or error message is shown
+
+#### 21.8. Bulk Delete Groups
+
+**File:** `tests/groups-management/bulk-delete-groups.spec.ts`
+
+**Steps:**
+  1. Navigate to Groups admin section with multiple groups
+    - expect: Groups list is visible
+  2. Select multiple groups using checkboxes
+    - expect: Multiple groups are selected
+    - expect: Bulk delete button appears or is enabled
+  3. Click bulk delete button
+    - expect: Confirmation dialog appears for bulk deletion
+  4. Confirm bulk deletion
+    - expect: Selected groups are deleted
+    - expect: Success notification is displayed
+    - expect: Groups are removed from the table
+    - expect: If any groups cannot be deleted, appropriate error messages are shown
+
+#### 21.9. Group Permissions Enforcement
+
+**File:** `tests/groups-management/group-permissions-enforcement.spec.ts`
+
+**Steps:**
+  1. Log in as a user with ViewGroups but not ManageGroups permission
+    - expect: User is authenticated with view-only groups access
+  2. Navigate to Groups admin section
+    - expect: Groups page is accessible
+    - expect: Groups list is visible
+    - expect: User can view groups and search
+  3. Attempt to create a new group
+    - expect: Create group button is disabled or hidden
+    - expect: Attempting to create shows permission error
+  4. Attempt to edit or delete a group
+    - expect: Edit and delete icons are disabled or hidden
+    - expect: Attempting actions shows appropriate permission denied message
+
+### 22. Global Workspace Settings
+
+**Seed:** `tests/seed.spec.ts`
+
+#### 22.1. View Global Workspace Settings
+
+**File:** `tests/global-workspace-settings/view-workspace-settings.spec.ts`
+
+**Steps:**
+  1. Navigate to Admin section and click on Workspaces in the sidebar
+    - expect: Workspaces admin page loads at http://localhost:4310/admin?section=Workspaces
+    - expect: Settings section is visible at the top of the page
+    - expect: Toggle switch for Disable Workspace Operations is displayed
+    - expect: Active Runs section is visible below settings
+
+#### 22.2. Enable Disable Workspace Operations
+
+**File:** `tests/global-workspace-settings/enable-disable-operations.spec.ts`
+
+**Steps:**
+  1. Navigate to Workspaces admin section
+    - expect: Workspace settings are visible
+    - expect: Disable Workspace Operations toggle is in OFF state (operations enabled)
+  2. Click the Disable Workspace Operations toggle switch
+    - expect: Toggle switches to ON state
+    - expect: Setting is saved
+    - expect: Success notification may appear
+  3. Navigate to a project workspace and attempt to create a plan run
+    - expect: Run creation is prevented or disabled
+    - expect: Appropriate message indicates workspace operations are globally disabled
+  4. Return to Workspaces admin and toggle Disable Workspace Operations back to OFF
+    - expect: Toggle switches to OFF state
+    - expect: Workspace operations are re-enabled globally
+    - expect: Users can now perform plan, apply, and destroy operations normally
+
+#### 22.3. View Active Runs Globally
+
+**File:** `tests/global-workspace-settings/view-active-runs-globally.spec.ts`
+
+**Steps:**
+  1. Navigate to Workspaces admin section
+    - expect: Workspaces admin page loads
+  2. Scroll to the Active Runs section
+    - expect: Active Runs heading is displayed
+    - expect: Table shows currently running or queued runs across all workspaces
+    - expect: Columns include: createdAt, isDestroy, status, workspaceId, actions
+    - expect: Search textbox is available
+    - expect: Pagination controls show items per page dropdown and navigation buttons
+    - expect: If no active runs exist, appropriate message is shown
+
+#### 22.4. Search Active Runs
+
+**File:** `tests/global-workspace-settings/search-active-runs.spec.ts`
+
+**Steps:**
+  1. Navigate to Workspaces admin section with active runs
+    - expect: Active Runs table is visible with multiple runs
+    - expect: Search textbox is displayed
+  2. Enter a search term (e.g., workspace ID or status) in the search box
+    - expect: The runs table filters to show matching runs
+    - expect: Search works across run details
+    - expect: Results update in real-time
+  3. Clear the search box
+    - expect: All active runs are displayed again
+    - expect: Filter is removed
+
+#### 22.5. Sort Active Runs
+
+**File:** `tests/global-workspace-settings/sort-active-runs.spec.ts`
+
+**Steps:**
+  1. Navigate to Workspaces admin section - Active Runs
+    - expect: Active Runs table is visible with sortable columns
+  2. Click on the createdAt column header button
+    - expect: Runs are sorted by creation date
+    - expect: Sort indicator shows sort direction (newest or oldest first)
+  3. Click on the createdAt column header again
+    - expect: Sort direction reverses
+    - expect: Runs are now sorted in opposite order
+  4. Click on the status column header
+    - expect: Runs are sorted alphabetically by status
+    - expect: Sort indicator shows direction
+
+#### 22.6. Paginate Active Runs
+
+**File:** `tests/global-workspace-settings/paginate-active-runs.spec.ts`
+
+**Steps:**
+  1. Navigate to Workspaces admin section with many active runs
+    - expect: Active Runs table shows paginated results
+    - expect: Pagination controls display items per page dropdown (default 20)
+    - expect: Status shows current range (e.g., 1-20 of 45)
+  2. Click Items per page dropdown
+    - expect: Dropdown opens showing options (e.g., 5, 10, 20, 50)
+    - expect: Current selection is highlighted
+  3. Select a different page size
+    - expect: Table updates to show selected number of items per page
+    - expect: Pagination status updates accordingly
+  4. Click Next page button
+    - expect: Table shows next page of runs
+    - expect: Status updates to reflect new page range
+  5. Click Previous page button
+    - expect: Table shows previous page of runs
+    - expect: Status updates accordingly
+
+#### 22.7. Perform Actions on Active Runs
+
+**File:** `tests/global-workspace-settings/actions-on-active-runs.spec.ts`
+
+**Steps:**
+  1. Navigate to Workspaces admin section with active runs
+    - expect: Active Runs table is visible
+    - expect: Actions column shows available actions for each run
+  2. Click on an action button for a running operation (e.g., Cancel)
+    - expect: Action dialog or confirmation appears
+    - expect: User can confirm the action
+  3. Confirm the action
+    - expect: Action is performed on the run (e.g., run is cancelled)
+    - expect: Success notification is displayed
+    - expect: Run status updates in the table or run is removed if completed
