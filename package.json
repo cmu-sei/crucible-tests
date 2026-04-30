@@ -12,8 +12,12 @@
     "test:codegen": "playwright codegen"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.2",
     "@playwright/test": "^1.58.2",
     "@types/node": "^25.5.2",
-    "dotenv": "^17.4.1"
+    "@types/pg": "^8.20.0",
+    "axe-core": "^4.11.3",
+    "dotenv": "^17.4.1",
+    "pg": "^8.20.0"
   }
 }

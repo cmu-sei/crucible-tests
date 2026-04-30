@@ -20,6 +20,15 @@ ASPIRE_DASHBOARD_URL="${ASPIRE_DASHBOARD_URL:-https://localhost:17088}"
 # All supported apps
 ALL_APPS="keycloak blueprint player cite gameboard topomojo steamfitter moodle alloy caster gallery"
 
+# Map app name to apps it depends on (space-separated)
+get_app_deps() {
+    local app="$1"
+    case "$app" in
+        gameboard) echo "topomojo";;
+        *) echo "";;
+    esac
+}
+
 # Map app name to its UI URL from .env
 get_app_url() {
     local app="$1"
@@ -211,7 +220,7 @@ fi
 # Check services unless --no-check is specified
 if [ "$NO_CHECK" = false ] && [ "$COMMAND" != "help" ] && [ "$COMMAND" != "report" ]; then
     if [ -n "$TARGET_APP" ]; then
-        check_services "$TARGET_APP"
+        check_services "$TARGET_APP" $(get_app_deps "$TARGET_APP")
     else
         # Running all apps or no specific app - just check infrastructure
         check_services
