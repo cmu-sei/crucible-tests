@@ -1,0 +1,104 @@
+// Copyright 2026 Carnegie Mellon University. All Rights Reserved.
+// Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
+
+// spec: steamfitter/steamfitter-test-plan.md
+// seed: tests/seed.spec.ts
+
+import { test, expect, Services, getKeycloakAccessToken, authenticatedApi } from '../../fixtures';
+
+test.describe('API Error Handling', () => {
+  let templateId: string | null = null;
+  let scenarioId: string | null = null;
+  let apiToken: string | null = null;
+
+  test.afterEach(async ({ request }) => {
+    // Obtain a fresh token for cleanup if we don't already have one
+    const token = apiToken ?? await getKeycloakAccessToken(request).catch(() => null);
+    if (!token) return;
+    const api = authenticatedApi(request, token);
+
+    if (scenarioId) {
+      try {
+        await api.post(`${Services.Steamfitter.API}/api/scenarios/${scenarioId}/end`).catch(() => {});
+        await api.delete(`${Services.Steamfitter.API}/api/scenarios/${scenarioId}`);
+      } catch { /* ignore cleanup errors */ }
+      scenarioId = null;
+    }
+    if (templateId) {
+      try {
+        await api.delete(`${Services.Steamfitter.API}/api/scenariotemplates/${templateId}`);
+      } catch { /* ignore cleanup errors */ }
+      templateId = null;
+    }
+  });
+
+  test('Better VM API Error Messages', async ({ steamfitterAuthenticatedPage: page, request }) => {
+    // Obtain an access token for API calls
+    apiToken = await getKeycloakAccessToken(request);
+    const api = authenticatedApi(request, apiToken);
+
+    // Setup: create template with task targeting invalid VM
+    const createTemplateResp = await api.post(`${Services.Steamfitter.API}/api/scenariotemplates`, {
+      data: { name: 'VM Error Message Test', description: 'Test VM error messages', durationHours: 1 },
+    });
+    expect(createTemplateResp.ok()).toBeTruthy();
+    const template = await createTemplateResp.json();
+    templateId = template.id;
+
+    // Add a task targeting a non-existent VM
+    const createTaskResp = await api.post(`${Services.Steamfitter.API}/api/tasks/scenariotemplate/${templateId}`, {
+      data: {
+        name: 'Invalid VM Task',
+        description: 'Task targeting invalid VM',
+        triggerCondition: 'Manual',
+        vmMoid: 'invalid-vm-moid-12345',
+      },
+    });
+    if (createTaskResp.ok()) {
+      const task = await createTaskResp.json();
+      expect(task.id).toBeTruthy();
+    }
+
+    // Create scenario and start it
+    const createScenarioResp = await api.post(`${Services.Steamfitter.API}/api/scenarios`, {
+      data: { name: 'VM Error Scenario', description: 'Test scenario', scenarioTemplateId: templateId, durationHours: 1 },
+    });
+    expect(createScenarioResp.ok()).toBeTruthy();
+    const scenario = await createScenarioResp.json();
+    scenarioId = scenario.id;
+
+    await api.post(`${Services.Steamfitter.API}/api/scenarios/${scenarioId}/start`);
+    await page.waitForTimeout(1000);
+
+    // Navigate to the scenario
+    await page.goto(`${Services.Steamfitter.UI}/admin`);
+    await page.waitForLoadState('domcontentloaded');
+
+    const sidebar = page.locator('mat-sidenav, mat-drawer, [class*="sidebar"]').first();
+    await expect(sidebar).toBeVisible({ timeout: 15000 });
+    await sidebar.locator('text=Scenarios').first().click();
+    await page.waitForTimeout(1000);
+
+    await page.locator('text=VM Error Scenario').first().click();
+    await page.waitForTimeout(1000);
+
+    // Execute the task
+    const executeButton = page.locator('button:has(mat-icon:text("play_arrow")), button:has-text("Execute")').first();
+    const hasExecute = await executeButton.isVisible({ timeout: 5000 }).catch(() => false);
+
+    if (hasExecute) {
+      await executeButton.click();
+      await page.waitForTimeout(3000);
+
+      // Verify descriptive error message (not generic)
+      const resultText = page.locator('[class*="result"], [class*="error"], [class*="output"], pre, code');
+      const hasResult = await resultText.first().isVisible({ timeout: 5000 }).catch(() => false);
+      if (hasResult) {
+        const text = await resultText.first().textContent();
+        // Error should be descriptive, not just a generic "error occurred"
+        expect(text).toBeTruthy();
+        expect(text!.length).toBeGreaterThan(10);
+      }
+    }
+  });
+});

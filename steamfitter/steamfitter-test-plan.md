@@ -1361,3 +1361,479 @@ Steamfitter is a scenario execution service within the Crucible cybersecurity tr
     - expect: The output text shows what the command returned
     - expect: If the expected output was configured, the result indicates whether it matched
     - expect: The integration correctly captures and displays VM command results
+### 15. Dark Theme and UI Appearance
+
+**Seed:** `tests/seed.spec.ts`
+
+#### 15.1. Enable Dark Theme
+
+**File:** `tests/steamfitter/dark-theme-and-ui-appearance/enable-dark-theme.spec.ts`
+
+**Steps:**
+  1. Log in as admin user and navigate to http://localhost:4401
+    - expect: The home page loads successfully
+    - expect: The interface is displayed in light theme (default)
+  2. Click on the user menu in the topbar
+    - expect: A dropdown menu appears
+    - expect: The menu contains 'Administration', 'Logout', and a 'Dark Theme' toggle switch
+  3. Click the 'Dark Theme' toggle switch to enable dark theme
+    - expect: The toggle switch changes to the checked/on state
+    - expect: The application immediately switches to dark theme
+    - expect: The background colors change to dark gray/black tones
+    - expect: The text colors adjust for proper contrast on dark backgrounds
+    - expect: The topbar remains red but the main content area uses dark theme colors
+  4. Close the user menu by clicking elsewhere
+    - expect: The menu closes
+    - expect: Dark theme remains active
+
+#### 15.2. Dark Theme Persists Across Page Refreshes
+
+**File:** `tests/steamfitter/dark-theme-and-ui-appearance/dark-theme-persists-across-refreshes.spec.ts`
+
+**Steps:**
+  1. Enable dark theme using the Dark Theme toggle in the user menu
+    - expect: Dark theme is active
+    - expect: The theme setting is stored in localStorage under key 'akita-steamfitter-ui'
+  2. Refresh the page (F5 or browser refresh button)
+    - expect: The page reloads
+    - expect: Dark theme is still active after the refresh
+    - expect: The user does not need to re-enable dark theme
+    - expect: The theme preference was successfully persisted
+  3. Verify localStorage contains the theme setting
+    - expect: localStorage item 'akita-steamfitter-ui' contains a JSON object with theme: 'dark-theme'
+
+#### 15.3. Disable Dark Theme
+
+**File:** `tests/steamfitter/dark-theme-and-ui-appearance/disable-dark-theme.spec.ts`
+
+**Steps:**
+  1. With dark theme enabled, open the user menu
+    - expect: The user menu appears
+    - expect: The Dark Theme toggle is in the checked/on state
+  2. Click the Dark Theme toggle to disable dark theme
+    - expect: The toggle changes to the unchecked/off state
+    - expect: The application immediately switches back to light theme
+    - expect: The background colors return to light theme colors
+    - expect: The localStorage setting is updated to reflect light theme
+
+#### 15.4. Dark Theme Applies to All Sections
+
+**File:** `tests/steamfitter/dark-theme-and-ui-appearance/dark-theme-applies-to-all-sections.spec.ts`
+
+**Steps:**
+  1. Enable dark theme
+    - expect: Dark theme is active
+  2. Navigate to the Admin section (http://localhost:4401/admin)
+    - expect: The admin interface displays in dark theme
+    - expect: The sidebar uses dark theme colors
+    - expect: Tables and lists are rendered with dark backgrounds
+  3. Navigate through different admin sections (Scenario Templates, Scenarios, Users, Roles, Groups)
+    - expect: All admin sections consistently use dark theme
+    - expect: No sections revert to light theme
+    - expect: Dark theme is applied globally throughout the application
+  4. Open a dialog (e.g., Edit Scenario Template)
+    - expect: The dialog is displayed with dark theme styling
+    - expect: Form fields use appropriate dark theme colors
+
+#### 15.5. Classification Banner Display
+
+**File:** `tests/steamfitter/dark-theme-and-ui-appearance/classification-banner-display.spec.ts`
+
+**Steps:**
+  1. Configure the classification banner setting in the application settings (if not already configured)
+    - expect: The classification setting is available in the configuration
+  2. Navigate to http://localhost:4401 after classification is configured
+    - expect: A classification banner is displayed at the top of the page
+    - expect: The banner shows the configured classification marking (e.g., 'UNCLASSIFIED')
+    - expect: The banner uses appropriate colors for the classification level
+    - expect: The banner remains visible while scrolling
+  3. Navigate to different pages within the application
+    - expect: The classification banner persists across all pages
+    - expect: The banner is consistently positioned and styled
+
+### 16. Dialog Enhancements
+
+**Seed:** `tests/seed.spec.ts`
+
+#### 16.1. Scenario Template Edit Dialog Has Title
+
+**File:** `tests/steamfitter/dialog-enhancements/scenario-template-edit-dialog-has-title.spec.ts`
+
+**Steps:**
+  1. Navigate to Admin -> Scenario Templates
+    - expect: The Scenario Templates list is displayed
+  2. Click the menu icon on a scenario template and select 'Edit'
+    - expect: An edit dialog opens
+    - expect: The dialog has a title 'Edit Scenario Template' at the top
+    - expect: The title clearly indicates the purpose of the dialog
+  3. Click Cancel to close the dialog
+    - expect: The dialog closes without saving changes
+
+#### 16.2. Scenario Template Add Dialog Has Title
+
+**File:** `tests/steamfitter/dialog-enhancements/scenario-template-add-dialog-has-title.spec.ts`
+
+**Steps:**
+  1. Navigate to Admin -> Scenario Templates
+    - expect: The Scenario Templates list is displayed
+  2. Click the 'Add Scenario Template' button
+    - expect: A creation dialog opens
+    - expect: The dialog has a title 'Add Scenario Template' or similar at the top
+    - expect: The title clearly indicates this is for creating a new template
+  3. Click Cancel to close the dialog
+    - expect: The dialog closes
+
+#### 16.3. Scenario Edit Dialog Has Title
+
+**File:** `tests/steamfitter/dialog-enhancements/scenario-edit-dialog-has-title.spec.ts`
+
+**Steps:**
+  1. Navigate to Admin -> Scenarios
+    - expect: The Scenarios list is displayed
+  2. If no scenarios exist, create one first; then click the menu icon on a scenario and select 'Edit'
+    - expect: An edit dialog opens
+    - expect: The dialog has a title 'Edit Scenario' at the top
+    - expect: The title clearly indicates the purpose of the dialog
+  3. Click Cancel to close the dialog
+    - expect: The dialog closes without saving changes
+
+#### 16.4. Task Edit Dialog Uses Floating Labels
+
+**File:** `tests/steamfitter/dialog-enhancements/task-edit-dialog-uses-floating-labels.spec.ts`
+
+**Steps:**
+  1. Navigate to a Scenario Template with tasks
+    - expect: The scenario template is displayed with a task list
+  2. Click the menu icon on a task and select 'Edit'
+    - expect: The task edit dialog opens
+    - expect: Form fields use mat-label instead of placeholder attributes
+    - expect: Labels float above the input fields when focused or filled
+    - expect: Empty fields show the label in the placeholder position
+    - expect: Filled fields show the label floating above the input
+  3. Click into a field and observe label behavior
+    - expect: The label smoothly animates to float above the field
+    - expect: The label remains visible and accessible
+
+#### 16.5. Dialog Validation Prevents Invalid Saves
+
+**File:** `tests/steamfitter/dialog-enhancements/dialog-validation-prevents-invalid-saves.spec.ts`
+
+**Steps:**
+  1. Navigate to Admin -> Scenario Templates and open the edit dialog for a template
+    - expect: The edit dialog is displayed
+  2. Clear the Name field (make it empty) and attempt to save
+    - expect: A validation error appears indicating the Name is required
+    - expect: The Save button is disabled or the save operation is prevented
+    - expect: The dialog remains open for correction
+  3. Enter a valid name and save
+    - expect: The validation error clears
+    - expect: The save operation succeeds
+    - expect: The dialog closes
+
+### 17. Task Status and Execution Improvements
+
+**Seed:** `tests/seed.spec.ts`
+
+#### 17.1. Cancelled Task Shows Cancel Icon
+
+**File:** `tests/steamfitter/task-status-and-execution-improvements/cancelled-task-shows-cancel-icon.spec.ts`
+
+**Steps:**
+  1. Create a scenario with tasks and start the scenario
+    - expect: The scenario is active with tasks
+  2. Cancel a task execution (if task cancellation is supported) or view a task that has been cancelled
+    - expect: The cancelled task displays a 'mdi-cancel' icon (X in a circle)
+    - expect: The icon clearly indicates the task was cancelled
+    - expect: The icon is different from the pending or help-circle icon
+  3. Compare with tasks in other states (pending, executing, completed)
+    - expect: Each task status has a distinct icon
+    - expect: Pending tasks show an appropriate pending icon
+    - expect: Completed tasks show a success or completion icon
+    - expect: Failed tasks show a failure icon
+
+#### 17.2. Execute Button Disabled When Scenario Not Active
+
+**File:** `tests/steamfitter/task-status-and-execution-improvements/execute-button-disabled-when-scenario-not-active.spec.ts`
+
+**Steps:**
+  1. Create a scenario from a template but do not start it (leave it in 'Ready' or 'Planned' status)
+    - expect: The scenario exists but is not active
+  2. Navigate to the scenario detail view and locate manual tasks
+    - expect: Manual tasks are displayed
+    - expect: The execute button or option for manual tasks is disabled or grayed out
+  3. Hover over the disabled execute button
+    - expect: A tooltip appears explaining why execution is disabled
+    - expect: The tooltip indicates the scenario must be active to execute tasks
+  4. Start the scenario
+    - expect: The scenario status changes to 'Active'
+    - expect: The execute button becomes enabled
+    - expect: Tasks can now be executed
+
+#### 17.3. Execute Confirmation Dialog
+
+**File:** `tests/steamfitter/task-status-and-execution-improvements/execute-confirmation-dialog.spec.ts`
+
+**Steps:**
+  1. Start an active scenario with manual tasks
+    - expect: The scenario is active
+    - expect: Manual tasks are available for execution
+  2. Click the execute option on a manual task
+    - expect: A confirmation dialog appears before execution
+    - expect: The dialog asks the user to confirm task execution
+    - expect: The dialog has 'Confirm' and 'Cancel' buttons
+  3. Click 'Cancel' in the confirmation dialog
+    - expect: The dialog closes
+    - expect: The task is NOT executed
+    - expect: No task result is created
+  4. Click execute again and then click 'Confirm' in the dialog
+    - expect: The dialog closes
+    - expect: The task begins execution
+    - expect: A loading or progress indicator appears
+    - expect: After execution, the task result is displayed
+
+#### 17.4. Task Status Icon Tooltip Accuracy
+
+**File:** `tests/steamfitter/task-status-and-execution-improvements/task-status-icon-tooltip-accuracy.spec.ts`
+
+**Steps:**
+  1. View a task in pending status (not yet executed)
+    - expect: The task displays a pending status icon
+  2. Hover over the pending status icon
+    - expect: The tooltip shows 'pending' or similar text
+    - expect: The tooltip does NOT say 'click to execute'
+    - expect: The tooltip accurately describes the icon's meaning
+  3. View a completed task with an execute option
+    - expect: The completed task shows a completion icon
+  4. Hover over the execute button or icon for a manual task
+    - expect: The tooltip for the execute button accurately describes its function
+    - expect: Tooltips throughout the task interface are accurate and helpful
+
+#### 17.5. Score Panel Maintains Expanded State on Updates
+
+**File:** `tests/steamfitter/task-status-and-execution-improvements/score-panel-maintains-expanded-state.spec.ts`
+
+**Steps:**
+  1. Create a scenario with tasks that have point values assigned
+    - expect: The scenario has multiple tasks with points
+  2. Navigate to the tasks page for users (http://localhost:4401/scenario/[scenarioId])
+    - expect: The score panel is displayed
+    - expect: The score panel can be expanded or collapsed (if collapsible)
+  3. Expand the score panel or note its current state
+    - expect: The score panel is in a specific expanded or collapsed state
+  4. Execute a task while the score panel is visible
+    - expect: The task executes
+    - expect: Task or result updates arrive via SignalR
+    - expect: The score panel updates to reflect the new score
+    - expect: The score panel maintains its expanded/collapsed state
+    - expect: The panel does NOT unexpectedly collapse or change state
+  5. Execute additional tasks
+    - expect: Each time the score updates, the panel state is preserved
+    - expect: The user experience is not disrupted by panel state changes
+
+### 18. URL and Navigation Enhancements
+
+**Seed:** `tests/seed.spec.ts`
+
+#### 18.1. Deep Link to Scenario with Query Parameter
+
+**File:** `tests/steamfitter/url-and-navigation-enhancements/deep-link-to-scenario-query-param.spec.ts`
+
+**Steps:**
+  1. Create a scenario and note its ID
+    - expect: A scenario exists with a known ID
+  2. Navigate to http://localhost:4401/admin?scenario=[scenarioId]
+    - expect: The admin page loads
+    - expect: The specified scenario is automatically expanded or selected
+    - expect: The scenario details are visible without requiring additional clicks
+  3. Switch to a different tab or section in the admin interface
+    - expect: The query parameter is cleaned up from the URL
+    - expect: Stale query parameters do not persist when navigating away
+
+#### 18.2. Deep Link to Scenario Template with Query Parameter
+
+**File:** `tests/steamfitter/url-and-navigation-enhancements/deep-link-to-scenario-template-query-param.spec.ts`
+
+**Steps:**
+  1. Note the ID of an existing scenario template
+    - expect: A scenario template exists with a known ID
+  2. Navigate to http://localhost:4401/admin?template=[templateId] or similar URL pattern with query parameter
+    - expect: The admin page loads
+    - expect: The specified scenario template is automatically expanded or selected
+    - expect: The template details or tasks are visible
+  3. Switch to a different admin section
+    - expect: The query parameter is removed from the URL
+    - expect: The URL reflects the current state without stale parameters
+
+#### 18.3. Deep Link to Task with Query Parameter
+
+**File:** `tests/steamfitter/url-and-navigation-enhancements/deep-link-to-task-query-param.spec.ts`
+
+**Steps:**
+  1. Navigate to a scenario template with multiple tasks and note a task ID
+    - expect: The scenario template has tasks with known IDs
+  2. Navigate to a URL with a task query parameter (e.g., http://localhost:4401/admin?template=[templateId]&task=[taskId])
+    - expect: The admin page loads
+    - expect: The specified task is automatically expanded or highlighted
+    - expect: The user can immediately see the task details without manual navigation
+  3. Navigate away from the task
+    - expect: The task query parameter is cleaned up from the URL
+
+#### 18.4. Scenario Route for Manual Tasks Page
+
+**File:** `tests/steamfitter/url-and-navigation-enhancements/scenario-route-for-manual-tasks-page.spec.ts`
+
+**Steps:**
+  1. Create and start a scenario with user-executable tasks, note the scenario ID
+    - expect: An active scenario exists with known ID
+  2. Navigate to http://localhost:4401/scenario/[scenarioId]
+    - expect: The manual tasks page loads
+    - expect: User-executable tasks for the specified scenario are displayed
+    - expect: The route correctly maps to the scenario tasks view
+  3. Compare with the view-based route (http://localhost:4401/view/[viewId])
+    - expect: Both route patterns work for accessing tasks
+    - expect: The /scenario/:id route provides direct access by scenario ID
+    - expect: The /view/:id route provides access by Player view ID
+
+#### 18.5. Stale Query Parameters Cleaned on Tab Switch
+
+**File:** `tests/steamfitter/url-and-navigation-enhancements/stale-query-params-cleaned-on-tab-switch.spec.ts`
+
+**Steps:**
+  1. Navigate to a URL with query parameters (e.g., ?scenario=[id])
+    - expect: The page loads with the query parameter in the URL
+  2. Switch to a different admin section using the sidebar (e.g., from Scenarios to Scenario Templates)
+    - expect: The new section loads
+    - expect: The URL updates to reflect the new section
+    - expect: The stale query parameter (scenario=[id]) is removed from the URL
+    - expect: The URL is clean and reflects only the current state
+
+### 19. Topbar Enhancements
+
+**Seed:** `tests/seed.spec.ts`
+
+#### 19.1. Middle Click Topbar Icon Opens in New Tab
+
+**File:** `tests/steamfitter/topbar-enhancements/middle-click-topbar-icon-new-tab.spec.ts`
+
+**Steps:**
+  1. Log in and navigate to any page within the application
+    - expect: The topbar is displayed with the home icon
+  2. Middle-click (mouse wheel click) on the topbar home icon
+    - expect: The home page opens in a new browser tab
+    - expect: The current tab remains on the current page
+    - expect: The middle-click behavior matches standard browser link behavior
+  3. Close the new tab and verify the original tab is unaffected
+    - expect: The original tab is still on the same page
+    - expect: Navigation in the original tab was not disrupted
+
+#### 19.2. Topbar Styling Consistency
+
+**File:** `tests/steamfitter/topbar-enhancements/topbar-styling-consistency.spec.ts`
+
+**Steps:**
+  1. Navigate through different sections of the application (Home, Admin, Tasks page)
+    - expect: The topbar is displayed consistently on all pages
+  2. Observe the topbar elements: home icon, application title, user menu
+    - expect: The topbar layout is standardized across all pages
+    - expect: The topbar uses consistent spacing and alignment
+    - expect: The topbar background color is the configured red (#BB0000)
+    - expect: Text color is white (#FFFFFF)
+    - expect: All topbar elements are properly aligned vertically
+  3. Navigate to the admin section
+    - expect: The topbar maintains the same styling
+    - expect: The admin default section is properly displayed
+    - expect: No styling inconsistencies appear in different sections
+
+#### 19.3. Admin Section Access from Topbar
+
+**File:** `tests/steamfitter/topbar-enhancements/admin-section-access-from-topbar.spec.ts`
+
+**Steps:**
+  1. Log in as admin user and navigate to the home page
+    - expect: The home page is displayed
+    - expect: A gear icon button labeled 'Show Administration Page' is visible in the topbar area
+  2. Click the 'Show Administration Page' button
+    - expect: The browser navigates to http://localhost:4401/admin
+    - expect: The administration interface loads
+    - expect: The gear icon provides quick access to the admin section
+
+### 20. API Error Handling
+
+**Seed:** `tests/seed.spec.ts`
+
+#### 20.1. SSRF Protection Blocks Disallowed Hosts
+
+**File:** `tests/steamfitter/api-error-handling/ssrf-protection-blocks-disallowed-hosts.spec.ts`
+
+**Steps:**
+  1. Create an HTTP task with a target URL that is not in the SSRF allowlist (e.g., http://internal-server.local or http://169.254.169.254)
+    - expect: The task is created with the disallowed URL
+  2. Execute the HTTP task
+    - expect: The task execution completes
+    - expect: The task result shows a clear error message
+    - expect: The error message indicates the URL is blocked by SSRF protection
+    - expect: The error message explains that the target host is not in the allowlist
+    - expect: No actual HTTP request is made to the disallowed host
+  3. View the task result details
+    - expect: The result clearly communicates the security restriction
+    - expect: The user understands why the request was blocked
+
+#### 20.2. Better VM API Error Messages
+
+**File:** `tests/steamfitter/api-error-handling/better-vm-api-error-messages.spec.ts`
+
+**Steps:**
+  1. Create a task that targets VMs via Player VM API
+    - expect: The task is configured to interact with VMs
+  2. Simulate or cause a Player VM API error (e.g., VM not found, VM API unavailable, authentication failure)
+    - expect: The task execution attempts to communicate with Player VM API
+    - expect: The API returns an error
+  3. View the task result
+    - expect: The task result shows the actual error message from Player VM API
+    - expect: The error message is specific and descriptive (e.g., 'VM not found: vm-123', 'Authentication failed', 'Service unavailable')
+    - expect: The error message does NOT show a generic 'No matched VMs' message
+    - expect: The user can understand what went wrong from the error message
+
+#### 20.3. Task Score Update Without Concurrent Errors
+
+**File:** `tests/steamfitter/api-error-handling/task-score-update-without-concurrent-errors.spec.ts`
+
+**Steps:**
+  1. Create a scenario with multiple tasks that have point values assigned
+    - expect: The scenario has tasks with points configured
+  2. Start the scenario and execute multiple tasks in quick succession or simultaneously (if possible)
+    - expect: Multiple tasks execute
+    - expect: Each task completion triggers a score update
+  3. Monitor the task results and score panel for errors
+    - expect: Each task execution completes successfully
+    - expect: The scenario score updates correctly after each task
+    - expect: No concurrent update errors appear in the console or results
+    - expect: The score calculation does not fail due to race conditions
+    - expect: The final score accurately reflects all completed tasks
+  4. Check browser console for any errors related to score calculation
+    - expect: No errors related to concurrent score updates
+    - expect: The score update mechanism handles multiple simultaneous updates gracefully
+
+### 21. UI Scrolling and Layout
+
+**Seed:** `tests/seed.spec.ts`
+
+#### 21.1. Scrolling Works Throughout Application
+
+**File:** `tests/steamfitter/ui-scrolling-and-layout/scrolling-works-throughout-application.spec.ts`
+
+**Steps:**
+  1. Navigate to a page with a long list (e.g., Admin -> Scenario Templates with many templates)
+    - expect: The page displays a scrollable list
+  2. Scroll down the page using mouse wheel or scrollbar
+    - expect: The page scrolls smoothly
+    - expect: Content above scrolls out of view
+    - expect: Content below scrolls into view
+    - expect: The scrollbar indicator moves appropriately
+  3. Navigate to other sections with scrollable content (task lists, history results)
+    - expect: Scrolling works correctly in all sections
+    - expect: No areas have broken or stuck scrolling
+    - expect: Scrolling is smooth and responsive throughout the application
+  4. Open a dialog and check if it has scrollable content
+    - expect: If the dialog content exceeds the viewport, it is scrollable
+    - expect: Dialog scrolling works independently from page scrolling
