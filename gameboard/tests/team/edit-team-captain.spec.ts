@@ -1,0 +1,73 @@
+// Copyright 2026 Carnegie Mellon University. All Rights Reserved.
+// Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
+
+// spec: gameboard/gameboard-test-plan.md
+// seed: seed.spec.ts
+
+import { test, expect, Services } from '../../fixtures';
+import {
+  getAdminToken,
+  createGame,
+  deleteGame,
+  createSponsor,
+  deleteSponsor,
+  deletePlayer,
+  provisionGameboardUser,
+  enrollUser,
+  updatePlayer,
+  getPlayer,
+  CreatedGame,
+  CreatedSponsor,
+  CreatedPlayer,
+} from '../../api-helpers';
+import {
+  getKeycloakAdminToken,
+  createKeycloakUser,
+  deleteKeycloakUser,
+  tempUsername,
+  getUserToken,
+  KeycloakUser,
+} from '../../../keycloak-admin';
+
+test.describe('Team Management', () => {
+  let gbAdmin: string;
+  let kcAdmin: string;
+  let sponsor: CreatedSponsor;
+  let game: CreatedGame;
+  let captain: { user: KeycloakUser; player: CreatedPlayer; token: string };
+
+  test.beforeEach(async () => {
+    gbAdmin = await getAdminToken();
+    kcAdmin = await getKeycloakAdminToken();
+    sponsor = await createSponsor(gbAdmin, `EditCap-${Date.now()}`);
+    game = await createGame(gbAdmin, {
+      name: `EditCap-${Date.now()}`,
+      maxTeamSize: 4,
+      startOffsetDays: -1,
+      endOffsetDays: 30,
+    });
+    const u = await createKeycloakUser(kcAdmin, { username: tempUsername('cap'), password: 'pw' });
+    const tk = await getUserToken(u.username, 'pw');
+    await provisionGameboardUser(tk, sponsor.id);
+    const p = await enrollUser(tk, u.id, game.id);
+    captain = { user: u, player: p, token: tk };
+  });
+
+  test.afterEach(async () => {
+    if (captain) await deletePlayer(gbAdmin, captain.player.id).catch(() => {});
+    if (game) await deleteGame(gbAdmin, game.id);
+    if (sponsor) await deleteSponsor(gbAdmin, sponsor.id);
+    if (captain) await deleteKeycloakUser(kcAdmin, captain.user.id);
+  });
+
+  test('Edit Team Details - Team Captain', async ({ gameboardAuthenticatedPage: page }) => {
+    const newName = `Captain Team ${Date.now()}`;
+    await updatePlayer(captain.token, captain.player.id, { name: newName });
+
+    const after = await getPlayer(gbAdmin, captain.player.id);
+    expect(after.name).toBe(newName);
+
+    await page.goto(Services.Gameboard.UI + '/admin/dashboard', { waitUntil: 'networkidle' });
+    await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
+  });
+});
