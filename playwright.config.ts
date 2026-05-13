@@ -34,8 +34,8 @@ export default defineConfig({
   // Retry on CI (2x) and locally (1x) to handle transient auth/timing issues
   retries: process.env.CI ? 2 : 1,
 
-  // Opt out of parallel tests on CI
-  workers: process.env.CI ? 1 : undefined,
+  // Opt out of parallel tests on CI; cap local workers to reduce resource pressure
+  workers: process.env.CI ? 1 : 8,
 
   // Reporter to use
   reporter: [
@@ -48,25 +48,25 @@ export default defineConfig({
   use: {
     // Base URL read from .env (defaults to Blueprint UI)
     baseURL: process.env.BLUEPRINT_UI_URL || 'http://localhost:4725',
-    
+
     // Collect trace when retrying the failed test
     trace: 'on-first-retry',
-    
+
     // Screenshot on failure
     screenshot: 'only-on-failure',
-    
+
     // Video on failure
     video: 'retain-on-failure',
-    
+
     // Ignore HTTPS errors (for self-signed Keycloak certificate)
     ignoreHTTPSErrors: true,
-    
+
     // Browser context options
     viewport: { width: 1920, height: 1080 },
-    
+
     // Action timeout
     actionTimeout: 10000,
-    
+
     // Navigation timeout
     navigationTimeout: 30000,
   },
@@ -92,7 +92,7 @@ export default defineConfig({
 
     // {
     //   name: 'webkit',
-    //   use: { 
+    //   use: {
     //     ...devices['Desktop Safari'],
     //     acceptDownloads: true,
     //   },
