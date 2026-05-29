@@ -202,6 +202,8 @@ Options:
   --no-check            Skip service health checks
   --filter <pattern>    Filter tests by pattern
   --app <app>           Run tests for specific app
+  --browser <name>      Run tests in a single browser: chromium | firefox.
+                        When omitted, tests run in both browsers (default).
   --target <name>       Deployment target: aspire (default) | minikube.
                         Selects which .env.<name> file to load. Can also be
                         set via the CRUCIBLE_TARGET environment variable.
@@ -213,6 +215,7 @@ Examples:
   $0 ui blueprint       # Run Blueprint tests in UI mode
   $0 --filter login --app player  # Run Player tests matching 'login'
   $0 blueprint --target minikube  # Run Blueprint tests against a minikube deployment
+  $0 all --browser chromium  # Run all tests in chromium only
 
 EOF
 }
@@ -222,6 +225,7 @@ COMMAND=${1:-help}
 APP=""
 NO_CHECK=false
 FILTER=""
+BROWSER=""
 
 shift 2>/dev/null || true
 
@@ -237,6 +241,18 @@ while [[ $# -gt 0 ]]; do
             ;;
         --app)
             APP="$2"
+            shift 2
+            ;;
+        --browser)
+            case "$2" in
+                chromium|firefox)
+                    BROWSER="$2"
+                    ;;
+                *)
+                    print_error "Invalid --browser value: '$2' (valid values: chromium, firefox)"
+                    exit 1
+                    ;;
+            esac
             shift 2
             ;;
         --target)
@@ -275,6 +291,13 @@ if [ "$NO_CHECK" = false ] && [ "$COMMAND" != "help" ] && [ "$COMMAND" != "repor
     fi
 fi
 
+# Build the Playwright --project argument from --browser (empty = run all browsers).
+# The project names map to those defined in playwright.config.ts.
+BROWSER_ARG=""
+if [ -n "$BROWSER" ]; then
+    BROWSER_ARG="--project $BROWSER"
+fi
+
 # Execute command
 case $COMMAND in
     all)
@@ -282,15 +305,15 @@ case $COMMAND in
         if [ -n "$APP" ]; then
             print_warning "Running tests for app: $APP"
             if [ -n "$FILTER" ]; then
-                npx playwright test "$APP/" --grep "$FILTER"
+                npx playwright test "$APP/" $BROWSER_ARG --grep "$FILTER"
             else
-                npx playwright test "$APP/"
+                npx playwright test "$APP/" $BROWSER_ARG
             fi
         else
             if [ -n "$FILTER" ]; then
-                npx playwright test --grep "$FILTER"
+                npx playwright test $BROWSER_ARG --grep "$FILTER"
             else
-                npx playwright test
+                npx playwright test $BROWSER_ARG
             fi
         fi
         ;;
@@ -299,10 +322,10 @@ case $COMMAND in
         print_header "Running Quick Smoke Tests"
         if [ -n "$APP" ]; then
             print_warning "Running smoke tests for: $APP"
-            npx playwright test "$APP/tests/" --grep "login|home"
+            npx playwright test "$APP/tests/" $BROWSER_ARG --grep "login|home"
         else
             print_warning "Running smoke tests for all apps"
-            npx playwright test --grep "login|home"
+            npx playwright test $BROWSER_ARG --grep "login|home"
         fi
         print_success "Smoke tests complete!"
         ;;
@@ -315,9 +338,9 @@ case $COMMAND in
             print_warning "Running UI tests for: $APP"
         fi
         if [ -n "$FILTER" ]; then
-            npx playwright test "$TEST_PATH" --ui --grep "$FILTER"
+            npx playwright test "$TEST_PATH" $BROWSER_ARG --ui --grep "$FILTER"
         else
-            npx playwright test "$TEST_PATH" --ui
+            npx playwright test "$TEST_PATH" $BROWSER_ARG --ui
         fi
         ;;
 
@@ -329,9 +352,9 @@ case $COMMAND in
             print_warning "Running headed tests for: $APP"
         fi
         if [ -n "$FILTER" ]; then
-            npx playwright test "$TEST_PATH" --headed --grep "$FILTER"
+            npx playwright test "$TEST_PATH" $BROWSER_ARG --headed --grep "$FILTER"
         else
-            npx playwright test "$TEST_PATH" --headed
+            npx playwright test "$TEST_PATH" $BROWSER_ARG --headed
         fi
         ;;
 
@@ -343,9 +366,9 @@ case $COMMAND in
             print_warning "Running debug tests for: $APP"
         fi
         if [ -n "$FILTER" ]; then
-            npx playwright test "$TEST_PATH" --debug --grep "$FILTER"
+            npx playwright test "$TEST_PATH" $BROWSER_ARG --debug --grep "$FILTER"
         else
-            npx playwright test "$TEST_PATH" --debug
+            npx playwright test "$TEST_PATH" $BROWSER_ARG --debug
         fi
         ;;
 
@@ -363,9 +386,9 @@ case $COMMAND in
         if echo "$ALL_APPS" | grep -qw "$COMMAND"; then
             print_header "Running $COMMAND Tests"
             if [ -n "$FILTER" ]; then
-                npx playwright test "$COMMAND/" --grep "$FILTER"
+                npx playwright test "$COMMAND/" $BROWSER_ARG --grep "$FILTER"
             else
-                npx playwright test "$COMMAND/"
+                npx playwright test "$COMMAND/" $BROWSER_ARG
             fi
         else
             echo -e "${RED}Unknown command: $COMMAND${NC}"
