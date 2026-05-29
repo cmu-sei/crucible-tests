@@ -4,14 +4,14 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Search and Filtering', () => {
   test('MSEL Filtering by Status', async ({ blueprintAuthenticatedPage: page }) => {
-    await page.goto('http://localhost:4725/build');
+    await page.goto(`${Services.Blueprint.UI}/build`);
 
     // 1. Navigate to MSELs list
-    await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
     await page.waitForLoadState('domcontentloaded');
 
     // expect: MSELs list is displayed (Blueprint uses mat-table from Angular Material)

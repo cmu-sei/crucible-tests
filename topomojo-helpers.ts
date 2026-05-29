@@ -15,10 +15,9 @@
 
 import { APIRequestContext, request as playwrightRequest } from '@playwright/test';
 import { Services } from './shared-fixtures';
-
 export const TOPOMOJO_API_CANDIDATES = [
   process.env.TOPOMOJO_API_URL?.replace(/\/$/, ''),
-  'http://localhost:5000',
+  Services.TopoMojo.API,
 ].filter((x): x is string => !!x);
 
 let _resolvedTopoApi: string | null = null;

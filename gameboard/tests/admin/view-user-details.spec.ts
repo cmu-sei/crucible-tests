@@ -40,14 +40,14 @@ test.describe('Admin - Users', () => {
     const ctx: APIRequestContext = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
     try {
       // Provision the Gameboard user record.
-      await ctx.fetch('http://localhost:5002/api/user', {
+      await ctx.fetch(`${Services.Gameboard.API}/api/user`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${userToken}`, 'Content-Type': 'application/json' },
         data: { id: u.id },
       });
 
       // Admin fetches details.
-      const res = await ctx.fetch(`http://localhost:5002/api/user/${u.id}`, {
+      const res = await ctx.fetch(`${Services.Gameboard.API}/api/user/${u.id}`, {
         headers: { Authorization: `Bearer ${gbToken}` },
       });
       expect(res.ok()).toBe(true);

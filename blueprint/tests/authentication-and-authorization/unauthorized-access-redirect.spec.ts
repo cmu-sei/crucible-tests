@@ -5,6 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect } from '@playwright/test';
+import { Services, serviceUrlPattern } from '../../../shared-fixtures';
 
 test.describe('Authentication and Authorization', () => {
   test('Unauthorized Access Redirect', async ({ page }) => {
@@ -12,10 +13,10 @@ test.describe('Authentication and Authorization', () => {
     await page.context().clearCookies();
 
     // 2. Navigate to http://localhost:4725
-    await page.goto('http://localhost:4725');
+    await page.goto(Services.Blueprint.UI);
 
     // expect: The application redirects to the Keycloak login page
-    await expect(page).toHaveURL(/.*localhost:8443.*/, { timeout: 70000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 70000 });
 
     // expect: No application content is displayed before authentication
     const blueprintContent = page.locator('text=Event Dashboard');

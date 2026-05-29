@@ -8,3 +8,6 @@ playwright/.cache/
 
 # Authentication state
 .auth/
+
+# Per-user env overrides (loaded last, overrides .env.<target>)
+.env.local

@@ -29,7 +29,7 @@ test.describe('Admin - Games', () => {
   test('Create New Game (with card and map imagery)', async ({ gameboardAuthenticatedPage: page }) => {
     const ctx: APIRequestContext = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
     try {
-      const before = await ctx.fetch(`http://localhost:5002/api/games`, {
+      const before = await ctx.fetch(`${Services.Gameboard.API}/api/games`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const beforeIds = new Set<string>(((await before.json()) as any[]).map(g => g.id));
@@ -40,7 +40,7 @@ test.describe('Admin - Games', () => {
       await page.getByRole('button', { name: /New Game/i }).click();
       await page.waitForTimeout(3000);
 
-      const after = await ctx.fetch(`http://localhost:5002/api/games`, {
+      const after = await ctx.fetch(`${Services.Gameboard.API}/api/games`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const afterList = (await after.json()) as any[];
@@ -56,7 +56,7 @@ test.describe('Admin - Games', () => {
       await uploadGameMapImage(token, createdId, mapBytes, 'gameboard-map.png');
 
       // Confirm the game metadata reflects the uploaded imagery.
-      const res = await ctx.fetch(`http://localhost:5002/api/game/${createdId}`, {
+      const res = await ctx.fetch(`${Services.Gameboard.API}/api/game/${createdId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const withImages = await res.json();

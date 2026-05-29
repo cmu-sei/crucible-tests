@@ -56,7 +56,7 @@ test.describe('Leaderboard', () => {
 
     const ctx: APIRequestContext = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
     try {
-      const res = await ctx.fetch(`http://localhost:5002/api/game/${game.id}/score`, {
+      const res = await ctx.fetch(`${Services.Gameboard.API}/api/game/${game.id}/score`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       expect(res.ok(), `scoreboard status: ${res.status()}`).toBe(true);

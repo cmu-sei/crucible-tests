@@ -4,11 +4,11 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Event Dashboard and Navigation', () => {
   test('Navigation to Admin Section', async ({ blueprintAuthenticatedPage: page }) => {
-    await expect(page).toHaveURL(/^http:\/\/localhost:4725/, { timeout: 30000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 30000 });
     await page.waitForLoadState('networkidle');
 
     // Open user menu in topbar

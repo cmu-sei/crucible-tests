@@ -4,7 +4,7 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('MSEL Info Pages Management', () => {
   test('View Exercise View URL and Starter URL', async ({ blueprintAuthenticatedPage: page }) => {
@@ -23,7 +23,7 @@ test.describe('MSEL Info Pages Management', () => {
     await expect(exerciseViewSection).toBeVisible({ timeout: 5000 });
 
     // expect: Exercise View URL link is visible with correct format
-    const exerciseViewLink = page.getByRole('link', { name: /localhost:4725\/msel\/.*\/view/ });
+    const exerciseViewLink = page.getByRole('link', { name: serviceUrlPattern(Services.Blueprint.UI) });
     await expect(exerciseViewLink).toBeVisible({ timeout: 5000 });
     const exerciseHref = await exerciseViewLink.getAttribute('href');
     expect(exerciseHref).toContain('/msel/');
@@ -38,7 +38,7 @@ test.describe('MSEL Info Pages Management', () => {
     await expect(starterUrlSection).toBeVisible({ timeout: 5000 });
 
     // expect: Starter URL link is visible with correct format
-    const starterLink = page.getByRole('link', { name: /localhost:4725\/starter/ });
+    const starterLink = page.getByRole('link', { name: serviceUrlPattern(Services.Blueprint.UI) });
     await expect(starterLink).toBeVisible({ timeout: 5000 });
     const starterHref = await starterLink.getAttribute('href');
     expect(starterHref).toContain('/starter/');

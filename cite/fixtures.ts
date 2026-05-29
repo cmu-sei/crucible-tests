@@ -2,7 +2,7 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 import { test as base, Page } from '@playwright/test';
-import { Services, authenticateWithKeycloak } from '../shared-fixtures';
+import { Services, serviceUrlPattern, oidcStorageKey, authenticateWithKeycloak } from '../shared-fixtures';
 
 /**
  * CITE-specific fixtures
@@ -41,4 +41,4 @@ export const test = base.extend<CiteFixtures>({
 });
 
 export { expect } from '@playwright/test';
-export { Services };
+export { Services, serviceUrlPattern, oidcStorageKey };

@@ -5,7 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect } from '@playwright/test';
-import { authenticateTopoMojoWithKeycloak, Services } from '../../fixtures';
+import { authenticateTopoMojoWithKeycloak, Services, serviceUrlPattern } from '../../fixtures';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -16,7 +16,7 @@ test.describe('Authentication and Authorization', () => {
     await authenticateTopoMojoWithKeycloak(page, 'user1', 'user1');
 
     // expect: User is authenticated
-    await expect(page).toHaveURL(/localhost:4201/);
+    await expect(page).toHaveURL(serviceUrlPattern(Services.TopoMojo.UI));
 
     // 2. Attempt to navigate to /admin route
     await page.goto(Services.TopoMojo.UI + '/admin');

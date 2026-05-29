@@ -42,7 +42,7 @@ test.describe('Admin - Users', () => {
     const newUserToken = await getUserToken(username, password);
     const ctx: APIRequestContext = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
     try {
-      const createRes = await ctx.fetch('http://localhost:5002/api/user', {
+      const createRes = await ctx.fetch(`${Services.Gameboard.API}/api/user`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${newUserToken}`,
@@ -56,14 +56,14 @@ test.describe('Admin - Users', () => {
       const adminToken = await getAdminToken();
       // Fetch the user directly by id rather than listing all users (which
       // may paginate and exclude non-elevated accounts).
-      const userRes = await ctx.fetch(`http://localhost:5002/api/user/${kcUserId}`, {
+      const userRes = await ctx.fetch(`${Services.Gameboard.API}/api/user/${kcUserId}`, {
         headers: { Authorization: `Bearer ${adminToken}` },
       });
       expect(userRes.ok(), `GET /api/user/${kcUserId} should return 200`).toBe(true);
       const target = await userRes.json();
       expect(target.id).toBe(kcUserId);
 
-      const putRes = await ctx.fetch('http://localhost:5002/api/user', {
+      const putRes = await ctx.fetch(`${Services.Gameboard.API}/api/user`, {
         method: 'PUT',
         headers: {
           Authorization: `Bearer ${adminToken}`,
@@ -76,7 +76,7 @@ test.describe('Admin - Users', () => {
       // Verify the role is set. The API returns "appRole" either as the raw
       // enum value (e.g., "support") or the pretty-printed role name
       // (e.g., "Support"). Match case-insensitively.
-      const reRes = await ctx.fetch(`http://localhost:5002/api/user/${target.id}`, {
+      const reRes = await ctx.fetch(`${Services.Gameboard.API}/api/user/${target.id}`, {
         headers: { Authorization: `Bearer ${adminToken}` },
       });
       const updated = await reRes.json();

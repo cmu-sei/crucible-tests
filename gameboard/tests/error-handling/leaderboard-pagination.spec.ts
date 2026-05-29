@@ -60,7 +60,7 @@ test.describe('Error Handling', () => {
     const ctx: APIRequestContext = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
     try {
       const start = Date.now();
-      const res = await ctx.fetch(`http://localhost:5002/api/game/${game.id}/score`, {
+      const res = await ctx.fetch(`${Services.Gameboard.API}/api/game/${game.id}/score`, {
         headers: { Authorization: `Bearer ${token}` },
         timeout: 60000,
       });

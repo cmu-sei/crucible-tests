@@ -4,7 +4,7 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, oidcStorageKey } from '../../fixtures';
 import { deleteEvaluationByName, navigateToAdminSection } from '../../test-helpers';
 import {
   getKeycloakToken,
@@ -143,14 +143,15 @@ async function setupGalleryAndCiteEvaluation(
 
   // Fallback: fetch evaluation ID via in-page API call
   if (!citeEvaluationId) {
-    citeEvaluationId = await page.evaluate(async (evalName) => {
-      const userStr = sessionStorage.getItem('oidc.user:https://localhost:8443/realms/crucible:cite.ui') ||
+    const citeOidcKey = oidcStorageKey('cite.ui');
+    citeEvaluationId = await page.evaluate(async ({ evalName, oidcKey, citeApi }) => {
+      const userStr = sessionStorage.getItem(oidcKey) ||
                       Object.values(sessionStorage).find(v => v.includes('access_token')) || '';
       try {
         const userData = JSON.parse(userStr);
         const t = userData?.access_token;
         if (t) {
-          const resp = await fetch('http://localhost:4720/api/my-evaluations', {
+          const resp = await fetch(`${citeApi}/api/my-evaluations`, {
             headers: { Authorization: `Bearer ${t}` }
           });
           if (resp.ok) {
@@ -160,7 +161,7 @@ async function setupGalleryAndCiteEvaluation(
         }
       } catch { /* ignore */ }
       return undefined;
-    }, opts.evalName);
+    }, { evalName: opts.evalName, oidcKey: citeOidcKey, citeApi: Services.Cite.API });
   }
 
   // ── CITE UI: add team with admin user ──
@@ -308,7 +309,7 @@ test.describe('Integration with Gallery', () => {
       await expect(galleryLink).toBeVisible({ timeout: 5000 });
 
       const href = await galleryLink.getAttribute('href');
-      expect(href).toContain('localhost:4723');
+      expect(href).toMatch(serviceUrlPattern(Services.Gallery.UI));
     } finally {
       // Cleanup
       await deleteEvaluationByName(page, TEST_EVAL_NAME);

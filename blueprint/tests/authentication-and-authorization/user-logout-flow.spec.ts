@@ -4,13 +4,13 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Authentication and Authorization', () => {
   test('User Logout Flow', async ({ blueprintAuthenticatedPage: page }) => {
 
     // expect: Successfully authenticated and viewing the home page
-    await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
     const topbarText = page.locator('text=Event Dashboard');
     await expect(topbarText).toBeVisible();
 
@@ -39,10 +39,10 @@ test.describe('Authentication and Authorization', () => {
     expect(sessionStorageKeys.length).toBe(0);
 
     // expect: The user is redirected to the Keycloak logout page or login page
-    await expect(page).toHaveURL(/.*localhost:8443.*/, { timeout: 70000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 70000 });
 
     // Verify user cannot access Blueprint without re-authenticating
     await page.goto(Services.Blueprint.UI);
-    await expect(page).toHaveURL(/.*localhost:8443.*/, { timeout: 70000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 70000 });
   });
 });

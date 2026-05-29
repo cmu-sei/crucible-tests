@@ -5,7 +5,7 @@
 // seed: seed.spec.ts
 
 import { test, expect } from '@playwright/test';
-import { Services } from '../../fixtures';
+import { Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Integration and API', () => {
   test('Keycloak Authentication Integration', async ({ page }) => {
@@ -13,7 +13,7 @@ test.describe('Integration and API', () => {
     await page.goto(Services.Gallery.UI);
 
     // expect: Application redirects to Keycloak login page
-    await page.waitForURL(/localhost:8443.*realms\/crucible/, { timeout: 15000 });
+    await page.waitForURL(serviceUrlPattern(Services.Keycloak), { timeout: 15000 });
     await page.getByRole('button', { name: 'Sign In' }).waitFor({ state: 'visible' });
 
     // 2. Enter valid credentials and submit

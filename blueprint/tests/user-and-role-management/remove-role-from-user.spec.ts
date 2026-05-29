@@ -22,7 +22,7 @@
 //   5. Verifies the role was removed (dropdown shows "None Locally")
 //   6. Reverts the user back to their original role to keep test data clean
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 // ---------------------------------------------------------------------------
 // Helper: navigate to admin section and click a sidebar item
@@ -41,7 +41,7 @@ async function gotoAdminSection(page: any, section: string) {
 
 test.describe('User and Role Management', () => {
   test('Remove Role from User', async ({ blueprintAuthenticatedPage: page }) => {
-    await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
 
     // 2. Navigate to Users admin section
     // expect: Users admin section is visible with user table

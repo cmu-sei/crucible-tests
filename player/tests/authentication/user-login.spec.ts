@@ -5,7 +5,7 @@
 // seed: seed.spec.ts
 
 import { test, expect } from '@playwright/test';
-import { Services } from '../../fixtures';
+import { Services, serviceUrlPattern } from '../../fixtures';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -40,7 +40,7 @@ test.describe('Authentication', () => {
     await page.getByRole('button', { name: 'Sign In' }).click();
 
     // expect: The user is redirected back to Player UI
-    await page.waitForURL(/localhost:4301/, { timeout: 30000 });
+    await page.waitForURL(serviceUrlPattern(Services.Player.UI), { timeout: 30000 });
 
     // expect: The page displays 'My Views' section
     await expect(page.getByText('My Views')).toBeVisible();

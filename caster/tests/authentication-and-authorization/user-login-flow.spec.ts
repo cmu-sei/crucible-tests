@@ -5,7 +5,7 @@
 // seed: seed.spec.ts
 
 import { test, expect } from '@playwright/test';
-import { Services } from '../../fixtures';
+import { Services, serviceUrlPattern } from '../../fixtures';
 
 // Override global storageState so this test starts from a fresh unauthenticated state.
 test.use({ storageState: { cookies: [], origins: [] } });
@@ -17,7 +17,7 @@ test.describe('Authentication and Authorization', () => {
     await page.goto(Services.Caster.UI);
 
     // expect: The application redirects to the Keycloak authentication page at https://localhost:8443/realms/crucible
-    await expect(page).toHaveURL(/.*localhost:8443.*realms\/crucible/, { timeout: 70000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 70000 });
     await expect(page.getByText('Sign in to your account')).toBeVisible();
 
     // 2. Enter username 'admin' in the username field
@@ -39,7 +39,7 @@ test.describe('Authentication and Authorization', () => {
 
     // expect: The application authenticates successfully
     // expect: The user is redirected back to http://localhost:4310
-    await expect(page).toHaveURL(/localhost:4310/, { timeout: 30000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Caster.UI), { timeout: 30000 });
 
     // expect: The main application interface loads
     // expect: The topbar displays 'Caster' branding

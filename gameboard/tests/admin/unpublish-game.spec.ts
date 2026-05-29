@@ -24,20 +24,20 @@ test.describe('Admin - Games', () => {
   test('Unpublish Game - isPublished Toggles False', async ({ gameboardAuthenticatedPage: page }) => {
     const ctx: APIRequestContext = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
     try {
-      const beforeRes = await ctx.fetch(`http://localhost:5002/api/game/${game.id}`, {
+      const beforeRes = await ctx.fetch(`${Services.Gameboard.API}/api/game/${game.id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const before = await beforeRes.json();
       expect(before.isPublished).toBe(true);
 
-      const putRes = await ctx.fetch(`http://localhost:5002/api/game`, {
+      const putRes = await ctx.fetch(`${Services.Gameboard.API}/api/game`, {
         method: 'PUT',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         data: { ...before, isPublished: false },
       });
       expect(putRes.ok()).toBe(true);
 
-      const afterRes = await ctx.fetch(`http://localhost:5002/api/game/${game.id}`, {
+      const afterRes = await ctx.fetch(`${Services.Gameboard.API}/api/game/${game.id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const after = await afterRes.json();

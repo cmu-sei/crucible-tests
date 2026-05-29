@@ -4,14 +4,14 @@
 // spec: topomojo/topomojo-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Authentication and Authorization', () => {
   test('Session Persistence After Refresh', async ({ topomojoAuthenticatedPage: page }) => {
 
     // 1. Log in with valid credentials (admin/admin) - handled by fixture
     // expect: User is successfully authenticated and viewing TopoMojo home page
-    await expect(page).toHaveURL(/localhost:4201/);
+    await expect(page).toHaveURL(serviceUrlPattern(Services.TopoMojo.UI));
 
     // 2. Refresh the browser page
     await page.reload();
@@ -19,7 +19,7 @@ test.describe('Authentication and Authorization', () => {
     // expect: User remains authenticated
     // expect: Home page loads without redirecting to Keycloak
     await page.waitForLoadState('domcontentloaded');
-    await expect(page).not.toHaveURL(/localhost:8443/);
+    await expect(page).not.toHaveURL(serviceUrlPattern(Services.Keycloak));
 
     // expect: User session is maintained
     const appContent = page.locator('app-root, mat-toolbar, [class*="topbar"], nav, header').first();

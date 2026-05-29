@@ -5,7 +5,7 @@
 // seed: seed.spec.ts
 
 import { test, expect } from '@playwright/test';
-import { Services } from '../../fixtures';
+import { Services, serviceUrlPattern } from '../../fixtures';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -21,7 +21,7 @@ test.describe('Authentication', () => {
 
     // expect: User is redirected to Keycloak login page
     await page.getByText('Sign in to your account').first().waitFor({ state: 'visible', timeout: 70000 });
-    await expect(page).toHaveURL(/localhost:8443/);
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak));
 
     // expect: Protected route is not accessible without authentication
     await expect(page.getByRole('heading', { name: 'Sign in to your account' })).toBeVisible();

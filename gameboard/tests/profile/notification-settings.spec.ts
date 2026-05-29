@@ -17,7 +17,7 @@ test.describe('Profile', () => {
     const ctx: APIRequestContext = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
     let original: boolean | undefined;
     try {
-      const getRes = await ctx.fetch('http://localhost:5002/api/user/settings', {
+      const getRes = await ctx.fetch(`${Services.Gameboard.API}/api/user/settings`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       expect(getRes.ok()).toBe(true);
@@ -25,14 +25,14 @@ test.describe('Profile', () => {
       original = current.playAudioOnBrowserNotification;
 
       // Toggle to the opposite value.
-      const putRes = await ctx.fetch('http://localhost:5002/api/user/settings', {
+      const putRes = await ctx.fetch(`${Services.Gameboard.API}/api/user/settings`, {
         method: 'PUT',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         data: { playAudioOnBrowserNotification: !original },
       });
       expect(putRes.ok()).toBe(true);
 
-      const verifyRes = await ctx.fetch('http://localhost:5002/api/user/settings', {
+      const verifyRes = await ctx.fetch(`${Services.Gameboard.API}/api/user/settings`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const updated = await verifyRes.json();
@@ -40,7 +40,7 @@ test.describe('Profile', () => {
     } finally {
       // Restore original value.
       if (original !== undefined) {
-        await ctx.fetch('http://localhost:5002/api/user/settings', {
+        await ctx.fetch(`${Services.Gameboard.API}/api/user/settings`, {
           method: 'PUT',
           headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
           data: { playAudioOnBrowserNotification: original },

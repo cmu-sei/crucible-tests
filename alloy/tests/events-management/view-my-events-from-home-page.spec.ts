@@ -5,15 +5,14 @@
 // seed: seed.spec.ts
 
 import { test, expect } from '@playwright/test';
-import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
-
+import { authenticateWithKeycloak, Services, serviceUrlPattern } from '../../../shared-fixtures';
 test.describe('Events Management', () => {
   test('View My Events from Home Page', async ({ page }) => {
     // 1. Navigate to http://localhost:4403 (home page)
     await authenticateWithKeycloak(page, Services.Alloy.UI);
 
     // expect: Home page loads
-    await expect(page).toHaveURL(/localhost:4403/);
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Alloy.UI));
 
     // 2. View the list of events displayed on the home page
     // expect: My Events section is visible

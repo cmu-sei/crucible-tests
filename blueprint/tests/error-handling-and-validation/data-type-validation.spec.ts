@@ -4,7 +4,7 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Error Handling and Validation', () => {
   const TEST_MSEL_NAME = 'Data Type Validation Test MSEL';
@@ -59,7 +59,7 @@ test.describe('Error Handling and Validation', () => {
   test('Data Type Validation', async ({ blueprintAuthenticatedPage: page }) => {
 
     // 1. Navigate to Blueprint MSEL management page
-    await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
     await page.waitForLoadState('networkidle');
 
     // Click on "Manage an Event" button to navigate to Blueprint page

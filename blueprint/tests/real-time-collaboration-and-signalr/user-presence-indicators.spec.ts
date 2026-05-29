@@ -4,7 +4,7 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 import { chromium, BrowserContext } from '@playwright/test';
 import { authenticateBlueprintWithKeycloak } from '../../fixtures';
 
@@ -20,7 +20,7 @@ test.describe('Real-time Collaboration and SignalR', () => {
     await page.waitForLoadState('networkidle');
 
     // expect: We're on the build/MSEL list page where user presence indicators are shown
-    await expect(page).toHaveURL(/.*localhost:4725\/build/);
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI));
 
     const currentUrl = page.url();
     

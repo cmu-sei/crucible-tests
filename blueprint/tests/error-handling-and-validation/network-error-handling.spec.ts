@@ -4,12 +4,12 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Error Handling and Validation', () => {
   test('Network Error Handling', async ({ blueprintAuthenticatedPage: page, context }) => {
 
-    await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
     await page.waitForLoadState('domcontentloaded');
 
     // Click the "Manage an Event" card to navigate to MSEL list
@@ -131,7 +131,7 @@ test.describe('Error Handling and Validation', () => {
     // Either the save button becomes disabled (indicating changes were saved) or we see a success notification
     // The key is that the application didn't crash and is still functional
     expect(saveSuccessful || successNotification !== null).toBeTruthy();
-    expect(page.url()).toContain('localhost:4725');
+    expect(page.url()).toMatch(serviceUrlPattern(Services.Blueprint.UI));
 
     // ── CLEANUP: Delete the MSEL created by this test ──────────────────────
     await page.goto(`${Services.Blueprint.UI}/build`, { waitUntil: 'domcontentloaded' });

@@ -31,7 +31,7 @@ test.describe('Admin - Games', () => {
     // Confirm the game exists.
     const ctx: APIRequestContext = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
     try {
-      const beforeRes = await ctx.fetch(`http://localhost:5002/api/games`, {
+      const beforeRes = await ctx.fetch(`${Services.Gameboard.API}/api/games`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const beforeList = await beforeRes.json();
@@ -42,7 +42,7 @@ test.describe('Admin - Games', () => {
       game = null; // prevent double-delete in afterEach
 
       // Confirm it's gone.
-      const afterRes = await ctx.fetch(`http://localhost:5002/api/games`, {
+      const afterRes = await ctx.fetch(`${Services.Gameboard.API}/api/games`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const afterList = await afterRes.json();

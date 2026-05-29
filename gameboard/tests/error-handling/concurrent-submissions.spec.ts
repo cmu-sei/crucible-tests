@@ -64,7 +64,7 @@ test.describe('Error Handling', () => {
     try {
       // Even with two submissions, the challenge score stays at the max (100),
       // not double-credited.
-      const res = await ctx.fetch(`http://localhost:5002/api/challenge/${challengeId}`, {
+      const res = await ctx.fetch(`${Services.Gameboard.API}/api/challenge/${challengeId}`, {
         headers: { Authorization: `Bearer ${gbToken}` },
       });
       const detail = await res.json();

@@ -4,7 +4,7 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Error Handling and Validation', () => {
   test('API Health Check Error', async ({ blueprintAuthenticatedPage: page }) => {
@@ -45,7 +45,7 @@ test.describe('Error Handling and Validation', () => {
     // The app should show some error state when the API is unavailable
     if (!errorFound) {
       // Verify we are at least on the build page
-      await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 5000 });
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 5000 });
     }
   });
 });

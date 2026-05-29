@@ -4,12 +4,12 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Event Detail Page', () => {
   test('View Event Detail Page', async ({ blueprintAuthenticatedPage: page }) => {
     // Authenticate and navigate to Blueprint
-    await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
     await page.waitForLoadState('networkidle');
 
     // Click on "Manage an Event" button to navigate to Blueprint page

@@ -4,7 +4,7 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('View Details', () => {
   test('Return to Home from View', async ({ playerAuthenticatedPage: page }) => {
@@ -19,7 +19,7 @@ test.describe('View Details', () => {
 
     // expect: User is navigated back to the home page
     // expect: The URL changes to '/'
-    await expect(page).toHaveURL(/localhost:4301\/$/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Player.UI), { timeout: 10000 });
 
     // expect: The 'My Views' list is displayed
     await expect(page.getByText('My Views')).toBeVisible();

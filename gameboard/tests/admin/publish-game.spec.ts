@@ -29,7 +29,7 @@ test.describe('Admin - Games', () => {
     const ctx: APIRequestContext = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
     try {
       // Fetch current state.
-      const beforeRes = await ctx.fetch(`http://localhost:5002/api/game/${game.id}`, {
+      const beforeRes = await ctx.fetch(`${Services.Gameboard.API}/api/game/${game.id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const before = await beforeRes.json();
@@ -37,7 +37,7 @@ test.describe('Admin - Games', () => {
 
       // PUT with isPublished=true.
       const updated = { ...before, isPublished: true };
-      const putRes = await ctx.fetch(`http://localhost:5002/api/game`, {
+      const putRes = await ctx.fetch(`${Services.Gameboard.API}/api/game`, {
         method: 'PUT',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -47,7 +47,7 @@ test.describe('Admin - Games', () => {
       });
       expect(putRes.ok()).toBe(true);
 
-      const afterRes = await ctx.fetch(`http://localhost:5002/api/game/${game.id}`, {
+      const afterRes = await ctx.fetch(`${Services.Gameboard.API}/api/game/${game.id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const after = await afterRes.json();

@@ -56,7 +56,7 @@ test.describe('Leaderboard', () => {
     try {
       // /api/team/{teamId}/score returns per-team scoring detail.
       const top = seeded[0];
-      const res = await ctx.fetch(`http://localhost:5002/api/team/${top.teamId}/score`, {
+      const res = await ctx.fetch(`${Services.Gameboard.API}/api/team/${top.teamId}/score`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       expect(res.ok(), `team/score status: ${res.status()}`).toBe(true);

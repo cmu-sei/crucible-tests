@@ -50,7 +50,7 @@ test.describe('Admin - Users', () => {
     // Verify enrollment exists.
     const ctx: APIRequestContext = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
     try {
-      const before = await ctx.fetch(`http://localhost:5002/api/players`, {
+      const before = await ctx.fetch(`${Services.Gameboard.API}/api/players`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const beforeList = await before.json();
@@ -59,7 +59,7 @@ test.describe('Admin - Users', () => {
       // Remove via DELETE.
       await deletePlayer(token, playerId!);
 
-      const after = await ctx.fetch(`http://localhost:5002/api/players`, {
+      const after = await ctx.fetch(`${Services.Gameboard.API}/api/players`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const afterList = await after.json();

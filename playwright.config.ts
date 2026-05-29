@@ -2,11 +2,10 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 import { defineConfig, devices } from '@playwright/test';
-import dotenv from 'dotenv';
-import path from 'path';
+import { loadCrucibleEnv } from './load-env';
 
-// Load .env from the crucible-tests root
-dotenv.config({ path: path.resolve(__dirname, '.env') });
+// Load environment based on CRUCIBLE_TARGET (aspire | minikube). Defaults to .env.
+loadCrucibleEnv();
 
 /**
  * Playwright configuration for Crucible applications

@@ -5,7 +5,7 @@
 // seed: seed.spec.ts
 
 import { test, expect } from '@playwright/test';
-import { Services } from '../../fixtures';
+import { Services, serviceUrlPattern } from '../../fixtures';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -33,7 +33,7 @@ test.describe('Authentication', () => {
     await expect(errorMessage).toBeVisible({ timeout: 5000 });
 
     // expect: User remains on the login page
-    await expect(page).toHaveURL(/localhost:8443/, { timeout: 5000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 5000 });
 
     // expect: User is not authenticated
     await expect(page.getByRole('textbox', { name: 'Username or email' })).toBeVisible();

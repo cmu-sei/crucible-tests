@@ -4,14 +4,14 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Home Page and Navigation', () => {
   test('Home Page Initial Load', async ({ casterAuthenticatedPage: page }) => {
 
     // 1. Log in as admin user and navigate to http://localhost:4310
     // expect: The home page loads successfully
-    await expect(page).toHaveURL(/localhost:4310/, { timeout: 30000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Caster.UI), { timeout: 30000 });
 
     // expect: The topbar is visible with application branding
     // expect: The topbar displays 'Caster' or configured AppTopBarText

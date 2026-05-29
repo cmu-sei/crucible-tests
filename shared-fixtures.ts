@@ -2,11 +2,10 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 import { test as base, expect as baseExpect, Page } from '@playwright/test';
-import dotenv from 'dotenv';
-import path from 'path';
+import { loadCrucibleEnv } from './load-env';
 
-// Load .env from the crucible-tests root
-dotenv.config({ path: path.resolve(__dirname, '.env') });
+// Load environment based on CRUCIBLE_TARGET (aspire | minikube). Defaults to .env.
+loadCrucibleEnv();
 
 /**
  * Shared fixtures for all Crucible applications
@@ -24,18 +23,18 @@ export const Services = {
   KeycloakRealm: process.env.KEYCLOAK_REALM_URL || 'https://localhost:8443/realms/crucible',
   Player: {
     UI: process.env.PLAYER_UI_URL || 'http://localhost:4301',
-    API: process.env.PLAYER_API_URL || 'http://localhost:4302',
+    API: process.env.PLAYER_API_URL || 'http://localhost:4300',
   },
   PlayerVM: {
     UI: process.env.PLAYERVM_UI_URL || 'http://localhost:4303',
-    API: process.env.PLAYERVM_API_URL || 'http://localhost:4304',
+    API: process.env.PLAYERVM_API_URL || 'http://localhost:4302',
   },
   Console: {
     UI: process.env.CONSOLE_UI_URL || 'http://localhost:4305',
   },
   Caster: {
     UI: process.env.CASTER_UI_URL || 'http://localhost:4310',
-    API: process.env.CASTER_API_URL || 'http://localhost:4311',
+    API: process.env.CASTER_API_URL || 'http://localhost:4309',
   },
   Alloy: {
     UI: process.env.ALLOY_UI_URL || 'http://localhost:4403',
@@ -63,12 +62,75 @@ export const Services = {
   },
   Gameboard: {
     UI: process.env.GAMEBOARD_UI_URL || 'http://localhost:4202',
-    API: process.env.GAMEBOARD_API_URL || 'http://localhost:4203',
+    API: process.env.GAMEBOARD_API_URL || 'http://localhost:5002',
   },
   Moodle: process.env.MOODLE_URL || 'http://localhost:8081',
   Lrsql: process.env.LRSQL_URL || 'http://localhost:9274',
   Misp: process.env.MISP_URL || 'https://localhost:8444',
 };
+
+/**
+ * Build the OIDC sessionStorage key the SPA uses to persist its token.
+ *
+ * The Angular `oidc-client-ts` library writes one entry per (authority,
+ * clientId) pair under the key:
+ *
+ *   oidc.user:<authority>:<clientId>
+ *
+ * where `<authority>` is the Keycloak realm URL. Using this helper keeps the
+ * key correct under both Aspire (`https://localhost:8443/realms/crucible`)
+ * and Minikube (`https://crucible/keycloak/realms/crucible`).
+ */
+export function oidcStorageKey(clientId: string): string {
+  const authority = Services.KeycloakRealm.replace(/\/$/, '');
+  return `oidc.user:${authority}:${clientId}`;
+}
+
+/**
+ * Build a `RegExp` that matches any URL beginning with `serviceUrl`.
+ *
+ * Tests historically wrote things like `expect(page).toHaveURL(/localhost:4301/)`
+ * to mean "we landed on the Player UI." That worked under the Aspire topology
+ * because each app had a unique `localhost:<port>`, but breaks under Minikube
+ * where every app shares `https://crucible/...` and is distinguished only by
+ * its path prefix. Use this helper so the same assertion adapts to either:
+ *
+ *   await expect(page).toHaveURL(serviceUrlPattern(Services.Player.UI));
+ *
+ * The pattern matches `<host><pathPrefix>` followed by either end-of-string
+ * or a path separator (`/`, `?`, `#`), so `Services.Player.UI` (Minikube
+ * value `https://crucible/player`) does not also match `/playerVm` or
+ * `/playground`.
+ */
+export function serviceUrlPattern(serviceUrl: string): RegExp {
+  const u = new URL(serviceUrl);
+  const prefix = u.host + u.pathname.replace(/\/$/, '');
+  // Escape regex metacharacters in host/path.
+  const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(escaped + '(?:[/?#]|$)');
+}
+
+/**
+ * Returns true when `url` looks like a Keycloak page.
+ *
+ * Works for both deployment topologies:
+ *   - Aspire:   app and Keycloak are on different hosts (host comparison wins).
+ *   - Minikube: app and Keycloak share the host but Keycloak lives under a
+ *               path prefix (e.g. /keycloak), so we fall back to path checks.
+ */
+function isKeycloakUrl(url: URL | string): boolean {
+  const u = typeof url === 'string' ? new URL(url) : url;
+  const keycloak = new URL(Services.Keycloak);
+  if (u.host === keycloak.host && u.pathname.startsWith(keycloak.pathname.replace(/\/$/, '') || '/')) {
+    // Same host AND under Keycloak's path prefix.
+    if (keycloak.pathname && keycloak.pathname !== '/') return true;
+    // No path prefix (Aspire): fall through to other signals.
+  }
+  // Path-based fallbacks that hold regardless of topology.
+  if (u.pathname.includes('/realms/')) return true;
+  if (u.pathname.includes('/protocol/openid-connect/')) return true;
+  return false;
+}
 
 /**
  * Generic Keycloak authentication helper
@@ -95,9 +157,11 @@ export async function authenticateWithKeycloak(
     } catch {
       await page.click('input[type="submit"]');
     }
-    // Wait for redirect back to the app
+    // Wait for redirect back to the app. Under minikube the app and Keycloak
+    // share a host, so a host-only check returns true immediately — instead,
+    // wait for a URL that is NOT a Keycloak page.
     const appHost = new URL(appUrl).host;
-    await page.waitForURL((url) => url.host === appHost, { timeout: 30000 });
+    await page.waitForURL((url) => url.host === appHost && !isKeycloakUrl(url), { timeout: 30000 });
   };
 
   // Navigate to the app
@@ -113,9 +177,8 @@ export async function authenticateWithKeycloak(
   }
 
   // Check if we got redirected to Keycloak immediately
-  const keycloakHost = new URL(Services.Keycloak).host;
   const currentUrl = page.url();
-  const isOnKeycloak = currentUrl.includes(keycloakHost) || currentUrl.includes('/realms/crucible');
+  const isOnKeycloak = isKeycloakUrl(currentUrl);
 
   if (isOnKeycloak) {
     console.log(`Redirected to Keycloak at ${currentUrl}`);
@@ -133,7 +196,7 @@ export async function authenticateWithKeycloak(
     page.on('framenavigated', (frame) => {
       if (frame === page.mainFrame()) {
         const url = frame.url();
-        if (url.includes(keycloakHost) || url.includes('/realms/crucible')) {
+        if (isKeycloakUrl(url)) {
           console.log(`Detected redirect to Keycloak: ${url}`);
           redirectedToKeycloak = true;
         }
@@ -163,7 +226,7 @@ export async function authenticateWithKeycloak(
         // 1. A redirect to Keycloak to start (URL changes to include :8443 or /realms/crucible)
         // 2. The wait to timeout (meaning we're stable and authenticated)
         try {
-          await page.waitForURL((url) => url.toString().includes(':8443') || url.toString().includes('/realms/crucible'), {
+          await page.waitForURL((url) => isKeycloakUrl(url), {
             timeout: 15000
           });
           console.log(`OIDC initiated redirect to Keycloak after app content appeared`);

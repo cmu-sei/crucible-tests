@@ -128,24 +128,45 @@ The script automatically checks that **Keycloak** and the **target application**
 
 ## Configuring Service URLs
 
-All service URLs are defined in a single file at the root of this repository:
+Service URLs live in env files at the root of this repository. The suite supports two deployment topologies and selects between them via the `CRUCIBLE_TARGET` environment variable (or the `--target` flag on `run-tests.sh`):
 
-```
-.env
-```
+| `CRUCIBLE_TARGET` | File loaded     | Use when…                                                                |
+|-------------------|-----------------|--------------------------------------------------------------------------|
+| _(unset)_         | `.env`          | You want today's behavior — whatever you have configured locally.        |
+| `aspire`          | `.env.aspire`   | Crucible is running via .NET Aspire (each app on its own `localhost:<port>`). |
+| `minikube`        | `.env.minikube` | Crucible is running in Minikube via Helm (single ingress host).          |
 
-Edit this file to change ports or hostnames for your environment. The `.env` file is loaded by:
-- **Shell scripts** (`run-tests.sh`, `setup.sh`) via `source`
-- **Playwright config and fixtures** via `dotenv`
+`.env.local` (gitignored) is loaded last — use it to override individual values without editing the tracked profile files. Shell-exported vars beat all of the above.
 
-If the file is missing, all URLs fall back to their default `localhost` values.
-
-Example entries:
 ```bash
-TOPOMOJO_UI_URL=http://localhost:4201
-KEYCLOAK_URL=https://localhost:8443
-BLUEPRINT_UI_URL=http://localhost:4725
+# One-off
+CRUCIBLE_TARGET=minikube ./run-tests.sh blueprint
+
+# Same thing via the flag
+./run-tests.sh blueprint --target minikube
+
+# Aspire (the default; equivalent to today)
+./run-tests.sh blueprint --target aspire
+
+# Set for the whole shell
+export CRUCIBLE_TARGET=minikube
+./run-tests.sh all
 ```
+
+If you copy `.env.minikube` to `.env.local`, you can edit a single override (e.g. a custom ingress host) without touching the tracked file:
+
+```bash
+# .env.local
+CRUCIBLE_HOST=mycluster.example.com
+KEYCLOAK_URL=https://mycluster.example.com/keycloak
+# …only the keys you want to override
+```
+
+### Minikube caveats
+
+- The Aspire dashboard does not exist under Minikube; `Services.AspireDashboard` is empty in that profile.
+- `gameboard/db-helpers.ts` uses `docker inspect crucible-postgres` to read the DB password. Under Minikube that container does not exist — set `CRUCIBLE_POSTGRES_PASSWORD` and port-forward `5432` to the in-cluster `crucible-infra-postgresql-rw` service, or skip the affected scoreboard tests.
+- A handful of tests still hardcode `localhost:4xxx` / `localhost:8443` regex matchers (mostly under `player/tests/`). They do not pass against Minikube without per-test fixes — convert them to `Services.X.UI` if you need them green.
 
 ## Directory Structure
 

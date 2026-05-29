@@ -17,7 +17,7 @@
 //   3. Verifies at least one user row is visible with data in each column
 //   4. Opens a role dropdown to confirm role options are visible (without changing anything)
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 // ---------------------------------------------------------------------------
 // Helper: navigate to admin section and click a sidebar item
@@ -36,7 +36,7 @@ async function gotoAdminSection(page: any, section: string) {
 
 test.describe('User and Role Management', () => {
   test('View User Details', async ({ blueprintAuthenticatedPage: page }) => {
-    await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
 
     // 2. Navigate to Users admin section
     // Note: URL stays at /admin — there is no /admin/users route

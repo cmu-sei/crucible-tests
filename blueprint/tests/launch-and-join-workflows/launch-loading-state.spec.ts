@@ -4,7 +4,7 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Launch and Join Event Workflows', () => {
   test('Launch Loading State', async ({ blueprintAuthenticatedPage: page }) => {
@@ -53,7 +53,7 @@ test.describe('Launch and Join Event Workflows', () => {
     } else {
       // Launch may have completed quickly or loading state was too brief to catch
       // Verify we are still in the app
-      await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 5000 });
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 5000 });
     }
   });
 });

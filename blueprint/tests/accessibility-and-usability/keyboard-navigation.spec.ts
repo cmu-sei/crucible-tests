@@ -4,18 +4,18 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Accessibility and Usability', () => {
   test.beforeEach(async ({ blueprintAuthenticatedPage: page }) => {
     // Navigate to Blueprint application (auth state pre-loaded from setup)
-    await page.goto('http://localhost:4725');
+    await page.goto(Services.Blueprint.UI);
     await page.waitForLoadState('domcontentloaded');
   });
 
   test('Keyboard Navigation', async ({ blueprintAuthenticatedPage: page }) => {
     // 1. Navigate to the home page
-    await expect(page).toHaveURL(/.*localhost:4725.*/);
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI));
 
     // Wait for Angular to render the page content before interacting
     // The app-root renders an Angular app that needs time to bootstrap after domcontentloaded

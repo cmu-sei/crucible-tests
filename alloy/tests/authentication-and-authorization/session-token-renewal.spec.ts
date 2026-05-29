@@ -5,8 +5,7 @@
 // seed: seed.spec.ts
 
 import { test, expect } from '@playwright/test';
-import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
-
+import { authenticateWithKeycloak, Services, serviceUrlPattern } from '../../../shared-fixtures';
 test.describe('Authentication and Authorization', () => {
   test('Session Token Renewal', async ({ page }) => {
     // Collect console messages to check for token renewal
@@ -29,6 +28,6 @@ test.describe('Authentication and Authorization', () => {
 
     // expect: The application automatically renews the authentication token
     // Verify we are still on the app (not redirected to Keycloak)
-    await expect(page).toHaveURL(/localhost:4403/);
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Alloy.UI));
   });
 });

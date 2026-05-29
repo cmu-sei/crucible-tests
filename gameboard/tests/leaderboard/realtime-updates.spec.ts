@@ -51,7 +51,7 @@ test.describe('Leaderboard', () => {
     try {
       await seedScoreboardPlayers(client, game.id, sponsor.id, 3);
 
-      const before = await ctx.fetch(`http://localhost:5002/api/game/${game.id}/score`, {
+      const before = await ctx.fetch(`${Services.Gameboard.API}/api/game/${game.id}/score`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const boardBefore = await before.json();
@@ -61,7 +61,7 @@ test.describe('Leaderboard', () => {
       // Add two more players mid-game.
       await seedScoreboardPlayers(client, game.id, sponsor.id, 2);
 
-      const after = await ctx.fetch(`http://localhost:5002/api/game/${game.id}/score`, {
+      const after = await ctx.fetch(`${Services.Gameboard.API}/api/game/${game.id}/score`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const boardAfter = await after.json();

@@ -4,13 +4,13 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Error Handling and Edge Cases', () => {
   test('API Error Handling - Server Error (500)', async ({ citeAuthenticatedPage: page }) => {
 
     // 1. Log in successfully
-    await expect(page).toHaveURL(/localhost:4721/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
 
     // 2. Trigger an API call that returns 500 error
     await page.route('**/api/**', (route) =>

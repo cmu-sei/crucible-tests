@@ -5,7 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect } from '@playwright/test';
-import { Services } from '../../fixtures';
+import { Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Performance and Optimization', () => {
   test('Memory Leak Detection', async ({ page, context }) => {
@@ -14,7 +14,7 @@ test.describe('Performance and Optimization', () => {
     await page.waitForLoadState('domcontentloaded');
 
     // Verify main application loaded
-    await expect(page).toHaveURL(/.*localhost:4725.*/);
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI));
     await expect(page.locator('text=Event Dashboard')).toBeVisible({ timeout: 5000 });
 
     await page.waitForLoadState('load');

@@ -7,7 +7,7 @@
 // This file combines all scoresheet tests into a single file to run them serially,
 // avoiding parallel execution issues where multiple tests compete for the same "Admin User" visibility.
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 import { navigateToAdminSection, deleteEvaluationByName, deleteTeamTypeByName } from '../../test-helpers';
 
 async function createActiveEvalWithMoveAndTeam(
@@ -187,7 +187,7 @@ async function navigateToEvaluationScoresheet(
   // Navigate to home page and click into the evaluation (which opens the scoresheet by default)
   await page.goto(Services.Cite.UI);
   await page.waitForLoadState('domcontentloaded');
-  await expect(page).toHaveURL(/localhost:4721/, { timeout: 10000 });
+  await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
 
   const myEvalsHeading = page.locator('text=My Evaluations');
   await expect(myEvalsHeading).toBeVisible({ timeout: 10000 });

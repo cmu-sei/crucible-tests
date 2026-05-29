@@ -61,11 +61,11 @@ test.describe('Performance', () => {
     const ctx: APIRequestContext = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
     try {
       // Warm-up.
-      await ctx.fetch(`http://localhost:5002/api/challenges?gid=${game.id}`, {
+      await ctx.fetch(`${Services.Gameboard.API}/api/challenges?gid=${game.id}`, {
         headers: { Authorization: `Bearer ${gbToken}` },
       });
       const start = Date.now();
-      const res = await ctx.fetch(`http://localhost:5002/api/challenges?gid=${game.id}`, {
+      const res = await ctx.fetch(`${Services.Gameboard.API}/api/challenges?gid=${game.id}`, {
         headers: { Authorization: `Bearer ${gbToken}` },
       });
       const elapsed = Date.now() - start;

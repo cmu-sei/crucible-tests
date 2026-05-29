@@ -11,7 +11,7 @@
 // short delay, which exercises the "session stays alive" contract the plan
 // describes without relying on timing of the silent renewal iframe.
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Authentication', () => {
   test('OIDC Silent Token Renewal Smoke', async ({ gameboardAuthenticatedPage: page }) => {
@@ -21,12 +21,12 @@ test.describe('Authentication', () => {
     // Wait briefly to allow background OIDC activity, then verify session is intact.
     await page.waitForTimeout(5000);
     await page.reload();
-    await expect(page).not.toHaveURL(/localhost:8443/);
+    await expect(page).not.toHaveURL(serviceUrlPattern(Services.Keycloak));
     await expect(page.locator('a:has-text("Log out"), button:has-text("Log out")').first()).toBeVisible({ timeout: 15000 });
 
     // Navigate to another protected route — should not re-prompt login.
     await page.goto(Services.Gameboard.UI + '/admin');
-    await expect(page).toHaveURL(/localhost:4202\/admin/);
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Gameboard.UI));
     await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
   });
 });

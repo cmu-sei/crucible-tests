@@ -7,7 +7,7 @@
 // This file combines all report tests into a single file to run them serially,
 // avoiding parallel execution issues where multiple tests compete for the same "Admin User" visibility.
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 import { navigateToAdminSection, deleteEvaluationByName, deleteTeamTypeByName } from '../../test-helpers';
 
 // Test data constants
@@ -175,7 +175,7 @@ async function navigateToEvaluation(page: import('@playwright/test').Page, evalN
   // Navigate to home page and click into the evaluation
   await page.goto(Services.Cite.UI);
   await page.waitForLoadState('domcontentloaded');
-  await expect(page).toHaveURL(/localhost:4721/, { timeout: 10000 });
+  await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
 
   const myEvalsHeading = page.locator('text=My Evaluations');
   await expect(myEvalsHeading).toBeVisible({ timeout: 10000 });
@@ -279,7 +279,7 @@ test.describe('Report Interface', () => {
     await page.waitForTimeout(2000);
 
     // After reload, page returns to the CITE app (confirms the print flow completed)
-    await expect(page).toHaveURL(/localhost:4721/, { timeout: 15000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 15000 });
 
     // Cleanup
     await deleteEvaluationByName(page, EXPORT_EVAL_NAME);

@@ -4,7 +4,7 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 // Test data constants
 const TEST_USER_1_NAME = 'E2E Test User 1';
@@ -254,7 +254,7 @@ async function waitForBuildPage(page: any) {
 test.describe('Contributors Management', () => {
   test('Expand Unit to Manage User MSEL Roles - Full E2E Flow', async ({ blueprintAuthenticatedPage: page }) => {
     // 1. Authenticate
-    await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
 
     // -------------------------------------------------------------------------
     // PRE-CLEANUP: remove any leftover data from prior runs

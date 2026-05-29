@@ -4,7 +4,7 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Navigation', () => {
   test('Breadcrumb Navigation', async ({ playerAuthenticatedPage: page }) => {
@@ -29,7 +29,7 @@ test.describe('Navigation', () => {
 
     // The "Administration" link navigates back to home
     await page.getByRole('link', { name: 'Administration' }).click();
-    await expect(page).toHaveURL(/localhost:4301\/$/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Player.UI), { timeout: 10000 });
     await expect(page.getByText('My Views')).toBeVisible();
   });
 });

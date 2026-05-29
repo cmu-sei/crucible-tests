@@ -5,13 +5,51 @@
 
 set -e
 
-# Load service URLs from .env
+# Load service URLs from the appropriate env file.
+#
+# CRUCIBLE_TARGET (aspire|minikube) selects between deployment topologies:
+#   - aspire   : each app on its own localhost:<port> (default)
+#   - minikube : single ingress host (https://crucible/<app>)
+#
+# When unset, .env is sourced (back-compat with the original setup).
+# A `--target <name>` flag (parsed below) overrides the environment variable.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [ -f "$SCRIPT_DIR/.env" ]; then
-    set -a
-    source "$SCRIPT_DIR/.env"
-    set +a
-fi
+
+# Pre-scan for --target so the env file is loaded before anything else.
+for ((i=1; i<=$#; i++)); do
+    if [ "${!i}" = "--target" ]; then
+        next=$((i+1))
+        export CRUCIBLE_TARGET="${!next}"
+        break
+    fi
+done
+
+load_target_env() {
+    local file
+    if [ -n "$CRUCIBLE_TARGET" ]; then
+        file="$SCRIPT_DIR/.env.${CRUCIBLE_TARGET}"
+        if [ ! -f "$file" ]; then
+            echo "Error: CRUCIBLE_TARGET=${CRUCIBLE_TARGET} but ${file} does not exist." >&2
+            exit 1
+        fi
+    else
+        file="$SCRIPT_DIR/.env"
+    fi
+    if [ -f "$file" ]; then
+        set -a
+        # shellcheck disable=SC1090
+        source "$file"
+        set +a
+    fi
+    # Optional per-user override file, always loaded last.
+    if [ -f "$SCRIPT_DIR/.env.local" ]; then
+        set -a
+        # shellcheck disable=SC1091
+        source "$SCRIPT_DIR/.env.local"
+        set +a
+    fi
+}
+load_target_env
 
 # Resolve infrastructure URLs (with defaults)
 KEYCLOAK_URL="${KEYCLOAK_URL:-https://localhost:8443}"
@@ -91,11 +129,13 @@ check_services() {
         all_ok=false
     fi
 
-    # Aspire dashboard is optional
-    if curl -k -s "$ASPIRE_DASHBOARD_URL" > /dev/null 2>&1; then
-        print_success "Aspire Dashboard ($ASPIRE_DASHBOARD_URL)"
-    else
-        print_warning "Aspire Dashboard not accessible (optional)"
+    # Aspire dashboard is optional and only relevant under the aspire target
+    if [ -n "$ASPIRE_DASHBOARD_URL" ]; then
+        if curl -k -s "$ASPIRE_DASHBOARD_URL" > /dev/null 2>&1; then
+            print_success "Aspire Dashboard ($ASPIRE_DASHBOARD_URL)"
+        else
+            print_warning "Aspire Dashboard not accessible (optional)"
+        fi
     fi
 
     # Check each requested app
@@ -162,6 +202,9 @@ Options:
   --no-check            Skip service health checks
   --filter <pattern>    Filter tests by pattern
   --app <app>           Run tests for specific app
+  --target <name>       Deployment target: aspire (default) | minikube.
+                        Selects which .env.<name> file to load. Can also be
+                        set via the CRUCIBLE_TARGET environment variable.
 
 Examples:
   $0 all                # Run all tests for all apps
@@ -169,6 +212,7 @@ Examples:
   $0 quick --app blueprint  # Run Blueprint smoke tests
   $0 ui blueprint       # Run Blueprint tests in UI mode
   $0 --filter login --app player  # Run Player tests matching 'login'
+  $0 blueprint --target minikube  # Run Blueprint tests against a minikube deployment
 
 EOF
 }
@@ -193,6 +237,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --app)
             APP="$2"
+            shift 2
+            ;;
+        --target)
+            # Already consumed by the pre-scan above; just skip the value.
             shift 2
             ;;
         *)

@@ -61,7 +61,7 @@ test.describe('Challenges', () => {
   test('Submit Challenge Answer - Correct', async ({ gameboardAuthenticatedPage: page }) => {
     const ctx: APIRequestContext = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
     try {
-      const res = await ctx.fetch(`http://localhost:5002/api/challenge/${challengeId}`, {
+      const res = await ctx.fetch(`${Services.Gameboard.API}/api/challenge/${challengeId}`, {
         headers: { Authorization: `Bearer ${gbToken}` },
       });
       expect(res.ok()).toBe(true);
