@@ -5,7 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect } from '@playwright/test';
-import { Services } from '../../fixtures';
+import { Services, serviceUrlPattern } from '../../fixtures';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -24,7 +24,7 @@ test.describe('Authentication and Authorization', () => {
     await loginButton.click();
 
     // expect: User is redirected to Keycloak login page
-    await expect(page).toHaveURL(/.*localhost:8443.*realms\/crucible/, { timeout: 30000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 30000 });
 
     // 2. Enter invalid username 'invaliduser' in the username field
     const usernameField = page.locator('#username');
@@ -49,6 +49,6 @@ test.describe('Authentication and Authorization', () => {
     await expect(errorMessage).toBeVisible({ timeout: 10000 });
 
     // expect: User remains on Keycloak login page
-    await expect(page).toHaveURL(/.*localhost:8443.*realms\/crucible/);
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak));
   });
 });

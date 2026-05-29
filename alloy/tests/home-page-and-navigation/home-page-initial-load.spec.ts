@@ -5,15 +5,14 @@
 // seed: seed.spec.ts
 
 import { test, expect } from '@playwright/test';
-import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
-
+import { authenticateWithKeycloak, Services, serviceUrlPattern } from '../../../shared-fixtures';
 test.describe('Home Page and Navigation', () => {
   test('Home Page Initial Load', async ({ page }) => {
     // 1. Log in as admin user and navigate to http://localhost:4403
     await authenticateWithKeycloak(page, Services.Alloy.UI);
 
     // expect: The home page loads successfully
-    await expect(page).toHaveURL(/localhost:4403/);
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Alloy.UI));
 
     // expect: The topbar is visible with application branding
     // expect: The topbar displays 'Alloy' or configured AppTopBarText

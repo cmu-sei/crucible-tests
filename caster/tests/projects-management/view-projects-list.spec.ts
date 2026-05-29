@@ -4,14 +4,14 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Projects Management', () => {
   test('View Projects List', async ({ casterAuthenticatedPage: page }) => {
 
     // 1. Navigate to http://localhost:4310/projects
     // expect: Projects page loads successfully
-    await expect(page).toHaveURL(/localhost:4310/, { timeout: 30000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Caster.UI), { timeout: 30000 });
 
     // expect: Projects list is displayed in a table format
     await expect(page.getByText('My Projects')).toBeVisible();

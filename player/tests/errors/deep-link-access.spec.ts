@@ -5,7 +5,7 @@
 // seed: seed.spec.ts
 
 import { test, expect } from '@playwright/test';
-import { Services } from '../../fixtures';
+import { Services, serviceUrlPattern } from '../../fixtures';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -19,7 +19,7 @@ test.describe('Error Handling and Edge Cases', () => {
 
     // expect: User is redirected to login
     await page.getByText('Sign in to your account').first().waitFor({ state: 'visible', timeout: 70000 });
-    await expect(page).toHaveURL(/localhost:8443/);
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak));
 
     // 3. After login, user is redirected back to intended deep link
     await page.getByRole('textbox', { name: 'Username or email' }).fill('admin');
@@ -27,6 +27,6 @@ test.describe('Error Handling and Edge Cases', () => {
     await page.getByRole('button', { name: 'Sign In' }).click();
 
     // expect: After login, user is redirected back to intended deep link
-    await page.waitForURL(/localhost:4301/, { timeout: 30000 });
+    await page.waitForURL(serviceUrlPattern(Services.Player.UI), { timeout: 30000 });
   });
 });

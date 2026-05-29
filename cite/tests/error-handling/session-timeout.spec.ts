@@ -4,13 +4,13 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Error Handling and Edge Cases', () => {
   test('Session Timeout', async ({ citeAuthenticatedPage: page }) => {
 
     // 1. Log in successfully
-    await expect(page).toHaveURL(/localhost:4721/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
 
     // 2. Manually invalidate session by clearing cookies
     await page.context().clearCookies();
@@ -20,6 +20,6 @@ test.describe('Error Handling and Edge Cases', () => {
 
     // expect: User is notified of session expiration
     // expect: User is redirected to login page
-    await page.waitForURL(/localhost:8443|localhost:4721/, { timeout: 30000 });
+    await page.waitForURL(serviceUrlPattern(Services.Cite.UI), { timeout: 30000 });
   });
 });

@@ -4,14 +4,14 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 import fs from 'fs';
 
 test.describe('Export and Import', () => {
   test('Export MSEL to Excel', async ({ blueprintAuthenticatedPage: page }) => {
 
     // 1. Navigate to the MSEL list page
-    await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
     await page.waitForLoadState('networkidle');
 
     // Click "Manage an Event" button to navigate to MSEL list
@@ -20,7 +20,7 @@ test.describe('Export and Import', () => {
     await manageEventButton.click();
 
     // Wait for MSEL list page to load
-    await expect(page).toHaveURL(/.*localhost:4725\/build.*/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
     await page.waitForLoadState('networkidle');
 
     // expect: MSEL list is displayed with system MSELs

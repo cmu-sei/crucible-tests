@@ -4,7 +4,7 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Event Dashboard and Navigation', () => {
   test('Dashboard Loading State', async ({ blueprintAuthenticatedPage: page }) => {
@@ -15,7 +15,7 @@ test.describe('Event Dashboard and Navigation', () => {
     // expect: Loading card shows 'Initializing Data' title with 'Please wait ...' subtitle
     // expect: A progress spinner is visible
     // We check early DOM state before networkidle
-    await expect(page).toHaveURL(/^http:\/\/localhost:4725/, { timeout: 30000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 30000 });
 
     // Check for loading indicators at initial page load (may appear briefly)
     // Check for any of these loading indicators

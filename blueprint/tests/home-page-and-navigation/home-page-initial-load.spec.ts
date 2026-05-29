@@ -4,13 +4,13 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Home Page and Navigation', () => {
   test('Home Page Initial Load', async ({ blueprintAuthenticatedPage: page }) => {
 
     // expect: The home page loads successfully as the Event Dashboard
-    await expect(page).toHaveURL(/^http:\/\/localhost:4725/, { timeout: 30000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 30000 });
     await page.waitForLoadState('networkidle');
 
     // expect: The topbar is visible with Blueprint branding

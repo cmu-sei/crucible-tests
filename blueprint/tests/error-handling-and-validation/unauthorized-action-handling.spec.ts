@@ -4,7 +4,7 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Error Handling and Validation', () => {
   test('Unauthorized Action Handling', async ({ blueprintAuthenticatedPage: page, context }) => {
@@ -12,11 +12,11 @@ test.describe('Error Handling and Validation', () => {
     // by intercepting API calls and simulating 403 responses
 
     // expect: User is authenticated
-    await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
     await page.waitForLoadState('load');
 
     // Navigate to the admin page
-    await page.goto('http://localhost:4725');
+    await page.goto(Services.Blueprint.UI);
     await page.waitForLoadState('load');
 
     // Click on Admin User button to open the menu
@@ -26,7 +26,7 @@ test.describe('Error Handling and Validation', () => {
     await page.getByRole('menuitem', { name: 'Administration' }).click();
 
     // expect: User is on the admin page
-    await expect(page).toHaveURL('http://localhost:4725/admin');
+    await expect(page).toHaveURL(`${Services.Blueprint.UI}/admin`);
     await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
 
     // Set up API interception to simulate 403 Forbidden response for system-roles
@@ -83,11 +83,11 @@ test.describe('Error Handling and Validation', () => {
 
     // expect: User can still access other authorized features
     // Navigate back to home
-    await page.goto('http://localhost:4725');
+    await page.goto(Services.Blueprint.UI);
     await page.waitForLoadState('load');
 
     // expect: Home page is accessible
-    await expect(page).toHaveURL('http://localhost:4725/');
+    await expect(page).toHaveURL(Services.Blueprint.UI);
     await expect(page.getByRole('button', { name: /Manage an Event/i })).toBeVisible();
   });
 });

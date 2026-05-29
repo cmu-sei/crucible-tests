@@ -4,12 +4,12 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Event Dashboard and Navigation', () => {
   test('Theme Toggle Light Dark Mode', async ({ blueprintAuthenticatedPage: page }) => {
     // 1. Navigate to Event Dashboard and click user menu, toggle 'Dark Theme' switch
-    await expect(page).toHaveURL(/^http:\/\/localhost:4725/, { timeout: 30000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 30000 });
     await page.waitForLoadState('networkidle');
 
     // Open user menu

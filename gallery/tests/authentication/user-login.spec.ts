@@ -5,7 +5,7 @@
 // seed: seed.spec.ts
 
 import { test, expect } from '@playwright/test';
-import { Services } from '../../fixtures';
+import { Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Authentication and Authorization', () => {
   test('User Login and Session Management', async ({ page }) => {
@@ -14,7 +14,7 @@ test.describe('Authentication and Authorization', () => {
 
     // expect: The application redirects to Keycloak login page
     // The Angular OIDC client redirects asynchronously, so we need to wait for the Keycloak URL first
-    await page.waitForURL(/localhost:8443.*realms\/crucible/, { timeout: 30000 });
+    await page.waitForURL(serviceUrlPattern(Services.Keycloak), { timeout: 30000 });
     await page.getByRole('button', { name: 'Sign In' }).waitFor({ state: 'visible' });
 
     // 2. Enter valid credentials (admin/admin) and click Sign In

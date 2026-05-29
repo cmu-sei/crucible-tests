@@ -9,7 +9,7 @@ import { test, expect, Services } from '../../fixtures';
 test.describe('Accessibility and Usability', () => {
   test.beforeEach(async ({ blueprintAuthenticatedPage: page }) => {
     // Navigate to Blueprint application (auth state pre-loaded from setup)
-    await page.goto('http://localhost:4725');
+    await page.goto(Services.Blueprint.UI);
     await page.waitForLoadState('domcontentloaded');
   });
 

@@ -5,8 +5,7 @@
 // seed: seed.spec.ts
 
 import { test, expect } from '@playwright/test';
-import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
-
+import { authenticateWithKeycloak, Services, serviceUrlPattern } from '../../../shared-fixtures';
 test.describe('Home Page and Navigation', () => {
   test('Sidebar Navigation Toggle', async ({ page }) => {
     // 1. Navigate to http://localhost:4403/admin
@@ -22,7 +21,7 @@ test.describe('Home Page and Navigation', () => {
     await page.getByRole('link', { name: 'Administration' }).click();
 
     // expect: The sidebar collapses and user returns to home page
-    await expect(page).toHaveURL(/localhost:4403/);
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Alloy.UI));
     await expect(page.getByText('My Events')).toBeVisible();
 
     // Navigate back to admin using the "Show Administration Page" button

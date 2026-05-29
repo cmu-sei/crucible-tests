@@ -5,7 +5,7 @@
 // seed: seed.spec.ts
 
 import { test, expect } from '@playwright/test';
-import { authenticateGalleryWithKeycloak, Services } from '../../fixtures';
+import { authenticateGalleryWithKeycloak, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Authentication and Authorization', () => {
   test('Session Logout', async ({ page }) => {
@@ -28,15 +28,15 @@ test.describe('Authentication and Authorization', () => {
 
     // expect: User is logged out and redirected to Keycloak login page or public landing page
     // The OIDC logout redirects asynchronously, so we need to wait for the Keycloak URL first
-    await page.waitForURL(/localhost:8443.*realms\/crucible/, { timeout: 30000 });
+    await page.waitForURL(serviceUrlPattern(Services.Keycloak), { timeout: 30000 });
     await page.getByRole('button', { name: 'Sign In' }).waitFor({ state: 'visible' });
 
     // 4. Attempt to access http://localhost:4723 after logout
     await page.goto(Services.Gallery.UI);
 
     // expect: User is redirected to Keycloak login page
-    await page.waitForURL(/localhost:8443.*realms\/crucible/, { timeout: 30000 });
+    await page.waitForURL(serviceUrlPattern(Services.Keycloak), { timeout: 30000 });
     await page.getByRole('button', { name: 'Sign In' }).waitFor({ state: 'visible' });
-    await expect(page).toHaveURL(/localhost:8443.*realms\/crucible/);
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak));
   });
 });

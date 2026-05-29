@@ -4,7 +4,7 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 import { createEvaluation, deleteEvaluationByName, navigateToAdminSection } from '../../test-helpers';
 
 const TEST_EVAL_NAME = 'E2E Navigate Test Evaluation';
@@ -72,7 +72,7 @@ test.describe('Home Page and Evaluation List', () => {
     // 2. Navigate to home page
     await page.goto(Services.Cite.UI);
     await page.waitForLoadState('domcontentloaded');
-    await expect(page).toHaveURL(/localhost:4721/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
 
     const myEvalsHeading = page.locator('text=My Evaluations');
     await expect(myEvalsHeading).toBeVisible({ timeout: 10000 });

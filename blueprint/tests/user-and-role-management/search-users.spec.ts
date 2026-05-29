@@ -16,7 +16,7 @@
 //   3. Types "admin" in the Search input and verifies only matching rows appear
 //   4. Clears the search and verifies all users return
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 // ---------------------------------------------------------------------------
 // Helper: navigate to admin section and click a sidebar item
@@ -35,7 +35,7 @@ async function gotoAdminSection(page: any, section: string) {
 
 test.describe('User and Role Management', () => {
   test('Search Users', async ({ blueprintAuthenticatedPage: page }) => {
-    await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
 
     // 2. Navigate to Users admin section
     // Blueprint is a SPA — URL stays at /admin when navigating sidebar items

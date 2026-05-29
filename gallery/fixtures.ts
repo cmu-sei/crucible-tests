@@ -2,7 +2,7 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 import { test as base, Page, expect, request as pwRequest, APIRequestContext } from '@playwright/test';
-import { Services, authenticateWithKeycloak } from '../shared-fixtures';
+import { Services, serviceUrlPattern, oidcStorageKey, authenticateWithKeycloak } from '../shared-fixtures';
 
 /**
  * Gallery-specific fixtures
@@ -348,4 +348,4 @@ export const test = base.extend<GalleryFixtures>({
 });
 
 export { expect } from '@playwright/test';
-export { Services };
+export { Services, serviceUrlPattern, oidcStorageKey };

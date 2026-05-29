@@ -56,13 +56,13 @@ test.describe('Performance', () => {
     const ctx: APIRequestContext = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
     try {
       // Warm-up.
-      await ctx.fetch(`http://localhost:5002/api/game/${game.id}/score`, {
+      await ctx.fetch(`${Services.Gameboard.API}/api/game/${game.id}/score`, {
         headers: { Authorization: `Bearer ${token}` },
         timeout: 60000,
       });
 
       const start = Date.now();
-      const res = await ctx.fetch(`http://localhost:5002/api/game/${game.id}/score`, {
+      const res = await ctx.fetch(`${Services.Gameboard.API}/api/game/${game.id}/score`, {
         headers: { Authorization: `Bearer ${token}` },
         timeout: 60000,
       });

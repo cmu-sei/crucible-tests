@@ -5,11 +5,21 @@
 
 set -e
 
-# Load service URLs from .env
+# Load service URLs. If CRUCIBLE_TARGET is set (aspire|minikube), use the
+# matching .env.<target> file; otherwise fall back to .env for back-compat.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [ -f "$SCRIPT_DIR/.env" ]; then
+ENV_FILE="$SCRIPT_DIR/.env"
+if [ -n "$CRUCIBLE_TARGET" ]; then
+    ENV_FILE="$SCRIPT_DIR/.env.${CRUCIBLE_TARGET}"
+    if [ ! -f "$ENV_FILE" ]; then
+        echo "Error: CRUCIBLE_TARGET=${CRUCIBLE_TARGET} but ${ENV_FILE} does not exist." >&2
+        exit 1
+    fi
+fi
+if [ -f "$ENV_FILE" ]; then
     set -a
-    source "$SCRIPT_DIR/.env"
+    # shellcheck disable=SC1090
+    source "$ENV_FILE"
     set +a
 fi
 

@@ -5,11 +5,12 @@
 // seed: seed.spec.ts
 
 import { test, expect } from '@playwright/test';
+import { Services, serviceUrlPattern } from '../../../shared-fixtures';
 
 test.describe('Authentication and Authorization', () => {
   test('User Login Flow', async ({ page }) => {
     // 1. Navigate to http://localhost:4403
-    await page.goto('http://localhost:4403');
+    await page.goto(Services.Alloy.UI);
 
     // expect: The application redirects to the Keycloak authentication page
     await expect(page.getByText('Sign in to your account')).toBeVisible({ timeout: 30000 });
@@ -27,7 +28,7 @@ test.describe('Authentication and Authorization', () => {
     await page.getByRole('button', { name: 'Sign In' }).click();
 
     // expect: The user is redirected back to http://localhost:4403
-    await expect(page).toHaveURL(/localhost:4403/);
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Alloy.UI));
 
     // expect: The main application interface loads
     await expect(page.getByText('Alloy')).toBeVisible();

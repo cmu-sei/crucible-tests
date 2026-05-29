@@ -49,13 +49,13 @@ test.describe('Admin - Sponsors', () => {
     // Verify both have a non-empty logo and that child references the parent.
     const ctx: APIRequestContext = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
     try {
-      const parentRes = await ctx.fetch(`http://localhost:5002/api/sponsor/${parent.id}`, {
+      const parentRes = await ctx.fetch(`${Services.Gameboard.API}/api/sponsor/${parent.id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const parentData = await parentRes.json();
       expect(parentData.logo, 'parent sponsor logo should be set').toBeTruthy();
 
-      const childRes = await ctx.fetch(`http://localhost:5002/api/sponsor/${child.id}`, {
+      const childRes = await ctx.fetch(`${Services.Gameboard.API}/api/sponsor/${child.id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const childData = await childRes.json();

@@ -2,12 +2,12 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 // Debug test to investigate the import button
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test('Debug: Check for Import button', async ({ blueprintAuthenticatedPage: page }) => {
 
   // Navigate to Blueprint
-  await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 10000 });
+  await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
   await page.waitForLoadState('networkidle');
   await page.waitForTimeout(2000);
 

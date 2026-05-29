@@ -47,7 +47,7 @@ test.describe('Admin - Challenges', () => {
     // Confirm the game's `logo` and `background` metadata were updated.
     const ctx: APIRequestContext = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
     try {
-      const res = await ctx.fetch(`http://localhost:5002/api/game/${game.id}`, {
+      const res = await ctx.fetch(`${Services.Gameboard.API}/api/game/${game.id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const updated = await res.json();

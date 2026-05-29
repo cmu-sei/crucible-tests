@@ -29,7 +29,7 @@ test.describe('Admin - Games', () => {
     const ctx: APIRequestContext = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
     try {
       const cloneName = `CloneCopy-${Date.now()}`;
-      const cloneRes = await ctx.fetch(`http://localhost:5002/api/game/clone`, {
+      const cloneRes = await ctx.fetch(`${Services.Gameboard.API}/api/game/clone`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         data: { gameId: source.id, name: cloneName },

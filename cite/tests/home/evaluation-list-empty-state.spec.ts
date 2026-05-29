@@ -4,13 +4,13 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Home Page and Evaluation List', () => {
   test('Evaluation List Display - Empty State', async ({ citeAuthenticatedPage: page }) => {
 
     // 1. Log in as user with no evaluations assigned
-    await expect(page).toHaveURL(/localhost:4721/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
 
     // expect: Evaluation list is empty or shows 'No results found' message
     // Note: This test verifies the empty state handling. If evaluations exist,

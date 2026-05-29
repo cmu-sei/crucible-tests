@@ -62,7 +62,7 @@ test.describe('Error Handling', () => {
   test('Challenge Answer Case Sensitivity', async ({ gameboardAuthenticatedPage: page }) => {
     const ctx: APIRequestContext = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
     try {
-      const res = await ctx.fetch(`http://localhost:5002/api/challenge/${challengeId}/submissions`, {
+      const res = await ctx.fetch(`${Services.Gameboard.API}/api/challenge/${challengeId}/submissions`, {
         headers: { Authorization: `Bearer ${gbToken}` },
       });
       const payload = await res.json();

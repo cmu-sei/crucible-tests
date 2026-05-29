@@ -4,7 +4,7 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Error Handling and Edge Cases', () => {
   test('Form Validation - Invalid Input Format', async ({ playerAuthenticatedPage: page }) => {
@@ -16,7 +16,7 @@ test.describe('Error Handling and Edge Cases', () => {
 
     // expect: Form is displayed
     // Click on a template URL to edit
-    const urlButton = page.getByRole('button', { name: /localhost:4403/ });
+    const urlButton = page.getByRole('button', { name: serviceUrlPattern(Services.Alloy.UI) });
     await expect(urlButton).toBeVisible();
 
     // 2. The form should validate URL format

@@ -12,7 +12,7 @@ test.describe('Accessibility and Usability', () => {
     await page.setViewportSize({ width: 768, height: 1024 });
 
     // Navigate to Blueprint application (auth state pre-loaded from setup)
-    await page.goto('http://localhost:4725');
+    await page.goto(Services.Blueprint.UI);
     await page.waitForLoadState('domcontentloaded');
 
     // 2. Navigate through the application

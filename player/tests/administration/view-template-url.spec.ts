@@ -4,7 +4,7 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Administration - Application Templates', () => {
   test('View Template URL', async ({ playerAuthenticatedPage: page }) => {
@@ -21,7 +21,7 @@ test.describe('Administration - Application Templates', () => {
     await expect(page.getByText('{viewId}').first()).toBeVisible();
 
     // expect: URLs point to different Crucible services (Alloy, VM API)
-    await expect(page.getByRole('button', { name: /localhost:4403/ })).toBeVisible();
-    await expect(page.getByRole('button', { name: /localhost:4303/ }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: serviceUrlPattern(Services.Alloy.UI) })).toBeVisible();
+    await expect(page.getByRole('button', { name: serviceUrlPattern(Services.PlayerVM.UI) }).first()).toBeVisible();
   });
 });

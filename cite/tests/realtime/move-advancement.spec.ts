@@ -6,9 +6,8 @@
 
 import { test, expect, APIRequestContext } from '@playwright/test';
 import { Services, authenticateWithKeycloak } from '../../../shared-fixtures';
-
 async function getApiToken(request: APIRequestContext): Promise<string> {
-  const resp = await request.post('https://localhost:8443/realms/crucible/protocol/openid-connect/token', {
+  const resp = await request.post(`${Services.Keycloak}/realms/crucible/protocol/openid-connect/token`, {
     form: {
       grant_type: 'password',
       client_id: 'cite.ui',

@@ -4,14 +4,14 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Home Page and Navigation', () => {
   test('Browser Back and Forward Navigation', async ({ blueprintAuthenticatedPage: page }) => {
     // 1. Navigate to http://localhost:4725 and view the home page
     
     // expect: Home page loads
-    await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
     await page.waitForLoadState('domcontentloaded');
     
     const homeUrl = page.url();

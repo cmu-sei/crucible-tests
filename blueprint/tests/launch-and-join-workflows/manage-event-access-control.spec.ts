@@ -4,7 +4,7 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Launch and Join Event Workflows', () => {
   test('Manage Event Access Control', async ({ blueprintAuthenticatedPage: page }) => {
@@ -17,7 +17,7 @@ test.describe('Launch and Join Event Workflows', () => {
     await page.waitForLoadState('networkidle');
 
     // expect: The manage page loads
-    await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
 
     // Check if the 'nothing to manage' message is shown
     const nothingToManage = page.locator('text=You have nothing to manage.').first();

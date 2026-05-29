@@ -4,7 +4,9 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, oidcStorageKey } from '../../fixtures';
+
+const OIDC_STORAGE_KEY = oidcStorageKey('blueprint.ui');
 
 test.describe('Authentication and Authorization', () => {
   test('Session Token Renewal', async ({ blueprintAuthenticatedPage: page }) => {
@@ -17,12 +19,12 @@ test.describe('Authentication and Authorization', () => {
     });
 
     // expect: Successfully authenticated
-    await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 70000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 70000 });
 
     // Wait for OIDC library to store the token in session storage (async after page load)
-    const initialToken = await page.waitForFunction(() => {
-      return sessionStorage.getItem('oidc.user:https://localhost:8443/realms/crucible:blueprint.ui');
-    }, { timeout: 15000 }).then(handle => handle.jsonValue());
+    const initialToken = await page.waitForFunction((key) => {
+      return sessionStorage.getItem(key);
+    }, OIDC_STORAGE_KEY, { timeout: 15000 }).then(handle => handle.jsonValue());
     expect(initialToken).toBeTruthy();
 
     // 2. Wait for silent token renewal (automaticSilentRenew is enabled in config)
@@ -39,9 +41,9 @@ test.describe('Authentication and Authorization', () => {
 
     // expect: No user interaction is required for token renewal
     // expect: The user session remains active
-    const currentToken = await page.evaluate(() => {
-      return sessionStorage.getItem('oidc.user:https://localhost:8443/realms/crucible:blueprint.ui');
-    });
+    const currentToken = await page.evaluate((key) => {
+      return sessionStorage.getItem(key);
+    }, OIDC_STORAGE_KEY);
     expect(currentToken).toBeTruthy();
 
     // expect: Console logs show token refresh activity

@@ -35,7 +35,7 @@ test.describe('Admin - Reports', () => {
     const ctx: APIRequestContext = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
     try {
       const res = await ctx.fetch(
-        'http://localhost:5002/api/reports/export/enrollment',
+        `${Services.Gameboard.API}/api/reports/export/enrollment`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       expect(res.ok(), `status: ${res.status()}`).toBe(true);

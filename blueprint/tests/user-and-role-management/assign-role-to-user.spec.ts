@@ -20,7 +20,7 @@
 //   6. Verifies the role was assigned (dropdown shows "Observer")
 //   7. Reverts the role back to "None Locally" to avoid side effects
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 // ---------------------------------------------------------------------------
 // Helper: navigate to admin section and click a sidebar item
@@ -39,7 +39,7 @@ async function gotoAdminSection(page: any, section: string) {
 
 test.describe('User and Role Management', () => {
   test('Assign Role to User', async ({ blueprintAuthenticatedPage: page }) => {
-    await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
 
     // 2. Navigate to Users admin section
     // expect: Users admin section is visible with user table

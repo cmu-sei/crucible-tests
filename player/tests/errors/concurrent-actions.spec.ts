@@ -4,7 +4,7 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Error Handling and Edge Cases', () => {
   test('Concurrent User Actions - Race Conditions', async ({ playerAuthenticatedPage: page, browser }) => {
@@ -22,7 +22,7 @@ test.describe('Error Handling and Edge Cases', () => {
     await page2.getByRole('textbox', { name: 'Username or email' }).fill('admin');
     await page2.getByRole('textbox', { name: 'Password' }).fill('admin');
     await page2.getByRole('button', { name: 'Sign In' }).click();
-    await page2.waitForURL(/localhost:4301/, { timeout: 30000 });
+    await page2.waitForURL(serviceUrlPattern(Services.Player.UI), { timeout: 30000 });
 
     // expect: Both instances are authenticated
     await expect(page.getByText('My Views')).toBeVisible();

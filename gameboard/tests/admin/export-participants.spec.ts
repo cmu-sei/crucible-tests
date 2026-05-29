@@ -45,7 +45,7 @@ test.describe('Admin - Users', () => {
     const ctx: APIRequestContext = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
     try {
       const res = await ctx.fetch(
-        `http://localhost:5002/api/admin/games/${game.id}/players/export?teamIds=`,
+        `${Services.Gameboard.API}/api/admin/games/${game.id}/players/export?teamIds=`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       expect(res.ok(), `status: ${res.status()}`).toBe(true);

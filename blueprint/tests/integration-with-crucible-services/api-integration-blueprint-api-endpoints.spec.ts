@@ -4,7 +4,7 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Integration with Crucible Services', () => {
   test('API Integration - Blueprint API Endpoints', async ({ blueprintAuthenticatedPage: page }) => {
@@ -12,15 +12,17 @@ test.describe('Integration with Crucible Services', () => {
     await page.goto(Services.Blueprint.UI);
     await page.waitForLoadState('domcontentloaded');
 
+    const blueprintApiPattern = serviceUrlPattern(Services.Blueprint.API);
+
     // 1. Open browser developer tools Network tab
     // Note: In Playwright, we can listen to network events programmatically
     const apiRequests: any[] = [];
     const apiResponses: any[] = [];
-    
+
     // Listen to all requests
     page.on('request', (request) => {
       const url = request.url();
-      if (url.includes('localhost:4724')) {
+      if (blueprintApiPattern.test(url)) {
         apiRequests.push({
           url: url,
           method: request.method(),
@@ -29,11 +31,11 @@ test.describe('Integration with Crucible Services', () => {
         console.log(`API Request: ${request.method()} ${url}`);
       }
     });
-    
+
     // Listen to all responses
     page.on('response', (response) => {
       const url = response.url();
-      if (url.includes('localhost:4724')) {
+      if (blueprintApiPattern.test(url)) {
         apiResponses.push({
           url: url,
           status: response.status(),
@@ -42,9 +44,9 @@ test.describe('Integration with Crucible Services', () => {
         console.log(`API Response: ${response.status()} ${url}`);
       }
     });
-    
+
     // expect: Network tab is active (simulated via event listeners)
-    console.log('Network monitoring active - listening for API calls to http://localhost:4724');
+    console.log(`Network monitoring active - listening for API calls to ${Services.Blueprint.API}`);
     
     // 2. Perform various actions in Blueprint UI (create MSEL, add event, etc.)
     
@@ -93,12 +95,12 @@ test.describe('Integration with Crucible Services', () => {
       }
     }
     
-    // expect: API calls are made to http://localhost:4724 (Blueprint API)
+    // expect: API calls are made to the Blueprint API
     expect(apiRequests.length).toBeGreaterThan(0);
     console.log(`Total API requests captured: ${apiRequests.length}`);
-    
+
     // Verify at least one request goes to the Blueprint API
-    const blueprintApiRequests = apiRequests.filter(req => req.url.includes('localhost:4724'));
+    const blueprintApiRequests = apiRequests.filter(req => blueprintApiPattern.test(req.url));
     expect(blueprintApiRequests.length).toBeGreaterThan(0);
     
     // expect: Requests use proper authentication headers

@@ -4,7 +4,7 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Error Handling and Edge Cases', () => {
   test('Session Expiration', async ({ playerAuthenticatedPage: page }) => {
@@ -25,6 +25,6 @@ test.describe('Error Handling and Edge Cases', () => {
 
     // expect: User is redirected to login page
     // After clearing all auth state and reloading, the OIDC client should redirect to Keycloak
-    await expect(page).toHaveURL(/localhost:8443/, { timeout: 30000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 30000 });
   });
 });

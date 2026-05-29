@@ -4,7 +4,7 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 import path from 'path';
 import os from 'os';
 
@@ -12,7 +12,7 @@ test.describe('Export and Import', () => {
   test('Import MSEL from Excel', async ({ blueprintAuthenticatedPage: page }) => {
 
     // 1. Navigate to MSELs list
-    await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
     await page.waitForLoadState('networkidle');
 
     // Navigate to the build page

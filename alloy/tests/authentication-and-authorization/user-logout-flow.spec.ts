@@ -5,8 +5,7 @@
 // seed: seed.spec.ts
 
 import { test, expect } from '@playwright/test';
-import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
-
+import { authenticateWithKeycloak, Services, serviceUrlPattern } from '../../../shared-fixtures';
 test.describe('Authentication and Authorization', () => {
   test('User Logout Flow', async ({ page }) => {
     // 1. Log in as admin user
@@ -26,6 +25,6 @@ test.describe('Authentication and Authorization', () => {
 
     // expect: The user is redirected to the Keycloak login page
     await expect(page.getByText('Sign in to your account')).toBeVisible({ timeout: 30000 });
-    await expect(page).toHaveURL(/localhost:8443\/realms\/crucible/);
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak));
   });
 });

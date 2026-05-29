@@ -4,7 +4,7 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Authentication', () => {
   test('User Logout', async ({ playerAuthenticatedPage: page }) => {
@@ -25,6 +25,6 @@ test.describe('Authentication', () => {
 
     // expect: User is logged out
     // expect: User is redirected to Keycloak or login page
-    await expect(page).toHaveURL(/localhost:8443/, { timeout: 30000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 30000 });
   });
 });

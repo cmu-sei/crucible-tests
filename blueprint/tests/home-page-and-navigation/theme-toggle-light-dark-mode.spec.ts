@@ -4,13 +4,13 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Home Page and Navigation', () => {
   test('Theme Toggle (Light/Dark Mode)', async ({ blueprintAuthenticatedPage: page }) => {
 
     // expect: Application loads with default theme
-    await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
     await page.waitForLoadState('domcontentloaded');
 
     // Get initial theme - theme is applied as "darkMode" class on document.body

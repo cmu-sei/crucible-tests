@@ -4,12 +4,12 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Launch and Join Event Workflows', () => {
   test('Join Active Event', async ({ blueprintAuthenticatedPage: page }) => {
     // 1. Navigate to Event Dashboard and click 'Join an Event', then click 'Join' on a MSEL card
-    await expect(page).toHaveURL(/^http:\/\/localhost:4725/, { timeout: 30000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 30000 });
     await page.waitForLoadState('networkidle');
 
     const joinEventCard = page.locator(
@@ -53,6 +53,6 @@ test.describe('Launch and Join Event Workflows', () => {
     await page.waitForLoadState('networkidle');
 
     // expect: User is redirected to the event participant view
-    await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
   });
 });

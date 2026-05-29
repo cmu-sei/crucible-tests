@@ -69,7 +69,7 @@ test.describe('Challenges', () => {
     const ctx: APIRequestContext = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
     try {
       // Challenge detail exposes the VM we seeded.
-      const res = await ctx.fetch(`http://localhost:5002/api/challenge/${challengeId}`, {
+      const res = await ctx.fetch(`${Services.Gameboard.API}/api/challenge/${challengeId}`, {
         headers: { Authorization: `Bearer ${gbToken}` },
       });
       const detail = await res.json();

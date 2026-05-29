@@ -4,12 +4,12 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Accessibility and Usability', () => {
   test.beforeEach(async ({ blueprintAuthenticatedPage: page }) => {
     // Navigate to Blueprint application (auth state pre-loaded from setup)
-    await page.goto('http://localhost:4725');
+    await page.goto(Services.Blueprint.UI);
     await page.waitForLoadState('domcontentloaded');
   });
 
@@ -45,7 +45,7 @@ test.describe('Accessibility and Usability', () => {
     };
 
     // 1. Navigate through different pages and components
-    await expect(page).toHaveURL(/.*localhost:4725.*/);
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI));
 
     // 2. Check text color contrast against backgrounds
     // Check topbar contrast (#2d69b4 background with white text)

@@ -62,7 +62,7 @@ test.describe('Challenges', () => {
 
     const ctx: APIRequestContext = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
     try {
-      const res = await ctx.fetch(`http://localhost:5002/api/challenges?gid=${game.id}`, {
+      const res = await ctx.fetch(`${Services.Gameboard.API}/api/challenges?gid=${game.id}`, {
         headers: { Authorization: `Bearer ${gbToken}` },
       });
       expect(res.ok()).toBe(true);

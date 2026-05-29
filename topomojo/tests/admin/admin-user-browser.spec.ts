@@ -4,7 +4,7 @@
 // spec: topomojo/topomojo-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Admin Panel', () => {
   test('Admin - User Browser', async ({ topomojoAuthenticatedPage: page }) => {
@@ -27,7 +27,7 @@ test.describe('Admin Panel', () => {
       await page.fill('input[name="username"]', 'admin');
       await page.fill('input[name="password"]', 'admin');
       await page.click('button:has-text("Sign In")');
-      await page.waitForURL(/localhost:4201/, { timeout: 30000 });
+      await page.waitForURL(serviceUrlPattern(Services.TopoMojo.UI), { timeout: 30000 });
       // Wait for admin button to appear after auth
       await adminButton.waitFor({ state: 'visible', timeout: 30000 });
     } else if (winner === 'timeout') {

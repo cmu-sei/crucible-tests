@@ -4,14 +4,14 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Search and Filtering', () => {
   test('Scenario Event Filtering by Event Type', async ({ blueprintAuthenticatedPage: page }) => {
-    await page.goto('http://localhost:4725/build');
+    await page.goto(`${Services.Blueprint.UI}/build`);
 
     // 1. Navigate to a MSEL timeline view
-    await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
     await page.waitForLoadState('domcontentloaded');
 
     // Blueprint uses mat-table (Angular Material) with mat-row elements on the build page

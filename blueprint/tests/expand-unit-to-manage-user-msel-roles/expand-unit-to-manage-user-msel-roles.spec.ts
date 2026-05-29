@@ -16,7 +16,7 @@
 //  7.  Expand the unit row and assign MSEL roles to both test users
 //  8.  Cleanup: delete MSEL copy, unit, both users
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 /** Simple UUID v4 generator (no external dependency). */
 function uuidv4(): string {
@@ -177,7 +177,7 @@ async function addUserToUnit(page: any, unitName: string, userName: string) {
 test.describe('Expand Unit to Manage User MSEL Roles', () => {
   test('Create users + unit, copy MSEL, assign MSEL roles via Contributors tab', async ({ blueprintAuthenticatedPage: page }) => {
     // 1. Authenticate
-    await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 15000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 15000 });
 
     // ── PRE-CLEANUP ────────────────────────────────────────────────────────────
 

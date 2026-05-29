@@ -4,14 +4,14 @@
 // spec: topomojo/topomojo-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Error Handling and Edge Cases', () => {
   test('Browser Back Button Navigation', async ({ topomojoAuthenticatedPage: page }) => {
 
     // 1. Navigate through multiple pages (home -> about)
     // expect: Navigation history is recorded
-    await expect(page).toHaveURL(/localhost:4201/);
+    await expect(page).toHaveURL(serviceUrlPattern(Services.TopoMojo.UI));
 
     // Navigate to about page
     await page.goto(Services.TopoMojo.UI + '/about');

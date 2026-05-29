@@ -4,7 +4,7 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Authentication and Authorization', () => {
   test('User Logout Flow', async ({ casterAuthenticatedPage: page }) => {
@@ -25,7 +25,7 @@ test.describe('Authentication and Authorization', () => {
     // expect: The user is logged out
     // expect: Authentication tokens are cleared
     // expect: The user is redirected to the Keycloak login page
-    await expect(page).toHaveURL(/.*localhost:8443.*realms\/crucible/, { timeout: 30000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 30000 });
     await expect(page.getByText('Sign in to your account')).toBeVisible();
   });
 });

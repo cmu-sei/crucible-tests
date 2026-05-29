@@ -15,39 +15,14 @@
 import { APIRequestContext, request as playwrightRequest } from '@playwright/test';
 import { Services } from './fixtures';
 
-// The Gameboard API listens on a dynamic Aspire-assigned port (currently 5002).
-// The .env file's GAMEBOARD_API_URL may point at a legacy port (4203) that
-// isn't actually served. We check connectivity at startup and pick the first
-// reachable URL from a known list.
-export const GAMEBOARD_API_CANDIDATES = [
-  process.env.GAMEBOARD_API_URL?.replace(/\/$/, ''),
-  'http://localhost:5002',
-  'http://localhost:4203',
-].filter((x): x is string => !!x);
-
-let _resolvedApiBase: string | null = null;
+// Gameboard API base URL. Read from Services.Gameboard.API (which is driven
+// by GAMEBOARD_API_URL in the active .env profile). No more port-probing —
+// the env file is now the source of truth for both Aspire and Minikube.
 async function resolveApiBase(): Promise<string> {
-  if (_resolvedApiBase) return _resolvedApiBase;
-  const ctx = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
-    for (const candidate of GAMEBOARD_API_CANDIDATES) {
-      try {
-        const res = await ctx.fetch(`${candidate}/api/games`, { timeout: 3000 });
-        if (res.ok()) {
-          _resolvedApiBase = candidate;
-          return candidate;
-        }
-      } catch { /* try next */ }
-    }
-  } finally {
-    await ctx.dispose();
-  }
-  throw new Error(
-    `Could not reach Gameboard API at any of: ${GAMEBOARD_API_CANDIDATES.join(', ')}`
-  );
+  return Services.Gameboard.API.replace(/\/$/, '');
 }
 
-export const GAMEBOARD_API = 'http://localhost:5002'; // legacy export (prefer resolveApiBase)
+export const GAMEBOARD_API = Services.Gameboard.API.replace(/\/$/, ''); // legacy export
 
 async function newRequestContext(): Promise<APIRequestContext> {
   return playwrightRequest.newContext({ ignoreHTTPSErrors: true });

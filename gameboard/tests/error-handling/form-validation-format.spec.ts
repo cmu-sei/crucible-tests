@@ -34,7 +34,7 @@ test.describe('Error Handling', () => {
     const ctx: APIRequestContext = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
     try {
       // Fetch the current game details.
-      const getRes = await ctx.fetch(`http://localhost:5002/api/game/${game.id}`, {
+      const getRes = await ctx.fetch(`${Services.Gameboard.API}/api/game/${game.id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const current = await getRes.json();
@@ -42,7 +42,7 @@ test.describe('Error Handling', () => {
       // Attempt an update with a name that far exceeds the 128-char column limit.
       const tooLongName = 'x'.repeat(1024);
       const invalidPayload = { ...current, name: tooLongName };
-      const putRes = await ctx.fetch('http://localhost:5002/api/game', {
+      const putRes = await ctx.fetch(`${Services.Gameboard.API}/api/game`, {
         method: 'PUT',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         data: invalidPayload,
@@ -52,7 +52,7 @@ test.describe('Error Handling', () => {
       // Re-read the game; if validation rejected, the name should NOT equal
       // the too-long value. If the backend accepted it silently, this test
       // still catches the regression by asserting the name is different.
-      const afterRes = await ctx.fetch(`http://localhost:5002/api/game/${game.id}`, {
+      const afterRes = await ctx.fetch(`${Services.Gameboard.API}/api/game/${game.id}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const after = await afterRes.json();

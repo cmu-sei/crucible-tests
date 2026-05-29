@@ -57,7 +57,7 @@ test.describe('Admin - Challenges', () => {
     const ctx: APIRequestContext = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
     try {
       // PUT /api/challengespec with updated fields
-      const putRes = await ctx.fetch('http://localhost:5002/api/challengespec', {
+      const putRes = await ctx.fetch(`${Services.Gameboard.API}/api/challengespec`, {
         method: 'PUT',
         headers: {
           Authorization: `Bearer ${gbToken}`,
@@ -85,7 +85,7 @@ test.describe('Admin - Challenges', () => {
       });
       expect(putRes.ok(), `PUT status: ${putRes.status()}`).toBe(true);
 
-      const getRes = await ctx.fetch(`http://localhost:5002/api/challengespec/${spec.id}`, {
+      const getRes = await ctx.fetch(`${Services.Gameboard.API}/api/challengespec/${spec.id}`, {
         headers: { Authorization: `Bearer ${gbToken}` },
       });
       const updated = await getRes.json();

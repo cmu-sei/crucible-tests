@@ -35,11 +35,26 @@ npx playwright test --project=chromium                # pick a browser project
 
 ### Service URLs — single source of truth
 
-All service URLs live in `/.env` at the repo root. Both sides read it:
+All service URLs live in env files at the repo root. Both sides read them:
 - Shell scripts (`run-tests.sh`, `setup.sh`) via `source`.
-- Playwright config and `shared-fixtures.ts` via `dotenv`.
+- Playwright config and `shared-fixtures.ts` via `dotenv`, gated through `load-env.ts`.
 
-In TypeScript, **always** reach URLs through the `Services` object exported from `shared-fixtures.ts` (e.g. `Services.Gameboard.UI`, `Services.Keycloak`). Never hardcode `http://localhost:4XXX` in a spec — if a port moves, `.env` is the only place that should change.
+The suite supports two deployment topologies and switches between them via the `CRUCIBLE_TARGET` env var (or `--target` flag on `run-tests.sh`):
+
+| `CRUCIBLE_TARGET` | File loaded     | Topology                                                                 |
+|-------------------|-----------------|--------------------------------------------------------------------------|
+| _(unset)_         | `.env`          | Back-compat — whatever the user has configured locally.                  |
+| `aspire`          | `.env.aspire`   | Aspire dev-container: each app on its own `localhost:<port>`.            |
+| `minikube`        | `.env.minikube` | Helm/Minikube: single ingress host (`https://crucible/<app>`) over TLS.  |
+
+`.env.local` (gitignored) is loaded last and overrides whichever profile was selected — use it for per-machine tweaks without editing the tracked files. Shell-exported vars beat all of the above.
+
+In TypeScript, **always** reach URLs through the `Services` object exported from `shared-fixtures.ts` (e.g. `Services.Gameboard.UI`, `Services.Keycloak`). Never hardcode `http://localhost:4XXX` or `https://crucible/...` in a spec — if a port or path moves, the env files are the only places that should change.
+
+**Minikube caveats:**
+- No Aspire dashboard exists, so `Services.AspireDashboard` is empty under `--target minikube` — anything driving the dashboard should be skipped.
+- `gameboard/db-helpers.ts` reads the Postgres password from the `crucible-postgres` Docker container via `docker inspect`. Under minikube the DB is `crucible-infra-postgresql-rw` inside the cluster — set `CRUCIBLE_POSTGRES_PASSWORD` (and port-forward 5432 yourself) or skip the affected tests.
+- A handful of tests still hardcode `localhost:4xxx` / `localhost:8443` regex matchers (mostly under `player/tests/`) — those won't pass against minikube without per-test fixes; convert them to use `Services.X.UI` if you need them green there.
 
 ### Authentication
 

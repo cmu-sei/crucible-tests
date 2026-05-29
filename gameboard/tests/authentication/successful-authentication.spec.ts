@@ -5,7 +5,7 @@
 // seed: seed.spec.ts
 
 import { test, expect } from '@playwright/test';
-import { Services } from '../../fixtures';
+import { Services, serviceUrlPattern } from '../../fixtures';
 
 // The Gameboard home page is public (unauthenticated users can browse).
 // Authentication is triggered by navigating to /admin (or any protected route),
@@ -38,7 +38,7 @@ test.describe('Authentication', () => {
     await page.getByRole('button', { name: 'Sign In' }).click();
 
     // Expect redirect back to Gameboard and authenticated navigation.
-    await page.waitForURL(/localhost:4202/, { timeout: 30000 });
+    await page.waitForURL(serviceUrlPattern(Services.Gameboard.UI), { timeout: 30000 });
     // After login, the top nav shows Log out — a clear sign of authentication.
     await expect(page.locator('a:has-text("Log out"), button:has-text("Log out")').first()).toBeVisible({ timeout: 15000 });
     await expect(page.locator('a:has-text("Admin")').first()).toBeVisible();

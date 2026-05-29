@@ -2,7 +2,7 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 import { test as base, Page } from '@playwright/test';
-import { Services, authenticateWithKeycloak } from '../shared-fixtures';
+import { Services, serviceUrlPattern, oidcStorageKey, authenticateWithKeycloak } from '../shared-fixtures';
 
 /**
  * Gameboard-specific fixtures
@@ -67,7 +67,7 @@ export async function authenticateGameboardWithKeycloak(
   }
 
   // Wait for redirect back to Gameboard.
-  await page.waitForURL(/localhost:4202/, { timeout: 30000 });
+  await page.waitForURL(serviceUrlPattern(Services.Gameboard.UI), { timeout: 30000 });
   // Confirm auth landed — "Log out" link is visible.
   await page
     .locator('a:has-text("Log out"), button:has-text("Log out")')
@@ -93,4 +93,4 @@ export const test = base.extend<GameboardFixtures>({
 });
 
 export { expect } from '@playwright/test';
-export { Services };
+export { Services, serviceUrlPattern, oidcStorageKey };

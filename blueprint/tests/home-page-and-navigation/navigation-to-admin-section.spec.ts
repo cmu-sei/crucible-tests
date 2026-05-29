@@ -4,13 +4,13 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Home Page and Navigation', () => {
   test('Navigation to Admin Section', async ({ blueprintAuthenticatedPage: page }) => {
 
     // expect: Successfully authenticated on home page
-    await expect(page).toHaveURL(/^http:\/\/localhost:4725/, { timeout: 30000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 30000 });
     const topbarText = page.locator('text=Event Dashboard');
     await expect(topbarText).toBeVisible({ timeout: 10000 });
 
