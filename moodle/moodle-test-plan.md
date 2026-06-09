@@ -2,7 +2,7 @@
 
 ## Application Overview
 
-The Moodle application is a Learning Management System (LMS) integration within the Crucible cybersecurity training platform. It provides course management, student enrollment, content delivery, assessment tools, and grading functionality. Running on port 8081, this Moodle instance may include custom plugins for integration with other Crucible services (Player, Gallery, etc.). This test plan covers authentication flows, course administration, student participation, content management, assessment and grading, user management, Crucible-specific integrations, and comprehensive error handling scenarios.
+The Moodle application is a Learning Management System (LMS) integration within the Crucible cybersecurity training platform. It provides course management, student enrollment, content delivery, assessment tools, and grading functionality. Running on port 8081, this Moodle instance includes custom plugins for integration with other Crucible services (Player, TopoMojo). This test plan covers authentication flows, course administration, student participation, content management, assessment and grading, user management, Crucible-specific integrations, and comprehensive error handling scenarios.
 
 ## Test Scenarios
 
@@ -1001,23 +1001,7 @@ The Moodle application is a Learning Management System (LMS) integration within 
     - expect: Course content shows integration with Player
     - expect: Links to Player exercises work correctly
 
-#### 7.4. Gallery Content Integration
-
-**File:** `tests/moodle/integration/gallery-content.spec.ts`
-
-**Steps:**
-  1. Log in as teacher
-    - expect: Teacher is authenticated
-  2. Check for Gallery integration plugin or repository
-    - expect: Gallery repository appears in file picker or content sources
-  3. Add activity that sources content from Gallery
-    - expect: Gallery content browser is available
-    - expect: Content from Gallery at http://localhost:4723 can be browsed
-  4. Select and embed Gallery content in course
-    - expect: Content is embedded successfully
-    - expect: Students can access Gallery-sourced materials
-
-#### 7.5. Custom Moodle Plugin - Verify Installation
+#### 7.4. Custom Moodle Plugin - Verify Installation
 
 **File:** `tests/moodle/integration/custom-plugin-verify.spec.ts`
 
