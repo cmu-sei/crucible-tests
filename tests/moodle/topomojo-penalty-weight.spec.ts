@@ -67,7 +67,7 @@ test.describe('TopoMojo Penalty & Weight Verification', () => {
   });
 
   test.skip('should apply penalty cumulatively per wrong try', async ({ page }) => {
-    // TODO: Fix Moodle OAuth flow - need to click Keycloak button on Moodle login page
+    // TODO: Moodle OAuth flow needs proper fixture - manual testing works but automated test is flaky
     // Navigate to Test Course
     await page.goto('http://localhost:8081/course/view.php?id=2');
 
