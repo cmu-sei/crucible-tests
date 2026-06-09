@@ -59,28 +59,44 @@ test.describe('TopoMojo Penalty & Weight Verification', () => {
   });
 
   test.skip('should apply penalty cumulatively per wrong try', async ({ page }) => {
-    // TODO: Implement
-    // Test scenario:
-    // - Question worth 1 point with penalty 0.1
-    // - Try 1: Wrong answer → Check → Expect 0.00/1.00
-    // - Try 2: Wrong answer → Check → Expect 0.00/1.00
-    // - Try 3: Correct answer → Check → Expect 0.80/1.00
-    //
-    // Steps:
-    // 1. Navigate to Test Course
-    // 2. Access TopoMojo activity (or create one with known workspace)
-    // 3. Launch Lab
-    // 4. Wait for questions to load
-    // 5. For first question:
-    //    a. Fill wrong answer (e.g., "list")
-    //    b. Click Check button
-    //    c. Verify mark shows "Mark 0.00 out of 1.00"
-    //    d. Fill wrong answer again (e.g., "dir")
-    //    e. Click Check button
-    //    f. Verify mark still shows "Mark 0.00 out of 1.00"
-    //    g. Fill correct answer (e.g., "ls")
-    //    h. Click Check button
-    //    i. Verify mark shows "Mark 0.80 out of 1.00"
+    // Navigate to Test Course
+    await page.goto('http://localhost:8081/course/view.php?id=2');
+
+    // Access existing TopoMojo activity "test"
+    await page.getByRole('link', { name: 'test TopoMojo' }).click();
+    await expect(page).toHaveURL(/\/mod\/topomojo\/view\.php\?id=2/);
+
+    // Launch Lab
+    await page.getByRole('button', { name: 'Launch Lab' }).click();
+
+    // Wait for challenge page with questions
+    await expect(page).toHaveURL(/\/mod\/topomojo\/challenge\.php/);
+    await page.waitForSelector('.que.mojomatch', { timeout: 30000 });
+
+    // Find first question
+    const firstQuestion = page.locator('.que.mojomatch').first();
+    const answerInput = firstQuestion.locator('input[type="text"]');
+    const checkButton = firstQuestion.locator('input[type="submit"][name*="submit"]');
+
+    // Try 1: Wrong answer
+    await answerInput.fill('list');
+    await checkButton.click();
+    await page.waitForLoadState('networkidle');
+    await expect(firstQuestion.locator('.grade')).toContainText('Mark 0.00 out of');
+
+    // Try 2: Wrong answer again
+    await answerInput.fill('dir');
+    await checkButton.click();
+    await page.waitForLoadState('networkidle');
+    await expect(firstQuestion.locator('.grade')).toContainText('Mark 0.00 out of');
+
+    // Try 3: Correct answer (assuming "ls" is correct)
+    await answerInput.fill('ls');
+    await checkButton.click();
+    await page.waitForLoadState('networkidle');
+
+    // Verify penalty applied: 1.0 - (0.1 × 2) = 0.80
+    await expect(firstQuestion.locator('.grade')).toContainText('Mark 0.80 out of 1.00');
   });
 
   test.skip('should show Current Score correctly with penalties', async ({ page }) => {
