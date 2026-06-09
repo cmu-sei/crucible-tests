@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { Services } from '../../shared-fixtures';
 
 /**
  * TopoMojo Penalty & Weight Verification Tests
@@ -21,10 +22,10 @@ test.describe('TopoMojo Penalty & Weight Verification', () => {
 
   test.beforeEach(async ({ page }) => {
     // Navigate to Moodle
-    await page.goto('http://localhost:8081');
+    await page.goto(Services.Moodle);
 
-    // Login via Keycloak OAuth
-    await page.getByRole('button', { name: 'Log in' }).click();
+    // Login via Keycloak OAuth - "Log in" is a link, not a button
+    await page.getByRole('link', { name: 'Log in' }).click();
     await page.getByLabel('Username or email').fill('admin');
     await page.getByLabel('Password').fill('admin');
     await page.getByRole('button', { name: 'Sign In' }).click();
@@ -58,7 +59,7 @@ test.describe('TopoMojo Penalty & Weight Verification', () => {
     // - Missing penalty → defaults to 0.1
   });
 
-  test.skip('should apply penalty cumulatively per wrong try', async ({ page }) => {
+  test('should apply penalty cumulatively per wrong try', async ({ page }) => {
     // Navigate to Test Course
     await page.goto('http://localhost:8081/course/view.php?id=2');
 
