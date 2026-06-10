@@ -27,15 +27,31 @@ The TopoMojo API must be configured in Moodle:
 Tests use workspace ID: `11d9f0cb5ad64e27982a181e116f48b8` (Moodle Test Workspace - Variants)
 
 This workspace must exist in TopoMojo with:
-- At least one challenge with questions
-- Known penalty values (e.g., 0.1)
-- Known weight values (e.g., 1 point per question)
-- Multiple variants (for variant testing)
+- A challenge with **static** answers (no `##transform##` tokens). The reference
+  workspace's Variant 2 has: Q1=`cp`, Q2=`mv`, Q3=`test`.
+- penalty `0.1` and weight `1` on the graded questions.
+- Multiple variants (for variant testing).
 
-### 4. Test Course
-Tests assume a Moodle course exists at `http://localhost:8081/course/view.php?id=2` with:
-- Course name: "Test Course"
-- At least one TopoMojo activity created
+### 4. One activity per behaviour mode
+The behaviour tests need an activity pre-configured for each
+`preferredbehaviour`, all pointing at the workspace above:
+- **interactive** with `submissions` >= 3 (so a 3rd, correct try is allowed)
+- **immediatefeedback**
+- **deferredfeedback**
+
+Put their course-module IDs into `ACTIVITY_IDS` in the spec.
+
+> **Why per-mode activities:** the grading behaviour is fixed into an attempt's
+> question-usage when it starts, so the same activity can't be re-used across
+> modes without deleting attempts and changing the setting. Separate activities
+> keep each test independent.
+
+### Gamespace requirement (important)
+mojomatch resolves the correct answer from the **deployed gamespace's** cloned
+challenge, so every attempt deploys real VMs (~1 min each, and can fail for
+hypervisor reasons unrelated to grading). There is no preview/offline path.
+This is why the specs are `.skip()` by default — they are not suitable for
+unattended CI without a reliable hypervisor and seeded activities.
 
 ## Running Tests
 
@@ -46,7 +62,7 @@ npx playwright test tests/moodle/topomojo-penalty-weight.spec.ts
 
 ### Specific Test
 ```bash
-npx playwright test tests/moodle/topomojo-penalty-weight.spec.ts -g "penalty cumulatively"
+npx playwright test tests/moodle/topomojo-penalty-weight.spec.ts -g "cumulative penalty"
 ```
 
 ### With Headed Browser (see what happens)
@@ -61,40 +77,34 @@ npx playwright test tests/moodle/topomojo-penalty-weight.spec.ts --debug
 
 ## Test Status
 
-All tests are currently marked `.skip()` because they require:
-- [ ] TopoMojo API properly configured in Moodle
-- [ ] Test workspace created in TopoMojo with known question data
-- [ ] Test course and activity pre-created in Moodle
-- [ ] Shared test fixtures for Moodle auth (similar to other Crucible apps)
+All tests are `.skip()` by default. The scenarios they encode were **verified
+manually via Playwright on 2026-06-09** against a live stack — the assertions
+(`Mark 0.80 out of 1.00`, `Tries remaining`, no Check button in deferred, etc.)
+are the actual observed UI, not guesses. They stay skipped because they need a
+live gamespace per attempt (see "Gamespace requirement" above) plus seeded
+per-mode activities, which this repo does not provision.
 
-## Implementation Checklist
+To enable: satisfy prerequisites 1-4 above, fill in `ACTIVITY_IDS` in the spec,
+and remove `.skip` from the relevant tests.
 
-To enable these tests:
+### Verified behaviour (what these tests assert)
 
-1. **Create shared Moodle fixtures** (`tests/moodle/moodle-fixtures.ts`)
-   - Moodle login helper (Keycloak OAuth flow)
-   - Course navigation helpers
-   - Activity creation helpers
+| Mode | Behaviour |
+|------|-----------|
+| interactive | wrong → 0.00 with `Tries remaining` decrementing; correct after 2 wrong = **0.80** (`1 - 0.1*2`), marked Correct; correct first try = 1.00 |
+| immediatefeedback | single graded try; wrong = 0.00 "Incorrect", no retry, no penalty |
+| deferredfeedback | no Check buttons; answers saved on Submit Quiz; graded at finish, no penalty |
 
-2. **Create test data setup** (`tests/moodle/moodle-test-data.setup.ts`)
-   - Create test course if not exists
-   - Create test TopoMojo activity with known workspace
-   - Configure activity with interactive behavior
+## Optional future work
 
-3. **Add TopoMojo API helper** (`tests/moodle/topomojo-api.ts`)
-   - Fetch challenge JSON from TopoMojo API
-   - Get expected weight/penalty values
-   - Compare against Moodle imported values
-
-4. **Update tests to use fixtures**
-   - Replace manual login with `moodleAuth` fixture
-   - Use shared helpers for navigation
-   - Add proper waits for gamespace deployment
-
-5. **Add database verification**
-   - Query `mdl_question` table after import
-   - Verify `defaultmark` and `penalty` fields
-   - Requires database connection from Playwright
+- **Shared Moodle auth fixture** — `loginToMoodle()` in the spec could move to a
+  reusable fixture once a second Moodle spec exists.
+- **DB assertions for import** — verify `mdl_question.defaultmark` / `penalty`
+  after import. Note weight is imported **as-is** (TopoMojo weight is a
+  normalized share of the challenge; the plugin scales the activity grade by
+  ratio, so weight `1` → defaultmark `1`). Requires DB access from Playwright.
+- **Seed helper** — a setup script that creates the per-mode activities so the
+  tests can run without manual configuration.
 
 ## Test Plan
 

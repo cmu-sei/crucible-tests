@@ -1,159 +1,160 @@
 import { test, expect } from '@playwright/test';
-import { Services, authenticateWithKeycloak } from '../../shared-fixtures';
+import { Services } from '../../shared-fixtures';
 
 /**
- * TopoMojo Penalty & Weight Verification Tests
+ * TopoMojo penalty / weight / question-behaviour verification.
  *
- * Purpose: Verify that penalty and weight values from TopoMojo challenge JSON
- * are correctly imported into Moodle questions and applied during quiz grading.
+ * These tests reproduce the manual Playwright verification performed on
+ * 2026-06-09 against a live stack. They are kept `.skip()` because they
+ * require environment state that this repo does not provision:
  *
- * Data Flow:
- * 1. TopoMojo Challenge JSON → questionmanager.php imports weight/penalty
- * 2. Moodle stores in mdl_question table (defaultmark, penalty fields)
- * 3. behaviour/mojomatch applies penalty during grading
+ *   1. A LIVE GAMESPACE. mojomatch grades by pulling the correct answer from
+ *      the deployed gamespace's cloned challenge (get_rightanswer_topomojo),
+ *      so every attempt deploys real VMs on the hypervisor (~1 min, and can
+ *      fail for infra reasons unrelated to grading). There is no preview path.
  *
- * Formula: final_score = (correct_fraction - (penalty × previous_wrong_tries)) × defaultmark
+ *   2. SEEDED ACTIVITY STATE. The grading behaviour depends on the activity's
+ *      `preferredbehaviour` and `submissions` settings, and a question
+ *      `penalty > 0`. The manual run seeded penalty 0.1 (matching the real
+ *      challenge) and switched `preferredbehaviour` per test via SQL. A CI
+ *      run needs an activity pre-configured per mode, or admin setup steps.
+ *
+ * To enable: provision a course with one TopoMojo activity per behaviour mode
+ * (interactive+submissions>=3, immediatefeedback, deferredfeedback), all on a
+ * workspace whose challenge defines penalty 0.1 and STATIC answers (no ##transforms##),
+ * then remove `.skip` and set ACTIVITY_IDS / answers below.
+ *
+ * Reference workspace used for manual verification:
+ *   11d9f0cb5ad64e27982a181e116f48b8  "Moodle Test Workspace - Variants"
+ *   Variant 2 answers: Q1=cp, Q2=mv, Q3=test ; weight 1, penalty 0.1
+ *
+ * See /workspaces/crucible-development/TODO/topomojo-penalty-weight-verification.md
  */
 
-test.describe('TopoMojo Penalty & Weight Verification', () => {
+test.describe('TopoMojo penalty / weight / behaviour', () => {
 
-  // Test workspace with known penalty/weight values
-  const TEST_WORKSPACE_ID = '11d9f0cb5ad64e27982a181e116f48b8'; // Moodle Test Workspace - Variants
+  // Course-module IDs of activities pre-configured per behaviour mode.
+  // Fill these in once the seeded activities exist.
+  const ACTIVITY_IDS = {
+    interactive: 0,        // preferredbehaviour=interactive, submissions>=3
+    immediatefeedback: 0,  // preferredbehaviour=immediatefeedback
+    deferredfeedback: 0,   // preferredbehaviour=deferredfeedback
+  };
 
-  test.beforeEach(async ({ page }) => {
-    // Navigate to Moodle
+  // Variant-2 answers for the reference workspace.
+  const ANSWERS = { q1: 'cp', q2: 'mv', q3: 'test' };
+  const WRONG = 'zz';
+
+  /**
+   * Moodle login via the Keycloak OAuth button on Moodle's own login page.
+   * Moodle home → "Log in" link → "Crucible Keycloak" image → Keycloak form
+   * → redirect back to /my/. Verified working during manual testing.
+   */
+  async function loginToMoodle(page) {
     await page.goto(Services.Moodle);
-
-    // Moodle shows its own login page - click "Log in" link
     await page.getByRole('link', { name: 'Log in' }).click();
-
-    // Moodle login page shows Keycloak OAuth option as clickable image
-    // Click the Keycloak image/link to redirect to Keycloak
     await page.click('img[alt="Crucible Keycloak"]');
-
-    // Now we're on Keycloak - fill login form
-    await page.waitForSelector('input[name="username"]', { timeout: 10000 });
+    await page.waitForSelector('input[name="username"]', { timeout: 30000 });
     await page.fill('input[name="username"]', 'admin');
     await page.fill('input[name="password"]', 'admin');
     await page.click('button:has-text("Sign In"), input[type="submit"]');
+    await expect(page).toHaveURL(/\/my\//, { timeout: 30000 });
+  }
 
-    // Wait for redirect back to Moodle dashboard
-    await expect(page).toHaveURL(/\/my\//);
-  });
-
-  test.skip('should import weight correctly from TopoMojo challenge', async ({ page }) => {
-    // TODO: Implement
-    // 1. Get question data from TopoMojo API (need auth)
-    // 2. Create Moodle activity with TEST_WORKSPACE_ID
-    // 3. Navigate to Questions page
-    // 4. Verify mdl_question.defaultmark matches expected weight
-    //
-    // Expected behavior:
-    // - Integer weight (1) → defaultmark = 1
-    // - Decimal weight (0.5) → defaultmark = 5 (multiplied by 10)
-    // - Zero/missing weight → defaultmark = 1 (fallback)
-  });
-
-  test.skip('should import penalty correctly from TopoMojo challenge', async ({ page }) => {
-    // TODO: Implement
-    // 1. Get question data from TopoMojo API
-    // 2. Create Moodle activity with TEST_WORKSPACE_ID
-    // 3. Navigate to Questions page → Edit question
-    // 4. Verify "Penalty for each incorrect try" field matches TopoMojo penalty
-    //
-    // Expected behavior:
-    // - TopoMojo penalty 0.1 → Moodle penalty 0.1 (10%)
-    // - Missing penalty → defaults to 0.1
-  });
-
-  test.skip('should apply penalty cumulatively per wrong try', async ({ page }) => {
-    // TODO: Moodle OAuth flow needs proper fixture - manual testing works but automated test is flaky
-    // Navigate to Test Course
-    await page.goto('http://localhost:8081/course/view.php?id=2');
-
-    // Access existing TopoMojo activity "test"
-    await page.getByRole('link', { name: 'test TopoMojo' }).click();
-    await expect(page).toHaveURL(/\/mod\/topomojo\/view\.php\?id=2/);
-
-    // Launch Lab
+  /**
+   * Launch the lab for an activity and open its challenge page.
+   * Deploys a gamespace - slow. Returns once the first question is visible.
+   */
+  async function launchAndOpenChallenge(page, cmid: number) {
+    await page.goto(`${Services.Moodle}/mod/topomojo/view.php?id=${cmid}`);
     await page.getByRole('button', { name: 'Launch Lab' }).click();
+    await page.getByRole('button', { name: 'Confirm' }).click();
+    // Gamespace deployment - wait for the lab timer / End Lab to appear.
+    await expect(page.getByRole('button', { name: 'End Lab' })).toBeVisible({ timeout: 180000 });
+    await page.goto(`${Services.Moodle}/mod/topomojo/challenge.php?id=${cmid}`);
+    await expect(page.getByRole('heading', { name: 'Question 1' })).toBeVisible({ timeout: 30000 });
+  }
 
-    // Wait for challenge page with questions
-    await expect(page).toHaveURL(/\/mod\/topomojo\/challenge\.php/);
-    await page.waitForSelector('.que.mojomatch', { timeout: 30000 });
+  // A question block, located by its "Question N" heading's container.
+  function question(page, n: number) {
+    return page.locator('.que', { has: page.getByRole('heading', { name: `Question ${n}`, exact: true }) });
+  }
 
-    // Find first question
-    const firstQuestion = page.locator('.que.mojomatch').first();
-    const answerInput = firstQuestion.locator('input[type="text"]');
-    const checkButton = firstQuestion.locator('input[type="submit"][name*="submit"]');
+  test.skip('interactive: cumulative penalty, correct-after-wrong scores 1 - penalty*tries', async ({ page }) => {
+    await loginToMoodle(page);
+    await launchAndOpenChallenge(page, ACTIVITY_IDS.interactive);
 
-    // Try 1: Wrong answer
-    await answerInput.fill('list');
-    await checkButton.click();
-    await page.waitForLoadState('networkidle');
-    await expect(firstQuestion.locator('.grade')).toContainText('Mark 0.00 out of');
+    const q1 = question(page, 1);
+    const answer = q1.getByRole('textbox', { name: /Answer/ });
+    const check = q1.getByRole('button', { name: /Check Question 1/ });
 
-    // Try 2: Wrong answer again
-    await answerInput.fill('dir');
-    await checkButton.click();
-    await page.waitForLoadState('networkidle');
-    await expect(firstQuestion.locator('.grade')).toContainText('Mark 0.00 out of');
+    // Try 1: wrong -> 0.00, one try consumed, still active.
+    await answer.fill(WRONG);
+    await check.click();
+    await expect(q1).toContainText('Mark 0.00 out of 1.00');
+    await expect(q1).toContainText('Tries remaining: 2');
 
-    // Try 3: Correct answer (assuming "ls" is correct)
-    await answerInput.fill('ls');
-    await checkButton.click();
-    await page.waitForLoadState('networkidle');
+    // Try 2: wrong again -> still 0.00, another try consumed.
+    await answer.fill(WRONG + 'z');
+    await check.click();
+    await expect(q1).toContainText('Mark 0.00 out of 1.00');
+    await expect(q1).toContainText('Tries remaining: 1');
 
-    // Verify penalty applied: 1.0 - (0.1 × 2) = 0.80
-    await expect(firstQuestion.locator('.grade')).toContainText('Mark 0.80 out of 1.00');
+    // Try 3: correct after 2 wrong -> 1 - 0.1*2 = 0.80, marked Correct.
+    await answer.fill(ANSWERS.q1);
+    await check.click();
+    await expect(q1).toContainText('Mark 0.80 out of 1.00');
+    await expect(q1).toContainText('Correct');
+
+    // Cumulative live score box reflects the penalized total.
+    await expect(page.getByRole('heading', { name: 'Current Score' })).toBeVisible();
+    await expect(page.locator('body')).toContainText('0.8 out of 3');
   });
 
-  test.skip('should show Current Score correctly with penalties', async ({ page }) => {
-    // TODO: Implement
-    // Verify the "Current Score" box displays correct cumulative score
-    // after checking questions with penalties applied
-    //
-    // Expected: Current Score shows sum of all penalized question scores
+  test.skip('interactive: correct on first try scores full marks (no spurious penalty)', async ({ page }) => {
+    await loginToMoodle(page);
+    await launchAndOpenChallenge(page, ACTIVITY_IDS.interactive);
+
+    const q2 = question(page, 2);
+    await q2.getByRole('textbox', { name: /Answer/ }).fill(ANSWERS.q2);
+    await q2.getByRole('button', { name: /Check Question 2/ }).click();
+    await expect(q2).toContainText('Mark 1.00 out of 1.00');
+    await expect(q2).toContainText('Correct');
   });
 
-  test.skip('should calculate final grade with penalties', async ({ page }) => {
-    // TODO: Implement
-    // Complete full attempt with penalties, submit quiz
-    // Verify final grade on Review Attempts page matches expected calculation
+  test.skip('immediate feedback: single try, wrong answer finishes with no penalty/retry', async ({ page }) => {
+    await loginToMoodle(page);
+    await launchAndOpenChallenge(page, ACTIVITY_IDS.immediatefeedback);
+
+    const q1 = question(page, 1);
+    await q1.getByRole('textbox', { name: /Answer/ }).fill(WRONG);
+    await q1.getByRole('button', { name: /Check Question 1/ }).click();
+
+    // Graded once, marked Incorrect, no retry: the Check button is gone and
+    // there is no "Tries remaining" counter.
+    await expect(q1).toContainText('Mark 0.00 out of 1.00');
+    await expect(q1).toContainText('Incorrect');
+    await expect(q1).not.toContainText('Tries remaining');
+    await expect(q1.getByRole('button', { name: /Check Question 1/ })).toHaveCount(0);
   });
 
-  test.skip('should handle different behavior modes', async ({ page }) => {
-    // TODO: Implement
-    // Test penalty application in:
-    // - interactive (Check button per question)
-    // - immediatefeedback (Check button per question)
-    // - adaptive (similar to interactive)
-    // - deferredfeedback (no Check buttons, no penalties)
+  test.skip('deferred feedback: no Check buttons; answers saved on Submit Quiz, graded at finish', async ({ page }) => {
+    await loginToMoodle(page);
+    await launchAndOpenChallenge(page, ACTIVITY_IDS.deferredfeedback);
+
+    // No per-question Check button in deferred mode.
+    await expect(page.getByRole('button', { name: /Check Question/ })).toHaveCount(0);
+
+    // Answer all questions, then Submit Quiz (the only save point in deferred mode).
+    await question(page, 1).getByRole('textbox', { name: /Answer/ }).fill(ANSWERS.q1);
+    await question(page, 2).getByRole('textbox', { name: /Answer/ }).fill(ANSWERS.q2);
+    await question(page, 3).getByRole('textbox', { name: /Answer/ }).fill(ANSWERS.q3);
+    await page.getByRole('button', { name: 'Submit Quiz' }).click();
+
+    // Review page: each question saved and graded correct, no penalty.
+    await expect(page).toHaveURL(/viewattempt\.php/);
+    await expect(question(page, 1)).toContainText('Mark 1.00 out of 1.00');
+    await expect(question(page, 2)).toContainText('Mark 1.00 out of 1.00');
+    await expect(question(page, 3)).toContainText('Mark 1.00 out of 1.00');
   });
 });
-
-/**
- * Notes for Implementation:
- *
- * 1. TopoMojo API Integration:
- *    - Need to fetch challenge JSON to get expected weight/penalty
- *    - Requires TopoMojo auth token
- *    - API: GET /api/workspace/{workspaceId}/challenge
- *
- * 2. Database Verification:
- *    - Query mdl_question table after import
- *    - SELECT defaultmark, penalty FROM mdl_question WHERE qtype='mojomatch'
- *    - Requires DB access from Playwright (not available by default)
- *
- * 3. UI Selectors:
- *    - Question mark: text matching "Mark X.XX out of Y.YY"
- *    - Current Score box: alert with heading "Current Score"
- *    - Check button: input[type="submit"][name*="submit"]
- *
- * 4. Test Data Setup:
- *    - Create dedicated test workspace in TopoMojo
- *    - Known questions with specific weight/penalty values
- *    - Simple answers (no random transforms)
- *
- * See: /workspaces/crucible-development/TODO/topomojo-penalty-weight-verification.md
- */
