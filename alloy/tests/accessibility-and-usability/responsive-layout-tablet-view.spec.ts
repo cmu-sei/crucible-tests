@@ -24,7 +24,7 @@ test.describe('Accessibility and Usability', () => {
     await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
 
     // expect: Sidebar and navigation work appropriately
-    await expect(page.getByRole('link', { name: 'Event Templates' })).toBeVisible();
+    await expect(page.locator('mat-list').getByText('Event Templates')).toBeVisible();
     await expect(page.locator('mat-list').getByText('Events')).toBeVisible();
   });
 });
