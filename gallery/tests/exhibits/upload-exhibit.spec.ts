@@ -4,30 +4,35 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../fixtures';
 import { authenticateGalleryWithKeycloak } from '../../fixtures';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
 test.describe('Exhibit Management', () => {
-  test('Upload Exhibit from JSON', async ({ page }) => {
+  test('Upload Exhibit from JSON', async ({ page, seededExhibit }) => {
     await authenticateGalleryWithKeycloak(page);
     await page.getByRole('button', { name: 'Administration' }).click();
     await expect(page).toHaveTitle('Gallery Admin');
 
-    // Navigate to Exhibits section and select a collection with exhibits
+    // Navigate to Exhibits section and select the seeded collection
     await page.locator('mat-list-item').filter({ hasText: 'Exhibits' }).getByRole('button').click();
     const collectionDropdown = page.getByRole('combobox', { name: 'Select a Collection' });
     await collectionDropdown.click();
-    const firstOption = page.getByRole('option').first();
-    await firstOption.click();
 
-    // First, download an exhibit to use as upload source
-    // Get all table rows and find the first one that contains exhibit data (not header)
+    // Select the seeded collection by name
+    const seededOption = page.getByRole('option', { name: seededExhibit.collectionName });
+    await seededOption.click();
+
+    // Wait for the exhibits table to load with the seeded exhibit
+    await page.waitForTimeout(1000); // Brief wait for table to populate
+
+    // First, download the seeded exhibit to use as upload source
+    // Get all table rows and find the one with our seeded exhibit
     const tableRows = page.getByRole('table').getByRole('row');
-    // Find first row that has action buttons (indicates it's a data row, not header)
-    const dataRow = tableRows.filter({ has: page.locator('button[title*="Download"]') }).first();
+    // Find the row containing the seeded exhibit name
+    const dataRow = tableRows.filter({ hasText: seededExhibit.exhibitName }).first();
     await expect(dataRow).toBeVisible();
 
     const downloadPromise = page.waitForEvent('download');
@@ -48,6 +53,8 @@ test.describe('Exhibit Management', () => {
 
     // expect: The exhibit is imported successfully
     // expect: The new exhibit appears in the list
+    // Wait briefly for upload to complete
+    await page.waitForTimeout(2000);
 
     // Cleanup: Remove temp file
     try { fs.unlinkSync(tempPath); } catch { /* ignore */ }

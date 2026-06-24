@@ -4,18 +4,16 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
-import { authenticateGalleryWithKeycloak } from '../../fixtures';
+import { test, expect } from '../../fixtures';
+import { authenticateGalleryWithKeycloak, navigateToFirstExhibit } from '../../fixtures';
 
 test.describe('My Exhibits Landing Page', () => {
-  test('My Exhibits Navigation to Exhibit', async ({ page }) => {
+  test('My Exhibits Navigation to Exhibit', async ({ page, seededExhibit }) => {
     await authenticateGalleryWithKeycloak(page);
     await expect(page.getByRole('table')).toBeVisible();
 
-    // 1. Click on an exhibit name link in the table
-    const firstExhibitLink = page.getByRole('cell').getByRole('link').first();
-    await expect(firstExhibitLink).toBeVisible();
-    await firstExhibitLink.click();
+    // 1. Click on an exhibit name in the table
+    await navigateToFirstExhibit(page, seededExhibit.exhibitName);
 
     // expect: User is navigated to the exhibit's view
     // expect: URL updates to include '?exhibit={exhibitId}'

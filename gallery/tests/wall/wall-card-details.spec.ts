@@ -4,20 +4,19 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
-import { authenticateGalleryWithKeycloak } from '../../fixtures';
+import { test, expect } from '../../fixtures';
+import { authenticateGalleryWithKeycloak, navigateToFirstExhibit } from '../../fixtures';
 
 test.describe('Wall View Functionality', () => {
-  test('Wall Card Details Navigation', async ({ page }) => {
+  // Wall view requires TeamCards with isShownOnWall:true to render cards (fixture now creates them)
+  test('Wall Card Details Navigation', async ({ page, seededExhibit }) => {
     await authenticateGalleryWithKeycloak(page);
     await expect(page.getByRole('table')).toBeVisible();
 
     // Navigate to an exhibit's Wall view
-    const exhibitLink = page.getByRole('cell').getByRole('link').first();
-    await exhibitLink.click();
-    await expect(page).toHaveURL(/\?exhibit=/);
+    await navigateToFirstExhibit(page, seededExhibit.exhibitName);
 
-    // Navigate to Wall if not there already
+    // Navigate to Wall view
     const wallButton = page.getByRole('button', { name: 'Wall' });
     if (await wallButton.isVisible().catch(() => false)) {
       await wallButton.click();

@@ -4,19 +4,17 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
-import { authenticateGalleryWithKeycloak } from '../../fixtures';
+import { test, expect } from '../../fixtures';
+import { authenticateGalleryWithKeycloak, navigateToFirstExhibit } from '../../fixtures';
 
 test.describe('Wall View Functionality', () => {
-  test('Wall Page Display', async ({ page }) => {
+  test('Wall Page Display', async ({ page, seededExhibit }) => {
     // 1. Log in and navigate to an exhibit from the My Exhibits page
     await authenticateGalleryWithKeycloak(page);
     await expect(page.getByRole('table')).toBeVisible();
 
     // Click on an exhibit to enter its view
-    const exhibitLink = page.getByRole('cell').getByRole('link').first();
-    await exhibitLink.click();
-    await expect(page).toHaveURL(/\?exhibit=/);
+    await navigateToFirstExhibit(page, seededExhibit.exhibitName);
 
     // Navigate to the Wall view if not already there
     const wallButton = page.getByRole('button', { name: 'Wall' });

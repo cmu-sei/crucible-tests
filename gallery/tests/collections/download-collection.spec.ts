@@ -22,6 +22,11 @@ test.describe('Collection Management', () => {
     await createDialog.getByLabel('Name').fill(testCollectionName);
     await createDialog.getByLabel('Description').fill('Collection for download test');
     await createDialog.getByRole('button', { name: 'Save' }).click();
+    await expect(createDialog).not.toBeVisible();
+
+    // Search for the newly created collection (handles pagination)
+    const searchField = page.getByRole('textbox', { name: 'Search' });
+    await searchField.fill(testCollectionName);
     await expect(page.getByText(testCollectionName)).toBeVisible();
 
     // 1. Click the Download button (download icon) on a collection row

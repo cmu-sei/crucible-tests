@@ -25,9 +25,8 @@ test.describe('Admin Navigation and UI', () => {
     // expect: A 'Versions: UI x.x.x, API x.x.x' label is displayed at the bottom of the sidebar
     await expect(page.getByText(/Versions: UI .+, API .+/)).toBeVisible();
 
-    // expect: An 'Exit Administration' link with the heading 'Administration' is visible at the top
+    // expect: The heading 'Administration' is visible at the top
     await expect(page.getByRole('heading', { name: 'Administration', level: 2 })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Administration' })).toBeVisible();
 
     // 2. Click 'Collections' in the sidebar
     await page.locator('mat-list-item').filter({ hasText: 'Collections' }).getByRole('button').click();

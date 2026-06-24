@@ -4,11 +4,10 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
-import { authenticateGalleryWithKeycloak } from '../../fixtures';
+import { test, expect, authenticateGalleryWithKeycloak } from '../../fixtures';
 
 test.describe('My Exhibits Landing Page', () => {
-  test('My Exhibits Search', async ({ page }) => {
+  test('My Exhibits Search', async ({ page, seededExhibit }) => {
     await authenticateGalleryWithKeycloak(page);
     await expect(page.getByRole('table')).toBeVisible();
 
@@ -19,13 +18,8 @@ test.describe('My Exhibits Landing Page', () => {
     await expect(searchField).toBeVisible();
 
     // 2. Enter a search term that matches an exhibit name
-    // Use a term from the first visible exhibit row to ensure a match
-    const firstDataRow = page.getByRole('row').nth(1);
-    await expect(firstDataRow).toBeVisible();
-    const firstLink = firstDataRow.getByRole('link');
-    const exhibitName = await firstLink.textContent();
-    // Pick a meaningful substring (first word) for searching
-    const searchTerm = exhibitName!.trim().split(' ')[0];
+    // Use the seeded exhibit name to ensure a match
+    const searchTerm = seededExhibit.exhibitName.split(' ')[0];
     await searchField.fill(searchTerm);
 
     // expect: The table filters to show only matching exhibits

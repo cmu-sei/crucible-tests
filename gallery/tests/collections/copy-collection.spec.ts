@@ -22,6 +22,11 @@ test.describe('Collection Management', () => {
     await createDialog.getByLabel('Name').fill(testCollectionName);
     await createDialog.getByLabel('Description').fill('Collection to be copied');
     await createDialog.getByRole('button', { name: 'Save' }).click();
+    await expect(createDialog).not.toBeVisible();
+
+    // Search for the newly created collection (handles pagination)
+    const searchField = page.getByRole('textbox', { name: 'Search' });
+    await searchField.fill(testCollectionName);
     await expect(page.getByText(testCollectionName)).toBeVisible();
 
     // 1. Click the Copy button (clipboard icon) on a collection row
@@ -29,7 +34,7 @@ test.describe('Collection Management', () => {
     await row.getByRole('button', { name: `Copy ${testCollectionName}` }).click();
 
     // expect: A new collection is created as a copy of the original
-    // expect: The copied collection appears in the list
+    // expect: The copied collection appears in the list (search keeps it visible)
     // The copy typically gets a name like "Copy of <original>" or similar
     // Wait for a new row to appear
     await expect(page.getByRole('row').filter({ hasText: testCollectionName })).toHaveCount(2, { timeout: 10000 }).catch(() => {

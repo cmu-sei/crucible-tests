@@ -4,24 +4,27 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
-import { authenticateGalleryWithKeycloak } from '../../fixtures';
+import { test, expect } from '../../fixtures';
+import { authenticateGalleryWithKeycloak, navigateToFirstExhibit } from '../../fixtures';
 
 test.describe('Wall View Functionality', () => {
-  test('Wall Advance Move and Inject', async ({ page }) => {
+  // Wall view requires TeamCards with isShownOnWall:true to render cards (fixture now creates them)
+  test('Wall Advance Move and Inject', async ({ page, seededExhibit }) => {
     await authenticateGalleryWithKeycloak(page);
     await expect(page.getByRole('table')).toBeVisible();
 
     // Navigate to an exhibit's Wall view
-    const exhibitLink = page.getByRole('cell').getByRole('link').first();
-    await exhibitLink.click();
-    await expect(page).toHaveURL(/\?exhibit=/);
+    await navigateToFirstExhibit(page, seededExhibit.exhibitName);
 
+    // Navigate to Wall view
     const wallButton = page.getByRole('button', { name: 'Wall' });
     if (await wallButton.isVisible().catch(() => false)) {
       await wallButton.click();
     }
     await expect(page).toHaveTitle('Gallery Wall');
+
+    // Wait for the page to fully load and the Move/Inject indicator to appear
+    await expect(page.getByText(/Move \d+, Inject \d+/)).toBeVisible({ timeout: 10000 });
 
     // 1. Navigate to an exhibit's Wall view that has the Advance button enabled
     const advanceButton = page.getByRole('button', { name: 'Advance' });

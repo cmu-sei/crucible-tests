@@ -23,6 +23,11 @@ test.describe('Collection Management', () => {
     await createDialog.getByLabel('Name').fill(testCollectionName);
     await createDialog.getByLabel('Description').fill('To be edited');
     await createDialog.getByRole('button', { name: 'Save' }).click();
+    await expect(createDialog).not.toBeVisible();
+
+    // Search for the newly created collection (handles pagination)
+    const searchField = page.getByRole('textbox', { name: 'Search' });
+    await searchField.fill(testCollectionName);
     await expect(page.getByText(testCollectionName)).toBeVisible();
 
     // 1. Click the Edit button (pencil icon) on the collection row
@@ -44,6 +49,11 @@ test.describe('Collection Management', () => {
 
     // 3. Click 'Save' button
     await editDialog.getByRole('button', { name: 'Save' }).click();
+    await expect(editDialog).not.toBeVisible();
+
+    // Search for the updated collection (handles pagination)
+    await searchField.clear();
+    await searchField.fill(updatedName);
 
     // expect: Collection is updated successfully
     // expect: Changes are reflected in the collections list

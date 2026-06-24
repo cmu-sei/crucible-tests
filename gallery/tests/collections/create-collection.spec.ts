@@ -30,6 +30,13 @@ test.describe('Collection Management', () => {
     await dialog.getByRole('button', { name: 'Save' }).click();
 
     // expect: Collection is created successfully
+    // expect: Dialog closes
+    await expect(dialog).not.toBeVisible();
+
+    // Search for the newly created collection (handles pagination if >10 collections exist)
+    const searchField = page.getByRole('textbox', { name: 'Search' });
+    await searchField.fill(testCollectionName);
+
     // expect: New collection appears in the collections list
     await expect(page.getByText(testCollectionName)).toBeVisible();
 

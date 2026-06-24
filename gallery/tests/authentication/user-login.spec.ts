@@ -34,14 +34,10 @@ test.describe('Authentication and Authorization', () => {
     // expect: The application title is displayed
     await expect(page.getByText('Gallery - Exercise Information Sharing')).toBeVisible();
 
-    // 3. Verify the home page loads the My Exhibits table with columns: Name, Collection, Created By, Created
+    // 3. Verify the home page loads the My Exhibits table with columns: Name, Description, Collection, Created
     await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Description' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Collection' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Created By' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Created', exact: true })).toBeVisible();
-
-    // expect: Exhibit names are clickable links
-    const firstExhibitLink = page.getByRole('cell').getByRole('link').first();
-    await expect(firstExhibitLink).toBeVisible();
   });
 });

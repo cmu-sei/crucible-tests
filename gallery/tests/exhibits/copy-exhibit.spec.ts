@@ -22,6 +22,11 @@ test.describe('Exhibit Management', () => {
     await expect(createCollDialog).toBeVisible();
     await createCollDialog.getByLabel('Name').fill(testCollectionName);
     await createCollDialog.getByRole('button', { name: 'Save' }).click();
+    await expect(createCollDialog).not.toBeVisible();
+
+    // Search for the newly created collection (handles pagination)
+    const searchField = page.getByRole('textbox', { name: 'Search' });
+    await searchField.fill(testCollectionName);
     await expect(page.getByText(testCollectionName)).toBeVisible();
 
     await page.locator('mat-list-item').filter({ hasText: 'Exhibits' }).getByRole('button').click();
@@ -34,6 +39,7 @@ test.describe('Exhibit Management', () => {
     await expect(createDialog).toBeVisible();
     await createDialog.getByLabel('Name').fill(testExhibitName);
     await createDialog.getByRole('button', { name: 'Save' }).click();
+    await expect(createDialog).not.toBeVisible();
     await expect(page.getByText(testExhibitName)).toBeVisible();
 
     // 1. Click the Copy button (clipboard icon) on an exhibit row
@@ -58,6 +64,9 @@ test.describe('Exhibit Management', () => {
 
     // Cleanup: Delete the collection
     await page.locator('mat-list-item').filter({ hasText: 'Collections' }).getByRole('button').click();
+    // Search for the collection to delete
+    await searchField.clear();
+    await searchField.fill(testCollectionName);
     const collRow = page.getByRole('row').filter({ hasText: testCollectionName });
     await collRow.getByRole('button', { name: `Delete ${testCollectionName}` }).click();
     const confirmDialog = page.getByRole('dialog');

@@ -4,18 +4,16 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
-import { authenticateGalleryWithKeycloak } from '../../fixtures';
+import { test, expect } from '../../fixtures';
+import { authenticateGalleryWithKeycloak, navigateToFirstExhibit } from '../../fixtures';
 
 test.describe('Edge Cases and Negative Testing', () => {
-  test('Advance at Last Move or Inject', async ({ page }) => {
+  test('Advance at Last Move or Inject', async ({ page, seededExhibit }) => {
     await authenticateGalleryWithKeycloak(page);
     await expect(page.getByRole('table')).toBeVisible();
 
     // Navigate to an exhibit's Wall view
-    const exhibitLink = page.getByRole('cell').getByRole('link').first();
-    await exhibitLink.click();
-    await expect(page).toHaveURL(/\?exhibit=/);
+    await navigateToFirstExhibit(page, seededExhibit.exhibitName);
 
     const wallButton = page.getByRole('button', { name: 'Wall' });
     if (await wallButton.isVisible().catch(() => false)) {

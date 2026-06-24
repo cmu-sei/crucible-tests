@@ -23,6 +23,11 @@ test.describe('Integration and API', () => {
     await dialog.getByLabel('Name').fill(testCollectionName);
     await dialog.getByLabel('Description').fill('Persistence test');
     await dialog.getByRole('button', { name: 'Save' }).click();
+    await expect(dialog).not.toBeVisible();
+
+    // Search for the newly created collection (handles pagination)
+    const searchField = page.getByRole('textbox', { name: 'Search' });
+    await searchField.fill(testCollectionName);
 
     // expect: Collection is created and appears in the list
     await expect(page.getByText(testCollectionName)).toBeVisible();
@@ -30,6 +35,9 @@ test.describe('Integration and API', () => {
     // 2. Refresh the page
     await page.reload();
     await expect(page).toHaveTitle('Gallery Admin');
+
+    // Search for the collection again after reload
+    await searchField.fill(testCollectionName);
 
     // expect: The created collection persists and is still displayed
     await expect(page.getByText(testCollectionName)).toBeVisible();
@@ -42,6 +50,11 @@ test.describe('Integration and API', () => {
     await editDialog.getByLabel('Name').clear();
     await editDialog.getByLabel('Name').fill(updatedName);
     await editDialog.getByRole('button', { name: 'Save' }).click();
+    await expect(editDialog).not.toBeVisible();
+
+    // Search for the updated collection
+    await searchField.clear();
+    await searchField.fill(updatedName);
 
     // expect: Changes are saved
     await expect(page.getByText(updatedName)).toBeVisible();
@@ -49,6 +62,9 @@ test.describe('Integration and API', () => {
     // 4. Refresh the page again
     await page.reload();
     await expect(page).toHaveTitle('Gallery Admin');
+
+    // Search for the updated collection again after reload
+    await searchField.fill(updatedName);
 
     // expect: Updated name persists
     await expect(page.getByText(updatedName)).toBeVisible();

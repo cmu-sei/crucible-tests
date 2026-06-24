@@ -38,6 +38,10 @@ test.describe('Responsive Design and Accessibility', () => {
     // expect: Dialog processes the action and closes
     await expect(dialog2).not.toBeVisible();
 
+    // Search for the newly created collection (handles pagination)
+    const searchField = page.getByRole('textbox', { name: 'Search' });
+    await searchField.fill(dialogCollectionName);
+
     // expect: Changes are persisted
     await expect(page.getByText(dialogCollectionName)).toBeVisible();
 

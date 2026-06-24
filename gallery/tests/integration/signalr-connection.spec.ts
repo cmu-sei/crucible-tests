@@ -4,11 +4,11 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
-import { authenticateGalleryWithKeycloak } from '../../fixtures';
+import { test, expect } from '../../fixtures';
+import { authenticateGalleryWithKeycloak, navigateToFirstExhibit } from '../../fixtures';
 
 test.describe('Integration and API', () => {
-  test('SignalR Real-Time Connection', async ({ page }) => {
+  test('SignalR Real-Time Connection', async ({ page, seededExhibit }) => {
     // Set up console log listener before navigating
     const consoleMessages: string[] = [];
     page.on('console', (msg) => {
@@ -20,9 +20,7 @@ test.describe('Integration and API', () => {
     await expect(page.getByRole('table')).toBeVisible();
 
     // Navigate to an exhibit
-    const exhibitLink = page.getByRole('cell').getByRole('link').first();
-    await exhibitLink.click();
-    await expect(page).toHaveURL(/\?exhibit=/);
+    await navigateToFirstExhibit(page, seededExhibit.exhibitName);
 
     // Wait for SignalR messages to appear in console
     // expect: Console logs show SignalR WebSocket transport connected successfully

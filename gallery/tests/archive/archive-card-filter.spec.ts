@@ -4,18 +4,16 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
-import { authenticateGalleryWithKeycloak } from '../../fixtures';
+import { test, expect } from '../../fixtures';
+import { authenticateGalleryWithKeycloak, navigateToFirstExhibit } from '../../fixtures';
 
 test.describe('Archive Functionality', () => {
-  test('Archive Card Filtering', async ({ page }) => {
+  test('Archive Card Filtering', async ({ page, seededExhibit }) => {
     await authenticateGalleryWithKeycloak(page);
     await expect(page.getByRole('table')).toBeVisible();
 
     // Navigate to an exhibit and the Archive view
-    const exhibitLink = page.getByRole('cell').getByRole('link').first();
-    await exhibitLink.click();
-    await expect(page).toHaveURL(/\?exhibit=/);
+    await navigateToFirstExhibit(page, seededExhibit.exhibitName);
 
     const archiveButton = page.getByRole('button', { name: 'Archive' });
     if (await archiveButton.isVisible().catch(() => false)) {
@@ -37,13 +35,8 @@ test.describe('Archive Functionality', () => {
     // expect: Only articles belonging to the selected card are displayed
 
     // 3. Select 'All Cards' or clear the filter
-    await cardFilter.click();
-    const allCardsOption = page.getByRole('option', { name: 'All Cards' });
-    if (await allCardsOption.isVisible().catch(() => false)) {
-      await allCardsOption.click();
-    } else {
-      await page.keyboard.press('Escape');
-    }
+    // Simply press Escape to close the dropdown and clear the filter
+    await page.keyboard.press('Escape');
 
     // expect: All articles are displayed again
   });
