@@ -9,7 +9,10 @@ import { Services } from '../shared-fixtures';
  */
 
 /**
- * Navigate to CITE admin section and wait for it to load
+ * Navigate to CITE admin section and wait for it to load.
+ * IMPORTANT: Due to Angular state management issues, this function first navigates to the home page
+ * to pre-load evaluation data, then navigates to the admin section. This workaround ensures
+ * API-seeded evaluations are visible in the admin list.
  * @param page - Playwright Page object
  * @param section - Optional section name (Evaluations, Scoring Models, etc.)
  */
@@ -32,6 +35,12 @@ export async function navigateToAdminSection(page: Page, section?: string): Prom
     await page.waitForLoadState('domcontentloaded');
   };
 
+  // First navigate to home page to pre-load Angular state (workaround for API-seeded data visibility)
+  console.log('Navigating to home page first to pre-load Angular state...');
+  await page.goto(`${Services.Cite.UI}/`, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(2000);
+
+  // Now navigate to admin
   await page.goto(url, { waitUntil: 'domcontentloaded' });
 
   // Angular OIDC client may redirect to Keycloak asynchronously after the page loads.
@@ -69,6 +78,62 @@ export async function navigateToAdminSection(page: Page, section?: string): Prom
 
     throw new Error(`Failed to navigate to admin section. Current URL: ${currentUrl}. ${error}`);
   }
+}
+
+/**
+ * Wait for the admin list to fully load data via async chain (permissions -> data).
+ * The CITE admin UI loads permissions first, then based on permissions loads the actual data.
+ * This can take several seconds as it waits for permissionDataService.load() to complete,
+ * then evaluationDataService.load() to complete.
+ * @param page - Playwright Page object
+ * @param apiEndpoint - The API endpoint pattern (e.g., '/api/evaluations', '/api/teamtypes')
+ * @param expectData - Whether to expect data to be present (default true). Set false for empty lists.
+ */
+export async function waitForAdminListLoad(
+  page: Page,
+  apiEndpoint: string,
+  expectData: boolean = true
+): Promise<void> {
+  if (expectData) {
+    // Poll aggressively for up to 30 seconds for data to appear
+    const maxAttempts = 30;
+    let attempt = 0;
+    let foundData = false;
+
+    while (attempt < maxAttempts && !foundData) {
+      attempt++;
+
+      const hasRows = await page.evaluate(() => {
+        const tbody = document.querySelector('tbody');
+        if (!tbody) return false;
+        const rows = tbody.querySelectorAll('tr');
+        const dataRows = Array.from(rows).filter(row =>
+          !row.classList.contains('mat-mdc-row-spacer') &&
+          !row.classList.contains('spacer') &&
+          row.textContent && row.textContent.trim().length > 0
+        );
+        return dataRows.length > 0;
+      });
+
+      if (hasRows) {
+        foundData = true;
+        console.log(`Data appeared in table after ${attempt} second(s)`);
+        break;
+      }
+
+      await page.waitForTimeout(1000);
+    }
+
+    if (!foundData) {
+      console.log('Warning: No table rows found after 30 seconds of polling');
+    }
+  } else {
+    // Just wait a bit for the empty table to render
+    await page.waitForTimeout(2000);
+  }
+
+  // Additional delay for table rendering to stabilize
+  await page.waitForTimeout(500);
 }
 
 /**

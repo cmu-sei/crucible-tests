@@ -4,38 +4,38 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
-import { navigateToAdminSection, deleteTeamTypeByName } from '../../test-helpers';
+import { test, expect, Services, seedTeamType, apiDeleteTeamType } from '../../fixtures';
+import { navigateToAdminSection, waitForAdminListLoad } from '../../test-helpers';
 
 test.describe('Administration - Team Types', () => {
 
-  const TEST_TEAM_TYPE = 'Test Team Type For Delete';
+  let teamTypeName = '';
+  let teamTypeId = '';
 
   test('Delete Team Type', async ({ citeAuthenticatedPage: page }) => {
 
-    // Create a team type first
+    // 1. Seed a team type via API
+    teamTypeName = `Delete TT ${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    teamTypeId = await seedTeamType(teamTypeName);
+
+    // 2. Navigate to Team Types admin
     await navigateToAdminSection(page, 'Team Types');
+    await waitForAdminListLoad(page, '/api/teamtypes', true);
 
-    const addButton = page.getByRole('button', { name: 'Add TeamType' });
-    await addButton.click();
+    // Search for the team type
+    const searchBox = page.locator('input[placeholder="Search"], input[type="search"], input[aria-label="Search"]').first();
+    if (await searchBox.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await searchBox.clear();
+      await searchBox.fill(teamTypeName);
+      await page.waitForTimeout(1000);
+    }
 
-    const dialog = page.getByRole('dialog');
-    await expect(dialog).toBeVisible({ timeout: 5000 });
-
-    const nameField = dialog.getByRole('textbox').first();
-    await nameField.fill(TEST_TEAM_TYPE);
-
-    const saveButton = dialog.getByRole('button', { name: 'Save' });
-    await expect(saveButton).toBeEnabled({ timeout: 5000 });
-    await saveButton.click();
-    await expect(dialog).not.toBeVisible({ timeout: 10000 });
-    await page.waitForTimeout(1000);
-
-    // Now delete it
-    const typeRow = page.locator('tbody tr').filter({ hasText: TEST_TEAM_TYPE });
+    // 3. Delete it
+    const typeRow = page.locator('tbody tr').filter({ hasText: teamTypeName }).first();
     await expect(typeRow).toBeVisible({ timeout: 10000 });
 
     const deleteButton = typeRow.getByRole('button', { name: 'Delete Team Type' });
+    await expect(deleteButton).toBeVisible({ timeout: 5000 });
     await deleteButton.click();
 
     const confirmDialog = page.getByRole('dialog');
@@ -45,9 +45,18 @@ test.describe('Administration - Team Types', () => {
     await yesButton.click();
     await expect(confirmDialog).not.toBeVisible({ timeout: 5000 });
     await page.waitForTimeout(1000);
+
+    // 4. Verify it's gone
+    await expect(typeRow).not.toBeVisible({ timeout: 10000 });
+
+    // Mark as cleaned so afterEach doesn't try again
+    teamTypeId = '';
   });
 
-  test.afterEach(async ({ citeAuthenticatedPage: page }) => {
-    await deleteTeamTypeByName(page, TEST_TEAM_TYPE);
+  test.afterEach(async () => {
+    if (teamTypeId) {
+      await apiDeleteTeamType(teamTypeId);
+      teamTypeId = '';
+    }
   });
 });

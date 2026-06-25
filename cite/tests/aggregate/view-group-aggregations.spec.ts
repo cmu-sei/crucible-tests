@@ -4,7 +4,7 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, ensureScoringModelExists, ensureTeamTypeExists, purgeStaleEvaluations } from '../../fixtures';
 import { navigateToAdminSection, createEvaluation, deleteEvaluationByName } from '../../test-helpers';
 
 // These tests share backend state (admin user memberships, team types) with
@@ -18,7 +18,16 @@ test.describe('Aggregate Interface', () => {
   const TEST_TEAM_NAME = 'Group Agg Test Team';
   const TEST_TEAM_SHORT = 'GAT';
 
+  // Keep the evaluations list small/deterministic — the admin suite may have flooded it.
+  test.beforeAll(async () => {
+    await purgeStaleEvaluations();
+  });
+
   test.beforeEach(async ({ citeAuthenticatedPage: page }) => {
+    // Ensure a scoring model and a team type exist so the Add Evaluation and
+    // Add Team dialog dropdowns are populated on a clean database.
+    await ensureScoringModelExists();
+    await ensureTeamTypeExists();
     // Clean up any existing test evaluations first
     await deleteEvaluationByName(page, TEST_EVAL_NAME);
   });

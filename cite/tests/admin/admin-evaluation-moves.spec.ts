@@ -4,31 +4,39 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
-import { navigateToAdminSection, deleteEvaluationByName, createEvaluation } from '../../test-helpers';
+import { test, expect, Services, seedCompleteEvaluation, cleanupCompleteEvaluation } from '../../fixtures';
+import { navigateToAdminSection, waitForAdminListLoad } from '../../test-helpers';
 
 test.describe('Administration - Evaluations', () => {
 
-  const TEST_EVAL_NAME = 'Test Evaluation For Moves';
+  let evalName = '';
+  let seedData: { scoringModelId: string; evaluationId: string; teamTypeId: string } | null = null;
 
   test('Manage Evaluation Moves', async ({ citeAuthenticatedPage: page }) => {
 
-    // 1. Create an evaluation
-    await createEvaluation(page, TEST_EVAL_NAME);
+    // 1. Seed a complete evaluation via API
+    evalName = `Moves Test ${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    seedData = await seedCompleteEvaluation(evalName, 0);
 
-    // 2. Navigate to the evaluations list and wait for the evaluation to appear
+    // 2. Navigate to the evaluations list
     await navigateToAdminSection(page, 'Evaluations');
-    await page.waitForTimeout(2000);
+    await waitForAdminListLoad(page, '/api/evaluations', true);
 
-    const evalRow = page.locator('tbody tr').filter({ hasText: TEST_EVAL_NAME }).first();
-    await expect(evalRow).toBeVisible({ timeout: 15000 });
+    // Search for the seeded evaluation
+    const searchBox = page.locator('input[placeholder="Search"], input[type="search"], input[aria-label="Search"]').first();
+    await expect(searchBox).toBeVisible({ timeout: 5000 });
+    await searchBox.clear();
+    await searchBox.fill(evalName);
+    await page.waitForTimeout(1000);
+
+    const evalRow = page.locator('tbody tr').filter({ hasText: evalName }).first();
+    await expect(evalRow).toBeVisible({ timeout: 10000 });
     await evalRow.click();
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(1000);
 
     // 3. Find and expand the Moves panel
     const movesPanel = page.locator('mat-expansion-panel').filter({ hasText: 'Moves' }).first();
     await expect(movesPanel).toBeVisible({ timeout: 10000 });
-    // Use direct child selector to avoid selecting nested panel headers
     await movesPanel.locator('> mat-expansion-panel-header').click();
     await page.waitForTimeout(1000);
 
@@ -55,7 +63,10 @@ test.describe('Administration - Evaluations', () => {
     await expect(moveItem).toBeVisible({ timeout: 10000 });
   });
 
-  test.afterEach(async ({ citeAuthenticatedPage: page }) => {
-    await deleteEvaluationByName(page, TEST_EVAL_NAME);
+  test.afterEach(async () => {
+    if (seedData) {
+      await cleanupCompleteEvaluation(seedData);
+      seedData = null;
+    }
   });
 });

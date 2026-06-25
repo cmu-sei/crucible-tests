@@ -4,10 +4,16 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, seedScoringModel, apiDeleteScoringModel } from '../../fixtures';
 import { navigateToAdminSection, deleteEvaluationByName } from '../../test-helpers';
 
 test.describe('Administration - Evaluations', () => {
+  let scoringModelId: string | null = null;
+
+  test.beforeEach(async () => {
+    // Seed a scoring model so evaluations can be created
+    scoringModelId = await seedScoringModel(`Test Scoring Model ${Date.now()}`);
+  });
 
   test('Create Evaluation', async ({ citeAuthenticatedPage: page }) => {
 
@@ -74,5 +80,11 @@ test.describe('Administration - Evaluations', () => {
   test.afterEach(async ({ citeAuthenticatedPage: page }) => {
     // Cleanup: Delete test evaluations
     await deleteEvaluationByName(page, 'Test Evaluation Automation');
+
+    // Cleanup: Delete scoring model
+    if (scoringModelId) {
+      await apiDeleteScoringModel(scoringModelId);
+      scoringModelId = null;
+    }
   });
 });
