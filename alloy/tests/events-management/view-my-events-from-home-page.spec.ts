@@ -19,7 +19,7 @@ test.describe('Events Management', () => {
     await expect(page.getByText('My Events')).toBeVisible();
 
     // expect: Event table is visible with columns
-    await expect(page.getByRole('columnheader', { name: 'Event Name' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Name', exact: true })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Description' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Duration (Hours)' })).toBeVisible();
 

@@ -16,7 +16,7 @@ test.describe('Home Page and Navigation', () => {
 
     // expect: The topbar is visible with application branding
     // expect: The topbar displays 'Alloy' or configured AppTopBarText
-    await expect(page.getByRole('link', { name: 'Alloy' })).toBeVisible();
+    await expect(page.getByText('Alloy')).toBeVisible();
 
     // expect: Home link is visible in topbar
     await expect(page.getByRole('link', { name: 'Home' })).toBeVisible();

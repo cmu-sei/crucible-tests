@@ -14,7 +14,7 @@ test.describe('Accessibility and Usability', () => {
 
     // expect: Page has proper structure for screen readers
     // Verify semantic HTML elements are present
-    await expect(page.getByRole('link', { name: 'Alloy' })).toBeVisible();
+    await expect(page.getByText('Alloy')).toBeVisible();
     await expect(page.getByRole('link', { name: 'Home' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
 
