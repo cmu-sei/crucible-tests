@@ -29,7 +29,7 @@ test.describe('Home Page and Navigation', () => {
     await expect(page.locator('mat-list').getByText('Roles')).toBeVisible();
     await expect(page.locator('mat-list').getByText('Groups')).toBeVisible();
 
-    // expect: The 'Event Templates' section is selected by default (in breadcrumb)
-    await expect(page.getByRole('link', { name: 'Event Templates' })).toBeVisible();
+    // expect: The 'Event Templates' section is selected by default (in sidebar)
+    await expect(page.locator('mat-list').getByText('Event Templates')).toBeVisible();
   });
 });
