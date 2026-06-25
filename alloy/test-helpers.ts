@@ -61,7 +61,7 @@ export async function deleteEventTemplateByName(page: Page, name: string): Promi
     console.log(`Deleted event template "${name}"`);
     return true;
   } catch (error) {
-    console.log(`Error deleting event template "${name}":`, error);
+    console.log(`Error deleting event template "${name}":`, (error as Error).message);
     return false;
   }
 }
@@ -125,7 +125,7 @@ export async function deleteEventTemplatesByPattern(page: Page, searchTerm: stri
       console.log(`Cleaned up ${deletedCount} event template(s) matching "${searchTerm}"`);
     }
   } catch (error) {
-    console.log(`Error cleaning up event templates matching "${searchTerm}":`, error);
+    console.log(`Error cleaning up event templates matching "${searchTerm}":`, (error as Error).message);
   }
 
   return deletedCount;
@@ -194,7 +194,7 @@ export async function deleteDefaultEventTemplates(page: Page): Promise<number> {
       console.log(`Cleaned up ${deletedCount} default "New Event Template" orphan(s)`);
     }
   } catch (error) {
-    console.log('Error cleaning up default event templates:', error);
+    console.log('Error cleaning up default event templates:', (error as Error).message);
   }
 
   return deletedCount;
@@ -204,6 +204,11 @@ export async function deleteDefaultEventTemplates(page: Page): Promise<number> {
  * Create an event template via the admin UI and return its name.
  * The caller is responsible for cleaning up the template after the test.
  * Assumes the page is already authenticated and on the admin Event Templates page.
+ *
+ * As of Alloy.ui PR #711, "Add Event Template" opens a "Create New Event
+ * Template" dialog with an empty form instead of inserting a default "New Event
+ * Template" row. The template is only POSTed when Save is clicked, so we fill
+ * the form (name + duration are required) and wait for the POST on save.
  */
 export async function createTestEventTemplate(
   page: Page,
@@ -214,8 +219,24 @@ export async function createTestEventTemplate(
 
   await ensureOnAdminPage(page);
 
-  // Click Add Event Template and wait for the API to confirm creation
-  const [createResponse] = await Promise.all([
+  // Click Add Event Template to open the create dialog (no API call yet).
+  const createDialog = page.getByRole('dialog', { name: 'Create New Event Template' });
+  await page.getByRole('button', { name: 'Add Event Template' }).click();
+  await expect(createDialog).toBeVisible({ timeout: 5000 });
+
+  // Fill in the name, description, and duration. Name and Duration Hours are
+  // required; duration must be an integer greater than 0.
+  const nameField = createDialog.getByRole('textbox', { name: /^Name/ });
+  await nameField.fill(name);
+
+  const descField = createDialog.getByRole('textbox', { name: 'Event Template Description' });
+  await descField.fill(description);
+
+  const durationField = createDialog.getByRole('spinbutton', { name: 'Duration Hours' });
+  await durationField.fill(durationHours);
+
+  // Save — the template is created (POST) when the dialog is saved.
+  await Promise.all([
     page.waitForResponse(
       (resp) =>
         resp.url().includes('/api/eventtemplates') &&
@@ -223,47 +244,10 @@ export async function createTestEventTemplate(
         resp.status() >= 200 &&
         resp.status() < 300
     ),
-    page.getByRole('button', { name: 'Add Event Template' }).click(),
+    createDialog.getByRole('button', { name: 'Save' }).click(),
   ]);
 
-  const created = await createResponse.json();
-  const createdId: string = created.id;
-
-  // Open edit dialog for the freshly created template using its unique ID.
-  // Each row has a "Copy: <id>" button, so we find the row containing our ID
-  // then click its edit button. This avoids race conditions with parallel workers.
-  const editDialog = page.getByRole('dialog', { name: 'Edit Event Template' });
-  const copyButton = page.getByRole('button', { name: `Copy: ${createdId}` });
-  await expect(copyButton).toBeVisible({ timeout: 10000 });
-  // The edit button is a sibling in the same cell as the copy button
-  const rowCell = copyButton.locator('..');
-  const editButton = rowCell.getByRole('button', { name: /^Edit:/ });
-  await editButton.click();
-  await expect(editDialog).toBeVisible({ timeout: 5000 });
-
-  // Fill in the name, description, and duration
-  const nameField = page.getByRole('textbox', { name: /^Name/ });
-  await nameField.fill(name);
-
-  const descField = page.getByRole('textbox', { name: 'Event Template Description' });
-  await descField.fill(description);
-
-  const durationField = page.getByRole('spinbutton', { name: 'Duration Hours' });
-  await durationField.fill(durationHours);
-
-  // Save
-  const [saveResponse] = await Promise.all([
-    page.waitForResponse(
-      (resp) =>
-        resp.url().includes('/api/eventtemplates') &&
-        resp.request().method() === 'PUT' &&
-        resp.status() >= 200 &&
-        resp.status() < 300
-    ),
-    page.getByRole('button', { name: 'Save' }).click(),
-  ]);
-
-  await expect(editDialog).not.toBeVisible({ timeout: 10000 });
+  await expect(createDialog).not.toBeVisible({ timeout: 10000 });
   await expect(page.getByRole('cell', { name })).toBeVisible({ timeout: 15000 });
 
   console.log(`Created test event template "${name}"`);
@@ -286,6 +270,6 @@ export async function cleanupEndedEvents(page: Page): Promise<void> {
       await page.waitForTimeout(1000);
     }
   } catch (error) {
-    console.log('Error cleaning up events:', error);
+    console.log('Error cleaning up events:', (error as Error).message);
   }
 }
