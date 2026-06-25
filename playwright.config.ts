@@ -41,6 +41,9 @@ export default defineConfig({
     ['html'],
     ['list'],
     ['json', { outputFile: 'test-results/results.json' }],
+    // Pinned "% complete" bar painted directly to /dev/tty. No-ops when there is
+    // no controlling terminal (CI, or run-tests.sh's tee pipe), so logs stay clean.
+    ['./progress-reporter.ts'],
   ],
 
   // Shared settings for all the projects below
