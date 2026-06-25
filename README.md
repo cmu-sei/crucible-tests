@@ -112,6 +112,10 @@ cd /mnt/data/crucible/crucible-tests
 ./run-tests.sh gallery --filter "home"
 ./run-tests.sh all --filter login --app player
 
+# Control the number of parallel workers (count or percentage)
+./run-tests.sh all --workers 4
+./run-tests.sh cite --workers 50%
+
 # Skip service health checks
 ./run-tests.sh topomojo --no-check
 
@@ -123,6 +127,8 @@ npx playwright test --project=chromium topomojo/tests/
 ```
 
 The script automatically checks that **Keycloak** and the **target application** are reachable before running tests. Use `--no-check` to skip these checks.
+
+By default the number of parallel workers comes from `playwright.config.ts` (1 on CI, 2 locally). Use `--workers <n>` to override it per run — accepting either a count (`4`) or a percentage of CPU cores (`50%`). The flag is ignored for the interactive `ui` and `debug` modes, which Playwright always runs with a single worker. Note that tests share a single Crucible stack, so raising the worker count increases concurrent load on Keycloak and the apps and can surface auth/timing flakiness.
 
 **Supported applications:** `alloy`, `blueprint`, `caster`, `cite`, `gallery`, `gameboard`, `keycloak`, `moodle`, `player`, `steamfitter`, `topomojo`
 
