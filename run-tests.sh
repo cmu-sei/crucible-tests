@@ -281,6 +281,25 @@ elif echo "$ALL_APPS" | grep -qw "$COMMAND"; then
     TARGET_APP="$COMMAND"
 fi
 
+# Set up logging: capture the full output of this run (stdout + stderr, the
+# service health check, and all Playwright output) to a timestamped file under
+# .logs/ so past runs can be reviewed in full. Skipped for non-runs (help,
+# report) and the interactive GUI modes (ui, debug) which have no useful log.
+case "$COMMAND" in
+    help|--help|-h|report|ui|debug)
+        ;;
+    *)
+        LOG_DIR="$SCRIPT_DIR/.logs"
+        mkdir -p "$LOG_DIR"
+        LOG_FILE="$LOG_DIR/$(date +%Y%m%d-%H%M%S)-${COMMAND}${APP:+-$APP}.log"
+        # Redirect everything from here on through tee so it lands in both the
+        # terminal and the log file.
+        exec > >(tee -a "$LOG_FILE") 2>&1
+        echo -e "${BLUE}Logging full output to: $LOG_FILE${NC}"
+        echo ""
+        ;;
+esac
+
 # Check services unless --no-check is specified
 if [ "$NO_CHECK" = false ] && [ "$COMMAND" != "help" ] && [ "$COMMAND" != "report" ]; then
     if [ -n "$TARGET_APP" ]; then
