@@ -81,6 +81,33 @@ export async function navigateToAdminSection(page: Page, section?: string): Prom
 }
 
 /**
+ * Locate a row in a CITE admin list by name, typing into the Search box first so the
+ * row is guaranteed onto the (paginated) first page.
+ *
+ * The admin lists paginate at 50 rows and the test suite seeds plenty of data, so a
+ * freshly-created row routinely lands on page 2+. The Search box filters the FULL
+ * client-side dataset and only then paginates (see admin-scoring-models.component:
+ * applyFilter -> applyPagination), so filtering by the unique name collapses the list
+ * to the single matching row on page 1. Scanning raw `tbody tr` without filtering only
+ * ever sees page 1 and silently misses rows further down — the root cause of the
+ * "element(s) not found" failures across the admin scoring suite.
+ *
+ * @param page - Playwright Page object
+ * @param name - The row's display text to filter and match on
+ * @returns A locator for the first matching data row (already filtered onto page 1)
+ */
+export async function findAdminRowByName(page: Page, name: string) {
+  const searchField = page.getByRole('textbox', { name: 'Search' });
+  if (await searchField.isVisible({ timeout: 5000 }).catch(() => false)) {
+    await searchField.fill(name);
+    // The filter applies on valueChanges with no debounce, but give the slice a tick
+    // to re-render before we assert on the row.
+    await page.waitForTimeout(500);
+  }
+  return page.locator('tbody tr').filter({ hasText: name }).first();
+}
+
+/**
  * Wait for the admin list to fully load data via async chain (permissions -> data).
  * The CITE admin UI loads permissions first, then based on permissions loads the actual data.
  * This can take several seconds as it waits for permissionDataService.load() to complete,
@@ -164,6 +191,10 @@ export async function deleteEvaluationByName(page: Page, evaluationName: string)
     if (!page.url().includes('/admin')) {
       await navigateToAdminSection(page, 'Evaluations');
     }
+
+    // Filter by name so matching rows are on page 1 (the list paginates at 50);
+    // otherwise rows further down are invisible to the delete loop below.
+    await findAdminRowByName(page, evaluationName);
 
     // Loop to delete all evaluations with matching name
     while (true) {
@@ -255,8 +286,9 @@ export async function deleteScoringModelByName(page: Page, scoringModelName: str
 
     await navigateToAdminSection(page, 'Scoring Models');
 
-    // Use .first() to handle Angular Material spacer rows
-    const scoringModelRow = page.locator('tbody tr').filter({ hasText: scoringModelName }).first();
+    // Filter by name first so the row is on page 1 (the list paginates at 50), then
+    // take .first() to skip Angular Material spacer rows.
+    const scoringModelRow = await findAdminRowByName(page, scoringModelName);
     if (!(await scoringModelRow.isVisible({ timeout: 2000 }).catch(() => false))) {
       console.log(`Scoring model "${scoringModelName}" not found for cleanup`);
       return false;
@@ -502,8 +534,8 @@ export async function addAdminUserToEvaluation(page: Page, evaluationName: strin
   await navigateToAdminSection(page, 'Evaluations');
   await page.waitForTimeout(2000);
 
-  // Find and click the evaluation row
-  const evalRow = page.locator('tbody tr').filter({ hasText: evaluationName }).first();
+  // Find and click the evaluation row (filter by name so it's on page 1)
+  const evalRow = await findAdminRowByName(page, evaluationName);
   await expect(evalRow).toBeVisible({ timeout: 15000 });
   await evalRow.click();
   await page.waitForTimeout(2000);

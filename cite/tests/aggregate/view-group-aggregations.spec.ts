@@ -5,7 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, ensureScoringModelExists, ensureTeamTypeExists, purgeStaleEvaluations } from '../../fixtures';
-import { navigateToAdminSection, createEvaluation, deleteEvaluationByName } from '../../test-helpers';
+import { navigateToAdminSection, createEvaluation, deleteEvaluationByName, findAdminRowByName } from '../../test-helpers';
 
 // These tests share backend state (admin user memberships, team types) with
 // other aggregate tests. Running them serially avoids SignalR/session races
@@ -39,7 +39,7 @@ test.describe('Aggregate Interface', () => {
 
     // 2. Navigate to evaluations admin and expand the evaluation row
     await navigateToAdminSection(page, 'Evaluations');
-    const evalRow = page.locator('tbody tr').filter({ hasText: TEST_EVAL_NAME }).first();
+    const evalRow = await findAdminRowByName(page, TEST_EVAL_NAME);
     await expect(evalRow).toBeVisible({ timeout: 15000 });
     await evalRow.click();
 
@@ -108,7 +108,7 @@ test.describe('Aggregate Interface', () => {
     // so explicitly re-navigate to the evaluations admin to get a fresh state, then
     // re-expand the evaluation row and the Teams panel.
     await navigateToAdminSection(page, 'Evaluations');
-    const evalRowAfter = page.locator('tbody tr').filter({ hasText: TEST_EVAL_NAME }).first();
+    const evalRowAfter = await findAdminRowByName(page, TEST_EVAL_NAME);
     await expect(evalRowAfter).toBeVisible({ timeout: 15000 });
     await evalRowAfter.click();
     await page.waitForTimeout(1000);
