@@ -39,10 +39,12 @@ export default defineConfig({
   // Reporter to use
   reporter: [
     ['html'],
-    ['list'],
     ['json', { outputFile: 'test-results/results.json' }],
-    // Pinned "% complete" bar painted directly to /dev/tty. No-ops when there is
-    // no controlling terminal (CI, or run-tests.sh's tee pipe), so logs stay clean.
+    // Owns the terminal output for the test phase: prints per-test lines and a
+    // bottom-pinned "% complete" bar to /dev/tty, and a clean plain-text copy to
+    // CRUCIBLE_LOG_FILE (set by run-tests.sh). Replaces the built-in 'list'
+    // reporter — do not enable both, they would double every line. Falls back to
+    // plain stdout lines when there is no controlling terminal (CI, redirected).
     ['./progress-reporter.ts'],
   ],
 
