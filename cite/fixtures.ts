@@ -2,7 +2,9 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 import { test as base, Page, request as pwRequest, APIRequestContext } from '@playwright/test';
+import fs from 'fs';
 import { Services, serviceUrlPattern, oidcStorageKey, authenticateWithKeycloak } from '../shared-fixtures';
+import { authStatePath } from '../auth-paths';
 
 /**
  * CITE-specific fixtures
@@ -658,11 +660,55 @@ export type CiteFixtures = {
 };
 
 /**
- * Extended test with CITE-specific fixtures
+ * Path to the CITE storageState saved by global-setup.ts. May not exist if the
+ * global setup failed to provision (stack down at startup) — handled below.
+ */
+const citeStatePath = authStatePath('cite');
+
+/**
+ * True when global-setup successfully wrote the CITE auth state this run.
+ * Evaluated once at module load. Specs that want a clean unauthenticated context
+ * still override this with `test.use({ storageState: { cookies: [], origins: [] } })`.
+ */
+const citeStateExists = fs.existsSync(citeStatePath);
+
+/**
+ * Extended test with CITE-specific fixtures.
+ *
+ * `storageState` defaults to the pre-authenticated state captured once by
+ * global-setup.ts, so every spec's browser context starts with a valid OIDC token
+ * in localStorage. The `citeAuthenticatedPage` fixture then just navigates and
+ * waits for the Angular shell — no per-test Keycloak round-trip. Auth-flow specs
+ * opt out with `test.use({ storageState: { cookies: [], origins: [] } })`.
  */
 export const test = base.extend<CiteFixtures>({
+  // Default the context to the saved auth state when it exists. When it doesn't
+  // (provisioning failed), leave Playwright's default and rely on the fixture's
+  // interactive-login fallback below.
+  storageState: citeStateExists ? citeStatePath : undefined,
+
   citeAuthenticatedPage: async ({ page }, use) => {
-    await authenticateCiteWithKeycloak(page);
+    // Fast path: storageState already carries a valid token, so navigating home
+    // should render the authenticated shell without redirecting to Keycloak.
+    await page.goto(Services.Cite.UI, { waitUntil: 'domcontentloaded' });
+
+    const appShell = page.locator('app-root mat-toolbar').first();
+    const keycloakField = page.locator('input[name="username"]');
+
+    // Race the authenticated shell against a Keycloak login form. The form appears
+    // only if the saved state is missing/expired — in that case fall back to the
+    // full interactive login so the test still proceeds (just not as fast).
+    const winner = await Promise.race([
+      appShell.waitFor({ state: 'visible', timeout: 20000 }).then(() => 'shell' as const),
+      keycloakField.waitFor({ state: 'visible', timeout: 20000 }).then(() => 'keycloak' as const),
+    ]).catch(() => 'timeout' as const);
+
+    if (winner !== 'shell') {
+      // Either Keycloak appeared or neither did within the window — do a full login.
+      await authenticateCiteWithKeycloak(page);
+      await appShell.waitFor({ state: 'visible', timeout: 30000 });
+    }
+
     await use(page);
   },
 });

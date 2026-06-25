@@ -10,9 +10,13 @@ import { Services } from '../shared-fixtures';
 
 /**
  * Navigate to CITE admin section and wait for it to load.
- * IMPORTANT: Due to Angular state management issues, this function first navigates to the home page
- * to pre-load evaluation data, then navigates to the admin section. This workaround ensures
- * API-seeded evaluations are visible in the admin list.
+ *
+ * With the storageState-based auth (see global-setup.ts and cite/fixtures.ts), the
+ * browser context already carries a valid OIDC token, so we can navigate straight
+ * to /admin without the old "visit home first to pre-load Angular state" workaround
+ * or any fixed delay. We then wait on a concrete DOM signal (the admin table) rather
+ * than sleeping. The Keycloak-redirect race below is retained as a safety net for
+ * the rare case where the saved state is missing/expired.
  * @param page - Playwright Page object
  * @param section - Optional section name (Evaluations, Scoring Models, etc.)
  */
@@ -35,12 +39,8 @@ export async function navigateToAdminSection(page: Page, section?: string): Prom
     await page.waitForLoadState('domcontentloaded');
   };
 
-  // First navigate to home page to pre-load Angular state (workaround for API-seeded data visibility)
-  console.log('Navigating to home page first to pre-load Angular state...');
-  await page.goto(`${Services.Cite.UI}/`, { waitUntil: 'domcontentloaded' });
-  await page.waitForTimeout(2000);
-
-  // Now navigate to admin
+  // Navigate directly to admin — storageState provides the token, so no home-page
+  // pre-load is needed.
   await page.goto(url, { waitUntil: 'domcontentloaded' });
 
   // Angular OIDC client may redirect to Keycloak asynchronously after the page loads.
