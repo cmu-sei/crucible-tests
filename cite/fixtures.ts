@@ -3,7 +3,14 @@
 
 import { test as base, Page, request as pwRequest, APIRequestContext } from '@playwright/test';
 import fs from 'fs';
-import { Services, serviceUrlPattern, oidcStorageKey, authenticateWithKeycloak } from '../shared-fixtures';
+import {
+  Services,
+  serviceUrlPattern,
+  oidcStorageKey,
+  authenticateWithKeycloak,
+  waitForFirstVisible,
+  settleForResponse,
+} from '../shared-fixtures';
 import { authStatePath } from '../auth-paths';
 
 /**
@@ -791,10 +798,16 @@ export const test = base.extend<CiteFixtures>({
     // Race the authenticated shell against a Keycloak login form. The form appears
     // only if the saved state is missing/expired — in that case fall back to the
     // full interactive login so the test still proceeds (just not as fast).
-    const winner = await Promise.race([
-      appShell.waitFor({ state: 'visible', timeout: 20000 }).then(() => 'shell' as const),
-      keycloakField.waitFor({ state: 'visible', timeout: 20000 }).then(() => 'keycloak' as const),
-    ]).catch(() => 'timeout' as const);
+    // waitForFirstVisible is cancellation-safe: a plain Promise.race leaves the
+    // losing waitFor() running to its full 20s timeout in the background.
+    const winner = await waitForFirstVisible(
+      page,
+      [
+        { key: 'shell', locator: appShell },
+        { key: 'keycloak', locator: keycloakField },
+      ],
+      { timeout: 20000 }
+    );
 
     if (winner !== 'shell') {
       // Either Keycloak appeared or neither did within the window — do a full login.
@@ -807,4 +820,4 @@ export const test = base.extend<CiteFixtures>({
 });
 
 export { expect } from '@playwright/test';
-export { Services, serviceUrlPattern, oidcStorageKey };
+export { Services, serviceUrlPattern, oidcStorageKey, waitForFirstVisible, settleForResponse };

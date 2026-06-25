@@ -7,7 +7,7 @@
 // This file combines all scoresheet tests into a single file to run them serially,
 // avoiding parallel execution issues where multiple tests compete for the same "Admin User" visibility.
 
-import { test, expect, Services, serviceUrlPattern, ensureScoringModelExists, getCiteApiToken, purgeStaleEvaluations } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, ensureScoringModelExists, getCiteApiToken, purgeStaleEvaluations, settleForResponse } from '../../fixtures';
 import { navigateToAdminSection, deleteEvaluationByName, deleteTeamTypeByName } from '../../test-helpers';
 import { request as pwRequest } from '@playwright/test';
 
@@ -99,11 +99,7 @@ async function createActiveEvalWithMoveAndTeam(
 
   const scoringModelSelect = page.getByRole('combobox', { name: 'Scoring Model' });
   await expect(scoringModelSelect).toBeVisible({ timeout: 5000 });
-  await page.waitForResponse(
-    response => response.url().includes('/api/scoringmodels') && response.status() === 200,
-    { timeout: 15000 },
-  ).catch(() => {});
-  await page.waitForTimeout(1500);
+  await settleForResponse(page, '/api/scoringmodels');
   await scoringModelSelect.click();
   await page.waitForTimeout(1000);
 

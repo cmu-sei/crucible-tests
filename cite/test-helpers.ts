@@ -2,7 +2,7 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 import { Page, expect } from '@playwright/test';
-import { Services } from '../shared-fixtures';
+import { Services, waitForFirstVisible, settleForResponse } from '../shared-fixtures';
 
 /**
  * Helper utilities for CITE tests
@@ -49,11 +49,25 @@ export async function navigateToAdminSection(page: Page, section?: string): Prom
   const adminTable = page.locator('table').first();
 
   try {
-    // Race between Keycloak redirect and admin page loading
-    const winner = await Promise.race([
-      keycloakField.waitFor({ state: 'visible', timeout: 15000 }).then(() => 'keycloak' as const),
-      adminTable.waitFor({ state: 'visible', timeout: 15000 }).then(() => 'admin' as const),
-    ]);
+    // Wait for either the admin table or a Keycloak redirect. Use the
+    // cancellation-safe helper rather than Promise.race over two waitFor()s:
+    // with storageState auth the admin table always wins, but a bare race would
+    // leave the losing keycloakField.waitFor() running to its full 15s timeout in
+    // the background on EVERY call (navigateToAdminSection runs 62× per CITE suite,
+    // so that orphaned wait was the single largest cost in the run).
+    const winner = await waitForFirstVisible(
+      page,
+      [
+        { key: 'admin', locator: adminTable },
+        { key: 'keycloak', locator: keycloakField },
+      ],
+      { timeout: 15000 }
+    );
+
+    if (winner === null) {
+      // Neither appeared in the window — fall through to the catch's diagnostics.
+      throw new Error('Neither admin table nor Keycloak login form became visible');
+    }
 
     if (winner === 'keycloak') {
       console.log('Keycloak login form appeared during admin navigation');
@@ -469,12 +483,10 @@ export async function createEvaluation(page: Page, evaluationName: string): Prom
   const scoringModelSelect = page.getByRole('combobox', { name: 'Scoring Model' });
   await expect(scoringModelSelect).toBeVisible({ timeout: 5000 });
 
-  // Wait for the scoring models API to respond before opening the dropdown
-  await page.waitForResponse(
-    response => response.url().includes('/api/scoringmodels') && response.status() === 200,
-    { timeout: 15000 }
-  ).catch(() => {});
-  await page.waitForTimeout(1500);
+  // Best-effort wait for the scoring models API to respond before opening the dropdown.
+  // settleForResponse matches on URL only (not status===200) and uses a short timeout,
+  // so when the call already fired it returns at once instead of burning the full 15s.
+  await settleForResponse(page, '/api/scoringmodels');
 
   // Try multiple approaches to open the dropdown - Angular Material can be finicky
   // First try clicking the combobox itself

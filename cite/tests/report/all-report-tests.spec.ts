@@ -7,7 +7,7 @@
 // This file combines all report tests into a single file to run them serially,
 // avoiding parallel execution issues where multiple tests compete for the same "Admin User" visibility.
 
-import { test, expect, Services, serviceUrlPattern, ensureScoringModelExists, purgeStaleEvaluations } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, ensureScoringModelExists, purgeStaleEvaluations, settleForResponse } from '../../fixtures';
 import { navigateToAdminSection, deleteEvaluationByName, deleteTeamTypeByName } from '../../test-helpers';
 
 // Test data constants
@@ -53,11 +53,7 @@ async function createActiveEvalWithMoveAndTeam(page: import('@playwright/test').
 
   const scoringModelSelect = page.getByRole('combobox', { name: 'Scoring Model' });
   await expect(scoringModelSelect).toBeVisible({ timeout: 5000 });
-  await page.waitForResponse(
-    response => response.url().includes('/api/scoringmodels') && response.status() === 200,
-    { timeout: 15000 }
-  ).catch(() => {});
-  await page.waitForTimeout(1500);
+  await settleForResponse(page, '/api/scoringmodels');
   await scoringModelSelect.click();
   await page.waitForTimeout(1000);
 

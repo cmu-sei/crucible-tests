@@ -4,7 +4,7 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, seedScoringModel, apiDeleteScoringModel } from '../../fixtures';
+import { test, expect, Services, seedScoringModel, apiDeleteScoringModel, settleForResponse } from '../../fixtures';
 import { navigateToAdminSection, deleteEvaluationByName } from '../../test-helpers';
 
 test.describe('Administration - Evaluations', () => {
@@ -44,8 +44,7 @@ test.describe('Administration - Evaluations', () => {
     await expect(scoringModelSelect).toBeVisible({ timeout: 5000 });
 
     // Wait for scoring models API to load
-    await page.waitForResponse(response => response.url().includes('/api/scoringmodels') && response.status() === 200, { timeout: 10000 }).catch(() => {});
-    await page.waitForTimeout(1000);
+    await settleForResponse(page, '/api/scoringmodels');
 
     // Click the dropdown to open options
     await scoringModelSelect.click();

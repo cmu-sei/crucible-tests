@@ -4,7 +4,7 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern, oidcStorageKey, ensureScoringModelExists, purgeStaleEvaluations } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, oidcStorageKey, ensureScoringModelExists, purgeStaleEvaluations, settleForResponse } from '../../fixtures';
 import { deleteEvaluationByName, navigateToAdminSection } from '../../test-helpers';
 import {
   getKeycloakToken,
@@ -111,11 +111,7 @@ async function setupGalleryAndCiteEvaluation(
 
   const scoringModelSelect = page.getByRole('combobox', { name: 'Scoring Model' });
   await expect(scoringModelSelect).toBeVisible({ timeout: 5000 });
-  await page.waitForResponse(
-    response => response.url().includes('/api/scoringmodels') && response.status() === 200,
-    { timeout: 15000 }
-  ).catch(() => {});
-  await page.waitForTimeout(1500);
+  await settleForResponse(page, '/api/scoringmodels');
   await scoringModelSelect.click();
   await page.waitForTimeout(1000);
   const firstOption = page.locator('mat-option').first();
@@ -236,12 +232,8 @@ async function navigateToEvaluationDashboard(page: import('@playwright/test').Pa
   const evalUrl = `${Services.Cite.UI}/?evaluation=${evalId}`;
   await page.evaluate((url) => { window.location.href = url; }, evalUrl);
   await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(5000);
 
-  await page.waitForResponse(
-    response => response.url().includes('/unreadarticlecount') && response.ok(),
-    { timeout: 30000 }
-  ).catch(() => {});
+  await settleForResponse(page, '/unreadarticlecount', { timeout: 30000 });
   await page.waitForTimeout(2000);
 }
 
