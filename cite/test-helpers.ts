@@ -136,45 +136,23 @@ export async function waitForAdminListLoad(
   expectData: boolean = true
 ): Promise<void> {
   if (expectData) {
-    // Poll aggressively for up to 30 seconds for data to appear
-    const maxAttempts = 30;
-    let attempt = 0;
-    let foundData = false;
-
-    while (attempt < maxAttempts && !foundData) {
-      attempt++;
-
-      const hasRows = await page.evaluate(() => {
-        const tbody = document.querySelector('tbody');
-        if (!tbody) return false;
-        const rows = tbody.querySelectorAll('tr');
-        const dataRows = Array.from(rows).filter(row =>
-          !row.classList.contains('mat-mdc-row-spacer') &&
-          !row.classList.contains('spacer') &&
-          row.textContent && row.textContent.trim().length > 0
-        );
-        return dataRows.length > 0;
-      });
-
-      if (hasRows) {
-        foundData = true;
-        console.log(`Data appeared in table after ${attempt} second(s)`);
-        break;
-      }
-
-      await page.waitForTimeout(1000);
-    }
-
-    if (!foundData) {
+    // Wait for at least one real data row (excluding Material's spacer rows). A web-first
+    // `expect` polls internally (~100ms) rather than the old 1s `page.evaluate` loop, so a
+    // row that lands after, say, 1.3s no longer costs a full 2 seconds of rounding. Same
+    // 30s ceiling and same non-throwing contract: on timeout we log and return, leaving the
+    // caller's own assertions to produce the actual failure.
+    const dataRow = page.locator('tbody tr:not(.mat-mdc-row-spacer):not(.spacer)').filter({ hasText: /\S/ });
+    try {
+      await expect(dataRow.first()).toBeVisible({ timeout: 30000 });
+    } catch {
       console.log('Warning: No table rows found after 30 seconds of polling');
     }
   } else {
-    // Just wait a bit for the empty table to render
-    await page.waitForTimeout(2000);
+    // Empty list: wait for the table element itself to render before the caller asserts
+    // emptiness, so an "is empty" check can't fire against a not-yet-rendered table. This
+    // replaces a blind 2s sleep with a wait on a concrete signal.
+    await page.locator('table').first().waitFor({ state: 'visible', timeout: 10000 }).catch(() => {});
   }
-
-  // Additional delay for table rendering to stabilize
-  await page.waitForTimeout(500);
 }
 
 /**

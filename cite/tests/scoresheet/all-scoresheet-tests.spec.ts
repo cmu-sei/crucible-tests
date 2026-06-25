@@ -343,20 +343,24 @@ async function navigateToEvaluationScoresheet(
       : Services.Cite.UI;
     await page.goto(target);
     await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(2500);
+
+    // Fast path: on a warm page the scoresheet renders within a second, so wait on the
+    // success signal (the User toggle) directly instead of a fixed 2.5s sleep. Only fall
+    // through to the recovery steps below if it hasn't appeared shortly after load.
+    if (await userButton.isVisible({ timeout: 3000 }).catch(() => false)) {
+      break;
+    }
 
     // If we landed on the home list (no id resolved), click into the eval then switch tab.
     if (!evalId) {
       const searchBox = page.locator('input[placeholder="Search"], input[type="search"], input[aria-label="Search"]');
       if (await searchBox.isVisible({ timeout: 2000 }).catch(() => false)) {
         await searchBox.fill(searchText);
-        await page.waitForTimeout(1000);
       }
       const link = page.locator(`a:has-text("${evalName}")`).first();
       if (await link.isVisible({ timeout: 4000 }).catch(() => false)) {
         await link.click();
         await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(2000);
       }
     }
 
@@ -364,9 +368,9 @@ async function navigateToEvaluationScoresheet(
     const scoresheetTab = page.getByRole('button', { name: 'Scoresheet', exact: true });
     if (await scoresheetTab.isVisible({ timeout: 2000 }).catch(() => false)) {
       await scoresheetTab.click();
-      await page.waitForTimeout(2000);
     }
 
+    // After the recovery steps, wait once more on the toggle before re-navigating.
     if (await userButton.isVisible({ timeout: 3000 }).catch(() => false)) {
       break;
     }
