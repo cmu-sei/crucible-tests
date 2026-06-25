@@ -122,21 +122,34 @@ export async function ensureScoringModelExists(
   const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
   try {
     const token = await getCiteApiToken(apiContext);
+    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
     const listResponse = await apiContext.get(`${Services.Cite.API}/api/scoringmodels`, {
       headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
     });
     if (listResponse.ok()) {
-      const models: Array<{ id: string; description: string; useUserScore?: boolean; useTeamScore?: boolean; scoringCategories?: unknown[] }> =
+      const models: Array<{ id: string; description: string; useUserScore?: boolean; useTeamScore?: boolean }> =
         await listResponse.json();
-      // Reuse an existing model ONLY if it is scoresheet-ready: the score flags are set
-      // AND it has at least one scoring category. The admin suite creates many bare
-      // category-less models; returning one of those would leave the scoresheet table
-      // empty (no rows -> no User/Team toggle). Prefer our own named model.
-      const ready = models.find(
-        m => m.useUserScore && m.useTeamScore && Array.isArray(m.scoringCategories) && m.scoringCategories.length > 0,
-      );
-      if (ready) {
-        return ready.id;
+      // Reuse OUR named shared model if it already exists. This MUST match on the
+      // well-known description, because the LIST endpoint does not serialize
+      // `scoringCategories` (it always returns []), so we cannot tell from the list
+      // alone whether a model has categories. Matching on description keeps this
+      // idempotent — exactly one "E2E Shared Scoring Model" is ever created, instead
+      // of a fresh one on every call (which previously flooded the admin list past
+      // its 50-row first page and broke row lookups suite-wide).
+      const existing = models.find(m => m.description === description && m.useUserScore && m.useTeamScore);
+      if (existing) {
+        // Lazily guarantee the reused model is scoresheet-ready: the scoresheet table
+        // needs at least one scoring category to render score rows. Categories only
+        // appear on the by-id GET (not the list), so fetch the single model and seed
+        // a category if it has none.
+        const detail = await apiContext.get(`${Services.Cite.API}/api/scoringmodels/${existing.id}`, {
+          headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+        });
+        const categories = detail.ok() ? (await detail.json()).scoringCategories : [];
+        if (!Array.isArray(categories) || categories.length === 0) {
+          await seedScoringCategoryWithOptions(apiContext, headers, existing.id);
+        }
+        return existing.id;
       }
     }
 
@@ -145,7 +158,6 @@ export async function ensureScoringModelExists(
     // something to display. The scoresheet's User/Team toggle only appears when
     // `(useUserScore && useTeamScore) || useTeamAverageScore || useOfficialScore`
     // is true, and the scoresheet table needs at least one scoring category.
-    const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
     const modelResponse = await apiContext.post(`${Services.Cite.API}/api/scoringmodels`, {
       headers,
       data: {
@@ -173,40 +185,56 @@ export async function ensureScoringModelExists(
     const model = await modelResponse.json();
 
     // One scoring category with two options so the scoresheet renders score rows.
-    const categoryResponse = await apiContext.post(`${Services.Cite.API}/api/scoringcategories`, {
-      headers,
-      data: {
-        description: 'E2E Category',
-        displayOrder: 1,
-        scoringModelId: model.id,
-        scoringWeight: 1,
-        isModifierRequired: false,
-        calculationEquation: '',
-        moveNumberFirstDisplay: 0,
-        moveNumberLastDisplay: 99,
-        scoringOptionSelection: 'Single',
-      },
-    });
-    if (categoryResponse.ok()) {
-      const category = await categoryResponse.json();
-      for (const [i, opt] of [['E2E Option Low', 0], ['E2E Option High', 10]].entries()) {
-        await apiContext.post(`${Services.Cite.API}/api/scoringoptions`, {
-          headers,
-          data: {
-            description: opt[0],
-            displayOrder: i + 1,
-            value: opt[1],
-            isModifier: false,
-            scoringCategoryId: category.id,
-          },
-        });
-      }
-    }
+    await seedScoringCategoryWithOptions(apiContext, headers, model.id);
 
     console.log(`API seed: Created scoresheet-ready scoring model "${description}" (${model.id})`);
     return model.id;
   } finally {
     await apiContext.dispose();
+  }
+}
+
+/**
+ * Seed one scoring category (with two scoring options) onto a scoring model so the
+ * scoresheet table renders score rows. Shared by both the reuse and create paths of
+ * ensureScoringModelExists. Best-effort: a failed category POST is logged, not thrown,
+ * so seeding never blocks the test that depends on the model existing.
+ */
+async function seedScoringCategoryWithOptions(
+  apiContext: APIRequestContext,
+  headers: Record<string, string>,
+  scoringModelId: string,
+): Promise<void> {
+  const categoryResponse = await apiContext.post(`${Services.Cite.API}/api/scoringcategories`, {
+    headers,
+    data: {
+      description: 'E2E Category',
+      displayOrder: 1,
+      scoringModelId,
+      scoringWeight: 1,
+      isModifierRequired: false,
+      calculationEquation: '',
+      moveNumberFirstDisplay: 0,
+      moveNumberLastDisplay: 99,
+      scoringOptionSelection: 'Single',
+    },
+  });
+  if (categoryResponse.ok()) {
+    const category = await categoryResponse.json();
+    for (const [i, opt] of [['E2E Option Low', 0], ['E2E Option High', 10]].entries()) {
+      await apiContext.post(`${Services.Cite.API}/api/scoringoptions`, {
+        headers,
+        data: {
+          description: opt[0],
+          displayOrder: i + 1,
+          value: opt[1],
+          isModifier: false,
+          scoringCategoryId: category.id,
+        },
+      });
+    }
+  } else {
+    console.warn(`API seed: Failed to create scoring category for model ${scoringModelId}: ${categoryResponse.status()}`);
   }
 }
 
@@ -633,6 +661,71 @@ export async function purgeStaleEvaluations(
         }).catch(() => { /* best effort */ });
       }
     }
+  } finally {
+    await apiContext.dispose();
+  }
+}
+
+/**
+ * Teardown backstop: delete ALL CITE test data this suite is known to seed
+ * (evaluations, scoring models, team types) whose name matches a well-known test
+ * prefix. Runs from global-teardown after the suite so that even if an individual
+ * test's own cleanup fails, the database never accumulates leftovers across runs.
+ *
+ * This is a safety net, NOT a substitute for per-test cleanup — every test must still
+ * delete what it seeds (see CLAUDE.md "Test data hygiene"). Matching is by name prefix
+ * so it only ever removes data this suite created; real/operator data is untouched.
+ */
+const CITE_TEST_NAME_PREFIXES = [
+  'E2E',                  // shared seeds: "E2E Shared Scoring Model", "E2E Shared Team Type", "E2E ... Evaluation"
+  'Test Evaluation',
+  'Test Scoring Model',
+  'Test Model For',       // admin scoring suite per-test models
+  'Test Team Type',
+  'Group Aggregation',
+  'Aggregate Display',
+  'Scoring Model for',    // seedCompleteEvaluation children
+  'Team Type for',
+  'Complete Test Evaluation',
+  'Delete Test',
+  'Copy Test',
+];
+
+function matchesTestPrefix(name: string | undefined): boolean {
+  return CITE_TEST_NAME_PREFIXES.some(p => (name ?? '').startsWith(p));
+}
+
+export async function purgeAllCiteTestData(): Promise<void> {
+  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
+  try {
+    const token = await getCiteApiToken(apiContext);
+    const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
+
+    // Order matters: evaluations reference scoring models, so delete evaluations first.
+    const endpoints: Array<{ path: string; nameKey: 'description' | 'name'; label: string }> = [
+      { path: '/api/evaluations', nameKey: 'description', label: 'evaluation' },
+      { path: '/api/scoringmodels', nameKey: 'description', label: 'scoring model' },
+      { path: '/api/teamtypes', nameKey: 'name', label: 'team type' },
+    ];
+
+    let removed = 0;
+    for (const { path, nameKey, label } of endpoints) {
+      const listResponse = await apiContext.get(`${Services.Cite.API}${path}`, { headers });
+      if (!listResponse.ok()) continue;
+      const items: Array<Record<string, string>> = await listResponse.json();
+      for (const item of items) {
+        if (!matchesTestPrefix(item[nameKey])) continue;
+        const del = await apiContext
+          .delete(`${Services.Cite.API}${path}/${item.id}`, { headers: { Authorization: `Bearer ${token}` } })
+          .catch(() => null);
+        if (del && (del.ok() || del.status() === 404)) {
+          removed++;
+        } else if (del) {
+          console.warn(`Teardown: failed to delete ${label} "${item[nameKey]}" (${item.id}): ${del.status()}`);
+        }
+      }
+    }
+    console.log(`Teardown: purged ${removed} CITE test record(s) by name prefix`);
   } finally {
     await apiContext.dispose();
   }

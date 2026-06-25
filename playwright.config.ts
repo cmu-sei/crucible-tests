@@ -24,6 +24,12 @@ export default defineConfig({
   // per-app in each app's fixtures.ts.
   globalSetup: require.resolve('./global-setup'),
 
+  // After the whole suite, purge any CITE test data left behind (by name prefix) as a
+  // safety net. This does NOT replace per-test cleanup — every test must delete what it
+  // seeds (see CLAUDE.md "Test data hygiene"); this only catches crashed-before-cleanup
+  // cases so the database never accumulates leftovers across runs.
+  globalTeardown: require.resolve('./global-teardown'),
+
   // Maximum time one test can run for (includes auth redirect which can take up to 3 min)
   timeout: 300000,
 
