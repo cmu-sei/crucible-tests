@@ -15,6 +15,7 @@ End-to-end Playwright tests for the **Crucible** platform — a suite of apps (`
 ./run-tests.sh quick [--app <app>]       # smoke tests (grep "login|home")
 ./run-tests.sh ui | headed | debug [app] # interactive modes
 ./run-tests.sh <app> --filter <pattern>  # --grep wrapper
+./run-tests.sh <cmd> --workers <n>       # parallel workers (count or %, e.g. 4 or 50%); overrides config default
 ./run-tests.sh <cmd> --no-check          # skip the Keycloak/app health check
 ./run-tests.sh report                    # open last HTML report
 

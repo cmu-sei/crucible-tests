@@ -204,6 +204,9 @@ Options:
   --app <app>           Run tests for specific app
   --browser <name>      Run tests in a single browser: chromium | firefox.
                         When omitted, tests run in both browsers (default).
+  --workers <n>         Number of parallel workers (passed to Playwright).
+                        Accepts a count (e.g. 4) or a percentage (e.g. 50%).
+                        When omitted, the playwright.config.ts default is used.
   --target <name>       Deployment target: aspire (default) | minikube.
                         Selects which .env.<name> file to load. Can also be
                         set via the CRUCIBLE_TARGET environment variable.
@@ -216,6 +219,7 @@ Examples:
   $0 --filter login --app player  # Run Player tests matching 'login'
   $0 blueprint --target minikube  # Run Blueprint tests against a minikube deployment
   $0 all --browser chromium  # Run all tests in chromium only
+  $0 all --workers 4         # Run all tests with 4 parallel workers
 
 EOF
 }
@@ -226,6 +230,7 @@ APP=""
 NO_CHECK=false
 FILTER=""
 BROWSER=""
+WORKERS=""
 
 shift 2>/dev/null || true
 
@@ -255,6 +260,14 @@ while [[ $# -gt 0 ]]; do
             esac
             shift 2
             ;;
+        --workers)
+            if ! [[ "$2" =~ ^[0-9]+%?$ ]]; then
+                print_error "Invalid --workers value: '$2' (expected a count like 4 or a percentage like 50%)"
+                exit 1
+            fi
+            WORKERS="$2"
+            shift 2
+            ;;
         --target)
             # Already consumed by the pre-scan above; just skip the value.
             shift 2
@@ -281,6 +294,25 @@ elif echo "$ALL_APPS" | grep -qw "$COMMAND"; then
     TARGET_APP="$COMMAND"
 fi
 
+# Set up logging: capture the full output of this run (stdout + stderr, the
+# service health check, and all Playwright output) to a timestamped file under
+# .logs/ so past runs can be reviewed in full. Skipped for non-runs (help,
+# report) and the interactive GUI modes (ui, debug) which have no useful log.
+case "$COMMAND" in
+    help|--help|-h|report|ui|debug)
+        ;;
+    *)
+        LOG_DIR="$SCRIPT_DIR/.logs"
+        mkdir -p "$LOG_DIR"
+        LOG_FILE="$LOG_DIR/$(date +%Y%m%d-%H%M%S)-${COMMAND}${APP:+-$APP}.log"
+        # Redirect everything from here on through tee so it lands in both the
+        # terminal and the log file.
+        exec > >(tee -a "$LOG_FILE") 2>&1
+        echo -e "${BLUE}Logging full output to: $LOG_FILE${NC}"
+        echo ""
+        ;;
+esac
+
 # Check services unless --no-check is specified
 if [ "$NO_CHECK" = false ] && [ "$COMMAND" != "help" ] && [ "$COMMAND" != "report" ]; then
     if [ -n "$TARGET_APP" ]; then
@@ -298,6 +330,12 @@ if [ -n "$BROWSER" ]; then
     BROWSER_ARG="--project $BROWSER"
 fi
 
+# Build the Playwright --workers argument (empty = use the config default).
+WORKERS_ARG=""
+if [ -n "$WORKERS" ]; then
+    WORKERS_ARG="--workers $WORKERS"
+fi
+
 # Execute command
 case $COMMAND in
     all)
@@ -305,15 +343,15 @@ case $COMMAND in
         if [ -n "$APP" ]; then
             print_warning "Running tests for app: $APP"
             if [ -n "$FILTER" ]; then
-                npx playwright test "$APP/" $BROWSER_ARG --grep "$FILTER"
+                npx playwright test "$APP/" $BROWSER_ARG $WORKERS_ARG --grep "$FILTER"
             else
-                npx playwright test "$APP/" $BROWSER_ARG
+                npx playwright test "$APP/" $BROWSER_ARG $WORKERS_ARG
             fi
         else
             if [ -n "$FILTER" ]; then
-                npx playwright test $BROWSER_ARG --grep "$FILTER"
+                npx playwright test $BROWSER_ARG $WORKERS_ARG --grep "$FILTER"
             else
-                npx playwright test $BROWSER_ARG
+                npx playwright test $BROWSER_ARG $WORKERS_ARG
             fi
         fi
         ;;
@@ -322,10 +360,10 @@ case $COMMAND in
         print_header "Running Quick Smoke Tests"
         if [ -n "$APP" ]; then
             print_warning "Running smoke tests for: $APP"
-            npx playwright test "$APP/tests/" $BROWSER_ARG --grep "login|home"
+            npx playwright test "$APP/tests/" $BROWSER_ARG $WORKERS_ARG --grep "login|home"
         else
             print_warning "Running smoke tests for all apps"
-            npx playwright test $BROWSER_ARG --grep "login|home"
+            npx playwright test $BROWSER_ARG $WORKERS_ARG --grep "login|home"
         fi
         print_success "Smoke tests complete!"
         ;;
@@ -352,9 +390,9 @@ case $COMMAND in
             print_warning "Running headed tests for: $APP"
         fi
         if [ -n "$FILTER" ]; then
-            npx playwright test "$TEST_PATH" $BROWSER_ARG --headed --grep "$FILTER"
+            npx playwright test "$TEST_PATH" $BROWSER_ARG $WORKERS_ARG --headed --grep "$FILTER"
         else
-            npx playwright test "$TEST_PATH" $BROWSER_ARG --headed
+            npx playwright test "$TEST_PATH" $BROWSER_ARG $WORKERS_ARG --headed
         fi
         ;;
 
@@ -386,9 +424,9 @@ case $COMMAND in
         if echo "$ALL_APPS" | grep -qw "$COMMAND"; then
             print_header "Running $COMMAND Tests"
             if [ -n "$FILTER" ]; then
-                npx playwright test "$COMMAND/" $BROWSER_ARG --grep "$FILTER"
+                npx playwright test "$COMMAND/" $BROWSER_ARG $WORKERS_ARG --grep "$FILTER"
             else
-                npx playwright test "$COMMAND/" $BROWSER_ARG
+                npx playwright test "$COMMAND/" $BROWSER_ARG $WORKERS_ARG
             fi
         else
             echo -e "${RED}Unknown command: $COMMAND${NC}"

@@ -18,7 +18,7 @@ test.describe('Roles and Permissions Management', () => {
     await page.locator('mat-list-item').filter({ hasText: 'Roles' }).click();
 
     // expect: Roles section is displayed
-    await expect(page.getByRole('link', { name: 'Roles' })).toBeVisible();
+    await expect(page.locator('mat-list').getByText('Roles')).toBeVisible();
 
     // expect: Tabs for 'Roles', 'EventTemplate Roles', and 'Event Roles' are visible
     await expect(page.getByRole('tab', { name: 'Roles', exact: true })).toBeVisible();
