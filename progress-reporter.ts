@@ -114,17 +114,27 @@ class ProgressReporter implements Reporter {
   }
 
   onTestEnd(test: TestCase, result: TestResult): void {
-    this.completed++;
-    switch (result.status) {
-      case 'passed':
-        this.passed++;
-        break;
-      case 'skipped':
-        this.skipped++;
-        break;
-      default:
-        this.failed++;
-        break;
+    // onTestEnd fires once per attempt, including retries. Only count a test
+    // toward progress on its final attempt — otherwise `completed` overshoots
+    // `total` (which counts unique tests), driving the bar width negative.
+    const willRetry =
+      result.status !== 'passed' &&
+      result.status !== 'skipped' &&
+      result.retry < test.retries;
+
+    if (!willRetry) {
+      this.completed++;
+      switch (result.status) {
+        case 'passed':
+          this.passed++;
+          break;
+        case 'skipped':
+          this.skipped++;
+          break;
+        default:
+          this.failed++;
+          break;
+      }
     }
     this.emitLine(test, result);
   }
@@ -255,10 +265,10 @@ class ProgressReporter implements Reporter {
   private drawBar(): void {
     if (!this.stream || this.total === 0) return;
 
-    const ratio = this.completed / this.total;
+    const ratio = Math.max(0, Math.min(1, this.completed / this.total));
     const pct = Math.floor(ratio * 100);
     const width = 30;
-    const filled = Math.round(ratio * width);
+    const filled = Math.max(0, Math.min(width, Math.round(ratio * width)));
     const bar = '█'.repeat(filled) + '░'.repeat(width - filled);
 
     const counts =

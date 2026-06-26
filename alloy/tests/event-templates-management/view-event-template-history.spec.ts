@@ -45,7 +45,17 @@ test.describe('Event Templates Management', () => {
     // expect: A table of event templates is displayed
     await expect(page.getByRole('table')).toBeVisible();
 
-    // 2. Click on the test event template in the table
+    // 2. Click on the test event template in the table.
+    //    The "My Events" list is sorted by name and paginated (10/page), and the
+    //    shared dev stack accumulates many templates, so our freshly-created one
+    //    can land on a later page. Filter via the search box first so the lookup
+    //    is robust regardless of how many other templates exist.
+    //    NOTE: the home-page list filters on the input's (keyup) event, so a plain
+    //    fill() (which sets the value without a keyup) does NOT trigger filtering.
+    //    Press a key after filling so Angular's applyFilter() runs.
+    const searchBox = page.getByRole('textbox', { name: 'Search' });
+    await searchBox.fill(templateName);
+    await searchBox.press('End');
     const templateCell = page.getByRole('cell', { name: templateName });
     await expect(templateCell).toBeVisible({ timeout: 15000 });
     await templateCell.click();
