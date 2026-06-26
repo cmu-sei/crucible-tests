@@ -6,7 +6,7 @@
 
 import { test, expect } from '@playwright/test';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
-import { deleteEventTemplateByName, deleteEventTemplatesByPattern, deleteDefaultEventTemplates } from '../../test-helpers';
+import { deleteEventTemplateByName, deleteEventTemplatesByPattern } from '../../test-helpers';
 
 test.describe('Event Templates Management', () => {
   // Track the template name created in this test for cleanup
@@ -21,8 +21,6 @@ test.describe('Event Templates Management', () => {
 
     // Also clean up any templates matching the pattern (in case of test failure before rename)
     await deleteEventTemplatesByPattern(page, 'Test Exercise Template');
-    // Clean up orphaned "New Event Template" rows left if the test failed mid-way
-    await deleteDefaultEventTemplates(page);
   });
 
   test('Create New Event Template', async ({ page }) => {

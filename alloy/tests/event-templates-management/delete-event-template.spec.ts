@@ -6,15 +6,13 @@
 
 import { test, expect } from '@playwright/test';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
-import { deleteEventTemplatesByPattern, deleteDefaultEventTemplates } from '../../test-helpers';
+import { deleteEventTemplatesByPattern } from '../../test-helpers';
 
 test.describe('Event Templates Management', () => {
   const DELETE_PREFIX = 'ToDelete';
 
   test.afterEach(async ({ page }) => {
     await deleteEventTemplatesByPattern(page, DELETE_PREFIX);
-    // Clean up orphaned "New Event Template" rows left if the test failed mid-way
-    await deleteDefaultEventTemplates(page);
   });
 
   test('Delete Event Template', async ({ page }) => {
