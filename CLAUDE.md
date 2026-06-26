@@ -96,5 +96,36 @@ These live at the root (not inside any app dir) because multiple apps use them. 
 - Import `test`/`expect` from the app's `fixtures.ts`, not from `@playwright/test`.
 - Use `Services.X.UI`/`Services.X.API` for URLs — never hardcode ports.
 - Tests must be independent; the config runs serially but depends on no ordering.
+- **Every test must clean up the data it seeds** — see "Test data hygiene" below.
 - Long-running waits should use the fixture-level timeouts already configured — don't override `actionTimeout`/`navigationTimeout` per call without a reason.
 - When re-enabling a `test.skip(...)`, check the "Skipped tests" table in `README.md` for the upstream tracking issue — some skips are waiting on service-side fixes.
+
+### Test data hygiene (REQUIRED)
+
+**If a test creates data, that same test must delete it.** Leaving seeded rows behind
+is not acceptable.
+
+Rules (apply to every app's suite):
+
+- **Clean up in `afterEach`/`afterAll`** (or a `try/finally` for API-only setup). The
+  cleanup must run even when the test body throws — never put it inline at the end of
+  the test where a mid-test failure skips it.
+- **Make "ensure exists" seeders idempotent.** A helper that guarantees a precondition
+  record exists must *reuse* its named record, not create a new one each call. Match on
+  a field the **list** endpoint actually returns (usually `name`/`description`) — many of
+  these APIs omit nested collections from list responses, so a reuse check based on a
+  field that's only populated on the single-item GET will never match and will leak a new
+  record every call.
+- **Find rows through the list's search/filter, not by scanning page 1.** Admin lists
+  paginate, so a freshly-created row often lands on page 2+. Type the unique name into
+  the list's search box first so the row collapses onto page 1, then assert on it. Don't
+  match `page.locator('tbody tr').filter({ hasText: name })` against an unfiltered,
+  paginated list. (CITE provides `findAdminRowByName(page, name)` in
+  `cite/test-helpers.ts` as a reusable example of this pattern.)
+- **Prefer API cleanup for API-seeded data.** Deleting via the REST API is faster and
+  more reliable than driving the UI; reach for the UI only when verifying UI behavior is
+  the point.
+- **A `globalTeardown` purge is a safety net, not a substitute.** Where an app wires one
+  up (CITE's `global-teardown.ts` deletes leftovers by name prefix after the suite), it
+  only covers the crash-before-cleanup case. Tests must still clean up themselves, and if
+  you seed data under a new name, make sure the app's purge prefixes cover it.

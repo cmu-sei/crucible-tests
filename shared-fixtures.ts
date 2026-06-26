@@ -1,7 +1,7 @@
 // Copyright 2026 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
-import { test as base, expect as baseExpect, Page } from '@playwright/test';
+import { test as base, expect as baseExpect, Page, Locator } from '@playwright/test';
 import { loadCrucibleEnv } from './load-env';
 
 // Load environment based on CRUCIBLE_TARGET (aspire | minikube). Defaults to .env.
@@ -84,6 +84,100 @@ export const Services = {
 export function oidcStorageKey(clientId: string): string {
   const authority = Services.KeycloakRealm.replace(/\/$/, '');
   return `oidc.user:${authority}:${clientId}`;
+}
+
+/**
+ * Wait until ANY of the supplied locators is visible and return which one won —
+ * a cancellation-safe replacement for `Promise.race([a.waitFor(), b.waitFor()])`.
+ *
+ * Why this exists: `Promise.race` over `locator.waitFor()` resolves as soon as the
+ * first wait settles, but it does NOT cancel the losers. Each losing `waitFor`
+ * keeps running until its own timeout (often 15–20s), burning wall-clock in the
+ * background and then throwing an unhandled rejection. When a test races "app
+ * shell vs. Keycloak login form" on every navigation, that orphaned wait was the
+ * single largest cost in the CITE suite (~15s × 62 admin navigations).
+ *
+ * This polls `isVisible()` (a cheap, instant, non-throwing check) on each candidate
+ * in turn, so there is nothing left running once one matches. The first candidate
+ * to be visible on a given tick wins; ties break by array order, so list the
+ * "expected/fast" outcome first.
+ *
+ * App-agnostic by design: callers pass their own labelled locators, so any app's
+ * fixture (CITE today; TopoMojo/Player/Gallery in future PRs) can use it to
+ * collapse a navigate→race→login dance without duplicating the orphan-prone race.
+ *
+ * @param page      - Playwright Page (used for its polling clock)
+ * @param candidates - Ordered list of `{ key, locator }`; `key` is returned on match
+ * @param options.timeout    - Max wait in ms (default 15000)
+ * @param options.pollIntervalMs - Poll cadence in ms (default 150)
+ * @returns the `key` of the first visible locator, or `null` if none appears in time
+ */
+export async function waitForFirstVisible<K extends string>(
+  page: Page,
+  candidates: Array<{ key: K; locator: Locator }>,
+  options: { timeout?: number; pollIntervalMs?: number } = {}
+): Promise<K | null> {
+  const timeout = options.timeout ?? 15000;
+  const pollIntervalMs = options.pollIntervalMs ?? 150;
+  const deadline = Date.now() + timeout;
+
+  // Loop until one candidate is visible or the deadline passes. `isVisible()`
+  // returns immediately (no implicit waiting) and never throws on a missing
+  // element, so a losing candidate costs nothing once another has won.
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    for (const { key, locator } of candidates) {
+      if (await locator.isVisible().catch(() => false)) {
+        return key;
+      }
+    }
+    if (Date.now() >= deadline) {
+      return null;
+    }
+    await page.waitForTimeout(pollIntervalMs);
+  }
+}
+
+/**
+ * Best-effort wait for a network response whose URL contains `urlSubstring`,
+ * without over-constraining on status and without the silent full-timeout cost of
+ * a bare `page.waitForResponse(...).catch(() => {})`.
+ *
+ * Two problems with the pattern this replaces:
+ *   await page.waitForResponse(r => r.url().includes(x) && r.status() === 200,
+ *                              { timeout: 15000 }).catch(() => {});
+ *   1. The `status() === 200` predicate means a 204/304/already-fired response
+ *      never matches, so the wait burns the FULL timeout every time and the
+ *      `.catch` hides it (180s on one CITE line alone).
+ *   2. A long timeout on a swallowed wait is pure dead time when it doesn't match.
+ *
+ * This matches on URL substring only (any status counts as "the call happened"),
+ * defaults to a short timeout, and resolves to a boolean instead of throwing —
+ * so callers can branch on it but a miss costs at most `timeout` ms, not 15s.
+ * App-agnostic: any app can use it to settle a list/detail load before asserting.
+ *
+ * @param page - Playwright Page
+ * @param urlSubstring - substring the response URL must contain (e.g. '/api/scoringmodels')
+ * @param options.timeout - max wait in ms (default 5000)
+ * @param options.predicate - optional extra filter on the response
+ * @returns true if a matching response arrived within the window, false otherwise
+ */
+export async function settleForResponse(
+  page: Page,
+  urlSubstring: string,
+  options: { timeout?: number; predicate?: (url: string) => boolean } = {}
+): Promise<boolean> {
+  const timeout = options.timeout ?? 5000;
+  return page
+    .waitForResponse(
+      (response) => {
+        const url = response.url();
+        return url.includes(urlSubstring) && (options.predicate ? options.predicate(url) : true);
+      },
+      { timeout }
+    )
+    .then(() => true)
+    .catch(() => false);
 }
 
 /**
@@ -209,11 +303,22 @@ export async function authenticateWithKeycloak(
     const appContent = page.locator('app-root, [class*="topbar"], mat-toolbar, [class*="dashboard"], nav, header, [role="banner"], [role="navigation"]');
 
     try {
-      // Wait up to 3 minutes for one of these to appear (apps can take time to redirect to Keycloak)
-      const winner = await Promise.race([
-        keycloakField.waitFor({ state: 'visible', timeout: 180000 }).then(() => 'keycloak' as const),
-        appContent.first().waitFor({ state: 'visible', timeout: 180000 }).then(() => 'app' as const),
-      ]);
+      // Wait up to 3 minutes for one of these to appear (apps can take time to redirect to Keycloak).
+      // Use the cancellation-safe helper instead of `Promise.race` of two waitFor()s: the loser of a
+      // race is never cancelled and would keep running to its 3-minute timeout in the background.
+      const winner = await waitForFirstVisible(
+        page,
+        [
+          { key: 'keycloak', locator: keycloakField },
+          { key: 'app', locator: appContent.first() },
+        ],
+        { timeout: 180000 }
+      );
+
+      if (winner === null) {
+        // Fall through to the catch's diagnostics: neither appeared in the window.
+        throw new Error('Neither Keycloak login form nor app content became visible');
+      }
 
       if (winner === 'keycloak') {
         console.log(`Keycloak login form appeared`);
