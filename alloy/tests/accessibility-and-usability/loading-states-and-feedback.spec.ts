@@ -21,32 +21,32 @@ test.describe('Accessibility and Usability', () => {
     // expect: The table loads with data
     await expect(page.getByRole('table')).toBeVisible();
 
-    // 3. Trigger an action (create template) - "Add Event Template" creates a row directly
+    // 3. Trigger an action (create template) - "Add Event Template" opens the
+    //    "Create New Event Template" dialog (Alloy.ui PR #711).
+    const createDialog = page.getByRole('dialog', { name: 'Create New Event Template' });
     await page.getByRole('button', { name: 'Add Event Template' }).click();
-
-    // expect: A new template row appears in the table
-    await expect(page.getByRole('cell', { name: 'New Event Template' }).first()).toBeVisible();
-
-    // Open the edit dialog to rename the template
-    await page.getByRole('button', { name: 'Edit: New Event Template' }).first().click();
-    await expect(page.getByRole('dialog', { name: 'Edit Event Template' })).toBeVisible();
+    await expect(createDialog).toBeVisible();
 
     // Fill in the form with a unique name
-    await page.getByRole('textbox', { name: 'Name (required)' }).fill(uniqueName);
-    await page.getByRole('spinbutton', { name: 'Duration Hours' }).fill('1');
+    await createDialog.getByRole('textbox', { name: 'Name (required)' }).fill(uniqueName);
+    await createDialog.getByRole('spinbutton', { name: 'Duration Hours' }).fill('1');
 
     // Click save
-    await page.getByRole('button', { name: 'Save' }).click();
+    await createDialog.getByRole('button', { name: 'Save' }).click();
 
-    // expect: Success - the template appears in the list with updated name
+    // expect: Success - the template appears in the list with the given name
     await expect(page.getByRole('cell', { name: uniqueName })).toBeVisible();
 
-    // Clean up: delete the template
+    // Clean up: delete the template. Scope the Delete button to the edit dialog —
+    // an unscoped name:'Delete' substring-matches edit-row buttons of parallel
+    // tests' templates (e.g. "Edit: ToDelete ..."), causing strict-mode failures.
+    const editDialog = page.getByRole('dialog', { name: 'Edit Event Template' });
     await page.getByRole('button', { name: `Edit: ${uniqueName}` }).click();
-    await expect(page.getByRole('dialog', { name: 'Edit Event Template' })).toBeVisible();
-    await page.getByRole('button', { name: 'Delete' }).click();
-    await expect(page.getByRole('dialog', { name: 'Delete Event Template' })).toBeVisible();
-    await page.getByRole('button', { name: 'Yes' }).click();
+    await expect(editDialog).toBeVisible();
+    await editDialog.getByRole('button', { name: 'Delete' }).click();
+    const confirmDialog = page.getByRole('dialog', { name: 'Delete Event Template' });
+    await expect(confirmDialog).toBeVisible();
+    await confirmDialog.getByRole('button', { name: 'Yes' }).click();
 
     // Verify the template is removed from the table
     await expect(page.getByRole('cell', { name: uniqueName })).not.toBeVisible();

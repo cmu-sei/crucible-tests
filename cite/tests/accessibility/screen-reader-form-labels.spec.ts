@@ -18,16 +18,34 @@ test.describe('Accessibility', () => {
 
     // expect: All form fields have associated labels
     // Check all visible inputs on the main page
-    const inputs = page.locator('input:visible, select:visible, textarea:visible');
-    const inputCount = await inputs.count();
+    let inputs = page.locator('input:visible, select:visible, textarea:visible');
+    let inputCount = await inputs.count();
+
+    // The home page only shows form inputs (the search field) on the "My Evaluations"
+    // list view. A prior test may have left an evaluation selected (persisted in
+    // localStorage), opening the home page into that evaluation with no inputs. Reset
+    // to the list view rather than skipping.
+    if (inputCount === 0) {
+      await page.evaluate(() => {
+        try {
+          const raw = window.localStorage.getItem('uiState');
+          const state = raw ? JSON.parse(raw) : {};
+          state.selectedEvaluation = '';
+          window.localStorage.setItem('uiState', JSON.stringify(state));
+        } catch {
+          /* ignore */
+        }
+      });
+      await page.goto(Services.Cite.UI);
+      await page.waitForLoadState('networkidle');
+      await expect(page.locator('text=My Evaluations')).toBeVisible({ timeout: 10000 });
+      await page.waitForTimeout(1000);
+      inputs = page.locator('input:visible, select:visible, textarea:visible');
+      inputCount = await inputs.count();
+    }
 
     console.log(`Found ${inputCount} form inputs to check for labels`);
-
-    if (inputCount === 0) {
-      // No inputs on the main page, check if we can find any interactive elements
-      test.skip(true, 'No visible form inputs found on evaluations page');
-      return;
-    }
+    expect(inputCount).toBeGreaterThan(0);
 
     const inputsWithoutLabels: string[] = [];
 

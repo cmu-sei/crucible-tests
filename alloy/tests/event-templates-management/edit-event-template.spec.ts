@@ -6,19 +6,36 @@
 
 import { test, expect } from '@playwright/test';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
+import { createTestEventTemplate, deleteEventTemplateByName } from '../../test-helpers';
 
 test.describe('Event Templates Management', () => {
+  // Track the template seeded for this test so it can be cleaned up.
+  let seededTemplateName: string | null = null;
+
+  test.afterEach(async ({ page }) => {
+    if (seededTemplateName) {
+      await deleteEventTemplateByName(page, seededTemplateName);
+      seededTemplateName = null;
+    }
+  });
+
   test('Edit Event Template', async ({ page }) => {
     // 1. Navigate to admin Event Templates section
     await authenticateWithKeycloak(page, Services.Alloy.UI);
     await page.goto(`${Services.Alloy.UI}/admin`);
     await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
 
-    // expect: Event templates list is visible with at least one template
+    // expect: Event templates list is visible
     await expect(page.getByRole('table')).toBeVisible();
 
-    // 2. Click on the first existing event template's edit icon
-    await page.getByRole('button', { name: /^Edit:/ }).first().click();
+    // Seed a template so the test never depends on pre-existing data — an empty
+    // list (e.g. a fresh DB or parallel cleanup) previously made the
+    // `Edit: .first()` click time out.
+    seededTemplateName = `Edit Test Template ${Date.now()}`;
+    await createTestEventTemplate(page, seededTemplateName);
+
+    // 2. Open the seeded template's edit dialog
+    await page.getByRole('button', { name: `Edit: ${seededTemplateName}` }).click();
 
     // expect: The event template edit form is displayed
     const dialog = page.getByRole('dialog', { name: 'Edit Event Template' });
