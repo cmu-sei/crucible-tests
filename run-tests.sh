@@ -200,6 +200,9 @@ Commands:
 
 Options:
   --no-check            Skip service health checks
+  --verbose, -v         Echo each test's stdout/stderr to the terminal too.
+                        By default that output goes only to the .logs/ file,
+                        keeping the live progress display readable.
   --filter <pattern>    Filter tests by pattern
   --app <app>           Run tests for specific app
   --browser <name>      Run tests in a single browser: chromium | firefox.
@@ -231,6 +234,7 @@ NO_CHECK=false
 FILTER=""
 BROWSER=""
 WORKERS=""
+VERBOSE=false
 
 shift 2>/dev/null || true
 
@@ -238,6 +242,10 @@ while [[ $# -gt 0 ]]; do
     case $1 in
         --no-check)
             NO_CHECK=true
+            shift
+            ;;
+        --verbose|-v)
+            VERBOSE=true
             shift
             ;;
         --filter)
@@ -294,6 +302,13 @@ elif echo "$ALL_APPS" | grep -qw "$COMMAND"; then
     TARGET_APP="$COMMAND"
 fi
 
+# In verbose mode the progress-bar reporter echoes each test's stdout/stderr to
+# the terminal as well as the log. By default that output goes only to the log,
+# keeping the live terminal readable.
+if [ "$VERBOSE" = true ]; then
+    export CRUCIBLE_VERBOSE=1
+fi
+
 # Set up logging: capture the full output of this run (stdout + stderr, the
 # service health check, and all Playwright output) to a timestamped file under
 # .logs/ so past runs can be reviewed in full. Skipped for non-runs (help,
@@ -305,11 +320,16 @@ case "$COMMAND" in
         LOG_DIR="$SCRIPT_DIR/.logs"
         mkdir -p "$LOG_DIR"
         LOG_FILE="$LOG_DIR/$(date +%Y%m%d-%H%M%S)-${COMMAND}${APP:+-$APP}.log"
-        # Redirect everything from here on through tee so it lands in both the
-        # terminal and the log file.
+        # Redirect this script's own output (health check, headers, summary)
+        # through tee so it lands in both the terminal and the log file.
         exec > >(tee -a "$LOG_FILE") 2>&1
         echo -e "${BLUE}Logging full output to: $LOG_FILE${NC}"
         echo ""
+        # The progress-bar reporter owns the Playwright test output: it paints
+        # colored lines + a bottom-pinned bar to /dev/tty (kept off this tee pipe,
+        # so it never pollutes the log) and appends a clean plain-text copy of each
+        # line to the same log file via CRUCIBLE_LOG_FILE.
+        export CRUCIBLE_LOG_FILE="$LOG_FILE"
         ;;
 esac
 
