@@ -4,43 +4,55 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
-import { navigateToAdminSection, deleteEvaluationByName, createEvaluation } from '../../test-helpers';
+import { test, expect, Services, seedCompleteEvaluation, cleanupCompleteEvaluation } from '../../fixtures';
+import { navigateToAdminSection, waitForAdminListLoad } from '../../test-helpers';
 
 test.describe('Administration - Evaluations', () => {
 
-  const TEST_EVAL_NAME = 'Test Evaluation For Memberships';
+  let evalName = '';
+  let seedData: { scoringModelId: string; evaluationId: string; teamTypeId: string } | null = null;
 
   test('Manage Evaluation Memberships', async ({ citeAuthenticatedPage: page }) => {
 
-    // 1. Create an evaluation
-    await createEvaluation(page, TEST_EVAL_NAME);
+    // 1. Seed a complete evaluation via API
+    evalName = `Memberships Test ${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    seedData = await seedCompleteEvaluation(evalName, 0);
 
-    // 2. Navigate to the evaluations list and wait for the evaluation to appear
+    // 2. Navigate to the evaluations list
     await navigateToAdminSection(page, 'Evaluations');
-    await page.waitForTimeout(2000);
+    await waitForAdminListLoad(page, '/api/evaluations', true);
 
-    const evalRow = page.locator('tbody tr').filter({ hasText: TEST_EVAL_NAME }).first();
-    await expect(evalRow).toBeVisible({ timeout: 15000 });
+    // Search for the seeded evaluation
+    const searchBox = page.locator('input[placeholder="Search"], input[type="search"], input[aria-label="Search"]').first();
+    await expect(searchBox).toBeVisible({ timeout: 5000 });
+    await searchBox.clear();
+    await searchBox.fill(evalName);
+    await page.waitForTimeout(1000);
+
+    const evalRow = page.locator('tbody tr').filter({ hasText: evalName }).first();
+    await expect(evalRow).toBeVisible({ timeout: 10000 });
     await evalRow.click();
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(1000);
 
     // 3. Find and expand the Memberships panel
-    const membershipsPanel = page.locator('mat-expansion-panel').filter({ hasText: 'Memberships' }).first();
-    await expect(membershipsPanel).toBeVisible({ timeout: 10000 });
-    await membershipsPanel.locator('mat-expansion-panel-header').click();
+    const membershipsPanelButton = page.getByRole('button', { name: 'Memberships', exact: true });
+    await expect(membershipsPanelButton).toBeVisible({ timeout: 10000 });
+    await membershipsPanelButton.click();
     await page.waitForTimeout(1000);
 
     // 4. Verify membership management UI is displayed (two-column layout: non-members and members)
-    const membershipContent = membershipsPanel.locator('.mat-expansion-panel-body, mat-expansion-panel-body').first();
-    await expect(membershipContent).toBeVisible({ timeout: 5000 });
+    const membershipRegion = page.getByRole('region', { name: 'Memberships' });
+    await expect(membershipRegion).toBeVisible({ timeout: 5000 });
 
     // The membership panel shows available users and current members
-    const membersList = membershipsPanel.locator('app-admin-evaluation-member-list, app-admin-evaluation-membership-list').first();
+    const membersList = membershipRegion.locator('app-admin-evaluation-member-list, app-admin-evaluation-membership-list').first();
     await expect(membersList).toBeVisible({ timeout: 10000 });
   });
 
-  test.afterEach(async ({ citeAuthenticatedPage: page }) => {
-    await deleteEvaluationByName(page, TEST_EVAL_NAME);
+  test.afterEach(async () => {
+    if (seedData) {
+      await cleanupCompleteEvaluation(seedData);
+      seedData = null;
+    }
   });
 });

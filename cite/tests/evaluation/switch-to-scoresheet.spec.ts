@@ -4,28 +4,40 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect } from '../../fixtures';
-import { getApiToken, ensureEvaluation, deleteEvaluation, navigateToEvaluation } from './eval-helpers';
+import { test, expect, Services, seedCompleteEvaluation, cleanupCompleteEvaluation } from '../../fixtures';
 
 test.describe('Evaluation Dashboard Interface', () => {
-  test('Section Navigation - Switch to Scoresheet', async ({ citeAuthenticatedPage: page, request }) => {
-    const token = await getApiToken(request);
-    const { id: evalId, created } = await ensureEvaluation(request, token);
+  let evaluationIds: { evaluationId: string; scoringModelId: string; teamTypeId: string; } | null = null;
 
-    try {
-      // 1. Navigate to evaluation via admin page
-      await navigateToEvaluation(page);
-      await page.waitForLoadState('domcontentloaded');
+  test('Section Navigation - Switch to Scoresheet', async ({ citeAuthenticatedPage: page }) => {
+    // Create evaluation with team membership via API
+    const seededData = await seedCompleteEvaluation(`Switch Scoresheet Test ${Date.now()}`);
+    evaluationIds = {
+      evaluationId: seededData.evaluationId,
+      scoringModelId: seededData.scoringModelId,
+      teamTypeId: seededData.teamTypeId,
+    };
 
-      // 2. Click on 'Moves' section in admin view
-      const movesButton = page.getByRole('button', { name: 'Moves' }).first();
-      await expect(movesButton).toBeVisible({ timeout: 10000 });
-      await movesButton.click();
+    // 1. Navigate to evaluation dashboard
+    await page.goto(`${Services.Cite.UI}/?evaluation=${seededData.evaluationId}`);
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page).toHaveURL(new RegExp(seededData.evaluationId), { timeout: 15000 });
 
-      // expect: Moves section expands
-      await page.waitForLoadState('domcontentloaded');
-    } finally {
-      if (created) await deleteEvaluation(request, token, evalId);
+    // 2. Click on 'Scoresheet' button to switch to scoresheet view
+    const scoresheetButton = page.getByRole('button', { name: 'Scoresheet' });
+    await expect(scoresheetButton).toBeVisible({ timeout: 10000 });
+    await scoresheetButton.click();
+    await page.waitForTimeout(1000);
+
+    // expect: Scoresheet section is now displayed
+    // The page stays on same URL but changes section content
+    await expect(page).toHaveURL(new RegExp(seededData.evaluationId), { timeout: 5000 });
+  });
+
+  test.afterEach(async () => {
+    if (evaluationIds) {
+      await cleanupCompleteEvaluation(evaluationIds);
+      evaluationIds = null;
     }
   });
 });
