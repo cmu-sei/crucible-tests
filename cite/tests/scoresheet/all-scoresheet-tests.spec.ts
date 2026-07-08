@@ -9,7 +9,11 @@
 
 import { test, expect, Services, serviceUrlPattern, ensureScoringModelExists, getCiteApiToken, purgeStaleEvaluations, settleForResponse } from '../../fixtures';
 import { navigateToAdminSection, deleteEvaluationByName, deleteTeamTypeByName } from '../../test-helpers';
-import { request as pwRequest } from '@playwright/test';
+import { request as pwRequest, type Locator } from '@playwright/test';
+
+async function waitForVisible(locator: Locator, timeout: number): Promise<boolean> {
+  return locator.waitFor({ state: 'visible', timeout }).then(() => true).catch(() => false);
+}
 
 async function advanceEvaluationToMove(evaluationId: string, moveNumber: number): Promise<void> {
   const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
@@ -347,18 +351,18 @@ async function navigateToEvaluationScoresheet(
     // Fast path: on a warm page the scoresheet renders within a second, so wait on the
     // success signal (the User toggle) directly instead of a fixed 2.5s sleep. Only fall
     // through to the recovery steps below if it hasn't appeared shortly after load.
-    if (await userButton.isVisible({ timeout: 3000 }).catch(() => false)) {
+    if (await waitForVisible(userButton, 3000)) {
       break;
     }
 
     // If we landed on the home list (no id resolved), click into the eval then switch tab.
     if (!evalId) {
       const searchBox = page.locator('input[placeholder="Search"], input[type="search"], input[aria-label="Search"]');
-      if (await searchBox.isVisible({ timeout: 2000 }).catch(() => false)) {
+      if (await waitForVisible(searchBox, 2000)) {
         await searchBox.fill(searchText);
       }
       const link = page.locator(`a:has-text("${evalName}")`).first();
-      if (await link.isVisible({ timeout: 4000 }).catch(() => false)) {
+      if (await waitForVisible(link, 4000)) {
         await link.click();
         await page.waitForLoadState('domcontentloaded');
       }
@@ -366,12 +370,12 @@ async function navigateToEvaluationScoresheet(
 
     // Make sure we're on the scoresheet section (in case a redirect dropped the param).
     const scoresheetTab = page.getByRole('button', { name: 'Scoresheet', exact: true });
-    if (await scoresheetTab.isVisible({ timeout: 2000 }).catch(() => false)) {
+    if (await waitForVisible(scoresheetTab, 2000)) {
       await scoresheetTab.click();
     }
 
     // After the recovery steps, wait once more on the toggle before re-navigating.
-    if (await userButton.isVisible({ timeout: 3000 }).catch(() => false)) {
+    if (await waitForVisible(userButton, 3000)) {
       break;
     }
     attempts++;
@@ -404,7 +408,7 @@ test.describe('Scoresheet Interface', () => {
     // expect: Scoresheet interface loads with scoring categories displayed as table rows.
     // The scoresheet view contains both the scoring mat-table and (when present) a hidden
     // Score Summary table, so target a VISIBLE table specifically rather than .first().
-    const scoresheetTable = page.locator('mat-table').filter({ has: page.getByRole('row') }).locator('visible=true').first();
+    const scoresheetTable = page.locator('mat-table').filter({ has: page.getByRole('row'), visible: true }).first();
     await expect(scoresheetTable).toBeVisible({ timeout: 10000 });
 
     // expect: Scoring categories (discussion questions) are displayed

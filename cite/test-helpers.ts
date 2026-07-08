@@ -112,7 +112,7 @@ export async function navigateToAdminSection(page: Page, section?: string): Prom
  */
 export async function findAdminRowByName(page: Page, name: string) {
   const searchField = page.getByRole('textbox', { name: 'Search' });
-  if (await searchField.isVisible({ timeout: 5000 }).catch(() => false)) {
+  if (await searchField.waitFor({ state: 'visible', timeout: 5000 }).then(() => true).catch(() => false)) {
     await searchField.fill(name);
     // The filter applies on valueChanges with no debounce, but give the slice a tick
     // to re-render before we assert on the row.

@@ -7,6 +7,7 @@ import path from 'path';
 import { loadCrucibleEnv } from './load-env';
 import { Services, authenticateWithKeycloak } from './shared-fixtures';
 import { authStatePath } from './auth-paths';
+import { pathFiltersIncludeApp } from './playwright-run-filters';
 
 // Load environment based on CRUCIBLE_TARGET (aspire | minikube) before reading Services.
 loadCrucibleEnv();
@@ -57,7 +58,7 @@ async function globalSetup(_config: FullConfig): Promise<void> {
   const authDir = path.resolve(__dirname, '.auth');
   fs.mkdirSync(authDir, { recursive: true });
 
-  for (const target of PROVISION) {
+  for (const target of PROVISION.filter(target => pathFiltersIncludeApp(target.app))) {
     const statePath = authStatePath(target.app);
     const browser = await chromium.launch();
     try {
