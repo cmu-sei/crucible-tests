@@ -29,11 +29,22 @@ async function openManagePage(page: Page, path: string): Promise<void> {
 
 test.describe('Moodle plugin manage deployment pages', () => {
   test('Crucible and TopoMojo use matching table headers and extend modal behavior', async ({ moodleAdminPage: page }) => {
+    const consoleErrors: string[] = [];
+    page.on('console', message => {
+      if (message.type() === 'error') {
+        consoleErrors.push(message.text());
+      }
+    });
+
     for (const managePage of managePages) {
       await openManagePage(page, managePage.path);
 
       await expect(page.locator(`${managePage.table} th`).first()).toHaveCSS('background-color', 'rgb(245, 245, 245)');
       await expect(page.locator(`${managePage.table} .cell-status`, { hasText: /^Active$/ })).toHaveCount(0);
+      await expect(page.locator('#schedule-modal-content #scheduledfor-input')).toHaveAttribute(
+        'value',
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/
+      );
 
       const inProgressRow = page.locator(`${managePage.table} tbody tr[data-status="in progress"]`).first();
       if (await inProgressRow.count() === 0) {
@@ -56,5 +67,7 @@ test.describe('Moodle plugin manage deployment pages', () => {
 
       await dialog.getByRole('button', { name: /Cancel/i }).click();
     }
+
+    expect(consoleErrors.filter(error => error.includes('does not conform to the required format'))).toEqual([]);
   });
 });
