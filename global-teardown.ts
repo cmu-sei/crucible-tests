@@ -3,6 +3,7 @@
 
 import { FullConfig } from '@playwright/test';
 import { loadCrucibleEnv } from './load-env';
+import { pathFiltersIncludeApp } from './playwright-run-filters';
 
 // Load environment based on CRUCIBLE_TARGET (aspire | minikube) before reading Services.
 loadCrucibleEnv();
@@ -20,6 +21,11 @@ loadCrucibleEnv();
  * so everything is wrapped and only logged.
  */
 async function globalTeardown(_config: FullConfig): Promise<void> {
+  if (!pathFiltersIncludeApp('cite')) {
+    console.log('[global-teardown] Skipping CITE test-data purge for non-CITE path-filtered run.');
+    return;
+  }
+
   try {
     // Imported lazily so a failure loading the CITE fixtures (e.g. stack down) can't
     // break module resolution for the whole config.
