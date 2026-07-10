@@ -1,8 +1,26 @@
 // Copyright 2026 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
-import { Page, expect } from '@playwright/test';
+import { Locator, Page, expect } from '@playwright/test';
 import { Services } from '../shared-fixtures';
+
+async function closeOpenDialogs(page: Page): Promise<void> {
+  for (let i = 0; i < 3; i++) {
+    const openDialog = page.getByRole('dialog').first();
+    if (!(await openDialog.isVisible({ timeout: 500 }).catch(() => false))) {
+      return;
+    }
+
+    const cancelButton = openDialog.getByRole('button', { name: /Cancel|Close/i });
+    if (await cancelButton.isVisible({ timeout: 500 }).catch(() => false)) {
+      await cancelButton.click();
+    } else {
+      await page.keyboard.press('Escape');
+    }
+
+    await expect(openDialog).not.toBeVisible({ timeout: 5000 }).catch(() => {});
+  }
+}
 
 /**
  * Navigate to the Alloy admin Event Templates page.
@@ -12,8 +30,40 @@ async function ensureOnAdminPage(page: Page): Promise<void> {
   if (!page.url().includes('/admin')) {
     await page.goto(`${Services.Alloy.UI}/admin`, { waitUntil: 'domcontentloaded' });
   }
-  await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible({ timeout: 15000 });
-  await expect(page.getByRole('table')).toBeVisible({ timeout: 15000 });
+
+  await closeOpenDialogs(page);
+
+  const adminHeading = page.getByRole('heading', { name: 'Administration' });
+  const eventTemplatesTable = page.getByRole('table');
+  const adminLoaded =
+    (await adminHeading.isVisible({ timeout: 2000 }).catch(() => false)) &&
+    (await eventTemplatesTable.isVisible({ timeout: 2000 }).catch(() => false));
+
+  if (!adminLoaded) {
+    await page.goto(`${Services.Alloy.UI}/admin`, { waitUntil: 'domcontentloaded' });
+    await closeOpenDialogs(page);
+  }
+
+  await expect(adminHeading).toBeVisible({ timeout: 30000 });
+  await expect(eventTemplatesTable).toBeVisible({ timeout: 30000 });
+}
+
+export async function fillFieldAndVerify(field: Locator, value: string): Promise<void> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await field.click();
+    await field.fill(value);
+
+    try {
+      await expect(field).toHaveValue(value, { timeout: 5000 });
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError;
 }
 
 /**
@@ -25,18 +75,7 @@ export async function deleteEventTemplateByName(page: Page, name: string): Promi
   try {
     await ensureOnAdminPage(page);
 
-    // Close any open dialogs first
-    const openDialog = page.getByRole('dialog').first();
-    if (await openDialog.isVisible({ timeout: 1000 }).catch(() => false)) {
-      const cancelButton = openDialog.getByRole('button', { name: /Cancel|Close/i });
-      if (await cancelButton.isVisible({ timeout: 1000 }).catch(() => false)) {
-        await cancelButton.click();
-        await expect(openDialog).not.toBeVisible({ timeout: 5000 });
-      } else {
-        await page.keyboard.press('Escape');
-        await page.waitForTimeout(500);
-      }
-    }
+    await closeOpenDialogs(page);
 
     const editButton = page.getByRole('button', { name: `Edit: ${name}` });
     if (!(await editButton.first().isVisible({ timeout: 2000 }).catch(() => false))) {
@@ -139,7 +178,10 @@ export async function deleteEventTemplatesByPattern(page: Page, searchTerm: stri
  * As of Alloy.ui PR #711, "Add Event Template" opens a "Create New Event
  * Template" dialog with an empty form instead of inserting a default "New Event
  * Template" row. The template is only POSTed when Save is clicked, so we fill
- * the form (name + duration are required) and wait for the POST on save.
+ * the form (name + duration are required), save it, and wait for the UI to show
+ * the created row. The UI state is the stable contract these tests need; a
+ * raw waitForResponse here was flaky under parallel load even when the create
+ * eventually succeeded.
  */
 export async function createTestEventTemplate(
   page: Page,
@@ -158,28 +200,22 @@ export async function createTestEventTemplate(
   // Fill in the name, description, and duration. Name and Duration Hours are
   // required; duration must be an integer greater than 0.
   const nameField = createDialog.getByRole('textbox', { name: /^Name/ });
-  await nameField.fill(name);
+  await fillFieldAndVerify(nameField, name);
 
   const descField = createDialog.getByRole('textbox', { name: 'Event Template Description' });
-  await descField.fill(description);
+  await fillFieldAndVerify(descField, description);
 
   const durationField = createDialog.getByRole('spinbutton', { name: 'Duration Hours' });
-  await durationField.fill(durationHours);
+  await fillFieldAndVerify(durationField, durationHours);
 
-  // Save — the template is created (POST) when the dialog is saved.
-  await Promise.all([
-    page.waitForResponse(
-      (resp) =>
-        resp.url().includes('/api/eventtemplates') &&
-        resp.request().method() === 'POST' &&
-        resp.status() >= 200 &&
-        resp.status() < 300
-    ),
-    createDialog.getByRole('button', { name: 'Save' }).click(),
-  ]);
+  // Save. The template is created on save; wait for the user-visible result
+  // rather than a specific network response that can be missed or delayed.
+  const saveButton = createDialog.getByRole('button', { name: 'Save' });
+  await expect(saveButton).toBeEnabled({ timeout: 5000 });
+  await saveButton.click();
 
-  await expect(createDialog).not.toBeVisible({ timeout: 10000 });
-  await expect(page.getByRole('cell', { name })).toBeVisible({ timeout: 15000 });
+  await expect(createDialog).not.toBeVisible({ timeout: 60000 });
+  await expect(page.getByRole('cell', { name }).first()).toBeVisible({ timeout: 30000 });
 
   console.log(`Created test event template "${name}"`);
   return name;
