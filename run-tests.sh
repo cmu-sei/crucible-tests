@@ -363,9 +363,9 @@ case $COMMAND in
         if [ -n "$APP" ]; then
             print_warning "Running tests for app: $APP"
             if [ -n "$FILTER" ]; then
-                npx playwright test "$APP/" $BROWSER_ARG $WORKERS_ARG --grep "$FILTER"
+                npx playwright test "$APP/tests/" $BROWSER_ARG $WORKERS_ARG --grep "$FILTER"
             else
-                npx playwright test "$APP/" $BROWSER_ARG $WORKERS_ARG
+                npx playwright test "$APP/tests/" $BROWSER_ARG $WORKERS_ARG
             fi
         else
             if [ -n "$FILTER" ]; then
@@ -392,7 +392,7 @@ case $COMMAND in
         print_header "Running Tests in UI Mode"
         TEST_PATH=""
         if [ -n "$APP" ]; then
-            TEST_PATH="$APP/"
+            TEST_PATH="$APP/tests/"
             print_warning "Running UI tests for: $APP"
         fi
         if [ -n "$FILTER" ]; then
@@ -406,7 +406,7 @@ case $COMMAND in
         print_header "Running Tests in Headed Mode"
         TEST_PATH=""
         if [ -n "$APP" ]; then
-            TEST_PATH="$APP/"
+            TEST_PATH="$APP/tests/"
             print_warning "Running headed tests for: $APP"
         fi
         if [ -n "$FILTER" ]; then
@@ -420,7 +420,7 @@ case $COMMAND in
         print_header "Running Tests in Debug Mode"
         TEST_PATH=""
         if [ -n "$APP" ]; then
-            TEST_PATH="$APP/"
+            TEST_PATH="$APP/tests/"
             print_warning "Running debug tests for: $APP"
         fi
         if [ -n "$FILTER" ]; then
@@ -444,9 +444,9 @@ case $COMMAND in
         if echo "$ALL_APPS" | grep -qw "$COMMAND"; then
             print_header "Running $COMMAND Tests"
             if [ -n "$FILTER" ]; then
-                npx playwright test "$COMMAND/" $BROWSER_ARG $WORKERS_ARG --grep "$FILTER"
+                npx playwright test "$COMMAND/tests/" $BROWSER_ARG $WORKERS_ARG --grep "$FILTER"
             else
-                npx playwright test "$COMMAND/" $BROWSER_ARG $WORKERS_ARG
+                npx playwright test "$COMMAND/tests/" $BROWSER_ARG $WORKERS_ARG
             fi
         else
             echo -e "${RED}Unknown command: $COMMAND${NC}"

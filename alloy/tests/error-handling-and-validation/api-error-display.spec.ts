@@ -6,17 +6,33 @@
 
 import { test, expect } from '@playwright/test';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
+import { createTestEventTemplate, deleteEventTemplateByName } from '../../test-helpers';
 
 test.describe('Error Handling and Validation', () => {
+  // Track the template seeded for this test so it can be cleaned up.
+  let seededTemplateName: string | null = null;
+
+  test.afterEach(async ({ page }) => {
+    if (seededTemplateName) {
+      await deleteEventTemplateByName(page, seededTemplateName);
+      seededTemplateName = null;
+    }
+  });
+
   test('API Error Display', async ({ page }) => {
     // 1. Navigate to admin
     await authenticateWithKeycloak(page, Services.Alloy.UI);
     await page.goto(`${Services.Alloy.UI}/admin`);
     await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
 
-    // 2. Wait for the table to load, then open the edit dialog on an existing template
+    // 2. Seed a template so the test never depends on pre-existing data — an
+    //    empty list previously made the `Edit: .first()` click time out.
     await expect(page.getByRole('table')).toBeVisible();
-    await page.getByRole('button', { name: /^Edit:/ }).first().click();
+    seededTemplateName = `API Error Test ${Date.now()}`;
+    await createTestEventTemplate(page, seededTemplateName);
+
+    // Open the seeded template's edit dialog
+    await page.getByRole('button', { name: `Edit: ${seededTemplateName}` }).click();
     await expect(page.getByRole('dialog', { name: 'Edit Event Template' })).toBeVisible();
 
     // The Name field is required - verify it's marked as required

@@ -5,7 +5,7 @@
 
 import { test, expect } from '@playwright/test';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
-import { createTestEventTemplate, deleteEventTemplateByName, deleteEventTemplatesByPattern, deleteDefaultEventTemplates } from '../../test-helpers';
+import { createTestEventTemplate, deleteEventTemplateByName, deleteEventTemplatesByPattern } from '../../test-helpers';
 
 test.describe('Event Templates Management', () => {
   let templateName: string;
@@ -20,7 +20,6 @@ test.describe('Event Templates Management', () => {
     await deleteEventTemplateByName(page, templateName);
     await deleteEventTemplatesByPattern(page, 'clone');
     await deleteEventTemplatesByPattern(page, 'Clone Source');
-    await deleteDefaultEventTemplates(page);
   });
 
   test('Clone Event Template', async ({ page }) => {
