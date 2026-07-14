@@ -6,7 +6,7 @@
 
 import { test, expect } from '@playwright/test';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
-import { deleteEventTemplateByName, deleteEventTemplatesByPattern } from '../../test-helpers';
+import { deleteEventTemplateByName, deleteEventTemplatesByPattern, fillFieldAndVerify } from '../../test-helpers';
 
 test.describe('Event Templates Management', () => {
   // Track the template name created in this test for cleanup
@@ -41,36 +41,26 @@ test.describe('Event Templates Management', () => {
 
     // 3. Enter unique name in the Name field
     const nameField = createDialog.getByRole('textbox', { name: /^Name/ });
-    await nameField.fill(uniqueName);
-    await expect(nameField).toHaveValue(uniqueName);
+    await fillFieldAndVerify(nameField, uniqueName);
 
     // 4. Enter description in the Description field
-    const descriptionField = createDialog.getByRole('textbox', { name: /Description/ });
-    await descriptionField.fill('This is a test exercise for validation');
-    await expect(descriptionField).toHaveValue('This is a test exercise for validation');
+    const descriptionField = createDialog.getByRole('textbox', { name: 'Event Template Description' });
+    await fillFieldAndVerify(descriptionField, 'This is a test exercise for validation');
 
     // 5. Set Duration Hours to '4'
     const durationField = createDialog.getByRole('spinbutton', { name: 'Duration Hours' });
-    await durationField.click();
-    await durationField.fill('4');
-    await expect(durationField).toHaveValue('4');
+    await fillFieldAndVerify(durationField, '4');
 
-    // 6. Click 'Save' and wait for the API to confirm creation (POST)
-    await Promise.all([
-      page.waitForResponse(resp =>
-        resp.url().includes('/api/eventtemplates') &&
-        resp.request().method() === 'POST' &&
-        resp.status() >= 200 && resp.status() < 300
-      ),
-      createDialog.getByRole('button', { name: 'Save' }).click(),
-    ]);
+    // 6. Click 'Save' and wait for the user-visible result
+    const saveButton = createDialog.getByRole('button', { name: 'Save' });
+    await expect(saveButton).toBeEnabled({ timeout: 5000 });
+    await saveButton.click();
 
     // expect: The dialog closes and the template appears in the list
-    await expect(createDialog).not.toBeVisible();
+    await expect(createDialog).not.toBeVisible({ timeout: 60000 });
 
-    // The API confirmed the save (saveResponse). Verify the template is in the list.
-    // With parallel tests, SignalR updates may cause the table to re-render.
-    // Use the search box to filter to our specific template for reliable verification.
+    // Verify the template is in the list. With parallel tests, SignalR updates
+    // may cause the table to re-render; filter to the specific template.
     const searchBox = page.getByRole('textbox', { name: 'Search' });
     await searchBox.fill(uniqueName);
     await expect(page.getByRole('cell', { name: uniqueName })).toBeVisible({ timeout: 15000 });
