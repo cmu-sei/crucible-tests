@@ -78,6 +78,19 @@ Each app has a thin `{app}/fixtures.ts` that wraps this helper in an `{app}Authe
 
 When adding a new app: create the dir, add URLs to `.env` AND `Services` in `shared-fixtures.ts` (both — env var drives runtime, `Services` entry drives type-safe access), write `fixtures.ts`, write the test plan, then add specs.
 
+### Source repositories
+
+This suite runs in the Crucible development container. Application source
+repositories are available under `/mnt/data/crucible/`; use the repository
+matching the target application when source inspection is needed to understand
+intended behavior, investigate a test failure, or verify an API/UI contract.
+The development-container orchestration repository is at
+`/workspaces/crucible-development/`.
+
+Test work belongs in this repository. Do not edit an application source
+repository while creating, generating, or healing tests unless the user
+explicitly requests a source change.
+
 ### Shared helpers at the repo root
 
 These live at the root (not inside any app dir) because multiple apps use them. Prefer them over reinventing per-app variants.
