@@ -49,12 +49,6 @@ load_target_env() {
         set +a
     fi
 }
-load_target_env
-
-# Resolve infrastructure URLs (with defaults)
-KEYCLOAK_URL="${KEYCLOAK_URL:-https://localhost:8443}"
-ASPIRE_DASHBOARD_URL="${ASPIRE_DASHBOARD_URL:-https://localhost:17088}"
-
 # All supported apps
 ALL_APPS="keycloak blueprint player cite gameboard topomojo steamfitter moodle alloy caster gallery"
 
@@ -199,6 +193,7 @@ Commands:
   help                   Show this help message
 
 Options:
+  -h, --help             Show this help message and exit
   --no-check            Skip service health checks
   --verbose, -v         Echo each test's stdout/stderr to the terminal too.
                         By default that output goes only to the .logs/ file,
@@ -235,11 +230,22 @@ FILTER=""
 BROWSER=""
 WORKERS=""
 VERBOSE=false
+SHOW_HELP=false
+
+case "$COMMAND" in
+    -h|--help)
+        SHOW_HELP=true
+        ;;
+esac
 
 shift 2>/dev/null || true
 
 while [[ $# -gt 0 ]]; do
     case $1 in
+        -h|--help)
+            SHOW_HELP=true
+            shift
+            ;;
         --no-check)
             NO_CHECK=true
             shift
@@ -293,6 +299,17 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+if [ "$SHOW_HELP" = true ]; then
+    show_usage
+    exit 0
+fi
+
+load_target_env
+
+# Resolve infrastructure URLs (with defaults)
+KEYCLOAK_URL="${KEYCLOAK_URL:-https://localhost:8443}"
+ASPIRE_DASHBOARD_URL="${ASPIRE_DASHBOARD_URL:-https://localhost:17088}"
 
 # Determine which app(s) to health-check
 TARGET_APP=""
