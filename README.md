@@ -39,12 +39,25 @@ Codex uses equivalent project-scoped agents in `.codex/agents/`:
 `playwright-test-healer`. The `.codex/config.toml` file starts the local
 `playwright-test` MCP server using this repository's Playwright configuration.
 
-From a Codex CLI session opened in this repository, use `/mcp` to confirm that
-`playwright-test` is connected, then use `/agent playwright-test-planner`,
-`/agent playwright-test-generator`, or `/agent playwright-test-healer` to
-select the role. The same roles can be requested through a direct prompt when
-Codex is delegating work. Crucible services must be running before a planner or
-generator can drive the browser.
+From a Codex session opened in this repository, prefer the repository-local
+skills in `.codex/skills/`. They explicitly dispatch the matching agent role
+and wait for it to complete:
+
+```text
+$plan-crucible-tests Plan CITE team-management coverage.
+$generate-crucible-tests Implement CITE scenario "Create a team".
+$heal-crucible-tests Repair the failing gameboard leaderboard spec.
+```
+
+Name the target app and the feature, test-plan scenario, or failing spec in the
+prompt. Include the failing command, logs, trace, or screenshot when healing a
+test. Use `/mcp` to confirm that `playwright-test` is connected before
+browser-driven work.
+
+Use `/agent playwright-test-planner`, `/agent playwright-test-generator`, or
+`/agent playwright-test-healer` if project skills are unavailable in
+the Codex surface. Crucible services must be running before any agent can
+drive the browser or run an end-to-end test.
 
 ## Running Tests
 
