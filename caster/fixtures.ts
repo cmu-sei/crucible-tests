@@ -24,6 +24,21 @@ export async function authenticateCasterWithKeycloak(
 }
 
 /**
+ * A newly-created project opens immediately in the project view. Verify that
+ * navigation and return the project ID for API cleanup.
+ */
+export async function expectCasterProjectOpen(page: Page, projectName: string): Promise<string> {
+  await page.waitForURL(/\/projects\/[a-f0-9-]+(?:[/?#]|$)/, { timeout: 10000 });
+  await page.getByText(projectName, { exact: true }).waitFor({ state: 'visible', timeout: 10000 });
+
+  const projectId = new URL(page.url()).pathname.match(/\/projects\/([a-f0-9-]+)/)?.[1];
+  if (!projectId) {
+    throw new Error(`Expected project URL after creating "${projectName}", received ${page.url()}`);
+  }
+  return projectId;
+}
+
+/**
  * Get an access token from session storage and the API URL from the Angular
  * app's runtime settings.  Both are needed by the API helper functions below.
  */
