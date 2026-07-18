@@ -2,7 +2,15 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 import { test as base, Page } from '@playwright/test';
-import { Services, serviceUrlPattern, oidcStorageKey, authenticateWithKeycloak } from '../shared-fixtures';
+import fs from 'fs';
+import {
+  Services,
+  serviceUrlPattern,
+  oidcStorageKey,
+  authenticateWithKeycloak,
+  waitForFirstVisible,
+} from '../shared-fixtures';
+import { authSessionStatePath, authStatePath } from '../auth-paths';
 
 /**
  * Caster-specific fixtures
@@ -240,10 +248,22 @@ export type CasterFixtures = {
   cleanupCasterRole: (roleName: string) => Promise<void>;
 };
 
+const casterStatePath = authStatePath('caster');
+const casterStateExists = fs.existsSync(casterStatePath);
+const casterSessionStatePath = authSessionStatePath('caster');
+const casterSessionState: Array<[string, string]> = fs.existsSync(casterSessionStatePath)
+  ? JSON.parse(fs.readFileSync(casterSessionStatePath, 'utf8'))
+  : [];
+
 /**
  * Extended test with Caster-specific fixtures
  */
 export const test = base.extend<CasterFixtures>({
+  // Reuse the authenticated state global-setup captured for Caster. Auth-flow
+  // specs override this with an empty state; fallback login keeps normal specs
+  // working if setup could not provision a token.
+  storageState: casterStateExists ? casterStatePath : undefined,
+
   cleanupCasterProject: async ({ page }, use) => {
     const projectIds: string[] = [];
     await use((id: string) => {
@@ -337,8 +357,32 @@ export const test = base.extend<CasterFixtures>({
       }
     }
   },
-  casterAuthenticatedPage: async ({ page }, use) => {
-    await authenticateCasterWithKeycloak(page);
+  casterAuthenticatedPage: async ({ page, storageState }, use) => {
+    if (storageState === casterStatePath && casterSessionState.length > 0) {
+      await page.addInitScript((entries: Array<[string, string]>) => {
+        for (const [key, value] of entries) {
+          sessionStorage.setItem(key, value);
+        }
+      }, casterSessionState);
+    }
+    await page.goto(Services.Caster.UI, { waitUntil: 'domcontentloaded' });
+
+    const appShell = page.getByRole('button', { name: 'Admin User' });
+    const keycloakField = page.locator('input[name="username"]');
+    const winner = await waitForFirstVisible(
+      page,
+      [
+        { key: 'shell', locator: appShell },
+        { key: 'keycloak', locator: keycloakField },
+      ],
+      { timeout: 20000 }
+    );
+
+    if (winner !== 'shell') {
+      await authenticateCasterWithKeycloak(page);
+      await appShell.waitFor({ state: 'visible', timeout: 30000 });
+    }
+
     await use(page);
   },
 });
@@ -367,4 +411,4 @@ export async function clickAddRoleButton(page: Page): Promise<void> {
 }
 
 export { expect } from '@playwright/test';
-export { Services, serviceUrlPattern, oidcStorageKey };
+export { Services, serviceUrlPattern, oidcStorageKey, waitForFirstVisible };
