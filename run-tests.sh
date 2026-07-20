@@ -56,13 +56,15 @@ KEYCLOAK_URL="${KEYCLOAK_URL:-https://localhost:8443}"
 ASPIRE_DASHBOARD_URL="${ASPIRE_DASHBOARD_URL:-https://localhost:17088}"
 
 # All supported apps
-ALL_APPS="keycloak blueprint player cite gameboard topomojo steamfitter moodle alloy caster gallery"
+ALL_APPS="keycloak blueprint player playerVm console cite gameboard topomojo steamfitter moodle alloy caster gallery"
 
 # Map app name to apps it depends on (space-separated)
 get_app_deps() {
     local app="$1"
     case "$app" in
+        console) echo "player playerVm";;
         gameboard) echo "topomojo";;
+        playerVm) echo "player";;
         *) echo "";;
     esac
 }
@@ -74,6 +76,8 @@ get_app_url() {
         keycloak)    echo "${KEYCLOAK_URL}";;
         blueprint)   echo "${BLUEPRINT_UI_URL:-http://localhost:4725}";;
         player)      echo "${PLAYER_UI_URL:-http://localhost:4301}";;
+        playerVm)    echo "${PLAYERVM_UI_URL:-http://localhost:4303}";;
+        console)     echo "${CONSOLE_UI_URL:-http://localhost:4305}";;
         cite)        echo "${CITE_UI_URL:-http://localhost:4721}";;
         gameboard)   echo "${GAMEBOARD_UI_URL:-http://localhost:4202}";;
         topomojo)    echo "${TOPOMOJO_UI_URL:-http://localhost:4201}";;
@@ -180,6 +184,8 @@ Applications:
   keycloak               Run Keycloak (Identity Provider) tests
   blueprint              Run Blueprint tests
   player                 Run Player tests
+  playerVm               Run Player VM tests
+  console                Run Console tests
   cite                   Run CITE tests
   gameboard              Run Gameboard tests
   topomojo               Run TopoMojo tests
