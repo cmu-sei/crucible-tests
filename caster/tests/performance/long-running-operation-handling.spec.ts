@@ -4,7 +4,7 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, expectCasterProjectOpen } from '../../fixtures';
 
 test.describe('Performance and Optimization', () => {
   test('Long Running Operation Handling', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
@@ -15,10 +15,7 @@ test.describe('Performance and Optimization', () => {
     await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
     await page.getByRole('textbox', { name: 'Name' }).fill('Long Running Test');
     await page.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByRole('link', { name: 'Long Running Test' }).first()).toBeVisible({ timeout: 10000 });
-
-    await page.getByRole('link', { name: 'Long Running Test' }).first().click();
-    await expect(page).toHaveURL(/\/projects\//, { timeout: 10000 });
+    await expectCasterProjectOpen(page, 'Long Running Test');
     await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
 
     // Extract the project ID from the URL and register it for cleanup
