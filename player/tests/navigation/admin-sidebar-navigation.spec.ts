@@ -24,7 +24,7 @@ test.describe('Navigation', () => {
     // Click Application Templates
     await page.getByRole('button', { name: 'Application Templates' }).click();
     await expect(page).toHaveURL(/section=application-templates/);
-    await expect(page.getByRole('columnheader', { name: 'Template Name' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
 
     // Click Users
     await page.getByRole('button', { name: 'Users Users' }).click();
@@ -39,7 +39,7 @@ test.describe('Navigation', () => {
     // Click Subscriptions
     await page.getByRole('button', { name: 'Subscriptions Subscriptions' }).click();
     await expect(page).toHaveURL(/section=subscriptions/);
-    await expect(page.getByRole('columnheader', { name: 'Subscription Name' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
 
     // expect: Each section loads correctly
     // expect: Active section is highlighted in sidebar

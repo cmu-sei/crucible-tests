@@ -9,14 +9,14 @@ import { test, expect, Services } from '../../fixtures';
 test.describe('View Details', () => {
   test('View Basic Information', async ({ playerAuthenticatedPage: page }) => {
     // 1. Log in and navigate to a view
-    await page.getByRole('link', { name: 'Project Lagoon TTX - Admin' }).click();
+    await page.getByRole('link', { name: 'Project Lagoon TTX - Admin', exact: true }).click();
 
     // expect: User is on the view details page
     await expect(page).toHaveURL(/\/view\//, { timeout: 10000 });
 
     // 2. Observe the view header
     // expect: View name is displayed
-    await expect(page.getByText('Project Lagoon TTX - Admin User')).toBeVisible();
+    await expect(page.getByText('Project Lagoon TTX - Admin', { exact: true })).toBeVisible();
 
     // expect: Current team is shown with 'Team:' label
     await expect(page.getByText('Team:')).toBeVisible();

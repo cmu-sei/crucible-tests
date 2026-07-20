@@ -14,7 +14,7 @@ test.describe('Navigation', () => {
     await expect(page).toHaveURL(/\/admin/, { timeout: 10000 });
 
     // Click on a view to open edit form
-    await page.getByRole('button', { name: 'Project Lagoon TTX - Admin User' }).click();
+    await page.getByRole('button', { name: 'Project Lagoon TTX - Admin', exact: true }).click();
     await expect(page.getByRole('heading', { name: /Edit View:/ })).toBeVisible();
 
     // expect: Breadcrumb trail is visible showing navigation path

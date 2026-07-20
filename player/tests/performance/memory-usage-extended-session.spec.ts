@@ -27,13 +27,13 @@ test.describe('Performance', () => {
     await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
 
     await page.getByRole('button', { name: 'Application Templates' }).click();
-    await expect(page.getByRole('columnheader', { name: 'Template Name' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
 
     await page.getByRole('button', { name: 'Roles Roles' }).click();
     await expect(page.getByRole('tab', { name: 'Roles', exact: true })).toBeVisible();
 
     await page.getByRole('button', { name: 'Subscriptions Subscriptions' }).click();
-    await expect(page.getByRole('columnheader', { name: 'Subscription Name' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
 
     // Navigate back to home
     await page.goto(Services.Player.UI);

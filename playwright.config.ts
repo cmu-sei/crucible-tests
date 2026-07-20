@@ -16,6 +16,9 @@ export default defineConfig({
   testDir: './',
   testMatch: '**/tests/**/*.spec.ts',
 
+  // Player opts into this per-app setup to reuse authenticated browser state.
+  globalSetup: require.resolve('./global-setup'),
+
   // Maximum time one test can run for (includes auth redirect which can take up to 3 min)
   timeout: 300000,
 

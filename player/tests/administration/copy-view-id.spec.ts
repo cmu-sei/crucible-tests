@@ -17,7 +17,7 @@ test.describe('Administration - Views', () => {
     await expect(page.getByRole('heading', { name: 'Views' })).toBeVisible();
 
     // 2. Click the copy icon next to a view
-    const copyButton = page.getByRole('button', { name: /^Copy: 35d24422/ });
+    const copyButton = page.getByTitle(/^Copy:/).first();
     await expect(copyButton).toBeVisible();
     await copyButton.click();
 

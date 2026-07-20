@@ -14,10 +14,11 @@ test.describe('Administration - Application Templates', () => {
     await page.getByRole('button', { name: 'Application Templates' }).click();
 
     // expect: The Application Templates section is displayed
-    await expect(page.getByRole('columnheader', { name: 'Template Name' })).toBeVisible();
+    const nameHeader = page.getByRole('columnheader', { name: 'Name' });
+    await expect(nameHeader).toBeVisible();
 
-    // 2. Click the 'Template Name' column header to sort
-    await page.getByRole('button', { name: 'Template Name' }).click();
+    // 2. Click the 'Name' column header to sort
+    await nameHeader.click();
 
     // expect: Templates are sorted by name (ascending or descending depending on current state)
     // Verify the sort changed by checking that the first row is different from default
@@ -26,7 +27,7 @@ test.describe('Administration - Application Templates', () => {
     const firstText = await firstCell.textContent();
 
     // Click again to reverse sort order
-    await page.getByRole('button', { name: 'Template Name' }).click();
+    await nameHeader.click();
     const firstCellAfterToggle = page.getByRole('row').nth(1).getByRole('cell').nth(1);
     const secondText = await firstCellAfterToggle.textContent();
 

@@ -17,7 +17,7 @@ test.describe('Administration - Views', () => {
     await expect(page.getByRole('heading', { name: 'Views' })).toBeVisible();
 
     // 2. Click on a view name
-    await page.getByRole('button', { name: 'Project Lagoon TTX - Admin User' }).click();
+    await page.getByRole('button', { name: 'Project Lagoon TTX - Admin', exact: true }).click();
 
     // expect: A view edit dialog or form opens
     await expect(page.getByRole('heading', { name: /Edit View:/ })).toBeVisible();
@@ -25,7 +25,7 @@ test.describe('Administration - Views', () => {
     // expect: View details are displayed for editing
     const nameField = page.getByRole('textbox', { name: 'Name (required)' });
     await expect(nameField).toBeVisible();
-    await expect(nameField).toHaveValue('Project Lagoon TTX - Admin User');
+    await expect(nameField).toHaveValue('Project Lagoon TTX - Admin');
 
     const descField = page.getByRole('textbox', { name: 'Description (required)' });
     await expect(descField).toBeVisible();

@@ -17,28 +17,36 @@ test.describe('Administration - Views', () => {
     await expect(page.getByRole('heading', { name: 'Views' })).toBeVisible();
 
     // 2. Click the checkbox in the header row
-    const headerCheckbox = page.getByRole('row').first().getByRole('checkbox');
-    await headerCheckbox.click();
+    const headerCheckbox = page
+      .locator('app-admin-view-search mat-header-row mat-checkbox')
+      .getByRole('checkbox');
+    await headerCheckbox.focus();
+    await page.keyboard.press('Space');
 
     // expect: All views are selected
     // expect: All individual checkboxes are checked
-    const rowCheckboxes = page.getByRole('row').getByRole('checkbox');
+    const rowCheckboxes = page.locator(
+      'app-admin-view-search mat-row mat-checkbox input[type="checkbox"]',
+    );
     const count = await rowCheckboxes.count();
-    for (let i = 1; i < count; i++) {
+    expect(count).toBeGreaterThan(0);
+    for (let i = 0; i < count; i++) {
       await expect(rowCheckboxes.nth(i)).toBeChecked();
     }
 
     // 3. Click the header checkbox again
-    await headerCheckbox.click();
+    await headerCheckbox.focus();
+    await page.keyboard.press('Space');
 
     // expect: All views are deselected
-    for (let i = 1; i < count; i++) {
+    for (let i = 0; i < count; i++) {
       await expect(rowCheckboxes.nth(i)).not.toBeChecked();
     }
 
     // 4. Click individual view checkboxes
-    const firstRowCheckbox = page.getByRole('row').nth(1).getByRole('checkbox');
-    await firstRowCheckbox.click();
+    const firstRowCheckbox = rowCheckboxes.first();
+    await firstRowCheckbox.focus();
+    await page.keyboard.press('Space');
 
     // expect: Only selected views have checked checkboxes
     await expect(firstRowCheckbox).toBeChecked();

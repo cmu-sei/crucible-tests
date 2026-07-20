@@ -13,14 +13,14 @@ test.describe('Home Page - My Views', () => {
     await expect(page.getByText('My Views')).toBeVisible();
 
     // 2. Click on a view name link
-    await page.getByRole('link', { name: 'Project Lagoon TTX - Admin' }).click();
+    await page.getByRole('link', { name: 'Project Lagoon TTX - Admin', exact: true }).click();
 
     // expect: User is navigated to the view details page
     // expect: The URL changes to /view/{viewId}
     await expect(page).toHaveURL(/\/view\//, { timeout: 10000 });
 
     // expect: The page displays the view name in the header
-    await expect(page.getByText('Project Lagoon TTX - Admin User')).toBeVisible();
+    await expect(page.getByText('Project Lagoon TTX - Admin', { exact: true })).toBeVisible();
 
     // expect: The page shows team selector and view content
     await expect(page.getByRole('button', { name: 'Select a Team' })).toBeVisible();

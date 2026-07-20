@@ -28,7 +28,7 @@ test.describe('Responsive Design and Accessibility', () => {
     await expect(page.getByRole('textbox', { name: 'Search' })).toBeVisible();
 
     // Links should have accessible names
-    const viewLink = page.getByRole('link', { name: 'Project Lagoon TTX - Admin User' });
+    const viewLink = page.getByRole('link', { name: 'Project Lagoon TTX - Admin', exact: true });
     await expect(viewLink).toBeVisible();
   });
 });

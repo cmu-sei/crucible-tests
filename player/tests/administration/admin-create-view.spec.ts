@@ -19,7 +19,9 @@ test.describe('Administration - Views', () => {
     await expect(page.getByRole('heading', { name: 'Views' })).toBeVisible();
 
     // 2. Click 'Create' or 'Add View' button (the + icon button, mdi-plus)
-    const createButton = page.locator('button:has(mat-icon.mdi-plus)');
+    const createButton = page
+      .locator('app-admin-view-search')
+      .locator('button:has(mat-icon[fonticon="mdi-plus-circle"])');
     await createButton.click();
 
     // expect: Create view dialog/form opens
@@ -52,6 +54,6 @@ test.describe('Administration - Views', () => {
     await page.getByRole('button', { name: viewName, exact: true }).click();
     await page.getByRole('button', { name: 'Delete View' }).click();
     const confirmDialog = page.getByRole('dialog');
-    await confirmDialog.getByRole('button', { name: /yes|confirm|ok|delete/i }).click();
+    await confirmDialog.getByRole('button', { name: 'Delete' }).click();
   });
 });

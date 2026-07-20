@@ -16,8 +16,9 @@ test.describe('Administration - Views', () => {
     // expect: The Views admin section displays multiple views
     await expect(page.getByRole('heading', { name: 'Views' })).toBeVisible();
 
-    // 2. Click the 'View Name' column header to sort
-    await page.getByRole('button', { name: 'View Name' }).click();
+    // 2. Click the 'Name' column header to sort
+    const nameHeader = page.getByRole('columnheader', { name: 'Name' });
+    await nameHeader.click();
 
     // expect: Views are sorted by name (toggling sort direction)
     const firstCell = page.getByRole('row').nth(1).getByRole('cell').nth(1);
@@ -25,7 +26,7 @@ test.describe('Administration - Views', () => {
     const firstText = await firstCell.textContent();
 
     // Click again to reverse sort order
-    await page.getByRole('button', { name: 'View Name' }).click();
+    await nameHeader.click();
     const firstCellAfterToggle = page.getByRole('row').nth(1).getByRole('cell').nth(1);
     const secondText = await firstCellAfterToggle.textContent();
 
@@ -33,9 +34,10 @@ test.describe('Administration - Views', () => {
     expect(firstText?.trim()).not.toEqual(secondText?.trim());
 
     // 3. Click the 'Status' column header
-    await page.getByRole('button', { name: 'Status' }).click();
+    const statusHeader = page.getByRole('columnheader', { name: 'Status' });
+    await statusHeader.click();
 
     // expect: Views are sorted by status
-    await expect(page.getByRole('button', { name: 'Status' })).toBeVisible();
+    await expect(statusHeader).toBeVisible();
   });
 });

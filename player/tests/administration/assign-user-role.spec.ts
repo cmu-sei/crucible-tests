@@ -17,7 +17,7 @@ test.describe('Administration - Users', () => {
     await expect(page.getByRole('columnheader', { name: 'Role' })).toBeVisible();
 
     // 2. Click the role dropdown for a user showing 'None'
-    const roleDropdown = page.getByRole('combobox', { name: 'None' }).first();
+    const roleDropdown = page.getByRole('combobox', { name: 'Role' }).first();
     await expect(roleDropdown).toBeVisible();
     await roleDropdown.click();
 

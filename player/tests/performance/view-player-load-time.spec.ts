@@ -13,11 +13,11 @@ test.describe('Performance', () => {
 
     const startTime = Date.now();
 
-    await page.getByRole('link', { name: 'Project Lagoon TTX - Admin' }).click();
+    await page.getByRole('link', { name: 'Project Lagoon TTX - Admin', exact: true }).click();
 
     // expect: View player loads within acceptable time
     await expect(page).toHaveURL(/\/view\//, { timeout: 10000 });
-    await expect(page.getByText('Project Lagoon TTX - Admin User')).toBeVisible();
+    await expect(page.getByText('Project Lagoon TTX - Admin', { exact: true })).toBeVisible();
 
     const loadTime = Date.now() - startTime;
 

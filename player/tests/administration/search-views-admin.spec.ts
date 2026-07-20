@@ -27,7 +27,7 @@ test.describe('Administration - Views', () => {
     await expect(page.getByRole('button', { name: 'Clear Search' })).toBeVisible();
 
     // expect: The matching view is visible
-    await expect(page.getByRole('button', { name: 'Project Lagoon TTX - Admin User' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Project Lagoon TTX - Admin', exact: true })).toBeVisible();
 
     // 3. Clear the search field
     await page.getByRole('button', { name: 'Clear Search' }).click();
@@ -36,7 +36,7 @@ test.describe('Administration - Views', () => {
     await expect(searchField).toHaveValue('');
 
     // expect: All views are still displayed
-    await expect(page.getByRole('button', { name: 'Project Lagoon TTX - Admin User' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Steamfitter View' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Project Lagoon TTX - Admin', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Steamfitter View', exact: true })).toBeVisible();
   });
 });

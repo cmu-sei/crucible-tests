@@ -14,18 +14,20 @@ test.describe('Administration - Subscriptions', () => {
     await page.getByRole('button', { name: 'Subscriptions Subscriptions' }).click();
 
     // expect: The Subscriptions section is displayed
-    await expect(page.getByRole('columnheader', { name: 'Subscription Name' })).toBeVisible();
+    const nameHeader = page.getByRole('columnheader', { name: 'Name' });
+    await expect(nameHeader).toBeVisible();
 
-    // 2. Click the 'Subscription Name' column header
-    await page.getByRole('button', { name: 'Subscription Name' }).click();
+    // 2. Click the 'Name' column header
+    await nameHeader.click();
 
     // expect: Subscriptions are sorted by name
-    await expect(page.getByRole('button', { name: 'Subscription Name' })).toBeVisible();
+    await expect(nameHeader).toBeVisible();
 
     // 3. Click the 'Event Types' column header
-    await page.getByRole('button', { name: 'Event Types' }).click();
+    const eventTypesHeader = page.getByRole('columnheader', { name: 'Event Types' });
+    await eventTypesHeader.click();
 
     // expect: Subscriptions are sorted by event types
-    await expect(page.getByRole('button', { name: 'Event Types' })).toBeVisible();
+    await expect(eventTypesHeader).toBeVisible();
   });
 });

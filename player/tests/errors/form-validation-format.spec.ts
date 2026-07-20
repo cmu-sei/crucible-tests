@@ -12,7 +12,7 @@ test.describe('Error Handling and Edge Cases', () => {
     await page.getByRole('button', { name: 'Menu' }).click();
     await page.getByRole('menuitem', { name: 'Administration' }).click();
     await page.getByRole('button', { name: 'Application Templates' }).click();
-    await expect(page.getByRole('columnheader', { name: 'Template Name' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
 
     // expect: Form is displayed
     // Click on a template URL to edit

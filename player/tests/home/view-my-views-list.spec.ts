@@ -20,7 +20,9 @@ test.describe('Home Page - My Views', () => {
 
     // expect: The table shows views the user has access to
     const rows = page.getByRole('row');
-    await expect(rows).toHaveCount(3, { timeout: 10000 }); // header + 2 views
+    expect(await rows.count()).toBeGreaterThanOrEqual(3); // header + fixture views
+    await expect(page.getByRole('link', { name: 'Project Lagoon TTX - Admin', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Steamfitter View', exact: true })).toBeVisible();
 
     // expect: Each view is clickable to navigate to the view details
     const firstViewLink = page.getByRole('cell').getByRole('link').first();

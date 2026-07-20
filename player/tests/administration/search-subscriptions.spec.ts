@@ -14,10 +14,10 @@ test.describe('Administration - Subscriptions', () => {
     await page.getByRole('button', { name: 'Subscriptions Subscriptions' }).click();
 
     // expect: The Subscriptions section is displayed
-    await expect(page.getByRole('columnheader', { name: 'Subscription Name' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
 
     // 2. Enter a subscription name in the Search field
-    const searchField = page.getByRole('textbox', { name: 'Search' });
+    const searchField = page.getByPlaceholder('Search');
     await searchField.fill('test');
 
     // expect: The subscriptions list filters to show only matching subscriptions

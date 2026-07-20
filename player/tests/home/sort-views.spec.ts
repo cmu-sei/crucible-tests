@@ -13,17 +13,15 @@ test.describe('Home Page - My Views', () => {
     await expect(page.getByText('My Views')).toBeVisible();
     await expect(page.getByRole('table')).toBeVisible();
 
-    // expect: Views are initially sorted by name in ascending order
-    const firstCell = page.getByRole('row').nth(1).getByRole('cell').first();
-    const lastCell = page.getByRole('row').nth(2).getByRole('cell').first();
-    await expect(firstCell).toContainText('Project Lagoon');
-    await expect(lastCell).toContainText('Steamfitter');
+    const names = page.getByRole('row').locator('[role="cell"]:first-child');
+    const ascendingNames = await names.allTextContents();
+    expect(ascendingNames).toEqual([...ascendingNames].sort((a, b) => a.localeCompare(b)));
 
     // 2. Click the 'Name' column header to toggle sort to descending
     await page.getByRole('button', { name: 'Name' }).click();
 
     // expect: Views are sorted by name in descending order
-    await expect(firstCell).toContainText('Steamfitter');
-    await expect(lastCell).toContainText('Project Lagoon');
+    const descendingNames = await names.allTextContents();
+    expect(descendingNames).toEqual([...ascendingNames].reverse());
   });
 });
