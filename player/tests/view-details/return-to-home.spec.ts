@@ -4,12 +4,14 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, seededPrimaryViewName, findPlayerHomeViewLink } from '../../fixtures';
 
 test.describe('View Details', () => {
   test('Return to Home from View', async ({ playerAuthenticatedPage: page }) => {
+    const primaryViewName = seededPrimaryViewName();
+
     // 1. Log in and navigate to a view
-    await page.getByRole('link', { name: 'Project Lagoon TTX - Admin' }).click();
+    await (await findPlayerHomeViewLink(page, primaryViewName)).click();
 
     // expect: User is on the view details page
     await expect(page).toHaveURL(/\/view\//, { timeout: 10000 });

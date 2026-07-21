@@ -4,16 +4,25 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import {
+  test,
+  expect,
+  Services,
+  seededPrimaryViewName,
+  findPlayerHomeViewLink,
+  clickWithoutOverlayInterference,
+} from '../../fixtures';
 
 test.describe('User Presence', () => {
   test('User Presence - Team Filter', async ({ playerAuthenticatedPage: page }) => {
+    const primaryViewName = seededPrimaryViewName();
+
     // 1. Navigate to user presence page in a view with multiple teams
-    await page.getByRole('link', { name: 'Project Lagoon TTX - Admin' }).click();
+    await (await findPlayerHomeViewLink(page, primaryViewName)).click();
     await expect(page).toHaveURL(/\/view\//, { timeout: 10000 });
 
     // Open the Users dialog
-    await page.getByRole('button', { name: 'Users' }).click();
+    await clickWithoutOverlayInterference(page, page.getByRole('button', { name: 'Users' }));
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
 

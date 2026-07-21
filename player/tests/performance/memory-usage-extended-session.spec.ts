@@ -4,23 +4,30 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import {
+  test,
+  expect,
+  Services,
+  seededPrimaryViewName,
+  findPlayerHomeViewLink,
+} from '../../fixtures';
 
 test.describe('Performance', () => {
   test('Memory Usage - Extended Session', async ({ playerAuthenticatedPage: page }) => {
+    const primaryViewName = seededPrimaryViewName();
+
     // 1. Log in and navigate through various pages for extended period
     await expect(page.getByText('My Views')).toBeVisible();
 
     // Navigate to several pages to simulate extended usage
     // Home -> View -> Home -> Admin -> Users -> Templates -> Roles -> Subscriptions -> Home
-    await page.getByRole('link', { name: 'Project Lagoon TTX - Admin' }).click();
+    await (await findPlayerHomeViewLink(page, primaryViewName)).click();
     await expect(page).toHaveURL(/\/view\//, { timeout: 10000 });
 
     await page.getByRole('link', { name: 'Player' }).click();
     await expect(page.getByText('My Views')).toBeVisible();
 
-    await page.getByRole('button', { name: 'Menu' }).click();
-    await page.getByRole('menuitem', { name: 'Administration' }).click();
+    await page.goto(`${Services.Player.UI}/admin`);
     await expect(page).toHaveURL(/\/admin/, { timeout: 10000 });
 
     await page.getByRole('button', { name: 'Users Users' }).click();

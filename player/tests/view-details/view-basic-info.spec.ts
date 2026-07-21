@@ -4,19 +4,21 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink } from '../../fixtures';
 
 test.describe('View Details', () => {
   test('View Basic Information', async ({ playerAuthenticatedPage: page }) => {
+    const primaryViewName = seededPrimaryViewName();
+
     // 1. Log in and navigate to a view
-    await page.getByRole('link', { name: 'Project Lagoon TTX - Admin', exact: true }).click();
+    await (await findPlayerHomeViewLink(page, primaryViewName)).click();
 
     // expect: User is on the view details page
     await expect(page).toHaveURL(/\/view\//, { timeout: 10000 });
 
     // 2. Observe the view header
     // expect: View name is displayed
-    await expect(page.getByText('Project Lagoon TTX - Admin', { exact: true })).toBeVisible();
+    await expect(page.getByText(primaryViewName, { exact: true })).toBeVisible();
 
     // expect: Current team is shown with 'Team:' label
     await expect(page.getByText('Team:')).toBeVisible();

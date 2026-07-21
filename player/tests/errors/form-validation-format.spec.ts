@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services } from '../../fixtures';
 
 test.describe('Error Handling and Edge Cases', () => {
   test('Form Validation - Invalid Input Format', async ({ playerAuthenticatedPage: page }) => {
+    const alloyViewUrl = `${Services.Alloy.UI.replace(/\/$/, '')}/views/{viewId}`;
+
     // 1. Navigate to a form with formatted fields (e.g., Application Template URL)
     await page.getByRole('button', { name: 'Menu' }).click();
     await page.getByRole('menuitem', { name: 'Administration' }).click();
@@ -16,7 +18,7 @@ test.describe('Error Handling and Edge Cases', () => {
 
     // expect: Form is displayed
     // Click on a template URL to edit
-    const urlButton = page.getByRole('button', { name: serviceUrlPattern(Services.Alloy.UI) });
+    const urlButton = page.getByRole('button', { name: alloyViewUrl, exact: true });
     await expect(urlButton).toBeVisible();
 
     // 2. The form should validate URL format

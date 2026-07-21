@@ -1,7 +1,8 @@
 // Copyright 2026 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
-import { test as base, Page, request as pwRequest, APIRequestContext } from '@playwright/test';
+import { createHash } from 'crypto';
+import { test as base, Page, Locator, request as pwRequest, APIRequestContext, TestInfo } from '@playwright/test';
 import fs from 'fs';
 import {
   Services,
@@ -27,6 +28,75 @@ export type PlayerFixtures = {
 interface PlayerView {
   id: string;
   name: string;
+}
+
+const primaryViewBaseName = 'Project Lagoon TTX - Admin';
+const steamfitterViewBaseName = 'Steamfitter View';
+
+function buildSeededViewName(baseName: string, testInfo: TestInfo): string {
+  const seed = createHash('sha1')
+    .update(`${testInfo.project.name}:${testInfo.file}:${testInfo.title}:${testInfo.retry}`)
+    .digest('hex')
+    .slice(0, 8);
+
+  return `${baseName} [${testInfo.project.name}-w${testInfo.workerIndex}-r${testInfo.retry}-${seed}]`;
+}
+
+export function seededPrimaryViewName(): string {
+  return buildSeededViewName(primaryViewBaseName, test.info());
+}
+
+export function seededSteamfitterViewName(): string {
+  return buildSeededViewName(steamfitterViewBaseName, test.info());
+}
+
+export async function typeIntoSearch(searchField: Locator, value: string): Promise<void> {
+  await searchField.click();
+  await searchField.press('Control+A');
+  await searchField.press('Delete');
+  if (value.length > 0) {
+    await searchField.pressSequentially(value);
+  }
+}
+
+export async function dismissTransientOverlays(page: Page): Promise<void> {
+  await page.mouse.move(0, 0).catch(() => {});
+  await page.keyboard.press('Escape').catch(() => {});
+
+  const backdrop = page.locator('.cdk-overlay-backdrop');
+  await backdrop.first().waitFor({ state: 'hidden', timeout: 1000 }).catch(() => {});
+
+  const tooltip = page.locator('mat-tooltip-component');
+  await tooltip.first().waitFor({ state: 'hidden', timeout: 1000 }).catch(() => {});
+}
+
+export async function clickWithoutOverlayInterference(page: Page, locator: Locator): Promise<void> {
+  await dismissTransientOverlays(page);
+  try {
+    await locator.click({ timeout: 1500 });
+  } catch {
+    await dismissTransientOverlays(page);
+    await locator.click({ force: true });
+  }
+}
+
+export async function findPlayerHomeViewLink(page: Page, viewName: string): Promise<Locator> {
+  const searchField = page.getByRole('textbox', { name: 'Search' });
+  await typeIntoSearch(searchField, viewName);
+
+  const viewLink = page.getByRole('link', { name: viewName, exact: true });
+  await viewLink.waitFor({ state: 'visible', timeout: 10000 });
+  return viewLink;
+}
+
+export async function findAdminViewButton(page: Page, viewName: string): Promise<Locator> {
+  const searchField = page.getByRole('textbox', { name: 'Search' });
+  const searchableName = viewName.replace(/ \[[^\]]+\]$/, '');
+  await typeIntoSearch(searchField, searchableName);
+
+  const viewButton = page.getByRole('button', { name: viewName, exact: true });
+  await viewButton.waitFor({ state: 'visible', timeout: 10000 });
+  return viewButton;
 }
 
 const playerHeaders = (token: string) => ({
@@ -109,16 +179,23 @@ async function deletePlayerView(
   });
 
   if (!response.ok() && response.status() !== 404) {
-    console.warn(`Player fixture cleanup failed for view ${viewId}: ${response.status()}`);
+    const responseBody = await response.text().catch(() => '');
+    console.warn(
+      `Player fixture cleanup failed for view ${viewId}: ${response.status()}${
+        responseBody ? `\n${responseBody}` : ''
+      }`
+    );
   }
 }
 
-async function seedLegacyPlayerData(token: string): Promise<() => Promise<void>> {
+async function seedLegacyPlayerData(token: string, testInfo: TestInfo): Promise<() => Promise<void>> {
   const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
   const viewIds: string[] = [];
+  const primaryViewName = buildSeededViewName(primaryViewBaseName, testInfo);
+  const steamfitterViewName = buildSeededViewName(steamfitterViewBaseName, testInfo);
 
   try {
-    const primary = await createPlayerView(apiContext, token, 'Project Lagoon TTX - Admin');
+    const primary = await createPlayerView(apiContext, token, primaryViewName);
     viewIds.push(primary.id);
 
     const teamsResponse = await apiContext.get(`${Services.Player.API}/api/views/${primary.id}/teams`, {
@@ -161,22 +238,28 @@ async function seedLegacyPlayerData(token: string): Promise<() => Promise<void>>
       throw new Error(`Failed to add Admin User to Player fixture team: ${addAdminResponse.status()} ${await addAdminResponse.text()}`);
     }
 
-    for (const name of ['Steamfitter View']) {
+    for (const name of [steamfitterViewName]) {
       const view = await createPlayerView(apiContext, token, name);
       viewIds.push(view.id);
     }
 
     return async () => {
+      try {
+        for (const viewId of viewIds.reverse()) {
+          await deletePlayerView(apiContext, token, viewId);
+        }
+      } finally {
+        await apiContext.dispose();
+      }
+    };
+  } catch (error) {
+    try {
       for (const viewId of viewIds.reverse()) {
         await deletePlayerView(apiContext, token, viewId);
       }
+    } finally {
       await apiContext.dispose();
-    };
-  } catch (error) {
-    for (const viewId of viewIds.reverse()) {
-      await deletePlayerView(apiContext, token, viewId);
     }
-    await apiContext.dispose();
     throw error;
   }
 }
@@ -193,7 +276,7 @@ export const test = base.extend<PlayerFixtures>({
   // opt out with an empty storageState and retain the interactive login flow.
   storageState: playerStateExists ? playerStatePath : undefined,
 
-  playerAuthenticatedPage: async ({ page, storageState }, use) => {
+  playerAuthenticatedPage: async ({ page, storageState }, use, testInfo) => {
     if (storageState === playerStatePath && playerSessionState.length > 0) {
       await page.addInitScript((entries: Array<[string, string]>) => {
         for (const [key, value] of entries) {
@@ -220,7 +303,7 @@ export const test = base.extend<PlayerFixtures>({
       await appShell.waitFor({ state: 'visible', timeout: 30000 });
     }
 
-    const cleanupLegacyData = await seedLegacyPlayerData(await getPlayerApiToken(page, playerSessionState));
+    const cleanupLegacyData = await seedLegacyPlayerData(await getPlayerApiToken(page, playerSessionState), testInfo);
     await page.reload({ waitUntil: 'domcontentloaded' });
     await appShell.waitFor({ state: 'visible', timeout: 30000 });
 

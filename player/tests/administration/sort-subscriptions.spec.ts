@@ -16,18 +16,24 @@ test.describe('Administration - Subscriptions', () => {
     // expect: The Subscriptions section is displayed
     const nameHeader = page.getByRole('columnheader', { name: 'Name' });
     await expect(nameHeader).toBeVisible();
+    const eventTypesHeader = page.getByRole('columnheader', { name: 'Event Types' });
+    const getSortState = async (header = nameHeader) => (await header.getAttribute('aria-sort')) ?? 'none';
+    const nextSortState = (state: string) =>
+      state === 'ascending' ? 'descending' : state === 'descending' ? 'none' : 'ascending';
 
     // 2. Click the 'Name' column header
+    const initialNameState = await getSortState(nameHeader);
     await nameHeader.click();
 
     // expect: Subscriptions are sorted by name
-    await expect(nameHeader).toBeVisible();
+    await expect.poll(() => getSortState(nameHeader)).toBe(nextSortState(initialNameState));
 
     // 3. Click the 'Event Types' column header
-    const eventTypesHeader = page.getByRole('columnheader', { name: 'Event Types' });
+    const initialEventTypesState = await getSortState(eventTypesHeader);
     await eventTypesHeader.click();
 
     // expect: Subscriptions are sorted by event types
-    await expect(eventTypesHeader).toBeVisible();
+    await expect.poll(() => getSortState(eventTypesHeader)).toBe(nextSortState(initialEventTypesState));
+    await expect.poll(() => getSortState(nameHeader)).toBe('none');
   });
 });

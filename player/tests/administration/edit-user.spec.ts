@@ -4,7 +4,7 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, typeIntoSearch } from '../../fixtures';
 
 test.describe('Administration - Users', () => {
   test('Edit User', async ({ playerAuthenticatedPage: page }) => {
@@ -16,19 +16,28 @@ test.describe('Administration - Users', () => {
     // expect: Users list displays
     await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
 
-    // 2. Observe user details
+    // 2. Search for the admin user
+    const searchField = page.getByRole('textbox', { name: 'Search' });
+    await typeIntoSearch(searchField, 'Admin User');
+
+    // expect: The users list filters to the requested user
+    await expect(searchField).toHaveValue('admin user');
+
+    // 3. Observe user details
     // expect: User details are displayed in editable form
     // Each user row shows ID, Name, and Role dropdown
-    const firstUserRow = page.getByRole('row').nth(1);
-    await expect(firstUserRow.getByRole('cell', { name: /Admin User/ })).toBeVisible();
+    const adminUserRow = page.getByRole('row').filter({
+      has: page.getByRole('cell', { name: 'Admin User', exact: true }),
+    });
+    await expect(adminUserRow.getByRole('cell', { name: 'Admin User', exact: true })).toBeVisible();
 
-    // 3. Modify user details (e.g., roles)
+    // 4. Modify user details (e.g., roles)
     // The role dropdown allows changing a user's role
-    const roleDropdown = firstUserRow.getByRole('combobox');
+    const roleDropdown = adminUserRow.getByRole('combobox');
     await expect(roleDropdown).toBeVisible();
 
     // expect: Fields accept modifications
-    // 4. The role dropdown is interactive
+    // 5. The role dropdown is interactive
     await expect(roleDropdown).toBeEnabled();
   });
 });

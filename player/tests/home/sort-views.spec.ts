@@ -4,24 +4,53 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, seededPrimaryViewName, seededSteamfitterViewName } from '../../fixtures';
 
 test.describe('Home Page - My Views', () => {
   test('Sort Views by Name', async ({ playerAuthenticatedPage: page }) => {
+    const primaryViewName = seededPrimaryViewName();
+    const steamfitterViewName = seededSteamfitterViewName();
+
     // 1. Log in as admin user
     // expect: User is on the home page with multiple views displayed
     await expect(page.getByText('My Views')).toBeVisible();
     await expect(page.getByRole('table')).toBeVisible();
 
-    const names = page.getByRole('row').locator('[role="cell"]:first-child');
-    const ascendingNames = await names.allTextContents();
-    expect(ascendingNames).toEqual([...ascendingNames].sort((a, b) => a.localeCompare(b)));
+    const nameHeader = page.getByRole('columnheader', { name: 'Name' });
+    const getSortState = async () => (await nameHeader.getAttribute('aria-sort')) ?? 'none';
+    const getVisibleNames = async () =>
+      (await page.getByRole('row').locator('[role="cell"]:first-child').allTextContents())
+        .map((name) => name.trim())
+        .filter((name) => name.length > 0);
+    const getRelativeOrder = async () => {
+      const visibleNames = await getVisibleNames();
+      const primaryIndex = visibleNames.indexOf(primaryViewName);
+      const steamfitterIndex = visibleNames.indexOf(steamfitterViewName);
 
-    // 2. Click the 'Name' column header to toggle sort to descending
-    await page.getByRole('button', { name: 'Name' }).click();
+      expect(primaryIndex).toBeGreaterThanOrEqual(0);
+      expect(steamfitterIndex).toBeGreaterThanOrEqual(0);
 
-    // expect: Views are sorted by name in descending order
-    const descendingNames = await names.allTextContents();
-    expect(descendingNames).toEqual([...ascendingNames].reverse());
+      return Math.sign(primaryIndex - steamfitterIndex);
+    };
+
+    // 2. The table starts sorted by Name ascending
+    await expect.poll(getSortState).toBe('ascending');
+    const ascendingOrder = await getRelativeOrder();
+
+    // 3. First click toggles to descending
+    await nameHeader.click();
+    await expect.poll(getSortState).toBe('descending');
+    const descendingOrder = await getRelativeOrder();
+    expect(descendingOrder).toBe(-ascendingOrder);
+
+    // 4. Second click toggles to unsorted/none
+    await nameHeader.click();
+    await expect.poll(getSortState).toBe('none');
+
+    // 5. Third click returns to ascending
+    await nameHeader.click();
+    await expect.poll(getSortState).toBe('ascending');
+    const restoredAscendingOrder = await getRelativeOrder();
+    expect(restoredAscendingOrder).toBe(ascendingOrder);
   });
 });

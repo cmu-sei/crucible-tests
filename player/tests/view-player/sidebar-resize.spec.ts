@@ -4,12 +4,14 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, seededPrimaryViewName, findPlayerHomeViewLink } from '../../fixtures';
 
 test.describe('View Player Interface', () => {
   test('View Player Sidebar - Resize', async ({ playerAuthenticatedPage: page }) => {
+    const primaryViewName = seededPrimaryViewName();
+
     // 1. Navigate to view player page
-    await page.getByRole('link', { name: 'Project Lagoon TTX - Admin' }).click();
+    await (await findPlayerHomeViewLink(page, primaryViewName)).click();
     await expect(page).toHaveURL(/\/view\//, { timeout: 10000 });
 
     // expect: Sidebar is visible

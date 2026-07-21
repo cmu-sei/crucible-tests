@@ -4,7 +4,7 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, typeIntoSearch } from '../../fixtures';
 
 test.describe('Administration - Views', () => {
   test('Delete View', async ({ playerAuthenticatedPage: page }) => {
@@ -26,6 +26,9 @@ test.describe('Administration - Views', () => {
     const descField = page.getByRole('textbox', { name: 'Description (required)' });
     await descField.fill('View to be deleted');
     await page.getByRole('button', { name: 'Done' }).click();
+    const searchField = page.getByRole('textbox', { name: 'Search' });
+    await typeIntoSearch(searchField, viewName);
+    await expect(searchField).toHaveValue(viewName);
     await expect(page.getByRole('button', { name: viewName, exact: true })).toBeVisible();
 
     // 1. Navigate to admin views section
