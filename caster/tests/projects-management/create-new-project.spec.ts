@@ -4,10 +4,11 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen } from '../../fixtures';
 
 test.describe('Projects Management', () => {
   test('Create New Project', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+    const projectName = `Test Infrastructure Project ${Date.now()}`;
 
     // 1. Navigate to Projects section
     // expect: Projects list is visible
@@ -20,12 +21,12 @@ test.describe('Projects Management', () => {
     await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Create New Project?' })).toBeVisible();
 
-    // 3. Enter 'Test Infrastructure Project' in the Name field
+    // 3. Enter a unique project name in the Name field
     const nameField = page.getByRole('textbox', { name: 'Name' });
-    await nameField.fill('Test Infrastructure Project');
+    await nameField.fill(projectName);
 
     // expect: The name field accepts input
-    await expect(nameField).toHaveValue('Test Infrastructure Project');
+    await expect(nameField).toHaveValue(projectName);
 
     // 4. Enter 'Test description' in the Description field
     const descField = page.getByRole('textbox', { name: 'Description' });
@@ -45,8 +46,7 @@ test.describe('Projects Management', () => {
     const projectData = await createResponse.json();
     cleanupCasterProject(projectData.id);
 
-    // expect: The project is created successfully
-    // expect: The new project appears in the projects list
-    await expect(page.getByRole('link', { name: 'Test Infrastructure Project' })).toBeVisible({ timeout: 10000 });
+    // expect: The project is created successfully and opens in its detail view.
+    await expectCasterProjectOpen(page, projectName);
   });
 });

@@ -31,28 +31,18 @@ test.describe('Accessibility and Usability', () => {
     // expect: Buttons have accessible names
     await expect(page.getByRole('button', { name: 'Add Event Template' })).toBeVisible();
 
-    // 3. Verify dialog accessibility - create a template first, then edit it
+    // 3. Verify dialog accessibility - "Add Event Template" opens the
+    //    "Create New Event Template" dialog directly (Alloy.ui PR #711).
+    const createDialog = page.getByRole('dialog', { name: 'Create New Event Template' });
     await page.getByRole('button', { name: 'Add Event Template' }).click();
-    await expect(page.getByRole('cell', { name: 'New Event Template' }).first()).toBeVisible();
-
-    // Open the edit dialog
-    await page.getByRole('button', { name: 'Edit: New Event Template' }).first().click();
-    await expect(page.getByRole('dialog', { name: 'Edit Event Template' })).toBeVisible();
+    await expect(createDialog).toBeVisible();
 
     // expect: Form labels are properly associated
-    await expect(page.getByRole('textbox', { name: 'Name (required)' })).toBeVisible();
-    await expect(page.getByRole('spinbutton', { name: 'Duration Hours' })).toBeVisible();
+    await expect(createDialog.getByRole('textbox', { name: 'Name (required)' })).toBeVisible();
+    await expect(createDialog.getByRole('spinbutton', { name: 'Duration Hours' })).toBeVisible();
 
-    // Close dialog and clean up: delete the created template
-    await page.getByRole('button', { name: 'Cancel' }).first().click();
-    await expect(page.getByRole('dialog', { name: 'Edit Event Template' })).not.toBeVisible();
-
-    // Delete the template we created
-    await page.getByRole('button', { name: 'Edit: New Event Template' }).first().click();
-    await expect(page.getByRole('dialog', { name: 'Edit Event Template' })).toBeVisible();
-    await page.getByRole('button', { name: 'Delete' }).click();
-    await expect(page.getByRole('dialog', { name: 'Delete Event Template' })).toBeVisible();
-    await page.getByRole('button', { name: 'Yes' }).click();
-    await expect(page.getByRole('cell', { name: 'New Event Template' })).not.toBeVisible();
+    // Close the dialog without creating anything (no row is added until Save).
+    await createDialog.getByRole('button', { name: 'Cancel' }).first().click();
+    await expect(createDialog).not.toBeVisible();
   });
 });

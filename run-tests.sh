@@ -49,20 +49,16 @@ load_target_env() {
         set +a
     fi
 }
-load_target_env
-
-# Resolve infrastructure URLs (with defaults)
-KEYCLOAK_URL="${KEYCLOAK_URL:-https://localhost:8443}"
-ASPIRE_DASHBOARD_URL="${ASPIRE_DASHBOARD_URL:-https://localhost:17088}"
-
 # All supported apps
-ALL_APPS="keycloak blueprint player cite gameboard topomojo steamfitter moodle alloy caster gallery"
+ALL_APPS="keycloak blueprint player playerVm console cite gameboard topomojo steamfitter moodle alloy caster gallery"
 
 # Map app name to apps it depends on (space-separated)
 get_app_deps() {
     local app="$1"
     case "$app" in
+        console) echo "player playerVm";;
         gameboard) echo "topomojo";;
+        playerVm) echo "player";;
         *) echo "";;
     esac
 }
@@ -74,6 +70,8 @@ get_app_url() {
         keycloak)    echo "${KEYCLOAK_URL}";;
         blueprint)   echo "${BLUEPRINT_UI_URL:-http://localhost:4725}";;
         player)      echo "${PLAYER_UI_URL:-http://localhost:4301}";;
+        playerVm)    echo "${PLAYERVM_UI_URL:-http://localhost:4303}";;
+        console)     echo "${CONSOLE_UI_URL:-http://localhost:4305}";;
         cite)        echo "${CITE_UI_URL:-http://localhost:4721}";;
         gameboard)   echo "${GAMEBOARD_UI_URL:-http://localhost:4202}";;
         topomojo)    echo "${TOPOMOJO_UI_URL:-http://localhost:4201}";;
@@ -180,6 +178,8 @@ Applications:
   keycloak               Run Keycloak (Identity Provider) tests
   blueprint              Run Blueprint tests
   player                 Run Player tests
+  playerVm               Run Player VM tests
+  console                Run Console tests
   cite                   Run CITE tests
   gameboard              Run Gameboard tests
   topomojo               Run TopoMojo tests
@@ -199,7 +199,11 @@ Commands:
   help                   Show this help message
 
 Options:
+  -h, --help             Show this help message and exit
   --no-check            Skip service health checks
+  --verbose, -v         Echo each test's stdout/stderr to the terminal too.
+                        By default that output goes only to the .logs/ file,
+                        keeping the live progress display readable.
   --filter <pattern>    Filter tests by pattern
   --app <app>           Run tests for specific app
   --browser <name>      Run tests in a single browser: chromium | firefox.
@@ -231,13 +235,29 @@ NO_CHECK=false
 FILTER=""
 BROWSER=""
 WORKERS=""
+VERBOSE=false
+SHOW_HELP=false
+
+case "$COMMAND" in
+    -h|--help)
+        SHOW_HELP=true
+        ;;
+esac
 
 shift 2>/dev/null || true
 
 while [[ $# -gt 0 ]]; do
     case $1 in
+        -h|--help)
+            SHOW_HELP=true
+            shift
+            ;;
         --no-check)
             NO_CHECK=true
+            shift
+            ;;
+        --verbose|-v)
+            VERBOSE=true
             shift
             ;;
         --filter)
@@ -286,12 +306,30 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+if [ "$SHOW_HELP" = true ]; then
+    show_usage
+    exit 0
+fi
+
+load_target_env
+
+# Resolve infrastructure URLs (with defaults)
+KEYCLOAK_URL="${KEYCLOAK_URL:-https://localhost:8443}"
+ASPIRE_DASHBOARD_URL="${ASPIRE_DASHBOARD_URL:-https://localhost:17088}"
+
 # Determine which app(s) to health-check
 TARGET_APP=""
 if [ -n "$APP" ]; then
     TARGET_APP="$APP"
 elif echo "$ALL_APPS" | grep -qw "$COMMAND"; then
     TARGET_APP="$COMMAND"
+fi
+
+# In verbose mode the progress-bar reporter echoes each test's stdout/stderr to
+# the terminal as well as the log. By default that output goes only to the log,
+# keeping the live terminal readable.
+if [ "$VERBOSE" = true ]; then
+    export CRUCIBLE_VERBOSE=1
 fi
 
 # Set up logging: capture the full output of this run (stdout + stderr, the
@@ -305,11 +343,16 @@ case "$COMMAND" in
         LOG_DIR="$SCRIPT_DIR/.logs"
         mkdir -p "$LOG_DIR"
         LOG_FILE="$LOG_DIR/$(date +%Y%m%d-%H%M%S)-${COMMAND}${APP:+-$APP}.log"
-        # Redirect everything from here on through tee so it lands in both the
-        # terminal and the log file.
+        # Redirect this script's own output (health check, headers, summary)
+        # through tee so it lands in both the terminal and the log file.
         exec > >(tee -a "$LOG_FILE") 2>&1
         echo -e "${BLUE}Logging full output to: $LOG_FILE${NC}"
         echo ""
+        # The progress-bar reporter owns the Playwright test output: it paints
+        # colored lines + a bottom-pinned bar to /dev/tty (kept off this tee pipe,
+        # so it never pollutes the log) and appends a clean plain-text copy of each
+        # line to the same log file via CRUCIBLE_LOG_FILE.
+        export CRUCIBLE_LOG_FILE="$LOG_FILE"
         ;;
 esac
 
@@ -343,9 +386,9 @@ case $COMMAND in
         if [ -n "$APP" ]; then
             print_warning "Running tests for app: $APP"
             if [ -n "$FILTER" ]; then
-                npx playwright test "$APP/" $BROWSER_ARG $WORKERS_ARG --grep "$FILTER"
+                npx playwright test "$APP/tests/" $BROWSER_ARG $WORKERS_ARG --grep "$FILTER"
             else
-                npx playwright test "$APP/" $BROWSER_ARG $WORKERS_ARG
+                npx playwright test "$APP/tests/" $BROWSER_ARG $WORKERS_ARG
             fi
         else
             if [ -n "$FILTER" ]; then
@@ -372,7 +415,7 @@ case $COMMAND in
         print_header "Running Tests in UI Mode"
         TEST_PATH=""
         if [ -n "$APP" ]; then
-            TEST_PATH="$APP/"
+            TEST_PATH="$APP/tests/"
             print_warning "Running UI tests for: $APP"
         fi
         if [ -n "$FILTER" ]; then
@@ -386,7 +429,7 @@ case $COMMAND in
         print_header "Running Tests in Headed Mode"
         TEST_PATH=""
         if [ -n "$APP" ]; then
-            TEST_PATH="$APP/"
+            TEST_PATH="$APP/tests/"
             print_warning "Running headed tests for: $APP"
         fi
         if [ -n "$FILTER" ]; then
@@ -400,7 +443,7 @@ case $COMMAND in
         print_header "Running Tests in Debug Mode"
         TEST_PATH=""
         if [ -n "$APP" ]; then
-            TEST_PATH="$APP/"
+            TEST_PATH="$APP/tests/"
             print_warning "Running debug tests for: $APP"
         fi
         if [ -n "$FILTER" ]; then
@@ -424,9 +467,9 @@ case $COMMAND in
         if echo "$ALL_APPS" | grep -qw "$COMMAND"; then
             print_header "Running $COMMAND Tests"
             if [ -n "$FILTER" ]; then
-                npx playwright test "$COMMAND/" $BROWSER_ARG $WORKERS_ARG --grep "$FILTER"
+                npx playwright test "$COMMAND/tests/" $BROWSER_ARG $WORKERS_ARG --grep "$FILTER"
             else
-                npx playwright test "$COMMAND/" $BROWSER_ARG $WORKERS_ARG
+                npx playwright test "$COMMAND/tests/" $BROWSER_ARG $WORKERS_ARG
             fi
         else
             echo -e "${RED}Unknown command: $COMMAND${NC}"

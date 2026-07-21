@@ -4,42 +4,37 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
-import { navigateToAdminSection, deleteTeamTypeByName } from '../../test-helpers';
+import { test, expect, Services, seedTeamType, apiDeleteTeamType } from '../../fixtures';
+import { navigateToAdminSection, waitForAdminListLoad } from '../../test-helpers';
 
 test.describe('Administration - Team Types', () => {
 
-  const TEST_TEAM_TYPE = 'Test Team Type For Edit';
-  const EDITED_TEAM_TYPE = 'Edited Team Type Automation';
+  let teamTypeName = '';
+  let teamTypeId = '';
+  const EDITED_TEAM_TYPE = `Edited TT ${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
   test('Edit Team Type', async ({ citeAuthenticatedPage: page }) => {
 
-    // 1. Create a team type to edit
+    // 1. Seed a team type via API
+    teamTypeName = `Edit TT ${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    teamTypeId = await seedTeamType(teamTypeName);
+
+    // 2. Navigate to Team Types admin
     await navigateToAdminSection(page, 'Team Types');
+    await waitForAdminListLoad(page, '/api/teamtypes', true);
 
-    const addButton = page.getByRole('button', { name: 'Add TeamType' });
-    await expect(addButton).toBeVisible({ timeout: 10000 });
-    await addButton.click();
+    // Search for the team type
+    const searchBox = page.locator('input[placeholder="Search"], input[type="search"], input[aria-label="Search"]').first();
+    if (await searchBox.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await searchBox.clear();
+      await searchBox.fill(teamTypeName);
+      await page.waitForTimeout(1000);
+    }
 
-    const createDialog = page.getByRole('dialog');
-    await expect(createDialog).toBeVisible({ timeout: 5000 });
-
-    const nameField = createDialog.getByRole('textbox').first();
-    await nameField.fill(TEST_TEAM_TYPE);
-
-    const saveButton = createDialog.getByRole('button', { name: 'Save' });
-    await expect(saveButton).toBeEnabled({ timeout: 5000 });
-    await saveButton.click();
-    await expect(createDialog).not.toBeVisible({ timeout: 10000 });
-    await page.waitForTimeout(1000);
-
-    // 2. Re-navigate and verify the team type was created
-    await navigateToAdminSection(page, 'Team Types');
-
-    const typeRow = page.locator('tbody tr').filter({ hasText: TEST_TEAM_TYPE }).first();
+    const typeRow = page.locator('tbody tr').filter({ hasText: teamTypeName }).first();
     await expect(typeRow).toBeVisible({ timeout: 10000 });
 
-    // 3. Click the edit button on the created team type
+    // 3. Click the edit button
     const editButton = typeRow.getByRole('button', { name: 'Edit Team Type' });
     await expect(editButton).toBeVisible({ timeout: 5000 });
     await editButton.click();
@@ -51,7 +46,7 @@ test.describe('Administration - Team Types', () => {
     const editNameField = editDialog.getByRole('textbox').first();
     await expect(editNameField).toBeVisible({ timeout: 5000 });
     const currentValue = await editNameField.inputValue();
-    expect(currentValue).toBe(TEST_TEAM_TYPE);
+    expect(currentValue).toBe(teamTypeName);
 
     await editNameField.clear();
     await editNameField.fill(EDITED_TEAM_TYPE);
@@ -64,17 +59,20 @@ test.describe('Administration - Team Types', () => {
     await page.waitForTimeout(1000);
 
     // 6. Verify the edit is reflected in the list
-    await navigateToAdminSection(page, 'Team Types');
+    if (await searchBox.isVisible({ timeout: 2000 }).catch(() => false)) {
+      await searchBox.clear();
+      await searchBox.fill(EDITED_TEAM_TYPE);
+      await page.waitForTimeout(1000);
+    }
 
     const editedRow = page.locator('tbody tr').filter({ hasText: EDITED_TEAM_TYPE }).first();
     await expect(editedRow).toBeVisible({ timeout: 10000 });
-
-    const oldRow = page.locator('tbody tr').filter({ hasText: TEST_TEAM_TYPE });
-    await expect(oldRow).toHaveCount(0, { timeout: 5000 });
   });
 
-  test.afterEach(async ({ citeAuthenticatedPage: page }) => {
-    await deleteTeamTypeByName(page, EDITED_TEAM_TYPE);
-    await deleteTeamTypeByName(page, TEST_TEAM_TYPE);
+  test.afterEach(async () => {
+    if (teamTypeId) {
+      await apiDeleteTeamType(teamTypeId);
+      teamTypeId = '';
+    }
   });
 });

@@ -12,11 +12,11 @@ test.describe('Global Workspace Settings', () => {
     await page.goto(Services.Caster.UI + '/admin?section=Workspaces');
     await expect(page.getByRole('heading', { name: 'Active Runs' })).toBeVisible({ timeout: 10000 });
 
-    await expect(page.getByRole('button', { name: 'createdAt' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'isDestroy' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Created At' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Destroy' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'status' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'workspaceId' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'actions' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Workspace ID' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Actions' })).toBeVisible();
     await expect(page.getByRole('textbox', { name: 'Search' })).toBeVisible();
     await expect(page.getByRole('combobox', { name: 'Items per page:' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Previous page' })).toBeVisible();

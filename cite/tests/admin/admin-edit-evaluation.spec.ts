@@ -4,27 +4,42 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
-import { navigateToAdminSection, deleteEvaluationByName, createEvaluation } from '../../test-helpers';
+import { test, expect, Services, seedCompleteEvaluation, cleanupCompleteEvaluation } from '../../fixtures';
+import { navigateToAdminSection, waitForAdminListLoad } from '../../test-helpers';
 
 test.describe('Administration - Evaluations', () => {
 
-  const TEST_EVAL_NAME = 'Test Evaluation For Edit';
-  const EDITED_EVAL_NAME = 'Edited Evaluation Automation';
+  let evaluationIds: { scoringModelId: string; evaluationId: string; teamTypeId: string } | null = null;
+  let evalName = '';
 
   test('Edit Evaluation', async ({ citeAuthenticatedPage: page }) => {
 
-    // 1. Create an evaluation to edit
-    await createEvaluation(page, TEST_EVAL_NAME);
+    // 1. Seed an evaluation via API
+    evalName = `Edit Test ${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const seedData = await seedCompleteEvaluation(evalName, 0);
+    evaluationIds = {
+      scoringModelId: seedData.scoringModelId,
+      evaluationId: seedData.evaluationId,
+      teamTypeId: seedData.teamTypeId,
+    };
 
-    // 2. Navigate to the evaluations list and wait for the evaluation to appear
+    // 2. Navigate to the evaluations admin list
     await navigateToAdminSection(page, 'Evaluations');
-    await page.waitForTimeout(2000);
 
-    const evalRow = page.locator('tbody tr').filter({ hasText: TEST_EVAL_NAME }).first();
-    await expect(evalRow).toBeVisible({ timeout: 15000 });
+    // Wait for the async permission + evaluations load chain to complete
+    await waitForAdminListLoad(page, '/api/evaluations', true);
 
-    // 3. Click edit button
+    // 3. Search for the evaluation by name to avoid pagination issues
+    const searchBox = page.locator('input[placeholder="Search"], input[type="search"], input[aria-label="Search"]').first();
+    await expect(searchBox).toBeVisible({ timeout: 5000 });
+    await searchBox.clear();
+    await searchBox.fill(evalName);
+    await page.waitForTimeout(1000);
+
+    const evalRow = page.locator('tbody tr').filter({ hasText: evalName }).first();
+    await expect(evalRow).toBeVisible({ timeout: 10000 });
+
+    // 4. Click edit button
     const editButton = evalRow.locator('button[title="Edit Evaluation"]');
     await expect(editButton).toBeVisible({ timeout: 5000 });
     await editButton.click();
@@ -32,31 +47,37 @@ test.describe('Administration - Evaluations', () => {
     const editDialog = page.getByRole('dialog');
     await expect(editDialog).toBeVisible({ timeout: 5000 });
 
-    // 4. Verify the description is pre-populated and modify it
+    // 5. Verify the description is pre-populated and modify it
     const editDescField = editDialog.getByRole('textbox', { name: 'Evaluation Description' });
     await expect(editDescField).toBeVisible({ timeout: 5000 });
     const currentValue = await editDescField.inputValue();
-    expect(currentValue).toContain(TEST_EVAL_NAME);
+    expect(currentValue).toContain(evalName);
 
+    const editedName = `${evalName} (Edited)`;
     await editDescField.clear();
-    await editDescField.fill(EDITED_EVAL_NAME);
+    await editDescField.fill(editedName);
 
-    // 5. Save the edit
+    // 6. Save the edit
     const editSaveButton = editDialog.getByRole('button', { name: 'Save' });
     await expect(editSaveButton).toBeEnabled({ timeout: 5000 });
     await editSaveButton.click();
-    await expect(editDialog).not.toBeVisible({ timeout: 15000 });
-    await page.waitForTimeout(2000);
+    await expect(editDialog).not.toBeVisible({ timeout: 10000 });
+    await page.waitForTimeout(1000);
 
-    // 6. Verify the edit is reflected
-    await navigateToAdminSection(page, 'Evaluations');
+    // 7. Verify the edit is reflected
+    await searchBox.clear();
+    await searchBox.fill(editedName);
+    await page.waitForTimeout(1000);
 
-    const editedRow = page.locator('tbody tr').filter({ hasText: EDITED_EVAL_NAME }).first();
+    const editedRow = page.locator('tbody tr').filter({ hasText: editedName }).first();
     await expect(editedRow).toBeVisible({ timeout: 10000 });
   });
 
-  test.afterEach(async ({ citeAuthenticatedPage: page }) => {
-    await deleteEvaluationByName(page, EDITED_EVAL_NAME);
-    await deleteEvaluationByName(page, TEST_EVAL_NAME);
+  test.afterEach(async () => {
+    // Clean up via API
+    if (evaluationIds) {
+      await cleanupCompleteEvaluation(evaluationIds);
+      evaluationIds = null;
+    }
   });
 });

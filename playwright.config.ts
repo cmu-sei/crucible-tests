@@ -16,8 +16,19 @@ export default defineConfig({
   testDir: './',
   testMatch: '**/tests/**/*.spec.ts',
 
-  // Player opts into this per-app setup to reuse authenticated browser state.
+  // Authenticate provisioned apps (currently cite, caster, player) once before the suite and
+  // save their browser storageState to .auth/<app>.json. Consuming apps load that state
+  // via their fixtures so per-test runs skip the full Keycloak redirect. See
+  // global-setup.ts. Note: no global `use.storageState` here on purpose — that would
+  // leak one app's auth into every other app's tests; consumption is opted into
+  // per-app in each app's fixtures.ts.
   globalSetup: require.resolve('./global-setup'),
+
+  // After the whole suite, purge any CITE test data left behind (by name prefix) as a
+  // safety net. This does NOT replace per-test cleanup — every test must delete what it
+  // seeds (see CLAUDE.md "Test data hygiene"); this only catches crashed-before-cleanup
+  // cases so the database never accumulates leftovers across runs.
+  globalTeardown: require.resolve('./global-teardown'),
 
   // Maximum time one test can run for (includes auth redirect which can take up to 3 min)
   timeout: 300000,
@@ -37,13 +48,18 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 1,
 
   // Opt out of parallel tests on CI; cap local workers to reduce resource pressure
-  workers: process.env.CI ? 1 : 8,
+  workers: process.env.CI ? 1 : 2,
 
   // Reporter to use
   reporter: [
     ['html'],
-    ['list'],
     ['json', { outputFile: 'test-results/results.json' }],
+    // Owns the terminal output for the test phase: prints per-test lines and a
+    // bottom-pinned "% complete" bar to /dev/tty, and a clean plain-text copy to
+    // CRUCIBLE_LOG_FILE (set by run-tests.sh). Replaces the built-in 'list'
+    // reporter — do not enable both, they would double every line. Falls back to
+    // plain stdout lines when there is no controlling terminal (CI, redirected).
+    ['./progress-reporter.ts'],
   ],
 
   // Shared settings for all the projects below

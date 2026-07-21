@@ -15,12 +15,26 @@ test.describe('Home Page and Navigation', () => {
     // expect: Application loads successfully
     await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
 
-    // 2. Click on the user menu button in the topbar (showing username)
-    await page.getByRole('button', { name: 'Admin User' }).click();
+    // 2. Click on the user menu button in the topbar (showing username).
+    //    The "Administration" item is gated on the topbar's async `canViewAdmin`
+    //    permission (GET /api/me/systempermissions). The mat-menu renders its
+    //    content lazily into an overlay when opened and does NOT re-render that
+    //    content if the permission resolves while the menu is already open — so
+    //    under parallel load the menu can open showing only Logout + Dark Theme.
+    //    Close (Escape) and re-open until the item appears, so the test reflects
+    //    the permission having loaded rather than racing it.
+    const menuButton = page.getByRole('button', { name: 'Admin User' });
+    const adminItem = page.getByRole('menuitem', { name: 'Administration' });
+    await expect(async () => {
+      if (await adminItem.isVisible().catch(() => false)) return;
+      await page.keyboard.press('Escape');
+      await expect(adminItem).toBeHidden({ timeout: 1000 });
+      await menuButton.click();
+      await expect(adminItem).toBeVisible({ timeout: 3000 });
+    }).toPass({ timeout: 30000 });
 
     // expect: User menu dropdown appears
     // expect: Menu contains "Administration", "Logout", and "Dark Theme" toggle
-    await expect(page.getByRole('menuitem', { name: 'Administration' })).toBeVisible();
     await expect(page.getByRole('menuitem', { name: 'Logout' })).toBeVisible();
     await expect(page.getByRole('switch', { name: 'Dark Theme' })).toBeVisible();
 

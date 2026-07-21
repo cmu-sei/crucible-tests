@@ -1,8 +1,26 @@
 // Copyright 2026 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
-import { Page, expect } from '@playwright/test';
+import { Locator, Page, expect } from '@playwright/test';
 import { Services } from '../shared-fixtures';
+
+async function closeOpenDialogs(page: Page): Promise<void> {
+  for (let i = 0; i < 3; i++) {
+    const openDialog = page.getByRole('dialog').first();
+    if (!(await openDialog.isVisible({ timeout: 500 }).catch(() => false))) {
+      return;
+    }
+
+    const cancelButton = openDialog.getByRole('button', { name: /Cancel|Close/i });
+    if (await cancelButton.isVisible({ timeout: 500 }).catch(() => false)) {
+      await cancelButton.click();
+    } else {
+      await page.keyboard.press('Escape');
+    }
+
+    await expect(openDialog).not.toBeVisible({ timeout: 5000 }).catch(() => {});
+  }
+}
 
 /**
  * Navigate to the Alloy admin Event Templates page.
@@ -12,8 +30,40 @@ async function ensureOnAdminPage(page: Page): Promise<void> {
   if (!page.url().includes('/admin')) {
     await page.goto(`${Services.Alloy.UI}/admin`, { waitUntil: 'domcontentloaded' });
   }
-  await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible({ timeout: 15000 });
-  await expect(page.getByRole('table')).toBeVisible({ timeout: 15000 });
+
+  await closeOpenDialogs(page);
+
+  const adminHeading = page.getByRole('heading', { name: 'Administration' });
+  const eventTemplatesTable = page.getByRole('table');
+  const adminLoaded =
+    (await adminHeading.isVisible({ timeout: 2000 }).catch(() => false)) &&
+    (await eventTemplatesTable.isVisible({ timeout: 2000 }).catch(() => false));
+
+  if (!adminLoaded) {
+    await page.goto(`${Services.Alloy.UI}/admin`, { waitUntil: 'domcontentloaded' });
+    await closeOpenDialogs(page);
+  }
+
+  await expect(adminHeading).toBeVisible({ timeout: 30000 });
+  await expect(eventTemplatesTable).toBeVisible({ timeout: 30000 });
+}
+
+export async function fillFieldAndVerify(field: Locator, value: string): Promise<void> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 2; attempt++) {
+    await field.click();
+    await field.fill(value);
+
+    try {
+      await expect(field).toHaveValue(value, { timeout: 5000 });
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError;
 }
 
 /**
@@ -25,18 +75,7 @@ export async function deleteEventTemplateByName(page: Page, name: string): Promi
   try {
     await ensureOnAdminPage(page);
 
-    // Close any open dialogs first
-    const openDialog = page.getByRole('dialog').first();
-    if (await openDialog.isVisible({ timeout: 1000 }).catch(() => false)) {
-      const cancelButton = openDialog.getByRole('button', { name: /Cancel|Close/i });
-      if (await cancelButton.isVisible({ timeout: 1000 }).catch(() => false)) {
-        await cancelButton.click();
-        await expect(openDialog).not.toBeVisible({ timeout: 5000 });
-      } else {
-        await page.keyboard.press('Escape');
-        await page.waitForTimeout(500);
-      }
-    }
+    await closeOpenDialogs(page);
 
     const editButton = page.getByRole('button', { name: `Edit: ${name}` });
     if (!(await editButton.first().isVisible({ timeout: 2000 }).catch(() => false))) {
@@ -53,7 +92,7 @@ export async function deleteEventTemplateByName(page: Page, name: string): Promi
 
     const confirmDialog = page.getByRole('dialog', { name: 'Delete Event Template' });
     await expect(confirmDialog).toBeVisible({ timeout: 5000 });
-    await confirmDialog.getByRole('button', { name: 'Yes' }).click();
+    await confirmDialog.getByRole('button', { name: 'Delete' }).click();
 
     await expect(editDialog).not.toBeVisible({ timeout: 10000 });
     await page.waitForTimeout(500);
@@ -61,7 +100,7 @@ export async function deleteEventTemplateByName(page: Page, name: string): Promi
     console.log(`Deleted event template "${name}"`);
     return true;
   } catch (error) {
-    console.log(`Error deleting event template "${name}":`, error);
+    console.log(`Error deleting event template "${name}":`, (error as Error).message);
     return false;
   }
 }
@@ -111,7 +150,7 @@ export async function deleteEventTemplatesByPattern(page: Page, searchTerm: stri
       if (!(await confirmDialog.isVisible({ timeout: 3000 }).catch(() => false))) {
         break;
       }
-      await confirmDialog.getByRole('button', { name: 'Yes' }).click();
+      await confirmDialog.getByRole('button', { name: 'Delete' }).click();
 
       await editDialog.waitFor({ state: 'hidden', timeout: 10000 }).catch(() => {});
       await page.waitForTimeout(500);
@@ -125,76 +164,7 @@ export async function deleteEventTemplatesByPattern(page: Page, searchTerm: stri
       console.log(`Cleaned up ${deletedCount} event template(s) matching "${searchTerm}"`);
     }
   } catch (error) {
-    console.log(`Error cleaning up event templates matching "${searchTerm}":`, error);
-  }
-
-  return deletedCount;
-}
-
-/**
- * Delete "New Event Template" entries that still have default values
- * (duration=0, description="Add description"). These are orphans left by
- * tests that called "Add Event Template" but failed before renaming.
- * Only deletes templates with unmodified defaults, so it's safe to call
- * even when other tests are running.
- */
-export async function deleteDefaultEventTemplates(page: Page): Promise<number> {
-  let deletedCount = 0;
-  const maxAttempts = 5;
-
-  try {
-    await ensureOnAdminPage(page);
-
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const openDialog = page.getByRole('dialog').first();
-      if (await openDialog.isVisible({ timeout: 500 }).catch(() => false)) {
-        await page.keyboard.press('Escape');
-        await page.waitForTimeout(500);
-      }
-
-      const editButtons = page.getByRole('button', { name: 'Edit: New Event Template' });
-      if (!(await editButtons.first().isVisible({ timeout: 2000 }).catch(() => false))) {
-        break;
-      }
-
-      let found = false;
-      const count = await editButtons.count();
-      for (let i = 0; i < count; i++) {
-        await editButtons.nth(i).click();
-        const editDialog = page.getByRole('dialog', { name: 'Edit Event Template' });
-        if (!(await editDialog.isVisible({ timeout: 3000 }).catch(() => false))) continue;
-
-        const duration = await page.getByRole('spinbutton', { name: 'Duration Hours' }).inputValue();
-        const desc = await page.getByRole('textbox', { name: 'Event Template Description' }).inputValue();
-
-        if (duration === '0' && desc === 'Add description') {
-          const deleteButton = editDialog.getByRole('button', { name: 'Delete' });
-          if (await deleteButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-            await deleteButton.click();
-            const confirmDialog = page.getByRole('dialog', { name: 'Delete Event Template' });
-            if (await confirmDialog.isVisible({ timeout: 3000 }).catch(() => false)) {
-              await confirmDialog.getByRole('button', { name: 'Yes' }).click();
-              await editDialog.waitFor({ state: 'hidden', timeout: 10000 }).catch(() => {});
-              await page.waitForTimeout(500);
-              deletedCount++;
-              found = true;
-              break;
-            }
-          }
-        }
-
-        await page.getByRole('button', { name: 'Cancel' }).first().click().catch(() => {});
-        await page.getByRole('dialog').first().waitFor({ state: 'hidden', timeout: 3000 }).catch(() => {});
-      }
-
-      if (!found) break;
-    }
-
-    if (deletedCount > 0) {
-      console.log(`Cleaned up ${deletedCount} default "New Event Template" orphan(s)`);
-    }
-  } catch (error) {
-    console.log('Error cleaning up default event templates:', error);
+    console.log(`Error cleaning up event templates matching "${searchTerm}":`, (error as Error).message);
   }
 
   return deletedCount;
@@ -204,6 +174,14 @@ export async function deleteDefaultEventTemplates(page: Page): Promise<number> {
  * Create an event template via the admin UI and return its name.
  * The caller is responsible for cleaning up the template after the test.
  * Assumes the page is already authenticated and on the admin Event Templates page.
+ *
+ * As of Alloy.ui PR #711, "Add Event Template" opens a "Create New Event
+ * Template" dialog with an empty form instead of inserting a default "New Event
+ * Template" row. The template is only POSTed when Save is clicked, so we fill
+ * the form (name + duration are required), save it, and wait for the UI to show
+ * the created row. The UI state is the stable contract these tests need; a
+ * raw waitForResponse here was flaky under parallel load even when the create
+ * eventually succeeded.
  */
 export async function createTestEventTemplate(
   page: Page,
@@ -214,57 +192,30 @@ export async function createTestEventTemplate(
 
   await ensureOnAdminPage(page);
 
-  // Click Add Event Template and wait for the API to confirm creation
-  const [createResponse] = await Promise.all([
-    page.waitForResponse(
-      (resp) =>
-        resp.url().includes('/api/eventtemplates') &&
-        resp.request().method() === 'POST' &&
-        resp.status() >= 200 &&
-        resp.status() < 300
-    ),
-    page.getByRole('button', { name: 'Add Event Template' }).click(),
-  ]);
+  // Click Add Event Template to open the create dialog (no API call yet).
+  const createDialog = page.getByRole('dialog', { name: 'Create New Event Template' });
+  await page.getByRole('button', { name: 'Add Event Template' }).click();
+  await expect(createDialog).toBeVisible({ timeout: 5000 });
 
-  const created = await createResponse.json();
-  const createdId: string = created.id;
+  // Fill in the name, description, and duration. Name and Duration Hours are
+  // required; duration must be an integer greater than 0.
+  const nameField = createDialog.getByRole('textbox', { name: /^Name/ });
+  await fillFieldAndVerify(nameField, name);
 
-  // Open edit dialog for the freshly created template using its unique ID.
-  // Each row has a "Copy: <id>" button, so we find the row containing our ID
-  // then click its edit button. This avoids race conditions with parallel workers.
-  const editDialog = page.getByRole('dialog', { name: 'Edit Event Template' });
-  const copyButton = page.getByRole('button', { name: `Copy: ${createdId}` });
-  await expect(copyButton).toBeVisible({ timeout: 10000 });
-  // The edit button is a sibling in the same cell as the copy button
-  const rowCell = copyButton.locator('..');
-  const editButton = rowCell.getByRole('button', { name: /^Edit:/ });
-  await editButton.click();
-  await expect(editDialog).toBeVisible({ timeout: 5000 });
+  const descField = createDialog.getByRole('textbox', { name: 'Event Template Description' });
+  await fillFieldAndVerify(descField, description);
 
-  // Fill in the name, description, and duration
-  const nameField = page.getByRole('textbox', { name: /^Name/ });
-  await nameField.fill(name);
+  const durationField = createDialog.getByRole('spinbutton', { name: 'Duration Hours' });
+  await fillFieldAndVerify(durationField, durationHours);
 
-  const descField = page.getByRole('textbox', { name: 'Event Template Description' });
-  await descField.fill(description);
+  // Save. The template is created on save; wait for the user-visible result
+  // rather than a specific network response that can be missed or delayed.
+  const saveButton = createDialog.getByRole('button', { name: 'Save' });
+  await expect(saveButton).toBeEnabled({ timeout: 5000 });
+  await saveButton.click();
 
-  const durationField = page.getByRole('spinbutton', { name: 'Duration Hours' });
-  await durationField.fill(durationHours);
-
-  // Save
-  const [saveResponse] = await Promise.all([
-    page.waitForResponse(
-      (resp) =>
-        resp.url().includes('/api/eventtemplates') &&
-        resp.request().method() === 'PUT' &&
-        resp.status() >= 200 &&
-        resp.status() < 300
-    ),
-    page.getByRole('button', { name: 'Save' }).click(),
-  ]);
-
-  await expect(editDialog).not.toBeVisible({ timeout: 10000 });
-  await expect(page.getByRole('cell', { name })).toBeVisible({ timeout: 15000 });
+  await expect(createDialog).not.toBeVisible({ timeout: 60000 });
+  await expect(page.getByRole('cell', { name }).first()).toBeVisible({ timeout: 30000 });
 
   console.log(`Created test event template "${name}"`);
   return name;
@@ -286,6 +237,6 @@ export async function cleanupEndedEvents(page: Page): Promise<void> {
       await page.waitForTimeout(1000);
     }
   } catch (error) {
-    console.log('Error cleaning up events:', error);
+    console.log('Error cleaning up events:', (error as Error).message);
   }
 }
