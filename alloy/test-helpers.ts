@@ -92,7 +92,7 @@ export async function deleteEventTemplateByName(page: Page, name: string): Promi
 
     const confirmDialog = page.getByRole('dialog', { name: 'Delete Event Template' });
     await expect(confirmDialog).toBeVisible({ timeout: 5000 });
-    await confirmDialog.getByRole('button', { name: 'Yes' }).click();
+    await confirmDialog.getByRole('button', { name: 'Delete' }).click();
 
     await expect(editDialog).not.toBeVisible({ timeout: 10000 });
     await page.waitForTimeout(500);
@@ -150,7 +150,7 @@ export async function deleteEventTemplatesByPattern(page: Page, searchTerm: stri
       if (!(await confirmDialog.isVisible({ timeout: 3000 }).catch(() => false))) {
         break;
       }
-      await confirmDialog.getByRole('button', { name: 'Yes' }).click();
+      await confirmDialog.getByRole('button', { name: 'Delete' }).click();
 
       await editDialog.waitFor({ state: 'hidden', timeout: 10000 }).catch(() => {});
       await page.waitForTimeout(500);
