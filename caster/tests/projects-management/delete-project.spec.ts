@@ -4,10 +4,11 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen } from '../../fixtures';
 
 test.describe('Projects Management', () => {
   test('Delete Project', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+    const projectName = `Project To Delete ${Date.now()}`;
 
     // 1. Navigate to Projects section
     // expect: Projects list is visible
@@ -16,7 +17,7 @@ test.describe('Projects Management', () => {
     // Create a project to delete
     await page.locator('button[mattooltip="Add New Project"]').click();
     await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
-    await page.getByRole('textbox', { name: 'Name' }).fill('Project To Delete');
+    await page.getByRole('textbox', { name: 'Name' }).fill(projectName);
 
     const createResponsePromise = page.waitForResponse(resp =>
       resp.url().includes('/api/projects') && resp.request().method() === 'POST' && resp.ok()
@@ -29,10 +30,14 @@ test.describe('Projects Management', () => {
     const projectId = projectData.id;
     cleanupCasterProject(projectId);
 
-    await expect(page.getByRole('link', { name: 'Project To Delete' })).toBeVisible({ timeout: 10000 });
+    await expectCasterProjectOpen(page, projectName);
+    await page.getByRole('link', { name: 'Caster' }).click();
+    const searchBox = page.getByRole('textbox', { name: 'Search' });
+    await searchBox.fill(projectName);
+    await searchBox.press('End');
 
     // 2. Click the delete icon for the project
-    const projectRow = page.getByRole('row').filter({ hasText: 'Project To Delete' });
+    const projectRow = page.getByRole('row').filter({ hasText: projectName });
     const deleteButton = projectRow.getByRole('button').last();
     await deleteButton.click();
 
@@ -45,7 +50,7 @@ test.describe('Projects Management', () => {
     // expect: The dialog closes
     // expect: The project is not deleted
     await expect(page.getByRole('dialog', { name: 'Delete Project?' })).not.toBeVisible();
-    await expect(page.getByRole('link', { name: 'Project To Delete' })).toBeVisible();
+    await expect(page.getByRole('link', { name: projectName })).toBeVisible();
 
     // 4. Click the delete icon again
     await deleteButton.click();
@@ -58,6 +63,6 @@ test.describe('Projects Management', () => {
 
     // expect: The project is deleted successfully
     // expect: The project is removed from the list
-    await expect(page.getByRole('link', { name: 'Project To Delete' })).not.toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('link', { name: projectName })).not.toBeVisible({ timeout: 10000 });
   });
 });

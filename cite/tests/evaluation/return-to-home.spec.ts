@@ -4,31 +4,43 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect } from '../../fixtures';
-import { getApiToken, ensureEvaluation, deleteEvaluation, navigateToEvaluation } from './eval-helpers';
+import { test, expect, Services, seedCompleteEvaluation, cleanupCompleteEvaluation } from '../../fixtures';
 
 test.describe('Evaluation Dashboard Interface', () => {
-  test('Return to Home from Evaluation', async ({ citeAuthenticatedPage: page, request }) => {
-    const token = await getApiToken(request);
-    const { id: evalId, created } = await ensureEvaluation(request, token);
+  let evaluationIds: { evaluationId: string; scoringModelId: string; teamTypeId: string; } | null = null;
 
-    try {
-      // 1. Navigate to evaluation via admin page
-      await navigateToEvaluation(page);
-      await page.waitForLoadState('domcontentloaded');
+  test('Return to Home from Evaluation', async ({ citeAuthenticatedPage: page }) => {
+    // Create evaluation with team membership via API
+    const seededData = await seedCompleteEvaluation(`Return Home Test ${Date.now()}`);
+    evaluationIds = {
+      evaluationId: seededData.evaluationId,
+      scoringModelId: seededData.scoringModelId,
+      teamTypeId: seededData.teamTypeId,
+    };
 
-      // 2. Click on CITE logo or home link in top bar
-      const homeLink = page.locator('a[href="/"], img[src*="cite"], [class*="app-logo"], mat-toolbar a, [class*="home-link"]').first();
-      await homeLink.click();
+    // 1. Navigate to evaluation dashboard
+    await page.goto(`${Services.Cite.UI}/?evaluation=${seededData.evaluationId}`);
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page).toHaveURL(new RegExp(seededData.evaluationId), { timeout: 15000 });
 
-      // expect: User is navigated back to home page
-      await page.waitForLoadState('domcontentloaded');
+    // 2. Click on 'Home' link in the top bar
+    const homeLink = page.getByRole('link', { name: 'Home' });
+    await expect(homeLink).toBeVisible({ timeout: 10000 });
+    await homeLink.click();
 
-      // expect: Evaluation list is displayed
-      const evaluationList = page.locator('mat-table, table, [class*="evaluation"], [class*="list"]').first();
-      await expect(evaluationList).toBeVisible({ timeout: 10000 });
-    } finally {
-      if (created) await deleteEvaluation(request, token, evalId);
+    // expect: User is navigated back to home page
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page).toHaveURL(Services.Cite.UI, { timeout: 10000 });
+
+    // expect: Home page content is displayed (user info and evaluation selector)
+    const userButton = page.getByRole('button', { name: 'Admin User' });
+    await expect(userButton).toBeVisible({ timeout: 10000 });
+  });
+
+  test.afterEach(async () => {
+    if (evaluationIds) {
+      await cleanupCompleteEvaluation(evaluationIds);
+      evaluationIds = null;
     }
   });
 });

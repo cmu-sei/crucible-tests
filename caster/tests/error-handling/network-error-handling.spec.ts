@@ -4,7 +4,7 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen } from '../../fixtures';
 
 test.describe('Error Handling and Validation', () => {
   test('Network Error Handling', async ({ casterAuthenticatedPage: page, context, cleanupCasterProject }) => {
@@ -31,12 +31,11 @@ test.describe('Error Handling and Validation', () => {
         (r) => r.url().includes('/api/projects') && r.request().method() === 'POST' && r.status() === 201,
         { timeout: 5000 },
       );
-      const body = await resp.json();
-      cleanupCasterProject(body.id);
+      await resp.json();
     } catch {
       // No project was created — nothing to clean up
     }
 
-    await expect(page.getByText('My Projects')).toBeVisible();
+    cleanupCasterProject(await expectCasterProjectOpen(page, 'Network Test'));
   });
 });

@@ -6,15 +6,13 @@
 
 import { test, expect } from '@playwright/test';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
-import { deleteEventTemplatesByPattern, deleteDefaultEventTemplates } from '../../test-helpers';
+import { deleteEventTemplatesByPattern } from '../../test-helpers';
 
 test.describe('Event Templates Management', () => {
   const DELETE_PREFIX = 'ToDelete';
 
   test.afterEach(async ({ page }) => {
     await deleteEventTemplatesByPattern(page, DELETE_PREFIX);
-    // Clean up orphaned "New Event Template" rows left if the test failed mid-way
-    await deleteDefaultEventTemplates(page);
   });
 
   test('Delete Event Template', async ({ page }) => {
@@ -24,46 +22,48 @@ test.describe('Event Templates Management', () => {
     await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
     await expect(page.getByRole('table')).toBeVisible();
 
-    // 2. Create a new template and capture its ID from the API response
-    const editDialog = page.getByRole('dialog', { name: 'Edit Event Template' });
-    const [createResponse] = await Promise.all([
+    // 2. Create a new template via the "Create New Event Template" dialog (PR #711).
+    //    The name is given a unique prefix so afterEach can clean up if delete fails.
+    const uniqueName = `${DELETE_PREFIX} ${Date.now()}`;
+    const createDialog = page.getByRole('dialog', { name: 'Create New Event Template' });
+    await page.getByRole('button', { name: 'Add Event Template' }).click();
+    await expect(createDialog).toBeVisible();
+
+    await createDialog.getByRole('textbox', { name: /^Name/ }).fill(uniqueName);
+    await createDialog.getByRole('spinbutton', { name: 'Duration Hours' }).fill('1');
+
+    // 3. Save and wait for the API to confirm creation (POST)
+    await Promise.all([
       page.waitForResponse(resp =>
         resp.url().includes('/api/eventtemplates') &&
         resp.request().method() === 'POST' &&
         resp.status() >= 200 && resp.status() < 300
       ),
-      page.getByRole('button', { name: 'Add Event Template' }).click(),
+      createDialog.getByRole('button', { name: 'Save' }).click(),
     ]);
-    const created = await createResponse.json();
-    const createdId: string = created.id;
+    await expect(createDialog).not.toBeVisible();
 
-    // 3. Open the freshly created template using its unique ID
-    const copyButton = page.getByRole('button', { name: `Copy: ${createdId}` });
-    await expect(copyButton).toBeVisible({ timeout: 10000 });
-    const rowCell = copyButton.locator('..');
-    await rowCell.getByRole('button', { name: /^Edit:/ }).click();
+    // 4. Re-open the freshly created template by name to delete it
+    const editDialog = page.getByRole('dialog', { name: 'Edit Event Template' });
+    await page.getByRole('button', { name: `Edit: ${uniqueName}` }).click();
     await expect(editDialog).toBeVisible();
 
-    // 4. Rename so afterEach can clean up if the delete fails
-    const uniqueName = `${DELETE_PREFIX} ${Date.now()}`;
-    await page.getByRole('textbox', { name: /^Name/ }).fill(uniqueName);
-    await page.getByRole('button', { name: 'Save' }).click();
-    await expect(editDialog).not.toBeVisible();
-
-    // 5. Re-open the template to delete it (use the copy button with the known ID)
-    await expect(copyButton).toBeVisible({ timeout: 10000 });
-    await rowCell.getByRole('button', { name: /^Edit:/ }).click();
-    await expect(editDialog).toBeVisible();
-
-    // 6. Click 'Delete' button within the edit dialog
+    // 5. Click 'Delete' button within the edit dialog
     await editDialog.getByRole('button', { name: 'Delete' }).click();
 
     // expect: A confirmation dialog appears
     const confirmDialog = page.getByRole('dialog', { name: 'Delete Event Template' });
     await expect(confirmDialog).toBeVisible();
 
-    // 7. Confirm deletion by clicking 'Yes'
-    await confirmDialog.getByRole('button', { name: 'Yes' }).click();
+    // 7. Confirm deletion and wait for the API to complete (DELETE)
+    await Promise.all([
+      page.waitForResponse(resp =>
+        resp.url().includes('/api/eventtemplates') &&
+        resp.request().method() === 'DELETE' &&
+        resp.status() >= 200 && resp.status() < 300
+      ),
+      confirmDialog.getByRole('button', { name: 'Delete' }).click(),
+    ]);
 
     // expect: Both dialogs close after deletion
     await expect(confirmDialog).not.toBeVisible();
