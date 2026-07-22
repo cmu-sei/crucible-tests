@@ -4,20 +4,22 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink } from '../../fixtures';
 
 test.describe('Performance', () => {
   test('Page Load Performance - View Player', async ({ playerAuthenticatedPage: page }) => {
+    const primaryViewName = seededPrimaryViewName();
+
     // 1. Measure time from navigation to view player until page is interactive
     await expect(page.getByText('My Views')).toBeVisible();
 
     const startTime = Date.now();
 
-    await page.getByRole('link', { name: 'Project Lagoon TTX - Admin' }).click();
+    await (await findPlayerHomeViewLink(page, primaryViewName)).click();
 
     // expect: View player loads within acceptable time
     await expect(page).toHaveURL(/\/view\//, { timeout: 10000 });
-    await expect(page.getByText('Project Lagoon TTX - Admin User')).toBeVisible();
+    await expect(page.getByText(primaryViewName, { exact: true })).toBeVisible();
 
     const loadTime = Date.now() - startTime;
 

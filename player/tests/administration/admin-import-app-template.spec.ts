@@ -14,14 +14,24 @@ test.describe('Administration - Application Templates', () => {
     await page.getByRole('button', { name: 'Application Templates' }).click();
 
     // expect: Templates section displays
-    await expect(page.getByRole('columnheader', { name: 'Template Name' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
 
     // 2. Click 'Import' button (the import icon)
-    const importButton = page.locator('button:has(mat-icon.mdi-file-import)');
+    const importButton = page
+      .locator('app-admin-app-template-search')
+      .locator('button:has(mat-icon[fonticon="mdi-file-import"])');
 
     // expect: Import dialog opens
     // expect: File upload interface is presented
     await expect(importButton).toBeVisible();
     await expect(importButton).toBeEnabled();
+    await importButton.click();
+    const importDialog = page.getByRole('dialog');
+    await expect(importDialog).toBeVisible();
+    await expect(
+      importDialog.getByRole('heading', { name: 'Import Application Templates' }),
+    ).toBeVisible();
+    await importDialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(importDialog).not.toBeVisible();
   });
 });

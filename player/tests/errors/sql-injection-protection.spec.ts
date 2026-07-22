@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink, typeIntoSearch } from '../../fixtures';
 
 test.describe('Error Handling and Edge Cases', () => {
   test('SQL Injection Protection - Search Fields', async ({ playerAuthenticatedPage: page }) => {
+    const primaryViewName = seededPrimaryViewName();
+
     // 1. Navigate to a search field (e.g., view list search)
     // expect: Search field is visible
     await expect(page.getByText('My Views')).toBeVisible();
@@ -15,7 +17,7 @@ test.describe('Error Handling and Edge Cases', () => {
     await expect(searchField).toBeVisible();
 
     // 2. Enter SQL injection attempt
-    await searchField.fill("' OR '1'='1");
+    await typeIntoSearch(searchField, "' OR '1'='1");
 
     // expect: Input is accepted
     await expect(searchField).toHaveValue("' OR '1'='1");
@@ -30,6 +32,6 @@ test.describe('Error Handling and Edge Cases', () => {
 
     // Clear and verify page is still functional
     await searchField.clear();
-    await expect(page.getByRole('link', { name: 'Project Lagoon TTX' })).toBeVisible();
+    await findPlayerHomeViewLink(page, primaryViewName);
   });
 });

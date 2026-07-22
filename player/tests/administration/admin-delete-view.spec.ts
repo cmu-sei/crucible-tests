@@ -4,7 +4,7 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, typeIntoSearch } from '../../fixtures';
 
 test.describe('Administration - Views', () => {
   test('Delete View', async ({ playerAuthenticatedPage: page }) => {
@@ -16,7 +16,9 @@ test.describe('Administration - Views', () => {
     await expect(page).toHaveURL(/\/admin/, { timeout: 10000 });
 
     // Create a test view first
-    const createButton = page.locator('button:has(mat-icon.mdi-plus)');
+    const createButton = page
+      .locator('app-admin-view-search')
+      .locator('button:has(mat-icon[fonticon="mdi-plus-circle"])');
     await createButton.click();
     const nameField = page.getByRole('textbox', { name: 'Name (required)' });
     await expect(nameField).toBeVisible({ timeout: 5000 });
@@ -24,6 +26,9 @@ test.describe('Administration - Views', () => {
     const descField = page.getByRole('textbox', { name: 'Description (required)' });
     await descField.fill('View to be deleted');
     await page.getByRole('button', { name: 'Done' }).click();
+    const searchField = page.getByRole('textbox', { name: 'Search' });
+    await typeIntoSearch(searchField, viewName);
+    await expect(searchField).toHaveValue(viewName);
     await expect(page.getByRole('button', { name: viewName, exact: true })).toBeVisible();
 
     // 1. Navigate to admin views section
@@ -42,7 +47,7 @@ test.describe('Administration - Views', () => {
     await expect(confirmDialog).toBeVisible();
 
     // 3. Click 'NO' in confirmation dialog to cancel
-    await confirmDialog.getByRole('button', { name: 'NO' }).click();
+    await confirmDialog.getByRole('button', { name: 'Cancel' }).click();
 
     // expect: Dialog closes
     // expect: View is not deleted
@@ -55,7 +60,7 @@ test.describe('Administration - Views', () => {
     await expect(confirmDialog).toBeVisible();
 
     // 5. Click 'YES' in dialog to confirm deletion
-    await confirmDialog.getByRole('button', { name: 'YES' }).click();
+    await confirmDialog.getByRole('button', { name: 'Delete' }).click();
 
     // expect: View is deleted successfully
     // expect: View is removed from list

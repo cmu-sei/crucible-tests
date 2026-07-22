@@ -14,18 +14,26 @@ test.describe('Administration - Subscriptions', () => {
     await page.getByRole('button', { name: 'Subscriptions Subscriptions' }).click();
 
     // expect: The Subscriptions section is displayed
-    await expect(page.getByRole('columnheader', { name: 'Subscription Name' })).toBeVisible();
+    const nameHeader = page.getByRole('columnheader', { name: 'Name' });
+    await expect(nameHeader).toBeVisible();
+    const eventTypesHeader = page.getByRole('columnheader', { name: 'Event Types' });
+    const getSortState = async (header = nameHeader) => (await header.getAttribute('aria-sort')) ?? 'none';
+    const nextSortState = (state: string) =>
+      state === 'ascending' ? 'descending' : state === 'descending' ? 'none' : 'ascending';
 
-    // 2. Click the 'Subscription Name' column header
-    await page.getByRole('button', { name: 'Subscription Name' }).click();
+    // 2. Click the 'Name' column header
+    const initialNameState = await getSortState(nameHeader);
+    await nameHeader.click();
 
     // expect: Subscriptions are sorted by name
-    await expect(page.getByRole('button', { name: 'Subscription Name' })).toBeVisible();
+    await expect.poll(() => getSortState(nameHeader)).toBe(nextSortState(initialNameState));
 
     // 3. Click the 'Event Types' column header
-    await page.getByRole('button', { name: 'Event Types' }).click();
+    const initialEventTypesState = await getSortState(eventTypesHeader);
+    await eventTypesHeader.click();
 
     // expect: Subscriptions are sorted by event types
-    await expect(page.getByRole('button', { name: 'Event Types' })).toBeVisible();
+    await expect.poll(() => getSortState(eventTypesHeader)).toBe(nextSortState(initialEventTypesState));
+    await expect.poll(() => getSortState(nameHeader)).toBe('none');
   });
 });

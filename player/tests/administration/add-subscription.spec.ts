@@ -14,14 +14,20 @@ test.describe('Administration - Subscriptions', () => {
     await page.getByRole('button', { name: 'Subscriptions Subscriptions' }).click();
 
     // expect: The Subscriptions section is displayed
-    await expect(page.getByRole('columnheader', { name: 'Subscription Name' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
 
-    // 2. Click the 'Add New Subscription' button
-    await page.getByRole('button', { name: 'Add New Subscription' }).click();
+    // 2. Click the add subscription button
+    await page
+      .locator('app-admin-subscription-search')
+      .locator('button:has(mat-icon[fonticon="mdi-plus-circle"])')
+      .click();
 
     // expect: A dialog or form opens to create a new webhook subscription
     // expect: Fields for subscription name, URL, event types are available
-    // The form should appear with input fields
-    await expect(page.getByRole('textbox').first()).toBeVisible({ timeout: 5000 });
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible({ timeout: 5000 });
+    await expect(dialog.getByRole('textbox', { name: 'Name' })).toBeVisible();
+    await expect(dialog.getByRole('textbox', { name: 'Callback URL' })).toBeVisible();
+    await expect(dialog.getByRole('combobox', { name: 'Events' })).toBeVisible();
   });
 });

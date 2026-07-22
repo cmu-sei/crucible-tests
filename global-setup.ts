@@ -40,6 +40,12 @@ const PROVISION: ProvisionTarget[] = [
     appShellSelector: 'app-root',
   },
   {
+    app: 'player',
+    homeUrl: Services.Player.UI,
+    // The Menu control renders only once Player has resolved the OIDC user.
+    appShellSelector: 'app-root button[aria-label="Menu"]',
+  },
+  {
     app: 'cite',
     homeUrl: Services.Cite.UI,
     // mat-toolbar renders only after the OIDC client resolves a user, so it is a

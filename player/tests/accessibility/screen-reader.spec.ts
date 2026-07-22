@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink } from '../../fixtures';
 
 test.describe('Responsive Design and Accessibility', () => {
   test('Screen Reader Compatibility', async ({ playerAuthenticatedPage: page }) => {
+    const primaryViewName = seededPrimaryViewName();
+
     // 1. Navigate through the application and verify ARIA labels
     await expect(page.getByText('My Views')).toBeVisible();
 
@@ -28,7 +30,6 @@ test.describe('Responsive Design and Accessibility', () => {
     await expect(page.getByRole('textbox', { name: 'Search' })).toBeVisible();
 
     // Links should have accessible names
-    const viewLink = page.getByRole('link', { name: 'Project Lagoon TTX - Admin User' });
-    await expect(viewLink).toBeVisible();
+    await findPlayerHomeViewLink(page, primaryViewName);
   });
 });

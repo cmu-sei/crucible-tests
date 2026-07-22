@@ -14,7 +14,7 @@ test.describe('Administration - Subscriptions', () => {
     await page.getByRole('button', { name: 'Subscriptions Subscriptions' }).click();
 
     // expect: The Subscriptions section is displayed with existing subscriptions
-    await expect(page.getByRole('columnheader', { name: 'Subscription Name' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
 
     // 2. Click on a subscription name (if any exist)
     // The test verifies the subscription table is accessible for editing
@@ -23,12 +23,17 @@ test.describe('Administration - Subscriptions', () => {
 
     // If there are subscriptions beyond the header row, click the first one
     if (rowCount > 1) {
-      const firstSubscriptionCell = subscriptionRows.nth(1).getByRole('cell').first();
-      await firstSubscriptionCell.click();
+      const editButton = page.getByTitle('Edit Subscription').first();
+      await editButton.click();
 
       // expect: A dialog opens showing subscription details for editing
-      // 3. Modify subscription details and save
-      // expect: The subscription is updated in the list
+      const editDialog = page.getByRole('dialog');
+      await expect(editDialog).toBeVisible();
+      await expect(
+        editDialog.getByRole('heading', { name: 'Edit Subscription' }),
+      ).toBeVisible();
+      await editDialog.getByRole('button', { name: 'Cancel' }).click();
+      await expect(editDialog).not.toBeVisible();
     }
 
     // Verify the table structure is correct

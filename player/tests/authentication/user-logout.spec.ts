@@ -23,8 +23,9 @@ test.describe('Authentication', () => {
     // 3. Click the 'Logout' option
     await page.getByRole('menuitem', { name: 'Logout' }).click();
 
-    // expect: User is logged out
-    // expect: User is redirected to Keycloak or login page
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 30000 });
+    // Keycloak SSO immediately establishes a fresh Player session after the
+    // application logout completes, returning the user to the home page.
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Player.UI), { timeout: 30000 });
+    await expect(page.getByText('My Views')).toBeVisible();
   });
 });

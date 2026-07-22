@@ -14,7 +14,7 @@ test.describe('Administration - Subscriptions', () => {
     await page.getByRole('button', { name: 'Subscriptions Subscriptions' }).click();
 
     // expect: The Subscriptions section is displayed with existing subscriptions
-    await expect(page.getByRole('columnheader', { name: 'Subscription Name' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
 
     // 2. Check if there are any subscriptions to delete
     const subscriptionRows = page.getByRole('row');
@@ -23,7 +23,7 @@ test.describe('Administration - Subscriptions', () => {
     // If there are subscriptions, verify delete functionality is available
     if (rowCount > 1) {
       // expect: A delete button is available for each subscription
-      const deleteButton = subscriptionRows.nth(1).getByRole('button').last();
+      const deleteButton = page.getByTitle('Delete Subscription').first();
       await expect(deleteButton).toBeVisible();
 
       // 3. Click delete would show confirmation dialog
@@ -32,6 +32,10 @@ test.describe('Administration - Subscriptions', () => {
     }
 
     // Verify the section is properly displayed
-    await expect(page.getByRole('button', { name: 'Add New Subscription' })).toBeVisible();
+    await expect(
+      page
+        .locator('app-admin-subscription-search')
+        .locator('button:has(mat-icon[fonticon="mdi-plus-circle"])'),
+    ).toBeVisible();
   });
 });

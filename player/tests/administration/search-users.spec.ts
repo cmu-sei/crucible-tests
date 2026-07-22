@@ -4,7 +4,7 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, typeIntoSearch } from '../../fixtures';
 
 test.describe('Administration - Users', () => {
   test('Search Users', async ({ playerAuthenticatedPage: page }) => {
@@ -18,7 +18,7 @@ test.describe('Administration - Users', () => {
 
     // 2. Enter a user name in the Search field
     const searchField = page.getByRole('textbox', { name: 'Search' });
-    await searchField.fill('Admin');
+    await typeIntoSearch(searchField, 'Admin');
 
     // expect: The users list filters to show only matching users
     await expect(page.getByRole('cell', { name: 'Admin User' }).first()).toBeVisible();
