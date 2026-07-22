@@ -9,7 +9,7 @@ import { test, expect, Services } from '../../fixtures';
 test.describe('Administration - Application Templates', () => {
   test('View Template URL', async ({ playerAuthenticatedPage: page }) => {
     const alloyViewUrl = `${Services.Alloy.UI.replace(/\/$/, '')}/views/{viewId}`;
-    const playerVmMapUrl = `${Services.PlayerVM.UI.replace(/\/$/, '')}/views/{viewId}/map{theme}`;
+    const playerVmMapUrl = `${Services.PlayerVM.UI.replace(/\/$/, '')}/views/{viewId}/map?{theme}`;
 
     // 1. Log in as admin and navigate to Administration > Application Templates
     await page.getByRole('button', { name: 'Menu' }).click();
