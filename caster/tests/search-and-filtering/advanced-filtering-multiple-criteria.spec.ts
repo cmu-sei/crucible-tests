@@ -4,35 +4,33 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen } from '../../fixtures';
 
 test.describe('Search and Filtering', () => {
   test('Advanced Filtering with Multiple Criteria', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+    const projectName = `Multi Filter Project ${Date.now()}`;
 
     await expect(page.getByText('My Projects')).toBeVisible();
 
     await page.locator('button[mattooltip="Add New Project"]').click();
     await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
-    await page.getByRole('textbox', { name: 'Name' }).fill('Multi Filter Project');
+    await page.getByRole('textbox', { name: 'Name' }).fill(projectName);
     await page.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByRole('link', { name: 'Multi Filter Project' })).toBeVisible({ timeout: 10000 });
-
-    // Register project for cleanup by extracting its ID from the link href
-    const projectLink = page.getByRole('link', { name: 'Multi Filter Project' });
-    const href = await projectLink.getAttribute('href');
-    if (href) {
-      const projectId = href.split('/').pop();
-      if (projectId) cleanupCasterProject(projectId);
-    }
+    cleanupCasterProject(await expectCasterProjectOpen(page, projectName));
+    await page.getByRole('link', { name: 'Caster' }).click();
 
     const searchBar = page.getByRole('textbox', { name: 'Search' });
     await expect(searchBar).toBeVisible();
 
-    await searchBar.fill('Multi Filter');
-    await expect(page.getByRole('link', { name: 'Multi Filter Project' })).toBeVisible();
+    await searchBar.fill(projectName);
+    await searchBar.press('End');
+    await expect(page.getByRole('link', { name: projectName })).toBeVisible();
 
     await searchBar.fill('NonexistentCriteria');
+    await searchBar.press('End');
     await searchBar.clear();
-    await expect(page.getByRole('link', { name: 'Multi Filter Project' })).toBeVisible();
+    await searchBar.press('End');
+    await expect(searchBar).toHaveValue('');
+    await expect(page.getByText(/No data matching the filter/)).not.toBeVisible();
   });
 });

@@ -65,6 +65,28 @@ Each app has a thin `{app}/fixtures.ts` that wraps this helper in an `{app}Authe
 
 **Gameboard is the exception**: its home page is public, so the shared helper doesn't trigger a redirect. `gameboard/fixtures.ts` works around this by navigating to `/admin` to force the login flow — if you see auth logic that looks different there, that's why.
 
+### Auth-state reuse and event-driven waiting
+
+For an app with many authenticated tests, opt into the repository's
+pre-authenticated storage-state infrastructure:
+
+1. Add the app's URL and authenticated shell signal to `PROVISION` in
+   `global-setup.ts`.
+2. In the app fixture, load `authStatePath('<app>')` when it exists, navigate
+   directly to the app, and use `waitForFirstVisible` to distinguish the
+   authenticated shell from a Keycloak login form.
+3. Fall back to `authenticateWithKeycloak` when the state is missing or
+   expired. Authentication, logout, and unauthorized-access specs must override
+   `storageState` with an empty context.
+
+Do not use `Promise.race` over `locator.waitFor()` calls: losing waits continue
+to run and can consume their whole timeout. Use `waitForFirstVisible` for
+alternative visible states. Do not add fixed sleeps or swallowed long
+`waitForResponse` calls when a route, response, dialog close, or visible DOM
+state can prove the action completed. Use `settleForResponse` only for
+best-effort passive load settling; retain an action-paired response wait when
+the response itself is the behavior under test.
+
 ### Per-app layout
 
 ```
@@ -115,8 +137,10 @@ These live at the root (not inside any app dir) because multiple apps use them. 
 
 ### Test data hygiene (REQUIRED)
 
-**If a test creates data, that same test must delete it.** Leaving seeded rows behind
-is not acceptable.
+**Every test must create or explicitly ensure every record it needs, and that
+same test must delete the data it created.** Never depend on an existing row,
+the order of another test, or the current database shape. Leaving seeded rows
+behind is not acceptable.
 
 Rules (apply to every app's suite):
 

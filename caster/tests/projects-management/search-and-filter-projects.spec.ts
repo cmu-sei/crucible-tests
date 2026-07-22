@@ -4,10 +4,11 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen } from '../../fixtures';
 
 test.describe('Projects Management', () => {
   test('Search and Filter Projects', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+    const projectName = `Searchable Project ${Date.now()}`;
 
     // 1. Navigate to Projects section
     await expect(page.getByText('My Projects')).toBeVisible();
@@ -15,7 +16,7 @@ test.describe('Projects Management', () => {
     // Create a project to search for
     await page.locator('button[mattooltip="Add New Project"]').click();
     await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
-    await page.getByRole('textbox', { name: 'Name' }).fill('Searchable Project');
+    await page.getByRole('textbox', { name: 'Name' }).fill(projectName);
 
     const createResponsePromise = page.waitForResponse(resp =>
       resp.url().includes('/api/projects') && resp.request().method() === 'POST' && resp.ok()
@@ -27,19 +28,24 @@ test.describe('Projects Management', () => {
     const projectData = await createResponse.json();
     cleanupCasterProject(projectData.id);
 
-    await expect(page.getByRole('link', { name: 'Searchable Project' })).toBeVisible({ timeout: 10000 });
+    await expectCasterProjectOpen(page, projectName);
+    await page.getByRole('link', { name: 'Caster' }).click();
 
     // 2. Enter a search term in the search box
     const searchBox = page.getByRole('textbox', { name: 'Search' });
-    await searchBox.fill('Searchable');
+    await searchBox.fill(projectName);
+    await searchBox.press('End');
 
     // expect: The list filters to show only projects matching the search term
-    await expect(page.getByRole('link', { name: 'Searchable Project' })).toBeVisible();
+    await expect(page.getByRole('link', { name: projectName })).toBeVisible();
 
     // 3. Clear the search box
     await searchBox.clear();
+    await searchBox.press('End');
 
-    // expect: All projects are displayed again
-    await expect(page.getByRole('link', { name: 'Searchable Project' })).toBeVisible();
+    // expect: The filter is removed and pagination returns to the full project list.
+    await expect(searchBox).toHaveValue('');
+    await expect(page.getByText(/No data matching the filter/)).not.toBeVisible();
+    await expect(page.getByRole('status')).not.toHaveText('1 – 1 of 1');
   });
 });

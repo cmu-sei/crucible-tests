@@ -55,8 +55,15 @@ test.describe('Event Templates Management', () => {
     const confirmDialog = page.getByRole('dialog', { name: 'Delete Event Template' });
     await expect(confirmDialog).toBeVisible();
 
-    // 7. Confirm deletion by clicking 'Yes'
-    await confirmDialog.getByRole('button', { name: 'Yes' }).click();
+    // 7. Confirm deletion and wait for the API to complete (DELETE)
+    await Promise.all([
+      page.waitForResponse(resp =>
+        resp.url().includes('/api/eventtemplates') &&
+        resp.request().method() === 'DELETE' &&
+        resp.status() >= 200 && resp.status() < 300
+      ),
+      confirmDialog.getByRole('button', { name: 'Delete' }).click(),
+    ]);
 
     // expect: Both dialogs close after deletion
     await expect(confirmDialog).not.toBeVisible();

@@ -4,7 +4,7 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen } from '../../fixtures';
 
 test.describe('Users and Permissions Management', () => {
   test('Project-Level User Permissions', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
@@ -24,9 +24,6 @@ test.describe('Users and Permissions Management', () => {
     const projectData = await createResponse.json();
     cleanupCasterProject(projectData.id);
 
-    await expect(page.getByRole('link', { name: 'Permission Project' })).toBeVisible({ timeout: 10000 });
-
-    await page.getByRole('link', { name: 'Permission Project' }).click();
-    await expect(page).toHaveURL(/\/projects\//, { timeout: 10000 });
+    await expectCasterProjectOpen(page, 'Permission Project');
   });
 });

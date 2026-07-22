@@ -27,7 +27,7 @@ test.describe('Accessibility and Usability', () => {
 
     // Verify the table has accessible column headers
     await expect(page.getByRole('table')).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Project Name' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Actions' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Description' })).toBeVisible();
   });
 });

@@ -4,7 +4,7 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen } from '../../fixtures';
 
 test.describe('Integration with Alloy', () => {
   test('Workspace Creation via Alloy Event Launch', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
@@ -16,14 +16,7 @@ test.describe('Integration with Alloy', () => {
     await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
     await page.getByRole('textbox', { name: 'Name' }).fill(projectName);
     await page.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByRole('link', { name: projectName })).toBeVisible({ timeout: 10000 });
-
-    await page.getByRole('link', { name: projectName }).click();
-    await page.waitForURL(/\/projects\//, { timeout: 10000 });
-
-    // Extract the project ID from the URL and register it for cleanup
-    const projectId = page.url().match(/\/projects\/([a-f0-9-]+)/)?.[1];
-    if (projectId) cleanupCasterProject(projectId);
+    cleanupCasterProject(await expectCasterProjectOpen(page, projectName));
 
     await page.getByTitle('Add New Directory').click();
     await expect(page.getByRole('dialog', { name: 'Create New Directory?' })).toBeVisible();
