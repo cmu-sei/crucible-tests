@@ -4,7 +4,7 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, typeIntoSearch } from '../../fixtures';
 
 test.describe('Administration - Views', () => {
   test('Create View', async ({ playerAuthenticatedPage: page }) => {
@@ -48,6 +48,9 @@ test.describe('Administration - Views', () => {
     // expect: View is created successfully
     // expect: New view appears in views list
     await expect(page.getByRole('heading', { name: 'Views' })).toBeVisible();
+    const searchField = page.getByRole('textbox', { name: 'Search' });
+    await typeIntoSearch(searchField, viewName);
+    await expect(searchField).toHaveValue(viewName);
     await expect(page.getByRole('button', { name: viewName, exact: true })).toBeVisible();
 
     // Cleanup: Delete the test view

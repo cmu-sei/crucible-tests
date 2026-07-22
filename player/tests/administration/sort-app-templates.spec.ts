@@ -16,28 +16,24 @@ test.describe('Administration - Application Templates', () => {
     // expect: The Application Templates section is displayed
     const nameHeader = page.getByRole('columnheader', { name: 'Name' });
     await expect(nameHeader).toBeVisible();
+    const getSortState = async (header = nameHeader) => (await header.getAttribute('aria-sort')) ?? 'none';
+    const nextSortState = (state: string) =>
+      state === 'ascending' ? 'descending' : state === 'descending' ? 'none' : 'ascending';
 
     // 2. Click the 'Name' column header to sort
+    const initialNameState = await getSortState(nameHeader);
     await nameHeader.click();
-
-    // expect: Templates are sorted by name (ascending or descending depending on current state)
-    // Verify the sort changed by checking that the first row is different from default
-    const firstCell = page.getByRole('row').nth(1).getByRole('cell').nth(1);
-    await expect(firstCell).toBeVisible();
-    const firstText = await firstCell.textContent();
-
-    // Click again to reverse sort order
+    const afterFirstNameClick = nextSortState(initialNameState);
+    await expect.poll(() => getSortState(nameHeader)).toBe(afterFirstNameClick);
     await nameHeader.click();
-    const firstCellAfterToggle = page.getByRole('row').nth(1).getByRole('cell').nth(1);
-    const secondText = await firstCellAfterToggle.textContent();
-
-    // expect: Sort order has changed
-    expect(firstText?.trim()).not.toEqual(secondText?.trim());
+    await expect.poll(() => getSortState(nameHeader)).toBe(nextSortState(afterFirstNameClick));
 
     // 3. Click the 'Url' column header
-    await page.getByRole('button', { name: 'Url' }).click();
+    const urlHeader = page.getByRole('columnheader', { name: 'Url' });
+    const initialUrlState = await getSortState(urlHeader);
+    await urlHeader.click();
 
     // expect: Templates are sorted by URL
-    await expect(page.getByRole('button', { name: 'Url' })).toBeVisible();
+    await expect.poll(() => getSortState(urlHeader)).toBe(nextSortState(initialUrlState));
   });
 });

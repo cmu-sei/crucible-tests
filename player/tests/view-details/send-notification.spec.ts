@@ -4,18 +4,28 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import {
+  test,
+  expect,
+  seededPrimaryViewName,
+  findPlayerHomeViewLink,
+  clickWithoutOverlayInterference,
+} from '../../fixtures';
 
 test.describe('View Details', () => {
   test('Send System Notification', async ({ playerAuthenticatedPage: page }) => {
+    const primaryViewName = seededPrimaryViewName();
+
     // 1. Log in and navigate to a view
-    await page.getByRole('link', { name: 'Project Lagoon TTX - Admin' }).click();
+    await (await findPlayerHomeViewLink(page, primaryViewName)).click();
 
     // expect: User is on the view details page
     await expect(page).toHaveURL(/\/view\//, { timeout: 10000 });
 
     // 2. Click the 'Notifications' button
-    await page.getByRole('button', { name: 'Notifications' }).click();
+    const notificationsToggle = page.getByRole('button', { name: 'Notifications' });
+    await clickWithoutOverlayInterference(page, notificationsToggle);
+    await expect(notificationsToggle).toHaveAttribute('aria-expanded', 'true');
 
     // expect: A notification panel opens with its system notification field
     const notificationInput = page.getByPlaceholder('Send system wide notification');

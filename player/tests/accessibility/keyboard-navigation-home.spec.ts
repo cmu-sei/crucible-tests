@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, seededPrimaryViewName, findPlayerHomeViewLink } from '../../fixtures';
 
 test.describe('Responsive Design and Accessibility', () => {
   test('Keyboard Navigation - Home Page', async ({ playerAuthenticatedPage: page }) => {
+    const primaryViewName = seededPrimaryViewName();
+
     // 1. Log in and navigate to home page
     // expect: User is on the home page
     await expect(page.getByText('My Views')).toBeVisible();
@@ -26,7 +28,7 @@ test.describe('Responsive Design and Accessibility', () => {
 
     // 3. Press Enter on a view link while focused
     // Focus on a view link and press Enter
-    const viewLink = page.getByRole('link', { name: 'Project Lagoon TTX - Admin' });
+    const viewLink = await findPlayerHomeViewLink(page, primaryViewName);
     await viewLink.focus();
     await page.keyboard.press('Enter');
 

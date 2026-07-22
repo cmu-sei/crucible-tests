@@ -4,10 +4,13 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services } from '../../fixtures';
 
 test.describe('Administration - Application Templates', () => {
   test('View Template URL', async ({ playerAuthenticatedPage: page }) => {
+    const alloyViewUrl = `${Services.Alloy.UI.replace(/\/$/, '')}/views/{viewId}`;
+    const playerVmMapUrl = `${Services.PlayerVM.UI.replace(/\/$/, '')}/views/{viewId}/map?{theme}`;
+
     // 1. Log in as admin and navigate to Administration > Application Templates
     await page.getByRole('button', { name: 'Menu' }).click();
     await page.getByRole('menuitem', { name: 'Administration' }).click();
@@ -21,7 +24,7 @@ test.describe('Administration - Application Templates', () => {
     await expect(page.getByText('{viewId}').first()).toBeVisible();
 
     // expect: URLs point to different Crucible services (Alloy, VM API)
-    await expect(page.getByRole('button', { name: serviceUrlPattern(Services.Alloy.UI) })).toBeVisible();
-    await expect(page.getByRole('button', { name: serviceUrlPattern(Services.PlayerVM.UI) }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: alloyViewUrl, exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: playerVmMapUrl, exact: true })).toBeVisible();
   });
 });

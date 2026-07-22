@@ -4,10 +4,13 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, seededPrimaryViewName, seededSteamfitterViewName, typeIntoSearch } from '../../fixtures';
 
 test.describe('Home Page - My Views', () => {
   test('View My Views List', async ({ playerAuthenticatedPage: page }) => {
+    const primaryViewName = seededPrimaryViewName();
+    const steamfitterViewName = seededSteamfitterViewName();
+
     // 1. Log in as admin user
     // expect: User is on the home page
     await expect(page.getByText('My Views')).toBeVisible();
@@ -21,8 +24,12 @@ test.describe('Home Page - My Views', () => {
     // expect: The table shows views the user has access to
     const rows = page.getByRole('row');
     expect(await rows.count()).toBeGreaterThanOrEqual(3); // header + fixture views
-    await expect(page.getByRole('link', { name: 'Project Lagoon TTX - Admin', exact: true })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Steamfitter View', exact: true })).toBeVisible();
+    const searchField = page.getByRole('textbox', { name: 'Search' });
+    await typeIntoSearch(searchField, primaryViewName);
+    await expect(page.getByRole('link', { name: primaryViewName, exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Clear Search' }).click();
+    await typeIntoSearch(searchField, 'Steamfitter');
+    await expect(page.getByRole('link', { name: steamfitterViewName, exact: true })).toBeVisible();
 
     // expect: Each view is clickable to navigate to the view details
     const firstViewLink = page.getByRole('cell').getByRole('link').first();

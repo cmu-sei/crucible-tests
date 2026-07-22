@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink } from '../../fixtures';
 
 test.describe('Performance', () => {
   test('API Response Time - View List', async ({ playerAuthenticatedPage: page }) => {
+    const primaryViewName = seededPrimaryViewName();
+
     // 1. Monitor network requests when loading view list
     const apiRequests: { url: string; duration: number }[] = [];
 
@@ -27,6 +29,6 @@ test.describe('Performance', () => {
     // expect: API response time is under acceptable threshold (e.g., 1 second)
     // expect: No unnecessary API calls are made
     // The page should load views within a reasonable time
-    await expect(page.getByRole('link', { name: 'Project Lagoon TTX' })).toBeVisible();
+    await findPlayerHomeViewLink(page, primaryViewName);
   });
 });

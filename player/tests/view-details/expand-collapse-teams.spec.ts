@@ -4,14 +4,23 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import {
+  test,
+  expect,
+  Services,
+  seededPrimaryViewName,
+  findPlayerHomeViewLink,
+  clickWithoutOverlayInterference,
+} from '../../fixtures';
 
 test.describe('View Details', () => {
   test('Expand/Collapse All Teams', async ({ playerAuthenticatedPage: page }) => {
+    const primaryViewName = seededPrimaryViewName();
+
     // 1. Log in and navigate to a view, then open the Users dialog
-    await page.getByRole('link', { name: 'Project Lagoon TTX - Admin' }).click();
+    await (await findPlayerHomeViewLink(page, primaryViewName)).click();
     await expect(page).toHaveURL(/\/view\//, { timeout: 10000 });
-    await page.getByRole('button', { name: 'Users' }).click();
+    await clickWithoutOverlayInterference(page, page.getByRole('button', { name: 'Users' }));
 
     // expect: The Users dialog is open showing multiple teams
     const dialog = page.getByRole('dialog');

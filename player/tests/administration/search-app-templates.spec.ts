@@ -4,7 +4,7 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, typeIntoSearch } from '../../fixtures';
 
 test.describe('Administration - Application Templates', () => {
   test('Search Application Templates', async ({ playerAuthenticatedPage: page }) => {
@@ -18,7 +18,7 @@ test.describe('Administration - Application Templates', () => {
 
     // 2. Enter a search term in the Search field
     const searchField = page.getByPlaceholder('Search');
-    await searchField.fill('Dashboard');
+    await typeIntoSearch(searchField, 'Dashboard');
 
     // expect: The search field accepts input
     await expect(searchField).toHaveValue('Dashboard');

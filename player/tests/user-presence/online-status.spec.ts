@@ -4,16 +4,25 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import {
+  test,
+  expect,
+  Services,
+  seededPrimaryViewName,
+  findPlayerHomeViewLink,
+  clickWithoutOverlayInterference,
+} from '../../fixtures';
 
 test.describe('User Presence', () => {
   test('User Presence - Online Status', async ({ playerAuthenticatedPage: page }) => {
+    const primaryViewName = seededPrimaryViewName();
+
     // 1. Navigate to a view and check user presence via Users dialog
-    await page.getByRole('link', { name: 'Project Lagoon TTX - Admin' }).click();
+    await (await findPlayerHomeViewLink(page, primaryViewName)).click();
     await expect(page).toHaveURL(/\/view\//, { timeout: 10000 });
 
     // Open the Users dialog to see online status
-    await page.getByRole('button', { name: 'Users' }).click();
+    await clickWithoutOverlayInterference(page, page.getByRole('button', { name: 'Users' }));
 
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();

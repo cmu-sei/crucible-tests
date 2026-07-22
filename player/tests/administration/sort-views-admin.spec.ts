@@ -16,28 +16,28 @@ test.describe('Administration - Views', () => {
     // expect: The Views admin section displays multiple views
     await expect(page.getByRole('heading', { name: 'Views' })).toBeVisible();
 
-    // 2. Click the 'Name' column header to sort
     const nameHeader = page.getByRole('columnheader', { name: 'Name' });
+    const getSortState = async (header = nameHeader) => (await header.getAttribute('aria-sort')) ?? 'none';
+    const nextSortState = (state: string) =>
+      state === 'ascending' ? 'descending' : state === 'descending' ? 'none' : 'ascending';
+
+    // 2. Click the 'Name' column header to sort
+    const initialNameState = await getSortState(nameHeader);
     await nameHeader.click();
-
-    // expect: Views are sorted by name (toggling sort direction)
-    const firstCell = page.getByRole('row').nth(1).getByRole('cell').nth(1);
-    await expect(firstCell).toBeVisible();
-    const firstText = await firstCell.textContent();
-
-    // Click again to reverse sort order
+    const afterFirstNameClick = nextSortState(initialNameState);
+    await expect.poll(() => getSortState(nameHeader)).toBe(afterFirstNameClick);
     await nameHeader.click();
-    const firstCellAfterToggle = page.getByRole('row').nth(1).getByRole('cell').nth(1);
-    const secondText = await firstCellAfterToggle.textContent();
-
-    // expect: Sort order has changed
-    expect(firstText?.trim()).not.toEqual(secondText?.trim());
+    const afterSecondNameClick = nextSortState(afterFirstNameClick);
+    await expect.poll(() => getSortState(nameHeader)).toBe(afterSecondNameClick);
+    await nameHeader.click();
+    await expect.poll(() => getSortState(nameHeader)).toBe(nextSortState(afterSecondNameClick));
 
     // 3. Click the 'Status' column header
     const statusHeader = page.getByRole('columnheader', { name: 'Status' });
+    const initialStatusState = await getSortState(statusHeader);
     await statusHeader.click();
 
     // expect: Views are sorted by status
-    await expect(statusHeader).toBeVisible();
+    await expect.poll(() => getSortState(statusHeader)).toBe(nextSortState(initialStatusState));
   });
 });

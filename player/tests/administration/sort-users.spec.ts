@@ -15,17 +15,25 @@ test.describe('Administration - Users', () => {
 
     // expect: The Users section is displayed
     await expect(page.getByRole('columnheader', { name: 'ID' })).toBeVisible();
+    const idHeader = page.getByRole('columnheader', { name: 'ID' });
+    const nameHeader = page.getByRole('columnheader', { name: 'Name' });
+    const getSortState = async (header: typeof idHeader) => (await header.getAttribute('aria-sort')) ?? 'none';
+    const nextSortState = (state: string) =>
+      state === 'ascending' ? 'descending' : state === 'descending' ? 'none' : 'ascending';
 
     // 2. Click the 'ID' column header
-    await page.getByRole('button', { name: 'ID' }).click();
+    const initialIdState = await getSortState(idHeader);
+    await idHeader.click();
 
     // expect: Users are sorted by ID
-    await expect(page.getByRole('button', { name: 'ID' })).toBeVisible();
+    await expect.poll(() => getSortState(idHeader)).toBe(nextSortState(initialIdState));
 
     // 3. Click the 'Name' column header
-    await page.getByRole('button', { name: 'Name' }).click();
+    const initialNameState = await getSortState(nameHeader);
+    await nameHeader.click();
 
     // expect: Users are sorted by name
-    await expect(page.getByRole('button', { name: 'Name' })).toBeVisible();
+    await expect.poll(() => getSortState(nameHeader)).toBe(nextSortState(initialNameState));
+    await expect.poll(() => getSortState(idHeader)).toBe('none');
   });
 });

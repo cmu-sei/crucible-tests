@@ -16,8 +16,8 @@ export default defineConfig({
   testDir: './',
   testMatch: '**/tests/**/*.spec.ts',
 
-  // Authenticate provisioned apps (currently cite) once before the suite and save
-  // their browser storageState to .auth/<app>.json. Consuming apps load that state
+  // Authenticate provisioned apps (currently cite, caster, player) once before the suite and
+  // save their browser storageState to .auth/<app>.json. Consuming apps load that state
   // via their fixtures so per-test runs skip the full Keycloak redirect. See
   // global-setup.ts. Note: no global `use.storageState` here on purpose — that would
   // leak one app's auth into every other app's tests; consumption is opted into

@@ -4,17 +4,28 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import {
+  test,
+  expect,
+  Services,
+  seededPrimaryViewName,
+  findPlayerHomeViewLink,
+  clickWithoutOverlayInterference,
+} from '../../fixtures';
 
 test.describe('View Details', () => {
   test('Notification Character Limit', async ({ playerAuthenticatedPage: page }) => {
+    const primaryViewName = seededPrimaryViewName();
+
     // 1. Log in and navigate to a view, then open the Notifications panel
-    await page.getByRole('link', { name: 'Project Lagoon TTX - Admin' }).click();
+    await (await findPlayerHomeViewLink(page, primaryViewName)).click();
     await expect(page).toHaveURL(/\/view\//, { timeout: 10000 });
-    await page.getByRole('button', { name: 'Notifications' }).click();
+    const notificationsToggle = page.getByRole('button', { name: 'Notifications' });
+    await clickWithoutOverlayInterference(page, notificationsToggle);
+    await expect(notificationsToggle).toHaveAttribute('aria-expanded', 'true');
 
     // expect: The notification panel is open
-    const notificationInput = page.getByRole('textbox', { name: 'Send system wide notification' });
+    const notificationInput = page.getByPlaceholder('Send system wide notification');
     await expect(notificationInput).toBeVisible();
     await expect(page.getByText('0 / 225')).toBeVisible();
 

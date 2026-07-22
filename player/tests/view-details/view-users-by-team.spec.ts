@@ -4,18 +4,27 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import {
+  test,
+  expect,
+  Services,
+  seededPrimaryViewName,
+  findPlayerHomeViewLink,
+  clickWithoutOverlayInterference,
+} from '../../fixtures';
 
 test.describe('View Details', () => {
   test('View Users by Team', async ({ playerAuthenticatedPage: page }) => {
+    const primaryViewName = seededPrimaryViewName();
+
     // 1. Log in and navigate to a view
-    await page.getByRole('link', { name: 'Project Lagoon TTX - Admin' }).click();
+    await (await findPlayerHomeViewLink(page, primaryViewName)).click();
 
     // expect: User is on the view details page
     await expect(page).toHaveURL(/\/view\//, { timeout: 10000 });
 
     // 2. Click the 'Users' button
-    await page.getByRole('button', { name: 'Users' }).click();
+    await clickWithoutOverlayInterference(page, page.getByRole('button', { name: 'Users' }));
 
     // expect: A dialog opens showing all teams in the view
     const dialog = page.getByRole('dialog');
