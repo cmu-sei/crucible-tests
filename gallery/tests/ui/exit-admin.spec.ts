@@ -4,14 +4,11 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
-import { authenticateGalleryWithKeycloak, Services } from '../../fixtures';
+import { test, expect, gotoGalleryAdmin, Services } from '../../fixtures';
 
 test.describe('Admin Navigation and UI', () => {
-  test('Exit Administration', async ({ page }) => {
-    await authenticateGalleryWithKeycloak(page);
-    await page.getByRole('button', { name: 'Administration' }).click();
-    await expect(page).toHaveTitle('Gallery Admin');
+  test('Exit Administration', async ({ galleryAuthenticatedPage: page }) => {
+    await gotoGalleryAdmin(page);
 
     // 1. Click the 'Exit Administration' area (with logo) at the top of the admin sidebar
     // The exit element is a clickable area with the gallery icon that links to '/'

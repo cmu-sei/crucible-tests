@@ -4,19 +4,31 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
-import { authenticateGalleryWithKeycloak } from '../../fixtures';
+import { test, expect, gotoGalleryAdmin, apiDeleteCollectionByName } from '../../fixtures';
 
 test.describe('Integration and API', () => {
-  const testCollectionName = `Persistence Test ${Date.now()}`;
-  const updatedName = `Updated ${testCollectionName}`;
+  // Every name this spec puts into the database is registered here *before* the
+  // record is created, so the afterEach safety net can remove it even when an
+  // assertion in the middle of the test throws. Only exact names created by this
+  // test are ever deleted — other workers create collections concurrently.
+  let createdNames: string[] = [];
 
-  test('Data Persistence', async ({ page }) => {
-    await authenticateGalleryWithKeycloak(page);
-    await page.getByRole('button', { name: 'Administration' }).click();
-    await expect(page).toHaveTitle('Gallery Admin');
+  test.afterEach(async () => {
+    for (const name of createdNames) {
+      // No-op when the collection is already gone (the happy path deletes it via UI).
+      await apiDeleteCollectionByName(name);
+    }
+    createdNames = [];
+  });
+
+  test('Data Persistence', async ({ galleryAuthenticatedPage: page }) => {
+    const testCollectionName = `Persistence Test ${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    const updatedName = `Updated ${testCollectionName}`;
+
+    await gotoGalleryAdmin(page);
 
     // 1. Create a new collection in admin
+    createdNames.push(testCollectionName);
     await page.getByRole('button', { name: 'Add Collection' }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
@@ -43,6 +55,9 @@ test.describe('Integration and API', () => {
     await expect(page.getByText(testCollectionName)).toBeVisible();
 
     // 3. Edit the collection name
+    // Register the post-rename name too: after a successful save the record is
+    // only reachable under `updatedName`, so cleanup needs both.
+    createdNames.push(updatedName);
     const row = page.getByRole('row').filter({ hasText: testCollectionName });
     await row.getByRole('button', { name: `Edit ${testCollectionName}` }).click();
     const editDialog = page.getByRole('dialog');

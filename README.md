@@ -290,6 +290,24 @@ Some tests are skipped pending fixes in upstream Crucible services. These use `t
 | App | Test | Reason |
 |-----|------|--------|
 | gameboard | `Large Data Set Handling - Leaderboard Pagination` (`gameboard/tests/error-handling/leaderboard-pagination.spec.ts`) | `/api/game/{id}/score` performs per-team queries in a loop and times out at 60s for 120 seeded teams. Blocked on batched-query rewrite of `ScoringService.GetGameScore`. |
+| gallery | `Exhibit List Sorting - rows reorder by column` (`gallery/tests/exhibits/exhibit-sorting.spec.ts`) | Sorting and pagination on the Exhibits admin table are both dead (`aria-sort` cycles but row order never changes; paginator reads `0 of 0`). Blocked on a UI fix in Gallery — see [gallery/gallery-app-bugs.md](gallery/gallery-app-bugs.md) §1. |
+| gallery | `Copy Collection` (`gallery/tests/collections/copy-collection.spec.ts`) | The admin Copy button is a no-op — `copyCollection()` never calls `collectionDataService.copy()`. The API endpoint itself works. Blocked on a UI fix in Gallery — see [gallery/gallery-app-bugs.md](gallery/gallery-app-bugs.md) §2. |
+| gallery | `Collection Upload Creates A Matching Copy` (`gallery/tests/edge-cases/download-upload-roundtrip.spec.ts`) | `POST /api/collections/json` 500s roughly half the time (6/12 measured) because `CollectionService.DownloadJsonAsync` omits `.AsNoTracking()`, leaking tracked membership rows into the export. Blocked on a one-line API fix — see [gallery/gallery-app-bugs.md](gallery/gallery-app-bugs.md) §4. |
+| gallery | `Edit Existing Article - changes reflected in the archive view` (`gallery/tests/articles/edit-article.spec.ts`) | The archive template never renders `article.status`; it exists only in the filter predicate and sort comparator, so an edit cannot be observed there. The wall half is asserted in full. |
+| gallery | `Article Status Workflow - status displayed in the archive view` (`gallery/tests/articles/article-status.spec.ts`) | Same cause as above — the archive has no status indicator at all. All five statuses are asserted on the wall, which does render them. |
+
+Gallery app defects found while building its suite — including several where a test is
+deliberately pinned to current buggy behaviour rather than skipped — are written up in
+[gallery/gallery-app-bugs.md](gallery/gallery-app-bugs.md), with the exact source location,
+a suggested fix, and what to change in the tests once each is fixed. Two of the entries there
+are **retractions** of findings that turned out to be defects in this test suite rather than in
+Gallery; they are kept, with evidence, so nobody re-chases them.
+
+Several Gallery specs are deliberately pinned to current buggy behaviour rather than skipped —
+including one that asserts *no* success snackbar appears (§15) and one that asserts an exhibit
+click lands on the Archive rather than the Wall (§16). Those assertions will fail when the app is
+fixed, which is intended: they are tripwires, not accidents. Each carries a comment saying so.
+Do not "repair" them by loosening the assertion — check the bug file first.
 
 ## Troubleshooting
 

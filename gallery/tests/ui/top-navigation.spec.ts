@@ -4,13 +4,10 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
-import { authenticateGalleryWithKeycloak } from '../../fixtures';
+import { test, expect, gotoGalleryAdmin } from '../../fixtures';
 
 test.describe('Admin Navigation and UI', () => {
-  test('Top Navigation Bar', async ({ page }) => {
-    await authenticateGalleryWithKeycloak(page);
-
+  test('Top Navigation Bar', async ({ galleryAuthenticatedPage: page }) => {
     // 1. Log in and observe the top navigation bar
     // expect: Gallery logo/icon is visible on the left as a clickable link
     const logoLink = page.locator('a[href="/"]').first();
@@ -24,8 +21,7 @@ test.describe('Admin Navigation and UI', () => {
 
     // 2. Click the Gallery logo
     // First navigate to admin so we can test the logo link
-    await page.getByRole('button', { name: 'Administration' }).click();
-    await expect(page).toHaveTitle('Gallery Admin');
+    await gotoGalleryAdmin(page);
 
     // Click logo to go back to home
     await page.locator('a[href="/"]').first().click();

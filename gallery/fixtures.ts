@@ -2,7 +2,15 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 import { test as base, Page, expect, request as pwRequest, APIRequestContext } from '@playwright/test';
-import { Services, serviceUrlPattern, oidcStorageKey, authenticateWithKeycloak } from '../shared-fixtures';
+import fs from 'fs';
+import {
+  Services,
+  serviceUrlPattern,
+  oidcStorageKey,
+  authenticateWithKeycloak,
+  waitForFirstVisible,
+} from '../shared-fixtures';
+import { authStatePath } from '../auth-paths';
 
 /**
  * Gallery-specific fixtures
@@ -52,6 +60,26 @@ export async function navigateToFirstExhibit(page: Page, exhibitName?: string): 
 
   // Expect to be navigated to the exhibit view
   await expect(page).toHaveURL(/\?exhibit=/);
+}
+
+/**
+ * Navigate straight to an exhibit's Wall or Archive view by id.
+ *
+ * Prefer this over `navigateToFirstExhibit` when the test already knows the
+ * exhibit id (e.g. from `seededExhibit`). My Exhibits is paginated, so with
+ * other tests seeding exhibits concurrently the target row can land on page 2+
+ * and a row lookup times out. `home-app.component.ts` reads `exhibit` and
+ * `section` straight off the query string, so this is the same code path the UI
+ * itself uses when you click through.
+ */
+export async function gotoExhibitSection(
+  page: Page,
+  exhibitId: string,
+  section: 'wall' | 'archive'
+): Promise<void> {
+  await page.goto(`${Services.Gallery.UI}/?exhibit=${exhibitId}&section=${section}`, {
+    waitUntil: 'domcontentloaded',
+  });
 }
 
 /**
@@ -259,34 +287,36 @@ export async function apiCleanupExhibits(prefixes: string[]): Promise<void> {
 
 /**
  * Delete a collection by ID via the Gallery API.
- * The Gallery DELETE /api/collections/{id} endpoint processes the deletion
- * but never returns a response, so we fire the DELETE and then poll GET
- * to confirm it was actually removed.
+ * DELETE /api/collections/{id} responds 204 promptly (measured 20-30ms against the
+ * running stack), so await it directly. An earlier version of this helper claimed the
+ * endpoint "never returns a response" and worked around that with a 2s timeout plus a
+ * 10x1s polling loop — that cost >=1s of sleep per deleted collection and the premise
+ * was wrong. The post-delete GET is kept as a single confirmation (no sleep), since
+ * cleanup silently failing is worse than cleanup being slightly slower.
  */
 async function deleteCollectionViaApi(apiContext: APIRequestContext, token: string, collectionId: string, collectionName: string): Promise<void> {
-  // Fire the DELETE request but don't wait for the response (it never comes)
-  const deletePromise = apiContext.delete(`${Services.Gallery.API}/api/collections/${collectionId}`, {
+  const deleteResponse = await apiContext.delete(`${Services.Gallery.API}/api/collections/${collectionId}`, {
     headers: { Authorization: `Bearer ${token}` },
-    timeout: 2000,
-  }).catch(() => {
-    // Expected: the DELETE endpoint hangs/times out, but the server still processes it
   });
-  await deletePromise;
 
-  // Poll the GET endpoint to confirm deletion
-  const maxAttempts = 10;
-  for (let i = 0; i < maxAttempts; i++) {
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    const checkResponse = await apiContext.get(`${Services.Gallery.API}/api/collections/${collectionId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      timeout: 5000,
-    });
-    if (checkResponse.status() === 404) {
-      console.log(`API cleanup: Deleted collection "${collectionName}" (${collectionId})`);
-      return;
-    }
+  // 404 means someone else already removed it — also a success for cleanup purposes.
+  if (!deleteResponse.ok() && deleteResponse.status() !== 404) {
+    console.warn(
+      `API cleanup: DELETE collection "${collectionName}" (${collectionId}) returned ${deleteResponse.status()}`
+    );
   }
-  console.warn(`API cleanup: Collection "${collectionName}" (${collectionId}) may not have been deleted`);
+
+  const checkResponse = await apiContext.get(`${Services.Gallery.API}/api/collections/${collectionId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (checkResponse.status() === 404) {
+    console.log(`API cleanup: Deleted collection "${collectionName}" (${collectionId})`);
+  } else {
+    console.warn(
+      `API cleanup: Collection "${collectionName}" (${collectionId}) still present after DELETE ` +
+        `(GET returned ${checkResponse.status()})`
+    );
+  }
 }
 
 /**
@@ -347,6 +377,198 @@ export async function apiCleanupCollections(prefixes: string[]): Promise<void> {
         await deleteCollectionViaApi(apiContext, token, collection.id, collection.name);
       }
     }
+  } finally {
+    await apiContext.dispose();
+  }
+}
+
+// ========================================================================
+// API-based system role cleanup
+// ========================================================================
+
+/**
+ * Delete all system roles matching the given prefixes via the Gallery API.
+ *
+ * Role specs create custom roles through the permission matrix UI; this is the
+ * teardown counterpart so an `afterEach` can guarantee removal even when the test
+ * body throws partway through.
+ *
+ * @param prefixes - Array of name prefixes to match for deletion
+ */
+export async function apiCleanupSystemRoles(prefixes: string[]): Promise<void> {
+  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
+  try {
+    const token = await getGalleryApiToken(apiContext);
+
+    const listResponse = await apiContext.get(`${Services.Gallery.API}/api/system-roles`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    });
+
+    if (!listResponse.ok()) {
+      console.warn(`API cleanup: Failed to list roles: ${listResponse.status()}`);
+      return;
+    }
+
+    const roles: Array<{ id: string; name: string }> = await listResponse.json();
+
+    for (const role of roles) {
+      if (prefixes.some(prefix => role.name.startsWith(prefix))) {
+        const response = await apiContext.delete(`${Services.Gallery.API}/api/system-roles/${role.id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (response.ok() || response.status() === 404) {
+          console.log(`API cleanup: Deleted role "${role.name}" (${role.id})`);
+        } else {
+          console.warn(`API cleanup: Failed to delete role "${role.name}": ${response.status()}`);
+        }
+      }
+    }
+  } finally {
+    await apiContext.dispose();
+  }
+}
+
+// ========================================================================
+// API-based seeding for single-purpose records
+// ========================================================================
+
+/**
+ * Create a bare collection via the API and return its id and name.
+ *
+ * Use this when a spec needs a collection to *exist* as a precondition (e.g. an
+ * exhibit's parent) rather than exercising the create-collection UI itself. Pair
+ * with `apiDeleteCollectionById` in an `afterEach`.
+ */
+export async function apiCreateCollection(
+  name: string,
+  description: string = 'Auto-seeded collection for Playwright tests'
+): Promise<{ id: string; name: string }> {
+  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
+  try {
+    const token = await getGalleryApiToken(apiContext);
+    const response = await apiContext.post(`${Services.Gallery.API}/api/collections`, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      data: { name, description },
+    });
+    if (!response.ok()) {
+      throw new Error(`Failed to create collection: ${response.status()} ${await response.text()}`);
+    }
+    const collection: { id: string; name: string } = await response.json();
+    console.log(`Seeded collection: ${collection.name} (${collection.id})`);
+    return collection;
+  } finally {
+    await apiContext.dispose();
+  }
+}
+
+/**
+ * Create a bare exhibit in the given collection via the API.
+ *
+ * Pair with `apiDeleteExhibitById` (or delete the parent collection) in teardown.
+ */
+export async function apiCreateExhibit(
+  collectionId: string,
+  name: string,
+  options: { showAdvanceButton?: boolean } = {}
+): Promise<{ id: string; name: string }> {
+  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
+  try {
+    const token = await getGalleryApiToken(apiContext);
+    const response = await apiContext.post(`${Services.Gallery.API}/api/exhibits`, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      data: {
+        name,
+        description: 'Auto-seeded exhibit for Playwright tests',
+        collectionId,
+        showAdvanceButton: options.showAdvanceButton ?? true,
+      },
+    });
+    if (!response.ok()) {
+      throw new Error(`Failed to create exhibit: ${response.status()} ${await response.text()}`);
+    }
+    const exhibit: { id: string; name: string } = await response.json();
+    console.log(`Seeded exhibit: ${exhibit.name} (${exhibit.id})`);
+    return exhibit;
+  } finally {
+    await apiContext.dispose();
+  }
+}
+
+/**
+ * Set an exhibit's current move/inject via the API.
+ *
+ * Advancing an exhibit mutates persistent state, and `seededExhibit` is
+ * worker-scoped — so a test that clicks Advance changes what every later test in
+ * that worker sees. Call this in `afterEach` to put the position back.
+ */
+export async function apiSetExhibitMoveAndInject(
+  exhibitId: string,
+  move: number,
+  inject: number
+): Promise<void> {
+  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
+  try {
+    const token = await getGalleryApiToken(apiContext);
+    const response = await apiContext.put(
+      `${Services.Gallery.API}/api/exhibits/${exhibitId}/move/${move}/inject/${inject}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!response.ok()) {
+      console.warn(
+        `Failed to reset exhibit ${exhibitId} to move ${move}/inject ${inject}: ${response.status()}`
+      );
+    }
+  } finally {
+    await apiContext.dispose();
+  }
+}
+
+/**
+ * Advance an exhibit via the API, returning the resulting move/inject or null
+ * when the exhibit is already at its last position (the API answers 400 there).
+ */
+export async function apiAdvanceExhibit(
+  exhibitId: string
+): Promise<{ currentMove: number; currentInject: number } | null> {
+  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
+  try {
+    const token = await getGalleryApiToken(apiContext);
+    const response = await apiContext.put(`${Services.Gallery.API}/api/exhibits/${exhibitId}/advance`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (response.status() === 400) {
+      return null;
+    }
+    if (!response.ok()) {
+      throw new Error(`Failed to advance exhibit: ${response.status()} ${await response.text()}`);
+    }
+    return await response.json();
+  } finally {
+    await apiContext.dispose();
+  }
+}
+
+/**
+ * Delete a collection by id. Safe to call for an already-deleted collection.
+ */
+export async function apiDeleteCollectionById(collectionId: string, label: string = collectionId): Promise<void> {
+  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
+  try {
+    const token = await getGalleryApiToken(apiContext);
+    await deleteCollectionViaApi(apiContext, token, collectionId, label);
+  } finally {
+    await apiContext.dispose();
+  }
+}
+
+/**
+ * Delete an exhibit by id. Safe to call for an already-deleted exhibit.
+ */
+export async function apiDeleteExhibitById(exhibitId: string, label: string = exhibitId): Promise<void> {
+  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
+  try {
+    const token = await getGalleryApiToken(apiContext);
+    await deleteExhibitViaApi(apiContext, token, exhibitId, label);
   } finally {
     await apiContext.dispose();
   }
@@ -458,11 +680,96 @@ export type GalleryWorkerFixtures = {
 };
 
 /**
- * Extended test with Gallery-specific fixtures
+ * Path to the Gallery storageState saved by global-setup.ts. May not exist if the
+ * global setup failed to provision (stack down at startup) — handled below.
+ */
+const galleryStatePath = authStatePath('gallery');
+
+/**
+ * True when global-setup successfully wrote the Gallery auth state this run.
+ * Evaluated once at module load. Specs that want a clean unauthenticated context
+ * still override this with `test.use({ storageState: { cookies: [], origins: [] } })`.
+ */
+const galleryStateExists = fs.existsSync(galleryStatePath);
+
+/**
+ * The topbar user-menu button renders only once the OIDC client has resolved a
+ * user, so it is the "authenticated shell is up" marker for Gallery. The
+ * enclosing mat-toolbar renders before authentication resolves and is therefore
+ * not a safe signal.
+ */
+const GALLERY_APP_SHELL = 'app-topbar .options-text button';
+
+/**
+ * Navigate to Gallery and ensure the authenticated shell is up, falling back to a
+ * full Keycloak login when the saved storageState is missing or expired.
+ *
+ * Prefer the `galleryAuthenticatedPage` fixture in specs; this is exported for the
+ * few specs that need to control navigation themselves.
+ */
+export async function ensureGalleryAuthenticated(page: Page): Promise<void> {
+  await page.goto(Services.Gallery.UI, { waitUntil: 'domcontentloaded' });
+
+  const appShell = page.locator(GALLERY_APP_SHELL).first();
+  const keycloakField = page.locator('input[name="username"]');
+
+  // Race the authenticated shell against a Keycloak login form. The form appears
+  // only if the saved state is missing/expired — in that case fall back to the
+  // full interactive login so the test still proceeds (just not as fast).
+  // waitForFirstVisible is cancellation-safe: a plain Promise.race leaves the
+  // losing waitFor() running to its full timeout in the background.
+  const winner = await waitForFirstVisible(
+    page,
+    [
+      { key: 'shell', locator: appShell },
+      { key: 'keycloak', locator: keycloakField },
+    ],
+    { timeout: 20000 }
+  );
+
+  if (winner !== 'shell') {
+    // Either Keycloak appeared or neither did within the window — do a full login.
+    await authenticateGalleryWithKeycloak(page);
+    await appShell.waitFor({ state: 'visible', timeout: 30000 });
+  }
+}
+
+/**
+ * Open the Gallery admin section from the authenticated home page and wait for the
+ * admin shell to render.
+ *
+ * The Administration entry lives in the topbar user menu and is permission-gated,
+ * so it only exists once `permissionDataService.load()` has resolved.
+ */
+export async function gotoGalleryAdmin(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Administration' }).click();
+  await expect(page).toHaveTitle('Gallery Admin');
+}
+
+/**
+ * Click an admin sidebar section (Collections, Exhibits, Users, Roles, Groups).
+ */
+export async function gotoAdminSection(page: Page, section: string): Promise<void> {
+  await page.locator('mat-list-item').filter({ hasText: section }).getByRole('button').click();
+}
+
+/**
+ * Extended test with Gallery-specific fixtures.
+ *
+ * `storageState` defaults to the pre-authenticated state captured once by
+ * global-setup.ts, so every spec's browser context starts with a valid OIDC token
+ * in localStorage. The `galleryAuthenticatedPage` fixture then just navigates and
+ * waits for the Angular shell — no per-test Keycloak round-trip. Auth-flow specs
+ * opt out with `test.use({ storageState: { cookies: [], origins: [] } })`.
  */
 export const test = base.extend<GalleryFixtures, GalleryWorkerFixtures>({
+  // Default the context to the saved auth state when it exists. When it doesn't
+  // (provisioning failed), leave Playwright's default and rely on the fixture's
+  // interactive-login fallback below.
+  storageState: galleryStateExists ? galleryStatePath : undefined,
+
   galleryAuthenticatedPage: async ({ page }, use) => {
-    await authenticateGalleryWithKeycloak(page);
+    await ensureGalleryAuthenticated(page);
     await use(page);
   },
 
@@ -577,10 +884,17 @@ export async function seedExhibitForAdmin(
 
     // Step 4: Create a Team on that Exhibit
     const teamName = `${teamNamePrefix} ${timestamp}`;
+    // shortName is deliberately set, even though the API accepts a team without one.
+    // `AdminTeamsComponent.sortTeams()` does an unguarded `a.shortName.toLowerCase()`
+    // (see gallery/gallery-app-bugs.md §5), so a null-shortName team in the shared team
+    // store makes the Exhibit Teams list throw and render no rows as soon as a second
+    // team exists. Seeding a shortName keeps that app bug from turning every teams spec
+    // into a cross-worker flake. Remove this note if/when §5 is fixed; keep the value.
     const teamResponse = await apiContext.post(`${Services.Gallery.API}/api/teams`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       data: {
         name: teamName,
+        shortName: `T${Date.now() % 100000}`,
         exhibitId: exhibit.id,
       },
     });
@@ -611,19 +925,39 @@ export async function seedExhibitForAdmin(
     const articleIds: string[] = [];
     const teamArticleIds: string[] = [];
 
-    // Create 3 cards at different moves/injects with 2 articles each
+    // Create 3 cards at different moves/injects with 2 articles each.
+    //
+    // sourceType MUST be one of these values. Gallery.Api.Data Enumerations.cs declares
+    // `SourceType { News = 10, Social = 20, Email = 30, Phone = 40, Intel = 50,
+    // Reporting = 60, Orders = 70 }` — the values are spaced by 10, NOT 0-based. Sending
+    // an unnamed number (0..6, as this fixture used to) is accepted by the API and stored,
+    // but then `JsonStringEnumConverter` cannot map it back to a name and serialises the
+    // raw number instead of a string. The Angular client types `sourceType` as a string
+    // union and calls `.toLowerCase()` on it, so seeding invalid values made the Archive
+    // search box throw `sourceType.toLowerCase is not a function` — a fixture defect that
+    // looked like an app bug. Always use SOURCE_TYPE.
+    const SOURCE_TYPE = {
+      News: 10,
+      Social: 20,
+      Email: 30,
+      Phone: 40,
+      Intel: 50,
+      Reporting: 60,
+      Orders: 70,
+    } as const;
+
     const cardData = [
       { move: 0, inject: 0, name: 'Test Card 1', articles: [
-        { name: 'Intel Article 1', sourceType: 0, summary: 'E2E test intel article' },
-        { name: 'News Article 1', sourceType: 3, summary: 'E2E test news article' }
+        { name: 'Intel Article 1', sourceType: SOURCE_TYPE.Intel, summary: 'E2E test intel article' },
+        { name: 'News Article 1', sourceType: SOURCE_TYPE.News, summary: 'E2E test news article' }
       ]},
       { move: 1, inject: 0, name: 'Test Card 2', articles: [
-        { name: 'Reporting Article 1', sourceType: 1, summary: 'E2E test reporting article' },
-        { name: 'Social Article 1', sourceType: 4, summary: 'E2E test social article' }
+        { name: 'Reporting Article 1', sourceType: SOURCE_TYPE.Reporting, summary: 'E2E test reporting article' },
+        { name: 'Social Article 1', sourceType: SOURCE_TYPE.Social, summary: 'E2E test social article' }
       ]},
       { move: 1, inject: 1, name: 'Test Card 3', articles: [
-        { name: 'Orders Article 1', sourceType: 2, summary: 'E2E test orders article' },
-        { name: 'Email Article 1', sourceType: 6, summary: 'E2E test email article' }
+        { name: 'Orders Article 1', sourceType: SOURCE_TYPE.Orders, summary: 'E2E test orders article' },
+        { name: 'Email Article 1', sourceType: SOURCE_TYPE.Email, summary: 'E2E test email article' }
       ]}
     ];
 
@@ -695,43 +1029,41 @@ export async function seedExhibitForAdmin(
         articleIds.push(article.id);
         console.log(`Seeded article: ${article.name} (${article.id})`);
 
-        // Link Article to Team
-        // Note: The API may return 500 if a duplicate record already exists.
-        // Since cleanup deletes the entire exhibit (which cascades), we can safely skip
-        // tracking failed TeamArticle creations.
-        try {
-          const teamArticleResponse = await apiContext.post(`${Services.Gallery.API}/api/teamarticles`, {
-            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-            data: {
-              exhibitId: exhibit.id,
-              teamId: team.id,
-              articleId: article.id,
-            },
-          });
-
-          if (teamArticleResponse.ok()) {
-            const teamArticle: { id: string } = await teamArticleResponse.json();
-            teamArticleIds.push(teamArticle.id);
-            console.log(`Linked article to team (TeamArticle ID: ${teamArticle.id})`);
-          } else {
-            const errorText = await teamArticleResponse.text();
-            // If it's a duplicate error, log a warning but continue (cleanup will handle it via cascade)
-            if (teamArticleResponse.status() === 500 && errorText.includes('already exists')) {
-              console.warn(`TeamArticle for article ${article.id} already exists, skipping (cleanup will handle via cascade)`);
-            } else {
-              throw new Error(`Failed to link article to team: ${teamArticleResponse.status()} ${errorText}`);
-            }
-          }
-        } catch (error: any) {
-          // If it's a duplicate error, log and continue
-          if (error.message?.includes('already exists')) {
-            console.warn(`TeamArticle creation skipped due to duplicate: ${error.message}`);
-          } else {
-            throw error;
-          }
-        }
+        // Note: the Article→Team link (TeamArticleEntity) is created by the API itself.
+        // ArticleService.CreateAsync (gallery.api .../Services/ArticleService.cs:126-156) fans out
+        // one TeamArticle per TeamCard matching the article's cardId + exhibitId whenever the
+        // article is posted with an exhibitId — which is exactly what we do above, after seeding
+        // the TeamCard. POSTing to /api/teamarticles here would therefore always be a duplicate
+        // insert (500 "A record with this identifier already exists."). We read the auto-created
+        // links back after the loop instead.
       }
     }
+
+    // Collect the TeamArticles the API auto-created for the articles above, so cleanup can
+    // delete them explicitly rather than relying solely on the exhibit-delete cascade.
+    const teamArticlesResponse = await apiContext.get(
+      `${Services.Gallery.API}/api/exhibits/${exhibit.id}/teamarticles`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    if (!teamArticlesResponse.ok()) {
+      throw new Error(
+        `Failed to read seeded team articles: ${teamArticlesResponse.status()} ${await teamArticlesResponse.text()}`,
+      );
+    }
+    const teamArticles: { id: string; articleId: string }[] = await teamArticlesResponse.json();
+    for (const teamArticle of teamArticles) {
+      if (articleIds.includes(teamArticle.articleId)) {
+        teamArticleIds.push(teamArticle.id);
+      }
+    }
+    if (teamArticleIds.length !== articleIds.length) {
+      throw new Error(
+        `Expected one TeamArticle per seeded article (${articleIds.length}), got ${teamArticleIds.length}. ` +
+          `The API auto-creates these in ArticleService.CreateAsync; a mismatch means the TeamCard/Article ` +
+          `wiring in this seeder is wrong.`,
+      );
+    }
+    console.log(`Seeded ${teamArticleIds.length} team articles (auto-created by the API)`);
 
     return {
       collectionId: collection.id,

@@ -4,12 +4,17 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
-import { Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Authentication and Authorization', () => {
+  // This spec exercises the Keycloak login flow itself, so it must start from a
+  // genuinely unauthenticated context — otherwise the pre-authenticated
+  // storageState provisioned by global-setup would skip the redirect entirely
+  // and the test would pass for the wrong reason.
+  test.use({ storageState: { cookies: [], origins: [] } });
+
   test('User Login and Session Management', async ({ page }) => {
-    // 1. Navigate to http://localhost:4723
+    // 1. Navigate to the Gallery UI
     await page.goto(Services.Gallery.UI);
 
     // expect: The application redirects to Keycloak login page

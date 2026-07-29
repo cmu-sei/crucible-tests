@@ -52,6 +52,14 @@ const PROVISION: ProvisionTarget[] = [
     // reliable "authenticated shell is up" marker for CITE.
     appShellSelector: 'app-root mat-toolbar',
   },
+  {
+    app: 'gallery',
+    homeUrl: Services.Gallery.UI,
+    // The topbar's `.options-text` block is guarded by `@if (currentUser$ | async)`,
+    // so it renders only once the OIDC client has resolved a user. The surrounding
+    // mat-toolbar renders before that and would snapshot state without a token.
+    appShellSelector: 'app-topbar .options-text button',
+  },
 ];
 
 /**

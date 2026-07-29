@@ -4,59 +4,110 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '../../fixtures';
-import { authenticateGalleryWithKeycloak } from '../../fixtures';
+import {
+  test,
+  expect,
+  gotoGalleryAdmin,
+  gotoAdminSection,
+  apiDeleteCollectionById,
+} from '../../fixtures';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
 test.describe('Exhibit Management', () => {
-  test('Upload Exhibit from JSON', async ({ page, seededExhibit }) => {
-    await authenticateGalleryWithKeycloak(page);
-    await page.getByRole('button', { name: 'Administration' }).click();
-    await expect(page).toHaveTitle('Gallery Admin');
+  // The upload endpoint calls privateExhibitCopyAsync(..., copyTheCollection: true), so
+  // it creates a brand-new collection (plus cards and articles) rather than reusing the
+  // source one. That new collection is outside the worker-scoped `seededExhibit`
+  // cleanup, so this spec must delete it itself — the previous version leaked an entire
+  // collection tree on every run.
+  let uploadedCollectionId: string | undefined;
+  let tempPath: string | undefined;
 
-    // Navigate to Exhibits section and select the seeded collection
-    await page.locator('mat-list-item').filter({ hasText: 'Exhibits' }).getByRole('button').click();
-    const collectionDropdown = page.getByRole('combobox', { name: 'Select a Collection' });
-    await collectionDropdown.click();
+  test.afterEach(async () => {
+    if (uploadedCollectionId) {
+      // Cascade removes the uploaded exhibit, teams, cards and articles.
+      await apiDeleteCollectionById(uploadedCollectionId, 'uploaded exhibit collection');
+      uploadedCollectionId = undefined;
+    }
+    if (tempPath) {
+      try {
+        fs.unlinkSync(tempPath);
+      } catch {
+        /* already gone */
+      }
+      tempPath = undefined;
+    }
+  });
 
-    // Select the seeded collection by name
+  test('Upload Exhibit from JSON', async ({ galleryAuthenticatedPage: page, seededExhibit }) => {
+    await gotoGalleryAdmin(page);
+    await gotoAdminSection(page, 'Exhibits');
+
+    // Select the worker-seeded collection so its exhibit can be exported.
+    await page.getByRole('combobox', { name: 'Select a Collection' }).click();
     const seededOption = page.getByRole('option', { name: seededExhibit.collectionName });
+    await expect(seededOption).toBeVisible({ timeout: 20000 });
     await seededOption.click();
 
-    // Wait for the exhibits table to load with the seeded exhibit
-    await page.waitForTimeout(1000); // Brief wait for table to populate
+    // The seeded exhibit's row appearing is what proves the table finished loading —
+    // no fixed sleep needed.
+    const seededRow = page.locator('tr.element-row').filter({ hasText: seededExhibit.exhibitName });
+    await expect(seededRow).toBeVisible();
 
-    // First, download the seeded exhibit to use as upload source
-    // Get all table rows and find the one with our seeded exhibit
-    const tableRows = page.getByRole('table').getByRole('row');
-    // Find the row containing the seeded exhibit name
-    const dataRow = tableRows.filter({ hasText: seededExhibit.exhibitName }).first();
-    await expect(dataRow).toBeVisible();
-
+    // Produce the upload source by downloading the seeded exhibit's JSON export.
     const downloadPromise = page.waitForEvent('download');
-    await dataRow.locator('button[title*="Download"]').click();
+    await seededRow.getByRole('button', { name: `Download ${seededExhibit.exhibitName}` }).click();
     const download = await downloadPromise;
 
-    // Save the downloaded file
-    const tempPath = path.join(os.tmpdir(), `gallery-exhibit-upload-test-${Date.now()}.json`);
+    tempPath = path.join(
+      os.tmpdir(),
+      `gallery-exhibit-upload-test-${Date.now()}-${Math.floor(Math.random() * 1e6)}.json`
+    );
     await download.saveAs(tempPath);
 
     // 1. Click the 'Upload Exhibit' button (upload icon) in the exhibits header
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.getByRole('button', { name: 'Upload Exhibit' }).click();
 
-    // 2. Select a valid JSON exhibit file to upload
+    // 2. Select a valid JSON exhibit file to upload. Pair the POST response wait with
+    // the action so completion is proven by the response, not by a fixed sleep.
+    const uploadResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/exhibits/json') && response.request().method() === 'POST',
+      { timeout: 60000 }
+    );
     const fileChooser = await fileChooserPromise;
     await fileChooser.setFiles(tempPath);
 
     // expect: The exhibit is imported successfully
-    // expect: The new exhibit appears in the list
-    // Wait briefly for upload to complete
-    await page.waitForTimeout(2000);
+    const uploadResponse = await uploadResponsePromise;
+    expect(uploadResponse.ok()).toBe(true);
+    const uploaded: { id: string; name: string; collectionId: string } = await uploadResponse.json();
 
-    // Cleanup: Remove temp file
-    try { fs.unlinkSync(tempPath); } catch { /* ignore */ }
+    // Register the new collection for teardown immediately, before any assertion that
+    // could throw and skip cleanup.
+    uploadedCollectionId = uploaded.collectionId;
+
+    // The import lands in a NEW collection, not the source one.
+    expect(uploaded.id).not.toBe(seededExhibit.exhibitId);
+    expect(uploaded.collectionId).not.toBe(seededExhibit.collectionId);
+    // privateExhibitCopyAsync keeps the exhibit name and suffixes only the collection
+    // name with " - <username>".
+    expect(uploaded.name).toBe(seededExhibit.exhibitName);
+
+    // expect: The new exhibit appears in the list.
+    // selectFile() calls collectionDataService.setActive('') before uploading, which
+    // clears the collection filter and hides the table, so select the newly created
+    // collection to see the imported exhibit.
+    const newCollectionName = `${seededExhibit.collectionName} - Admin User`;
+    await page.getByRole('combobox', { name: 'Select a Collection' }).click();
+    const newOption = page.getByRole('option', { name: newCollectionName });
+    await expect(newOption).toBeVisible({ timeout: 20000 });
+    await newOption.click();
+
+    await expect(
+      page.locator('tr.element-row').filter({ hasText: seededExhibit.exhibitName })
+    ).toBeVisible();
   });
 });

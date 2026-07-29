@@ -4,12 +4,15 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
-import { Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Integration and API', () => {
+  // This spec asserts the full Keycloak redirect/callback round-trip, so it must
+  // opt out of the pre-authenticated storageState from gallery/fixtures.ts.
+  test.use({ storageState: { cookies: [], origins: [] } });
+
   test('Keycloak Authentication Integration', async ({ page }) => {
-    // 1. Navigate to http://localhost:4723
+    // 1. Navigate to the Gallery UI
     await page.goto(Services.Gallery.UI);
 
     // expect: Application redirects to Keycloak login page
