@@ -15,7 +15,7 @@ test.describe('Event Templates Management', () => {
 
     // expect: Admin page loads with Event Templates section visible
     await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Event Templates' })).toBeVisible();
+    await expect(page.locator('mat-list').getByText('Event Templates')).toBeVisible();
 
     // 2. Click on 'Event Templates' in the sidebar
     await page.locator('mat-list-item').filter({ hasText: 'Event Templates' }).click();

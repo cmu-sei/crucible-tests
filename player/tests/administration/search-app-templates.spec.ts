@@ -4,7 +4,7 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, typeIntoSearch } from '../../fixtures';
 
 test.describe('Administration - Application Templates', () => {
   test('Search Application Templates', async ({ playerAuthenticatedPage: page }) => {
@@ -14,23 +14,23 @@ test.describe('Administration - Application Templates', () => {
     await page.getByRole('button', { name: 'Application Templates' }).click();
 
     // expect: The Application Templates section is displayed
-    await expect(page.getByRole('columnheader', { name: 'Template Name' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
 
     // 2. Enter a search term in the Search field
-    const searchField = page.getByRole('textbox', { name: 'Search' });
-    await searchField.fill('Dashboard');
+    const searchField = page.getByPlaceholder('Search');
+    await typeIntoSearch(searchField, 'Dashboard');
 
     // expect: The search field accepts input
     await expect(searchField).toHaveValue('Dashboard');
 
     // expect: A clear search button appears
-    await expect(page.getByRole('button', { name: 'Clear Search' })).toBeVisible();
+    await expect(page.getByTitle('Clear Search')).toBeVisible();
 
     // expect: The Dashboard template is still visible
     await expect(page.getByRole('cell', { name: /Dashboard/ }).first()).toBeVisible();
 
     // 3. Clear the search field
-    await page.getByRole('button', { name: 'Clear Search' }).click();
+    await page.getByTitle('Clear Search').click();
 
     // expect: Search field is cleared
     await expect(searchField).toHaveValue('');

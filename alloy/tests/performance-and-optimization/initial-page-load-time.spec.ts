@@ -24,6 +24,6 @@ test.describe('Performance and Optimization', () => {
 
     // 2. Verify the page rendered correctly
     await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Alloy' })).toBeVisible();
+    await expect(page.getByText('Alloy')).toBeVisible();
   });
 });

@@ -4,8 +4,8 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
-import { navigateToAdminSection, createEvaluation, deleteEvaluationByName } from '../../test-helpers';
+import { test, expect, Services, ensureScoringModelExists, ensureTeamTypeExists, purgeStaleEvaluations } from '../../fixtures';
+import { navigateToAdminSection, createEvaluation, deleteEvaluationByName, findAdminRowByName } from '../../test-helpers';
 
 // These tests share backend state (admin user memberships, team types) with
 // other aggregate tests. Running them serially avoids SignalR/session races
@@ -18,7 +18,16 @@ test.describe('Aggregate Interface', () => {
   const TEST_TEAM_NAME = 'Group Agg Test Team';
   const TEST_TEAM_SHORT = 'GAT';
 
+  // Keep the evaluations list small/deterministic — the admin suite may have flooded it.
+  test.beforeAll(async () => {
+    await purgeStaleEvaluations();
+  });
+
   test.beforeEach(async ({ citeAuthenticatedPage: page }) => {
+    // Ensure a scoring model and a team type exist so the Add Evaluation and
+    // Add Team dialog dropdowns are populated on a clean database.
+    await ensureScoringModelExists();
+    await ensureTeamTypeExists();
     // Clean up any existing test evaluations first
     await deleteEvaluationByName(page, TEST_EVAL_NAME);
   });
@@ -30,7 +39,7 @@ test.describe('Aggregate Interface', () => {
 
     // 2. Navigate to evaluations admin and expand the evaluation row
     await navigateToAdminSection(page, 'Evaluations');
-    const evalRow = page.locator('tbody tr').filter({ hasText: TEST_EVAL_NAME }).first();
+    const evalRow = await findAdminRowByName(page, TEST_EVAL_NAME);
     await expect(evalRow).toBeVisible({ timeout: 15000 });
     await evalRow.click();
 
@@ -99,7 +108,7 @@ test.describe('Aggregate Interface', () => {
     // so explicitly re-navigate to the evaluations admin to get a fresh state, then
     // re-expand the evaluation row and the Teams panel.
     await navigateToAdminSection(page, 'Evaluations');
-    const evalRowAfter = page.locator('tbody tr').filter({ hasText: TEST_EVAL_NAME }).first();
+    const evalRowAfter = await findAdminRowByName(page, TEST_EVAL_NAME);
     await expect(evalRowAfter).toBeVisible({ timeout: 15000 });
     await evalRowAfter.click();
     await page.waitForTimeout(1000);

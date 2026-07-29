@@ -15,7 +15,7 @@ test.describe('Events Management', () => {
     await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
 
     // expect: Event Templates section is accessible
-    await expect(page.getByRole('link', { name: 'Event Templates' })).toBeVisible();
+    await expect(page.locator('mat-list').getByText('Event Templates')).toBeVisible();
 
     // 2. Verify Event Templates table structure
     await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();

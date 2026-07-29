@@ -4,7 +4,7 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, expectCasterProjectOpen } from '../../fixtures';
 
 test.describe('Home Page and Navigation', () => {
   test('Browser Back and Forward Navigation', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
@@ -19,20 +19,7 @@ test.describe('Home Page and Navigation', () => {
     await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
     await page.getByRole('textbox', { name: 'Name' }).fill(projectName);
     await page.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByRole('link', { name: projectName })).toBeVisible({ timeout: 10000 });
-
-    // 2. Click on the project
-    await page.getByRole('link', { name: projectName }).click();
-
-    // expect: Project details page is displayed
-    await expect(page).toHaveURL(/\/projects\//, { timeout: 10000 });
-    await expect(page.getByText(projectName, { exact: true })).toBeVisible();
-
-    // Register project for cleanup using the ID from the URL
-    const projectId = page.url().match(/\/projects\/([a-f0-9-]+)/)?.[1];
-    if (projectId) {
-      cleanupCasterProject(projectId);
-    }
+    cleanupCasterProject(await expectCasterProjectOpen(page, projectName));
 
     // 3. Navigate to admin section
     await page.goto(Services.Caster.UI + '/admin');

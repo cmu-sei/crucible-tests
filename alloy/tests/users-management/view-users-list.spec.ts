@@ -18,7 +18,7 @@ test.describe('Users Management', () => {
     await page.locator('mat-list-item').filter({ hasText: 'Users' }).click();
 
     // expect: Users list is displayed
-    await expect(page.getByRole('link', { name: 'Users' })).toBeVisible();
+    await expect(page.locator('mat-list').getByText('Users')).toBeVisible();
     await expect(page.getByRole('table')).toBeVisible();
 
     // expect: Each user shows: ID, name, role

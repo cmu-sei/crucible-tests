@@ -4,30 +4,45 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect } from '../../fixtures';
-import { getApiToken, ensureEvaluation, deleteEvaluation, navigateToEvaluation } from './eval-helpers';
+import { test, expect, Services, seedCompleteEvaluation, cleanupCompleteEvaluation } from '../../fixtures';
 
 test.describe('Evaluation Dashboard Interface', () => {
-  test('Dashboard Initial Load', async ({ citeAuthenticatedPage: page, request }) => {
-    const token = await getApiToken(request);
-    const { id: evalId, created } = await ensureEvaluation(request, token);
+  let evaluationIds: { evaluationId: string; scoringModelId: string; teamTypeId: string; } | null = null;
 
-    try {
-      // 1. Navigate to evaluation via admin page
-      await navigateToEvaluation(page);
+  test('Dashboard Initial Load', async ({ citeAuthenticatedPage: page }) => {
+    // Create evaluation with team membership via API
+    const seededData = await seedCompleteEvaluation(`Dashboard Test Evaluation ${Date.now()}`);
+    evaluationIds = {
+      evaluationId: seededData.evaluationId,
+      scoringModelId: seededData.scoringModelId,
+      teamTypeId: seededData.teamTypeId,
+    };
 
-      // expect: Dashboard page loads
-      await page.waitForLoadState('domcontentloaded');
+    // 1. Navigate to evaluation dashboard using query parameter
+    await page.goto(`${Services.Cite.UI}/?evaluation=${seededData.evaluationId}`);
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page).toHaveURL(new RegExp(seededData.evaluationId), { timeout: 10000 });
 
-      // expect: Evaluation information header is displayed
-      const header = page.locator('[class*="evaluation"], [class*="header"], mat-toolbar, [class*="title"]').first();
-      await expect(header).toBeVisible({ timeout: 10000 });
+    // expect: Dashboard page loads with evaluation content
+    await page.waitForLoadState('domcontentloaded');
 
-      // expect: Main content area displays dashboard view
-      const content = page.locator('[class*="dashboard"], [class*="content"], mat-tab-group').first();
-      await expect(content).toBeVisible({ timeout: 10000 });
-    } finally {
-      if (created) await deleteEvaluation(request, token, evalId);
+    // expect: Move header is displayed
+    const moveLabel = page.getByRole('heading', { name: 'Move:' });
+    await expect(moveLabel).toBeVisible({ timeout: 10000 });
+
+    // expect: Team selection is visible
+    const teamLabel = page.getByText('Team:');
+    await expect(teamLabel).toBeVisible({ timeout: 10000 });
+
+    // expect: Score Summary is displayed
+    const scoreSummary = page.getByRole('heading', { name: 'Score Summary' });
+    await expect(scoreSummary).toBeVisible({ timeout: 10000 });
+  });
+
+  test.afterEach(async () => {
+    if (evaluationIds) {
+      await cleanupCompleteEvaluation(evaluationIds);
+      evaluationIds = null;
     }
   });
 });

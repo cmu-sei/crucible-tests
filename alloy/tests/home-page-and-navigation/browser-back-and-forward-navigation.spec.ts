@@ -21,14 +21,14 @@ test.describe('Home Page and Navigation', () => {
 
     // expect: Events section is displayed
     await expect(page).toHaveURL(/section=Events/);
-    await expect(page.getByRole('link', { name: 'Events' })).toBeVisible();
+    await expect(page.locator('mat-list').getByText('Events')).toBeVisible();
 
     // 3. Click on 'Users' in the sidebar
     await page.locator('mat-list-item').filter({ hasText: 'Users' }).click();
 
     // expect: Users section is displayed
     await expect(page).toHaveURL(/section=Users/);
-    await expect(page.getByRole('link', { name: 'Users' })).toBeVisible();
+    await expect(page.locator('mat-list').getByText('Users')).toBeVisible();
 
     // 4. Click browser back button
     await page.goBack();

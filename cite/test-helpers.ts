@@ -2,14 +2,21 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 import { Page, expect } from '@playwright/test';
-import { Services } from '../shared-fixtures';
+import { Services, waitForFirstVisible, settleForResponse } from '../shared-fixtures';
 
 /**
  * Helper utilities for CITE tests
  */
 
 /**
- * Navigate to CITE admin section and wait for it to load
+ * Navigate to CITE admin section and wait for it to load.
+ *
+ * With the storageState-based auth (see global-setup.ts and cite/fixtures.ts), the
+ * browser context already carries a valid OIDC token, so we can navigate straight
+ * to /admin without the old "visit home first to pre-load Angular state" workaround
+ * or any fixed delay. We then wait on a concrete DOM signal (the admin table) rather
+ * than sleeping. The Keycloak-redirect race below is retained as a safety net for
+ * the rare case where the saved state is missing/expired.
  * @param page - Playwright Page object
  * @param section - Optional section name (Evaluations, Scoring Models, etc.)
  */
@@ -32,6 +39,8 @@ export async function navigateToAdminSection(page: Page, section?: string): Prom
     await page.waitForLoadState('domcontentloaded');
   };
 
+  // Navigate directly to admin — storageState provides the token, so no home-page
+  // pre-load is needed.
   await page.goto(url, { waitUntil: 'domcontentloaded' });
 
   // Angular OIDC client may redirect to Keycloak asynchronously after the page loads.
@@ -40,11 +49,25 @@ export async function navigateToAdminSection(page: Page, section?: string): Prom
   const adminTable = page.locator('table').first();
 
   try {
-    // Race between Keycloak redirect and admin page loading
-    const winner = await Promise.race([
-      keycloakField.waitFor({ state: 'visible', timeout: 15000 }).then(() => 'keycloak' as const),
-      adminTable.waitFor({ state: 'visible', timeout: 15000 }).then(() => 'admin' as const),
-    ]);
+    // Wait for either the admin table or a Keycloak redirect. Use the
+    // cancellation-safe helper rather than Promise.race over two waitFor()s:
+    // with storageState auth the admin table always wins, but a bare race would
+    // leave the losing keycloakField.waitFor() running to its full 15s timeout in
+    // the background on EVERY call (navigateToAdminSection runs 62× per CITE suite,
+    // so that orphaned wait was the single largest cost in the run).
+    const winner = await waitForFirstVisible(
+      page,
+      [
+        { key: 'admin', locator: adminTable },
+        { key: 'keycloak', locator: keycloakField },
+      ],
+      { timeout: 15000 }
+    );
+
+    if (winner === null) {
+      // Neither appeared in the window — fall through to the catch's diagnostics.
+      throw new Error('Neither admin table nor Keycloak login form became visible');
+    }
 
     if (winner === 'keycloak') {
       console.log('Keycloak login form appeared during admin navigation');
@@ -68,6 +91,67 @@ export async function navigateToAdminSection(page: Page, section?: string): Prom
     }
 
     throw new Error(`Failed to navigate to admin section. Current URL: ${currentUrl}. ${error}`);
+  }
+}
+
+/**
+ * Locate a row in a CITE admin list by name, typing into the Search box first so the
+ * row is guaranteed onto the (paginated) first page.
+ *
+ * The admin lists paginate at 50 rows and the test suite seeds plenty of data, so a
+ * freshly-created row routinely lands on page 2+. The Search box filters the FULL
+ * client-side dataset and only then paginates (see admin-scoring-models.component:
+ * applyFilter -> applyPagination), so filtering by the unique name collapses the list
+ * to the single matching row on page 1. Scanning raw `tbody tr` without filtering only
+ * ever sees page 1 and silently misses rows further down — the root cause of the
+ * "element(s) not found" failures across the admin scoring suite.
+ *
+ * @param page - Playwright Page object
+ * @param name - The row's display text to filter and match on
+ * @returns A locator for the first matching data row (already filtered onto page 1)
+ */
+export async function findAdminRowByName(page: Page, name: string) {
+  const searchField = page.getByRole('textbox', { name: 'Search' });
+  if (await searchField.waitFor({ state: 'visible', timeout: 5000 }).then(() => true).catch(() => false)) {
+    await searchField.fill(name);
+    // The filter applies on valueChanges with no debounce, but give the slice a tick
+    // to re-render before we assert on the row.
+    await page.waitForTimeout(500);
+  }
+  return page.locator('tbody tr').filter({ hasText: name }).first();
+}
+
+/**
+ * Wait for the admin list to fully load data via async chain (permissions -> data).
+ * The CITE admin UI loads permissions first, then based on permissions loads the actual data.
+ * This can take several seconds as it waits for permissionDataService.load() to complete,
+ * then evaluationDataService.load() to complete.
+ * @param page - Playwright Page object
+ * @param apiEndpoint - The API endpoint pattern (e.g., '/api/evaluations', '/api/teamtypes')
+ * @param expectData - Whether to expect data to be present (default true). Set false for empty lists.
+ */
+export async function waitForAdminListLoad(
+  page: Page,
+  apiEndpoint: string,
+  expectData: boolean = true
+): Promise<void> {
+  if (expectData) {
+    // Wait for at least one real data row (excluding Material's spacer rows). A web-first
+    // `expect` polls internally (~100ms) rather than the old 1s `page.evaluate` loop, so a
+    // row that lands after, say, 1.3s no longer costs a full 2 seconds of rounding. Same
+    // 30s ceiling and same non-throwing contract: on timeout we log and return, leaving the
+    // caller's own assertions to produce the actual failure.
+    const dataRow = page.locator('tbody tr:not(.mat-mdc-row-spacer):not(.spacer)').filter({ hasText: /\S/ });
+    try {
+      await expect(dataRow.first()).toBeVisible({ timeout: 30000 });
+    } catch {
+      console.log('Warning: No table rows found after 30 seconds of polling');
+    }
+  } else {
+    // Empty list: wait for the table element itself to render before the caller asserts
+    // emptiness, so an "is empty" check can't fire against a not-yet-rendered table. This
+    // replaces a blind 2s sleep with a wait on a concrete signal.
+    await page.locator('table').first().waitFor({ state: 'visible', timeout: 10000 }).catch(() => {});
   }
 }
 
@@ -99,6 +183,10 @@ export async function deleteEvaluationByName(page: Page, evaluationName: string)
     if (!page.url().includes('/admin')) {
       await navigateToAdminSection(page, 'Evaluations');
     }
+
+    // Filter by name so matching rows are on page 1 (the list paginates at 50);
+    // otherwise rows further down are invisible to the delete loop below.
+    await findAdminRowByName(page, evaluationName);
 
     // Loop to delete all evaluations with matching name
     while (true) {
@@ -190,8 +278,9 @@ export async function deleteScoringModelByName(page: Page, scoringModelName: str
 
     await navigateToAdminSection(page, 'Scoring Models');
 
-    // Use .first() to handle Angular Material spacer rows
-    const scoringModelRow = page.locator('tbody tr').filter({ hasText: scoringModelName }).first();
+    // Filter by name first so the row is on page 1 (the list paginates at 50), then
+    // take .first() to skip Angular Material spacer rows.
+    const scoringModelRow = await findAdminRowByName(page, scoringModelName);
     if (!(await scoringModelRow.isVisible({ timeout: 2000 }).catch(() => false))) {
       console.log(`Scoring model "${scoringModelName}" not found for cleanup`);
       return false;
@@ -372,12 +461,10 @@ export async function createEvaluation(page: Page, evaluationName: string): Prom
   const scoringModelSelect = page.getByRole('combobox', { name: 'Scoring Model' });
   await expect(scoringModelSelect).toBeVisible({ timeout: 5000 });
 
-  // Wait for the scoring models API to respond before opening the dropdown
-  await page.waitForResponse(
-    response => response.url().includes('/api/scoringmodels') && response.status() === 200,
-    { timeout: 15000 }
-  ).catch(() => {});
-  await page.waitForTimeout(1500);
+  // Best-effort wait for the scoring models API to respond before opening the dropdown.
+  // settleForResponse matches on URL only (not status===200) and uses a short timeout,
+  // so when the call already fired it returns at once instead of burning the full 15s.
+  await settleForResponse(page, '/api/scoringmodels');
 
   // Try multiple approaches to open the dropdown - Angular Material can be finicky
   // First try clicking the combobox itself
@@ -437,8 +524,8 @@ export async function addAdminUserToEvaluation(page: Page, evaluationName: strin
   await navigateToAdminSection(page, 'Evaluations');
   await page.waitForTimeout(2000);
 
-  // Find and click the evaluation row
-  const evalRow = page.locator('tbody tr').filter({ hasText: evaluationName }).first();
+  // Find and click the evaluation row (filter by name so it's on page 1)
+  const evalRow = await findAdminRowByName(page, evaluationName);
   await expect(evalRow).toBeVisible({ timeout: 15000 });
   await evalRow.click();
   await page.waitForTimeout(2000);

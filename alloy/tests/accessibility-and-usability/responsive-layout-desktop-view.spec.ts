@@ -16,14 +16,14 @@ test.describe('Accessibility and Usability', () => {
     // expect: Page layout utilizes desktop space effectively
     await expect(page.getByText('My Events')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Alloy' })).toBeVisible();
+    await expect(page.getByText('Alloy')).toBeVisible();
 
     // 2. Navigate to admin section
     await page.goto(`${Services.Alloy.UI}/admin`);
 
     // expect: Layout shows sidebar and main content properly
     await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Event Templates' })).toBeVisible();
+    await expect(page.locator('mat-list').getByText('Event Templates')).toBeVisible();
     await expect(page.getByRole('table')).toBeVisible();
 
     // 3. Resize window to smaller width

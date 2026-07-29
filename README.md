@@ -22,9 +22,42 @@ To use the agents, describe what you need. The right agent is automatically sele
 - *"Generate tests for the Blueprint authentication section"* — the **generator** creates spec files from the test plan
 - *"Fix the failing Blueprint tests"* — the **healer** debugs and repairs broken tests
 
+To generate comprehensive coverage for an application, use a prompt like:
+
+> @"playwright-test-generator (agent)" look at the `<app>-test-plan.md` and generate all tests mentioned in the test plan with multiple agents running in parallel using the established shared fixtures and authentication mechanism. Read the application documentation for additional context and add test-plan coverage where necessary.
+
 The agents require Crucible services to be running since they interact with the applications through a real browser.
 
-The agent definitions are generated during container creation by `npx playwright init-agents` (see `postcreate.sh` in the crucible-development repo) and stored in the crucible-development workspace.
+The Claude agent definitions are stored in `.claude/agents/`. The
+repository-local `.mcp.json` starts the `playwright-test` MCP server using this
+suite's Playwright configuration.
+
+### Codex Agents
+
+Codex uses equivalent project-scoped agents in `.codex/agents/`:
+`playwright-test-planner`, `playwright-test-generator`, and
+`playwright-test-healer`. The `.codex/config.toml` file starts the local
+`playwright-test` MCP server using this repository's Playwright configuration.
+
+From a Codex session opened in this repository, prefer the repository-local
+skills in `.codex/skills/`. They explicitly dispatch the matching agent role
+and wait for it to complete:
+
+```text
+$plan-crucible-tests Plan CITE team-management coverage.
+$generate-crucible-tests Implement CITE scenario "Create a team".
+$heal-crucible-tests Repair the failing gameboard leaderboard spec.
+```
+
+Name the target app and the feature, test-plan scenario, or failing spec in the
+prompt. Include the failing command, logs, trace, or screenshot when healing a
+test. Use `/mcp` to confirm that `playwright-test` is connected before
+browser-driven work.
+
+Use `/agent playwright-test-planner`, `/agent playwright-test-generator`, or
+`/agent playwright-test-healer` if project skills are unavailable in
+the Codex surface. Crucible services must be running before any agent can
+drive the browser or run an end-to-end test.
 
 ## Running Tests
 
@@ -112,6 +145,10 @@ cd /mnt/data/crucible/crucible-tests
 ./run-tests.sh gallery --filter "home"
 ./run-tests.sh all --filter login --app player
 
+# Control the number of parallel workers (count or percentage)
+./run-tests.sh all --workers 4
+./run-tests.sh cite --workers 50%
+
 # Skip service health checks
 ./run-tests.sh topomojo --no-check
 
@@ -123,6 +160,8 @@ npx playwright test --project=chromium topomojo/tests/
 ```
 
 The script automatically checks that **Keycloak** and the **target application** are reachable before running tests. Use `--no-check` to skip these checks.
+
+By default the number of parallel workers comes from `playwright.config.ts` (1 on CI, 2 locally). Use `--workers <n>` to override it per run — accepting either a count (`4`) or a percentage of CPU cores (`50%`). The flag is ignored for the interactive `ui` and `debug` modes, which Playwright always runs with a single worker. Note that tests share a single Crucible stack, so raising the worker count increases concurrent load on Keycloak and the apps and can surface auth/timing flakiness.
 
 **Supported applications:** `alloy`, `blueprint`, `caster`, `cite`, `gallery`, `gameboard`, `keycloak`, `moodle`, `player`, `steamfitter`, `topomojo`
 

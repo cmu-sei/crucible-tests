@@ -4,71 +4,44 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
-import { navigateToAdminSection, deleteEvaluationByName, createEvaluation } from '../../test-helpers';
+import { test, expect, Services, seedCompleteEvaluation, cleanupCompleteEvaluation } from '../../fixtures';
+import { navigateToAdminSection, waitForAdminListLoad } from '../../test-helpers';
 
 test.describe('Administration - Evaluations', () => {
 
-  const TEST_EVAL_NAME = 'Test Evaluation For Duties';
+  let evalName = '';
+  let seedData: { scoringModelId: string; evaluationId: string; teamTypeId: string } | null = null;
 
   test('Manage Evaluation Duties', async ({ citeAuthenticatedPage: page }) => {
 
-    // 1. Create an evaluation
-    await createEvaluation(page, TEST_EVAL_NAME);
+    // 1. Seed a complete evaluation via API (includes team)
+    evalName = `Duties Test ${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    seedData = await seedCompleteEvaluation(evalName, 0);
 
-    // 2. Navigate to the evaluations list and wait for the evaluation to appear
+    // 2. Navigate to the evaluations list
     await navigateToAdminSection(page, 'Evaluations');
-    await page.waitForTimeout(2000);
+    await waitForAdminListLoad(page, '/api/evaluations', true);
 
-    const evalRow = page.locator('tbody tr').filter({ hasText: TEST_EVAL_NAME }).first();
-    await expect(evalRow).toBeVisible({ timeout: 15000 });
+    // Search for the seeded evaluation
+    const searchBox = page.locator('input[placeholder="Search"], input[type="search"], input[aria-label="Search"]').first();
+    await expect(searchBox).toBeVisible({ timeout: 5000 });
+    await searchBox.clear();
+    await searchBox.fill(evalName);
+    await page.waitForTimeout(1000);
+
+    const evalRow = page.locator('tbody tr').filter({ hasText: evalName }).first();
+    await expect(evalRow).toBeVisible({ timeout: 10000 });
     await evalRow.click();
-    await page.waitForTimeout(2000);
-
-    // 3. First create a team (required for duties to work properly)
-    const teamsPanel = page.locator('mat-expansion-panel').filter({ hasText: 'Teams' }).first();
-    await expect(teamsPanel).toBeVisible({ timeout: 10000 });
-    await teamsPanel.locator('mat-expansion-panel-header').click();
     await page.waitForTimeout(1000);
 
-    const addTeamButton = teamsPanel.locator('button[title="Add Team"]');
-    await expect(addTeamButton).toBeVisible({ timeout: 5000 });
-    await addTeamButton.click();
-
-    const teamDialog = page.getByRole('dialog');
-    await expect(teamDialog).toBeVisible({ timeout: 5000 });
-
-    // Fill in all required fields: Name, Short Name, and Team Type
-    // Use .first() and .last() to target the specific fields since both have similar attributes
-    const teamNameField = teamDialog.getByRole('textbox').first();
-    await teamNameField.fill('Test Team');
-
-    const teamShortNameField = teamDialog.getByRole('textbox').nth(1);
-    await teamShortNameField.fill('TTT');
-
-    // Select the first team type
-    const teamTypeCombobox = teamDialog.getByRole('combobox', { name: 'Team Type' });
-    await teamTypeCombobox.click();
-    await page.waitForTimeout(500);
-    const firstTeamTypeOption = page.getByRole('option').first();
-    await expect(firstTeamTypeOption).toBeVisible({ timeout: 5000 });
-    await firstTeamTypeOption.click();
-    await page.waitForTimeout(500);
-
-    const teamSaveButton = teamDialog.getByRole('button', { name: 'Save' });
-    await expect(teamSaveButton).toBeEnabled({ timeout: 5000 });
-    await teamSaveButton.click();
-    await expect(teamDialog).not.toBeVisible({ timeout: 10000 });
+    // 3. Find and expand the Duties panel
+    const dutiesPanelButton = page.getByRole('button', { name: 'Duties', exact: true });
+    await expect(dutiesPanelButton).toBeVisible({ timeout: 10000 });
+    await dutiesPanelButton.click();
     await page.waitForTimeout(1000);
 
-    // 4. Find and expand the Duties panel
-    const dutiesPanel = page.locator('mat-expansion-panel').filter({ hasText: 'Duties' }).first();
-    await expect(dutiesPanel).toBeVisible({ timeout: 10000 });
-    await dutiesPanel.locator('mat-expansion-panel-header').click();
-    await page.waitForTimeout(1000);
-
-    // 5. Add a duty
-    const addDutyButton = dutiesPanel.locator('button[title="Add Duty"]');
+    // 4. Add a duty
+    const addDutyButton = page.locator('button[title="Add Duty"]');
     await expect(addDutyButton).toBeVisible({ timeout: 5000 });
     await addDutyButton.click();
 
@@ -87,14 +60,18 @@ test.describe('Administration - Evaluations', () => {
 
     // Wait for the dialog to close and the duty to be created
     await expect(dutyDialog).not.toBeVisible({ timeout: 10000 });
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(1000);
 
-    // 6. Verify the duty appears
-    const dutyItem = dutiesPanel.locator('text=Test Duty Name');
+    // 5. Verify the duty appears within the Duties region
+    const dutiesRegion = page.getByRole('region', { name: 'Duties' });
+    const dutyItem = dutiesRegion.getByText('Test Duty Name').first();
     await expect(dutyItem).toBeVisible({ timeout: 10000 });
   });
 
-  test.afterEach(async ({ citeAuthenticatedPage: page }) => {
-    await deleteEvaluationByName(page, TEST_EVAL_NAME);
+  test.afterEach(async () => {
+    if (seedData) {
+      await cleanupCompleteEvaluation(seedData);
+      seedData = null;
+    }
   });
 });

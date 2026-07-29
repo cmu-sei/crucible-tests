@@ -4,78 +4,29 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
-import { createEvaluation, deleteEvaluationByName, navigateToAdminSection } from '../../test-helpers';
-
-const TEST_EVAL_ALPHA = 'E2E Sort Alpha';
-const TEST_EVAL_BETA = 'E2E Sort Beta';
-
-async function createEvalWithTeamMember(page: import('@playwright/test').Page, evalName: string, teamName: string, teamShort: string) {
-  await createEvaluation(page, evalName);
-
-  await navigateToAdminSection(page, 'Evaluations');
-  await page.waitForTimeout(2000);
-
-  const evalRow = page.locator('tbody tr').filter({ hasText: evalName }).first();
-  await expect(evalRow).toBeVisible({ timeout: 15000 });
-  await evalRow.click();
-  await page.waitForTimeout(2000);
-
-  // Expand Teams panel and add a team
-  const teamsPanel = page.locator('mat-expansion-panel').filter({ hasText: 'Teams' }).first();
-  await expect(teamsPanel).toBeVisible({ timeout: 10000 });
-  await teamsPanel.locator('mat-expansion-panel-header').click();
-  await page.waitForTimeout(1000);
-
-  const addTeamButton = teamsPanel.locator('button[title="Add Team"]');
-  await expect(addTeamButton).toBeVisible({ timeout: 5000 });
-  await addTeamButton.click();
-
-  const teamDialog = page.getByRole('dialog');
-  await expect(teamDialog).toBeVisible({ timeout: 5000 });
-
-  await teamDialog.getByRole('textbox').first().fill(teamName);
-  await teamDialog.getByRole('textbox').nth(1).fill(teamShort);
-
-  const teamTypeCombobox = teamDialog.getByRole('combobox', { name: 'Team Type' });
-  await teamTypeCombobox.click();
-  await page.waitForTimeout(500);
-  const firstTeamTypeOption = page.getByRole('option').first();
-  await expect(firstTeamTypeOption).toBeVisible({ timeout: 5000 });
-  await firstTeamTypeOption.click();
-  await page.waitForTimeout(500);
-
-  const teamSaveButton = teamDialog.getByRole('button', { name: 'Save' });
-  await expect(teamSaveButton).toBeEnabled({ timeout: 5000 });
-  await teamSaveButton.click();
-  await expect(teamDialog).not.toBeVisible({ timeout: 10000 });
-  await page.waitForTimeout(2000);
-
-  // Expand the team to reveal membership UI
-  const teamRow = teamsPanel.locator('mat-expansion-panel-header').filter({ hasText: teamName });
-  await expect(teamRow).toBeVisible({ timeout: 10000 });
-  await teamRow.click();
-  await page.waitForTimeout(2000);
-
-  // Add Admin User as team member
-  const usersSection = teamsPanel.locator('app-admin-team-memberships, app-admin-team-membership-list');
-  await expect(usersSection.first()).toBeVisible({ timeout: 10000 });
-
-  const adminRow = usersSection.locator('tr').filter({ hasText: 'Admin User' }).first();
-  await expect(adminRow).toBeVisible({ timeout: 15000 });
-  const addButton = adminRow.locator('button').filter({ has: page.locator('mat-icon[fonticon*="plus"]') });
-  await expect(addButton).toBeVisible({ timeout: 5000 });
-  await addButton.click();
-  await page.waitForTimeout(2000);
-}
+import { test, expect, Services, serviceUrlPattern, seedCompleteEvaluation, cleanupCompleteEvaluation } from '../../fixtures';
 
 test.describe('Home Page and Evaluation List', () => {
+  let evaluation1Ids: { evaluationId: string; scoringModelId: string; teamTypeId: string; } | null = null;
+  let evaluation2Ids: { evaluationId: string; scoringModelId: string; teamTypeId: string; } | null = null;
 
   test('Evaluation List Sorting', async ({ citeAuthenticatedPage: page }) => {
+    const timestamp = Date.now();
 
-    // 1. Create two evaluations via admin UI with team memberships
-    await createEvalWithTeamMember(page, TEST_EVAL_ALPHA, 'Sort Alpha Team', 'SAT');
-    await createEvalWithTeamMember(page, TEST_EVAL_BETA, 'Sort Beta Team', 'SBT');
+    // 1. Create two evaluations via API with team memberships
+    const seededData1 = await seedCompleteEvaluation(`E2E Sort Alpha ${timestamp}`);
+    evaluation1Ids = {
+      evaluationId: seededData1.evaluationId,
+      scoringModelId: seededData1.scoringModelId,
+      teamTypeId: seededData1.teamTypeId,
+    };
+
+    const seededData2 = await seedCompleteEvaluation(`E2E Sort Beta ${timestamp}`);
+    evaluation2Ids = {
+      evaluationId: seededData2.evaluationId,
+      scoringModelId: seededData2.scoringModelId,
+      teamTypeId: seededData2.teamTypeId,
+    };
 
     // 2. Navigate to home page
     await page.goto(Services.Cite.UI);
@@ -103,8 +54,14 @@ test.describe('Home Page and Evaluation List', () => {
     await page.waitForTimeout(500);
   });
 
-  test.afterEach(async ({ citeAuthenticatedPage: page }) => {
-    await deleteEvaluationByName(page, TEST_EVAL_ALPHA);
-    await deleteEvaluationByName(page, TEST_EVAL_BETA);
+  test.afterEach(async () => {
+    if (evaluation1Ids) {
+      await cleanupCompleteEvaluation(evaluation1Ids);
+      evaluation1Ids = null;
+    }
+    if (evaluation2Ids) {
+      await cleanupCompleteEvaluation(evaluation2Ids);
+      evaluation2Ids = null;
+    }
   });
 });

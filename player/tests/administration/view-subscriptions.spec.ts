@@ -21,12 +21,16 @@ test.describe('Administration - Subscriptions', () => {
     // expect: The Subscriptions section is displayed
     await expect(page).toHaveURL(/section=subscriptions/);
 
-    // expect: A table shows subscriptions with columns: Subscription Name, Last Error, Event Types
-    await expect(page.getByRole('columnheader', { name: 'Subscription Name' })).toBeVisible();
+    // expect: A table shows subscriptions with columns: Name, Last Error, Event Types
+    await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Last Error' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Event Types' })).toBeVisible();
 
-    // expect: An 'Add New Subscription' button is visible
-    await expect(page.getByRole('button', { name: 'Add New Subscription' })).toBeVisible();
+    // expect: An add subscription button is visible
+    await expect(
+      page
+        .locator('app-admin-subscription-search')
+        .locator('button:has(mat-icon[fonticon="mdi-plus-circle"])')
+    ).toBeVisible();
   });
 });

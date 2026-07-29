@@ -6,6 +6,9 @@ test-results/
 playwright-report/
 playwright/.cache/
 
+# Full run logs from run-tests.sh
+.logs/
+
 # Authentication state
 .auth/
 

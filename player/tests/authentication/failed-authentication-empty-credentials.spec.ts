@@ -4,8 +4,7 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
-import { Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 

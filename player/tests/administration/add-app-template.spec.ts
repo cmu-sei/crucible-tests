@@ -14,10 +14,12 @@ test.describe('Administration - Application Templates', () => {
     await page.getByRole('button', { name: 'Application Templates' }).click();
 
     // expect: The Application Templates section is displayed
-    await expect(page.getByRole('columnheader', { name: 'Template Name' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
 
-    // 2. Click the add button (+ icon, mdi-plus)
-    const addButton = page.locator('button:has(mat-icon.mdi-plus)');
+    // 2. Click the add button
+    const addButton = page
+      .locator('app-admin-app-template-search')
+      .locator('button:has(mat-icon[fonticon="mdi-plus-circle"])');
     await expect(addButton).toBeVisible();
     await addButton.click();
 
@@ -32,7 +34,7 @@ test.describe('Administration - Application Templates', () => {
     await page.getByRole('button', { name: 'Delete Application Template' }).click();
     const confirmDialog = page.getByRole('dialog');
     await expect(confirmDialog).toBeVisible({ timeout: 5000 });
-    await confirmDialog.getByRole('button', { name: 'YES' }).click();
+    await confirmDialog.getByRole('button', { name: 'Delete' }).click();
     await expect(confirmDialog).not.toBeVisible();
   });
 });

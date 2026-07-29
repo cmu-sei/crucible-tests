@@ -4,7 +4,7 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen } from '../../fixtures';
 
 test.describe('Real-time Updates and SignalR', () => {
   test('Real-time Run Status Updates', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
@@ -20,10 +20,7 @@ test.describe('Real-time Updates and SignalR', () => {
     await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
     await page.getByRole('textbox', { name: 'Name' }).fill('RT Run Status Project');
     await page.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByRole('link', { name: 'RT Run Status Project' })).toBeVisible({ timeout: 10000 });
-
-    await page.getByRole('link', { name: 'RT Run Status Project' }).click();
-    await expect(page).toHaveURL(/\/projects\//, { timeout: 10000 });
+    await expectCasterProjectOpen(page, 'RT Run Status Project');
 
     // Register the project for cleanup
     const projectId = page.url().match(/\/projects\/([^/]+)/)?.[1];

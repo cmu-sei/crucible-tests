@@ -18,7 +18,7 @@ test.describe('Groups Management', () => {
     await page.locator('mat-list-item').filter({ hasText: 'Groups' }).click();
 
     // expect: Groups list is displayed
-    await expect(page.getByRole('link', { name: 'Groups' })).toBeVisible();
+    await expect(page.locator('mat-list').getByText('Groups')).toBeVisible();
     await expect(page.getByRole('table')).toBeVisible();
 
     // expect: Table has Group Name column

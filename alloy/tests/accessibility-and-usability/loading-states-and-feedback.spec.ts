@@ -6,6 +6,7 @@
 
 import { test, expect } from '@playwright/test';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
+import { createTestEventTemplate, deleteEventTemplateByName } from '../../test-helpers';
 
 test.describe('Accessibility and Usability', () => {
   test('Loading States and Feedback', async ({ page }) => {
@@ -21,34 +22,14 @@ test.describe('Accessibility and Usability', () => {
     // expect: The table loads with data
     await expect(page.getByRole('table')).toBeVisible();
 
-    // 3. Trigger an action (create template) - "Add Event Template" creates a row directly
-    await page.getByRole('button', { name: 'Add Event Template' }).click();
+    // 3. Trigger an action (create template).
+    await createTestEventTemplate(page, uniqueName, { durationHours: '1' });
 
-    // expect: A new template row appears in the table
-    await expect(page.getByRole('cell', { name: 'New Event Template' }).first()).toBeVisible();
-
-    // Open the edit dialog to rename the template
-    await page.getByRole('button', { name: 'Edit: New Event Template' }).first().click();
-    await expect(page.getByRole('dialog', { name: 'Edit Event Template' })).toBeVisible();
-
-    // Fill in the form with a unique name
-    await page.getByRole('textbox', { name: 'Name (required)' }).fill(uniqueName);
-    await page.getByRole('spinbutton', { name: 'Duration Hours' }).fill('1');
-
-    // Click save
-    await page.getByRole('button', { name: 'Save' }).click();
-
-    // expect: Success - the template appears in the list with updated name
-    await expect(page.getByRole('cell', { name: uniqueName })).toBeVisible();
-
-    // Clean up: delete the template
-    await page.getByRole('button', { name: `Edit: ${uniqueName}` }).click();
-    await expect(page.getByRole('dialog', { name: 'Edit Event Template' })).toBeVisible();
-    await page.getByRole('button', { name: 'Delete' }).click();
-    await expect(page.getByRole('dialog', { name: 'Delete Event Template' })).toBeVisible();
-    await page.getByRole('button', { name: 'Yes' }).click();
+    // expect: Success - the template appears in the list with the given name
+    await expect(page.getByRole('cell', { name: uniqueName })).toBeVisible({ timeout: 30000 });
 
     // Verify the template is removed from the table
-    await expect(page.getByRole('cell', { name: uniqueName })).not.toBeVisible();
+    await deleteEventTemplateByName(page, uniqueName);
+    await expect(page.getByRole('cell', { name: uniqueName })).not.toBeVisible({ timeout: 15000 });
   });
 });
