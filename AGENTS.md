@@ -134,6 +134,28 @@ These live at the root (not inside any app dir) because multiple apps use them. 
 - **Every test must clean up the data it seeds** — see "Test data hygiene" below.
 - Long-running waits should use the fixture-level timeouts already configured — don't override `actionTimeout`/`navigationTimeout` per call without a reason.
 - When re-enabling a `test.skip(...)`, check the "Skipped tests" table in `README.md` for the upstream tracking issue — some skips are waiting on service-side fixes.
+- **Never adjust a test to work around an app bug just to make it pass.** If you believe
+  you've found a legitimate defect in an app's API or UI, document it — see "App bug
+  reporting" below — and either assert the actual (buggy) behavior with a comment
+  explaining why, or `test.skip(...)` with a pointer to the writeup. Do not silently
+  loosen an assertion, add a retry, or change a selector to mask a real product bug.
+
+### App bug reporting (REQUIRED)
+
+When you find a legitimate bug in an app's API or UI (not a test bug), write it up in
+`{app}/{app}-app-bugs.md`.
+Verify the bug from source and/or the running stack before recording it; don't record a
+bug inferred from a test failure alone. Each entry should include what's wrong, where
+(source file/line if known), and what test(s) are affected or pinned to it.
+
+- If the bug blocks a documented test-plan scenario, `test.skip(...)` the spec with a
+  comment pointing at the relevant entry, and add a row to the "Skipped tests" table in
+  `README.md`.
+- If the app is merely wrong but still testable, assert the actual behavior and say so in
+  a comment so the assertion reads as deliberate, not an oversight.
+- This documentation is the deliverable for a suspected app bug — do not modify
+  application source to "fix" it from this repo (see "Source repositories" above), and do
+  not rewrite the test to avoid exercising the buggy path.
 
 ### Test data hygiene (REQUIRED)
 
