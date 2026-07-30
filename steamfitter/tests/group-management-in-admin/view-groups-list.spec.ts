@@ -35,7 +35,6 @@ test.describe('Group Management in Admin', () => {
 
     // Search to isolate the seeded group's row.
     await searchField.fill(GROUP_NAME);
-    await page.waitForTimeout(500);
     await expect(page.locator('tbody tr').filter({ hasText: GROUP_NAME }).first()).toBeVisible({
       timeout: 5000,
     });

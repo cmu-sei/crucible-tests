@@ -1353,6 +1353,10 @@ for API-only setup) even on failure — see "Test data hygiene (REQUIRED)" in th
 repo `CLAUDE.md`. Snapshot-create tests must delete the snapshot they created;
 power-state tests should restore the VM to its original power state.
 
+**Implementation status.** None of 14.1–14.9 have specs in this suite yet — this
+section is follow-up work. It is included here so the coverage is planned and
+tracked, not because any of the listed `**File:**` paths currently exist.
+
 #### 14.1. Available VM Actions Come from Player VM API
 
 **File:** `tests/steamfitter/player-vm-api-integration/available-vm-actions-list.spec.ts`

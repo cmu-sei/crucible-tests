@@ -4,8 +4,7 @@
 // spec: steamfitter/steamfitter-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect } from '@playwright/test';
-import { Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 // Override global storageState so this test starts from a fresh unauthenticated
 // state. The login flow test must exercise the real Keycloak round-trip and must

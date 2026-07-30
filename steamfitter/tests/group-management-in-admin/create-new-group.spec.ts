@@ -41,7 +41,6 @@ test.describe('Group Management in Admin', () => {
     // The new group should surface via search.
     const searchField = page.getByRole('textbox', { name: 'Search Groups' });
     await searchField.fill(GROUP_NAME);
-    await page.waitForTimeout(500);
     await expect(page.locator('tbody tr').filter({ hasText: GROUP_NAME }).first()).toBeVisible({
       timeout: 10000,
     });

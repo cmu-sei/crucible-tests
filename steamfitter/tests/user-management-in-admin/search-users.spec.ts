@@ -33,13 +33,11 @@ test.describe('User Management in Admin', () => {
 
     // 1. Search for the seeded user; only its row should remain.
     await searchField.fill(USER_NAME);
-    await page.waitForTimeout(500);
     const matchingRow = page.locator('tbody tr').filter({ hasText: USER_NAME }).first();
     await expect(matchingRow).toBeVisible({ timeout: 5000 });
 
     // 2. Clear the search; the list repopulates with more than the single match.
     await searchField.fill('');
-    await page.waitForTimeout(500);
     await expect(page.locator('tbody tr').filter({ hasText: 'admin' }).first()).toBeVisible({
       timeout: 5000,
     });

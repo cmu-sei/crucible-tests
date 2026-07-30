@@ -12,12 +12,12 @@ import { navigateToAdminSection } from '../../test-helpers';
  * A system role is assigned to a user inline, via the `mat-select` in that user's Role
  * column (there is no separate user detail view). Selecting a role PUTs the user with
  * its `roleId` set. This spec seeds a user, searches to isolate its row, assigns the
- * built-in "ContentDeveloper" role, waits on the PUT, and confirms the select now
+ * built-in "Content Developer" role, waits on the PUT, and confirms the select now
  * shows that role after a reload.
  */
 test.describe('User Management in Admin', () => {
   const USER_NAME = `E2E Role User ${Date.now()}`;
-  const ROLE_NAME = 'ContentDeveloper';
+  const ROLE_NAME = 'Content Developer';
 
   test.beforeEach(async () => {
     await seedUser(USER_NAME);
@@ -33,7 +33,6 @@ test.describe('User Management in Admin', () => {
     // 1. Search to isolate the seeded user's row.
     const searchField = page.getByRole('textbox', { name: 'Search' });
     await searchField.fill(USER_NAME);
-    await page.waitForTimeout(500);
     const row = page.locator('tbody tr').filter({ hasText: USER_NAME }).first();
     await expect(row).toBeVisible({ timeout: 5000 });
 
@@ -54,7 +53,6 @@ test.describe('User Management in Admin', () => {
     // 3. Reload the section, re-isolate the row, and confirm the select shows the role.
     await navigateToAdminSection(page, 'Users');
     await searchField.fill(USER_NAME);
-    await page.waitForTimeout(500);
     const reloadedRow = page.locator('tbody tr').filter({ hasText: USER_NAME }).first();
     await expect(reloadedRow.getByRole('combobox')).toContainText(ROLE_NAME, { timeout: 10000 });
   });
