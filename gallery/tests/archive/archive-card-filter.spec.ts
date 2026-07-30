@@ -51,23 +51,11 @@ test.describe('Archive Functionality', () => {
 
     // expect: A list of available cards is displayed — 'All Cards' plus one option per
     // seeded card, in card order.
-    //
-    // Asserted positionally rather than as the *complete* option list: another worker's
-    // exhibit seeds cards with the same names, and the Card/TeamCard stores are not
-    // exhibit-scoped (app bug against
-    // `signalr.service.ts#addCardHandlers`/`addTeamCardHandlers`), so extra options can
-    // be appended. The store is `set()` from the exhibit-scoped REST load and leaked
-    // rows are `upsert`ed afterwards, so this exhibit's cards are always the leading
-    // entries. Restore `await expect(options).toHaveText([...])` once the store is
-    // scoped.
     const options = page.getByRole('option');
-    await expect(options.nth(0)).toHaveText('All Cards');
-    await expect(options.nth(1)).toHaveText(/Test Card 1/);
-    await expect(options.nth(2)).toHaveText(/Test Card 2/);
-    await expect(options.nth(3)).toHaveText(/Test Card 3/);
+    await expect(options).toHaveText(['All Cards', 'Test Card 1', 'Test Card 2', 'Test Card 3']);
 
     // 2. Select a specific card from the dropdown.
-    await options.filter({ hasText: 'Test Card 2' }).first().click();
+    await options.filter({ hasText: 'Test Card 2' }).click();
 
     // expect: Only articles belonging to the selected card are displayed. Test Card 2
     // carries the Reporting and Social articles; the other four must be gone.
@@ -76,7 +64,7 @@ test.describe('Archive Functionality', () => {
 
     // Selecting a different card swaps the list rather than adding to it.
     await cardFilter.click();
-    await page.getByRole('option').filter({ hasText: 'Test Card 1' }).first().click();
+    await page.getByRole('option').filter({ hasText: 'Test Card 1' }).click();
     await expect(titles).toHaveText(['News Article 1', 'Intel Article 1']);
 
     // 3. Select 'All Cards' to clear the filter.

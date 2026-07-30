@@ -207,16 +207,10 @@ test.describe('Archive Functionality', () => {
       await gotoExhibitSection(page, exhibit.id, 'archive');
       await expect(page).toHaveTitle(/Gallery Archive/);
 
-      // Scoped to this spec's uniquely-named article rather than "the only card on the
-      // page": the Archive's UserArticle store is not exhibit-scoped, so an article
-      // created for the same user in another exhibit while this page is open is pushed
-      // into the list by SignalR (app bug against
-      // `signalr.service.ts#addUserArticleHandlers`). Tighten back to a bare
-      // `toHaveCount(1)` on `section.cards mat-card` once that is fixed.
+      await expect(page.locator('section.cards mat-card')).toHaveCount(1);
       const articleCard = page
         .locator('section.cards mat-card')
         .filter({ hasText: `Share Article ${stamp}` });
-      await expect(articleCard).toHaveCount(1);
 
       // 3 (done first, while the form is still pristine — `crucible-dialog` sets
       //    `guardUnsavedWork` from `form.dirty`, so cancelling after selecting a team

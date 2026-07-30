@@ -104,36 +104,12 @@ test.describe('Edge Cases and Negative Testing', () => {
     }
   });
 
-  // Plan steps 1-2 and 3-4 are split into two tests on purpose. Both the collection
-  // import and the exhibit import mint a copy collection named
-  // "<original> - Admin User", so running all four steps in one test leaves two
-  // identically-named collections in the picker at once and no locator can tell them
-  // apart. One copy per test keeps every lookup unambiguous, and afterEach removes it
-  // before the next test starts.
-  // APP BUG (Gallery): POST /api/collections/json returns 500 roughly half the time for
-  // a file produced by GET /api/collections/{id}/json.
-  //
-  // CollectionService.cs:202 loads the collection for export *without* AsNoTracking, so
-  // the entity is change-tracked. The permission middleware
-  // (UserClaimsService.cs:272) has already loaded that same user's
-  // CollectionMembershipEntity rows into the same scoped DbContext, so the tracked
-  // collection's `Memberships` navigation is populated and gets serialised into the
-  // export file. On import, privateCollectionCopyAsync (CollectionService.cs:158)
-  // re-attaches that graph, and EF throws:
-  //   "The instance of entity type 'CollectionMembershipEntity' cannot be tracked
-  //    because another instance with the same key value for {'Id'} is already being
-  //    tracked."
-  // It is intermittent only because UserClaimsService caches claims for 60s
-  // (appsettings.json:80) — on a cache hit the memberships are never loaded, the
-  // navigation serialises empty, and the import succeeds.
-  //
-  // ExhibitService.cs:213 does use AsNoTracking for the same query, which is why the
-  // exhibit round trip below is unaffected. Measured 6/12 failures against the live
-  // stack. Once the app is fixed, delete this test.skip and merge the two tests back
-  // together (see the naming note below about the duplicate copy names).
-  //
-  // Step 1 (download) is unaffected and stays asserted in full below; only step 2
-  // (upload) is skipped.
+  // Plan steps 1-4 cover both the collection round trip (1-2) and the exhibit round
+  // trip (3-4). They stay in separate tests because both the collection import and the
+  // exhibit import mint a copy collection named "<original> - Admin User", so running
+  // all four steps in one test would leave two identically-named collections in the
+  // picker at once and no locator could tell them apart. One copy per test keeps every
+  // lookup unambiguous, and afterEach removes it before the next test starts.
   test('Collection Download Upload Round Trip', async ({
     galleryAuthenticatedPage: page,
     seededExhibit,
@@ -165,34 +141,6 @@ test.describe('Edge Cases and Negative Testing', () => {
     expect(originalCollectionJson.Collection.Description).toBe(
       'Auto-seeded collection for Playwright tests'
     );
-  });
-
-  // Plan step 2. Skipped on the app bug documented above — the download half is covered
-  // by the test above, so skipping here loses only the import assertions.
-  test('Collection Upload Creates A Matching Copy', async ({
-    galleryAuthenticatedPage: page,
-    seededExhibit,
-  }) => {
-    test.skip(
-      true,
-      'Gallery bug: POST /api/collections/json 500s ~50% of the time (6/12 measured). ' +
-        'CollectionService.DownloadJsonAsync (CollectionService.cs:202) omits AsNoTracking, ' +
-        'so tracked CollectionMembershipEntity rows leak into the export file and ' +
-        'privateCollectionCopyAsync (CollectionService.cs:158) cannot re-attach them. ' +
-        'ExhibitService.cs:213 does use AsNoTracking, which is why the exhibit round trip passes.'
-    );
-
-    await gotoGalleryAdmin(page);
-
-    const collectionRow = await findCollectionRow(page, seededExhibit.collectionName);
-    const collectionDownloadPromise = page.waitForEvent('download');
-    await collectionRow
-      .getByRole('button', { name: `Download ${seededExhibit.collectionName}` })
-      .click();
-    const collectionDownload = await collectionDownloadPromise;
-    const originalCollectionJson = await readJsonDownload(collectionDownload);
-    const originalCardNames = namesOf(originalCollectionJson.Cards);
-    const originalArticleNames = namesOf(originalCollectionJson.Articles);
 
     const collectionFile = await saveToTemp(collectionDownload, 'collection');
     tempFiles.push(collectionFile);

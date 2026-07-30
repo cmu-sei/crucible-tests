@@ -68,16 +68,12 @@ test.describe('Edge Cases and Negative Testing', () => {
     // expect: the API refuses with 400 rather than silently wrapping around
     expect((await refused).status()).toBe(400);
 
-    // expect: an error message informs the user they cannot advance further.
-    //
-    // The message is "Cannot advance." — the ProblemDetails `title` — not the more
-    // descriptive `detail` sentence, because of a known Gallery bug: see
-    // gallery/gallery-app-bugs.md §3 (wall.component.ts:120 reads `err?.error?.Detail`
-    // with a capital D, but ASP.NET serializes ProblemDetails camelCase).
-    //
-    // This assertion is DELIBERATE — it pins current app behaviour. When the app bug
-    // is fixed, widen it to the `detail` sentence; do not treat it as a broken test.
-    await expect(page.getByText('Cannot advance.')).toBeVisible();
+    // expect: an error message informs the user they cannot advance further, using the
+    // descriptive `detail` sentence from the ProblemDetails response (not just the
+    // generic `title`).
+    await expect(
+      page.getByText('Already at the last move/inject. There are no further moves or injects to advance to.')
+    ).toBeVisible();
 
     // expect: the move/inject values stay pinned at the boundary
     await expect(moveInjectLabel).toHaveText(`Move ${LAST.move}, Inject ${LAST.inject}`);

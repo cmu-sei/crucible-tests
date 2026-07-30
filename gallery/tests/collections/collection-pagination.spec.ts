@@ -51,12 +51,6 @@ test.describe('Collection Management', () => {
       createdCollectionIds.push(seeded.id);
     }
 
-    // Known app race (see gallery-app-bugs.md): the home page's `loadMine()` and the
-    // admin container's `load()` write to the same Akita collection store with `set()`,
-    // so a slow `GET /api/my-collections` that resolves after the admin page has loaded
-    // replaces the full admin list with the caller's 3-4 "my" collections (observed
-    // "0 of 0" after filtering). If this spec ever flakes with a too-low row count,
-    // that race is the cause — it is an app defect, not something to paper over here.
     await gotoGalleryAdmin(page);
 
     const itemsPerPage = page.getByRole('combobox', { name: 'Items per page:' });

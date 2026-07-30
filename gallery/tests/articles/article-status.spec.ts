@@ -34,58 +34,19 @@ async function openCollectionArticlesPanel(page: Page, collectionName: string) {
   // clicking it fires a collection Download.
   await row.getByRole('cell', { name: collectionName }).click();
 
-  // Retry the section-header click: a concurrent rebuild (see
-  // `ensureArticlesPanel`) can collapse the panel again immediately after it
-  // opens, or tear down the header between resolving and clicking it.
   const articlesPanel = page.getByRole('region', { name: 'Articles' });
-  await expect(async () => {
-    if (!(await articlesPanel.isVisible().catch(() => false))) {
-      await page.getByRole('button', { name: 'Articles', exact: true }).click({ timeout: 5_000 });
-    }
-    await expect(articlesPanel).toBeVisible({ timeout: 5_000 });
-  }).toPass();
+  await page.getByRole('button', { name: 'Articles', exact: true }).click();
+  await expect(articlesPanel).toBeVisible();
   return articlesPanel;
 }
 
-/**
- * Re-open the Articles panel if it has collapsed, and re-apply the row filter.
- *
- * The panel is destroyed by traffic this test never causes.
- * `admin-collections.component.ts` subscribes to `collectionQuery.selectAll()`
- * and rebuilds `collectionList` with `{ ...collection }` clones on every
- * emission, reassigning `dataSource.data`. `<tr mat-row>` has no `trackBy`, so
- * the rows are torn down and rebuilt; the expanded detail sits behind
- * `@if (element.id === expandedCollectionId)`, so `<app-admin-articles>` and the
- * Articles `mat-expansion-panel` are destroyed and recreated collapsed.
- *
- * The store emits on any admin-group SignalR broadcast:
- * `MainHub.GetAdminIdList` adds every ViewCollections holder to
- * `AdminCollectionGroup`, so a collection created or deleted by any other
- * concurrently-running spec collapses this panel mid-test. Cached Locators are
- * therefore not stable across awaits — see delete-article.spec.ts for the probe
- * that proved this.
- */
+/** The Articles panel, filtered to `filterText`. */
 async function ensureArticlesPanel(
   page: Page,
   collectionName: string,
   filterText: string
 ): Promise<Locator> {
   const articlesPanel = page.getByRole('region', { name: 'Articles' });
-  if (!(await articlesPanel.isVisible().catch(() => false))) {
-    // The rebuild keeps the collection row expanded — `expandedCollectionId`
-    // lives on the component, not the row object — so the detail subtree and its
-    // section headers are still mounted and only the inner
-    // `mat-expansion-panel` reverted to collapsed. Re-clicking the section
-    // header is enough and avoids a full re-navigation, which would be slower
-    // and would widen the window for another rebuild.
-    const sectionHeader = page.getByRole('button', { name: 'Articles', exact: true });
-    if (await sectionHeader.isVisible().catch(() => false)) {
-      await sectionHeader.click();
-    } else {
-      await openCollectionArticlesPanel(page, collectionName);
-    }
-    await expect(articlesPanel).toBeVisible({ timeout: 10_000 });
-  }
   const panelSearch = articlesPanel.getByRole('textbox', { name: 'Search' });
   if ((await panelSearch.inputValue().catch(() => null)) !== filterText) {
     await panelSearch.fill(filterText);
@@ -197,27 +158,16 @@ test.describe('Article Management', () => {
 
     await openCollectionArticlesPanel(page, collectionName);
 
-    /**
-     * Drive one status transition through the admin edit dialog and prove it
-     * persisted. Wrapped in toPass at the open step because a concurrent panel
-     * rebuild can detach the row between resolving the Edit button and clicking
-     * it.
-     */
+    /** Drive one status transition through the admin edit dialog and prove it persisted. */
     const setStatusViaDialog = async (status: string) => {
-      await expect(async () => {
-        const panel = await ensureArticlesPanel(page, collectionName, articleName);
-        // force: true is required. The button itself is enabled (disabled=null,
-        // aria-disabled=null) but the enclosing
-        // `<mat-expansion-panel-header disabled>` carries aria-disabled="true",
-        // and Playwright treats descendants of an aria-disabled ancestor as
-        // disabled — a plain click waits out the timeout.
-        await panel
-          .getByRole('button', { name: `Edit ${articleName}` })
-          .click({ force: true, timeout: 5_000 });
-        await expect(page.getByRole('dialog', { name: 'Edit Article' })).toBeVisible({
-          timeout: 5_000,
-        });
-      }).toPass();
+      const panel = await ensureArticlesPanel(page, collectionName, articleName);
+      // force: true is required. The button itself is enabled (disabled=null,
+      // aria-disabled=null) but the enclosing
+      // `<mat-expansion-panel-header disabled>` carries aria-disabled="true",
+      // and Playwright treats descendants of an aria-disabled ancestor as
+      // disabled — a plain click waits out the timeout.
+      await panel.getByRole('button', { name: `Edit ${articleName}` }).click({ force: true });
+      await expect(page.getByRole('dialog', { name: 'Edit Article' })).toBeVisible();
 
       const dialog = page.getByRole('dialog', { name: 'Edit Article' });
       const statusSelect = dialog.getByRole('combobox', { name: 'Status' });
@@ -268,15 +218,9 @@ test.describe('Article Management', () => {
 
     // Re-opening the dialog shows the final persisted status, so the value
     // round-trips back into the form rather than only into the request body.
-    await expect(async () => {
-      const panel = await ensureArticlesPanel(page, collectionName, articleName);
-      await panel
-        .getByRole('button', { name: `Edit ${articleName}` })
-        .click({ force: true, timeout: 5_000 });
-      await expect(page.getByRole('dialog', { name: 'Edit Article' })).toBeVisible({
-        timeout: 5_000,
-      });
-    }).toPass();
+    const reopenPanel = await ensureArticlesPanel(page, collectionName, articleName);
+    await reopenPanel.getByRole('button', { name: `Edit ${articleName}` }).click({ force: true });
+    await expect(page.getByRole('dialog', { name: 'Edit Article' })).toBeVisible();
     const reopened = page.getByRole('dialog', { name: 'Edit Article' });
     await expect(reopened.getByRole('combobox', { name: 'Status' })).toContainText('Closed');
     await reopened.getByRole('button', { name: 'Cancel' }).click();

@@ -42,57 +42,19 @@ async function openCollectionCardsPanel(page: Page, collectionName: string) {
   // Edit/Copy/Download/Delete buttons and clicking it triggers a Download.
   await row.getByRole('cell', { name: collectionName }).click();
 
-  // Retry the section-header click: a concurrent rebuild (see
-  // `ensureCardsPanel`) can collapse the panel again immediately after it opens,
-  // or tear down the header between resolving and clicking it.
   const cardsPanel = page.getByRole('region', { name: 'Cards' });
-  await expect(async () => {
-    if (!(await cardsPanel.isVisible().catch(() => false))) {
-      await page.getByRole('button', { name: 'Cards', exact: true }).click({ timeout: 5_000 });
-    }
-    await expect(cardsPanel).toBeVisible({ timeout: 5_000 });
-  }).toPass();
+  await page.getByRole('button', { name: 'Cards', exact: true }).click();
+  await expect(cardsPanel).toBeVisible();
   return cardsPanel;
 }
 
-/**
- * Re-open the Cards panel if it has collapsed, and re-apply the row filter.
- *
- * The panel is destroyed by traffic this test never causes.
- * `admin-collections.component.ts` subscribes to `collectionQuery.selectAll()`
- * and rebuilds `collectionList` with `{ ...collection }` clones on every
- * emission, reassigning `dataSource.data`. `<tr mat-row>` has no `trackBy`, so
- * the rows are torn down and rebuilt; the expanded detail sits behind
- * `@if (element.id === expandedCollectionId)`, so `<app-admin-cards>` and the
- * Cards `mat-expansion-panel` are destroyed and recreated collapsed.
- *
- * The store emits on any admin-group SignalR broadcast:
- * `MainHub.GetAdminIdList` adds every ViewCollections holder to
- * `AdminCollectionGroup`, so a collection created or deleted by any other
- * concurrently-running spec (this config uses 2 local workers) collapses this
- * panel mid-test. Cached Locators are therefore not stable across awaits.
- */
+/** The Cards panel, filtered to `filterText` if given. */
 async function ensureCardsPanel(
   page: Page,
   collectionName: string,
   filterText?: string
 ): Promise<Locator> {
   const cardsPanel = page.getByRole('region', { name: 'Cards' });
-  if (!(await cardsPanel.isVisible().catch(() => false))) {
-    // The rebuild keeps the collection row expanded — `expandedCollectionId`
-    // lives on the component, not the row object — so the detail subtree and its
-    // section headers are still mounted and only the inner
-    // `mat-expansion-panel` reverted to collapsed. Re-clicking the section
-    // header is enough and avoids a full re-navigation, which would be slower
-    // and would widen the window for another rebuild.
-    const sectionHeader = page.getByRole('button', { name: 'Cards', exact: true });
-    if (await sectionHeader.isVisible().catch(() => false)) {
-      await sectionHeader.click();
-    } else {
-      await openCollectionCardsPanel(page, collectionName);
-    }
-    await expect(cardsPanel).toBeVisible({ timeout: 10_000 });
-  }
   if (filterText !== undefined) {
     const panelSearch = cardsPanel.getByRole('textbox', { name: 'Search' });
     if ((await panelSearch.inputValue().catch(() => null)) !== filterText) {
@@ -178,39 +140,24 @@ test.describe('Card Management', () => {
     // expect: Cards list is accessible with card details
     // The panel is a mat-accordion, not a mat-table: its header cells are
     // `<div mat-sort-header>` elements, which expose the button role rather than
-    // columnheader. Grouped in toPass so a concurrent panel rebuild re-opens the
-    // panel rather than failing the run.
-    await expect(async () => {
-      const panel = await ensureCardsPanel(page, collectionName);
-      await expect(panel.getByRole('button', { name: 'Name', exact: true })).toBeVisible({
-        timeout: 5_000,
-      });
-      await expect(panel.getByRole('button', { name: 'Description', exact: true })).toBeVisible({
-        timeout: 5_000,
-      });
-      await expect(panel).toContainText(seededCardName, { timeout: 5_000 });
-      await expect(panel).toContainText(seededCardDescription, { timeout: 5_000 });
-      // The per-row actions prove this is a management view, not a read-only list.
-      await expect(panel.getByRole('button', { name: `Edit ${seededCardName}` })).toHaveCount(1, {
-        timeout: 5_000,
-      });
-      await expect(panel.getByRole('button', { name: `Delete ${seededCardName}` })).toHaveCount(1, {
-        timeout: 5_000,
-      });
-    }).toPass();
+    // columnheader.
+    const panel = await ensureCardsPanel(page, collectionName);
+    await expect(panel.getByRole('button', { name: 'Name', exact: true })).toBeVisible();
+    await expect(panel.getByRole('button', { name: 'Description', exact: true })).toBeVisible();
+    await expect(panel).toContainText(seededCardName);
+    await expect(panel).toContainText(seededCardDescription);
+    // The per-row actions prove this is a management view, not a read-only list.
+    await expect(panel.getByRole('button', { name: `Edit ${seededCardName}` })).toHaveCount(1);
+    await expect(panel.getByRole('button', { name: `Delete ${seededCardName}` })).toHaveCount(1);
 
     // 2. Create a new card with name and description
-    await expect(async () => {
-      const panel = await ensureCardsPanel(page, collectionName);
-      await panel.getByRole('button', { name: 'Add a Card' }).click({ timeout: 5_000 });
-      await expect(page.getByRole('dialog', { name: 'Edit Card' })).toBeVisible({ timeout: 5_000 });
-    }).toPass();
+    await panel.getByRole('button', { name: 'Add a Card' }).click();
+    await expect(page.getByRole('dialog', { name: 'Add a Card' })).toBeVisible();
 
-    // The dialog title is hardcoded to "Edit Card" in
-    // admin-card-edit-dialog.component.html even when adding a new card — see
-    // the note in the spec report. Locating by that name is therefore correct
-    // for both add and edit.
-    const cardDialog = page.getByRole('dialog', { name: 'Edit Card' });
+    // The dialog is titled by mode (admin-card-edit-dialog.component.html binds
+    // [dialogTitle] to `data.card?.id ? 'Edit Card' : 'Add a Card'`), so the add dialog
+    // is titled "Add a Card" rather than "Edit Card".
+    const cardDialog = page.getByRole('dialog', { name: 'Add a Card' });
     await expect(cardDialog).toBeVisible();
 
     await cardDialog.getByRole('textbox', { name: 'Name' }).fill(newCardName);
@@ -229,12 +176,8 @@ test.describe('Card Management', () => {
 
     // expect: Card is created and appears in the list
     // The cards panel paginates too, so filter by the unique name first.
-    await expect(async () => {
-      const panel = await ensureCardsPanel(page, collectionName, newCardName);
-      await expect(panel.getByRole('button', { name: `Edit ${newCardName}` })).toHaveCount(1, {
-        timeout: 5_000,
-      });
-      await expect(panel).toContainText(newCardDescription, { timeout: 5_000 });
-    }).toPass();
+    const refreshedPanel = await ensureCardsPanel(page, collectionName, newCardName);
+    await expect(refreshedPanel.getByRole('button', { name: `Edit ${newCardName}` })).toHaveCount(1);
+    await expect(refreshedPanel).toContainText(newCardDescription);
   });
 });

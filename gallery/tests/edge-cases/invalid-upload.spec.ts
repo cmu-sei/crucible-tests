@@ -21,49 +21,29 @@ import * as os from 'os';
 /**
  * Edge Cases §15.4 — Invalid Upload Files.
  *
- * IMPORTANT — what the app really does, and how this differs from the plan.
+ * Both halves of this scenario were app bugs (see gallery/gallery-app-bugs.md §6) and are
+ * now fixed:
  *
- * The plan expects "an error message appears indicating invalid file format" /
- * "invalid JSON structure". **No error message is shown.** Invalid uploads fail
- * completely silently in the UI. Traced end to end:
+ *  - Server side, `CollectionService.UploadJsonAsync` / `ExhibitService.UploadJsonAsync` now
+ *    wrap `JsonSerializer.Deserialize` in a try/catch and throw a `BadRequestException` on
+ *    `JsonException`, so a non-JSON or truncated file gets a **400** response instead of an
+ *    unhandled 500. Verified live against both endpoints — the same message covers both a
+ *    non-JSON file and structurally-broken JSON, since both raise `JsonException`:
+ *      HTTP 400 {"title":"The uploaded file is not valid JSON.","status":400}
+ *  - Client side, `uploadJson` in `collection-data.service.ts` / `exhibit-data.service.ts`
+ *    now opens a `MatSnackBar` on the error callback reading
+ *    `err?.error?.detail || err?.error?.title || 'The uploaded file could not be processed.'`.
+ *    The 400 body above has no `detail`, so the snackbar falls through to `title`.
  *
- *  - Both upload buttons ("Upload Collection" in admin Collections, "Upload Exhibit" in
- *    admin Exhibits) open a hidden `<input type="file" accept=".json">` and pass the
- *    file straight through `selectFile()` with no client-side validation.
- *  - Server side, `CollectionService.UploadJsonAsync` / `ExhibitService.UploadJsonAsync`
- *    call `JsonSerializer.Deserialize<...>` on the raw file text with no try/catch, so a
- *    non-JSON or truncated file raises `System.Text.Json.JsonException`. That is not an
- *    `IApiException`, so `ExceptionMiddleware.GetStatusCodeFromException` falls through
- *    to its `HttpStatusCode.InternalServerError` default — the API answers **500**, not
- *    a 400 validation response. Verified live against both endpoints:
- *      HTTP 500 {"title":"'this is not json at all\n' is an invalid JSON literal.
- *      Expected the literal 'true'. Path: $ | LineNumber: 0 | BytePositionInLine: 1.",
- *      "status":500,"detail":"System.Text.Json.JsonException: ..."}
- *      HTTP 500 {"title":"Expected depth to be zero at the end of the JSON payload.
- *      There is an open JSON object or array that should be closed. Path: $.collection
- *      | LineNumber: 0 | BytePositionInLine: 35.","status":500, ...}
- *  - Back in the client, `uploadJson` in `collection-data.service.ts` /
- *    `exhibit-data.service.ts` subscribes with its **own** error callback that does
- *    nothing but `setLoading(false)` and `uploadProgress.next(0)`. Because that callback
- *    handles the error, it never propagates to Angular's global `ErrorHandler`
- *    (`ErrorService`), which is the only thing in this app that opens the
- *    `app-system-message` bottom sheet. So no sheet, no snackbar, no dialog — the
- *    spinner simply stops and the list is unchanged. Confirmed empirically: a first
- *    version of this spec asserted an error sheet and failed because none appears.
- *
- * So rather than inventing a passing assertion, this spec pins the behaviour that is
- * genuinely observable and genuinely correct-ish: the API rejects the payload, **no
- * record is created**, and the UI recovers to an interactive state. It then asserts the
- * *absence* of any error notification, so that if the app is ever fixed to surface one
- * this test fails loudly and can be tightened to the plan's wording instead of silently
- * continuing to pass. See the "silent failure" assertions below.
+ * This spec asserts that fixed behaviour: the payload is rejected with 400, the app surfaces
+ * an error notification naming the problem, no record is created, and the UI recovers to an
+ * interactive state.
  *
  * Fixture files are written under `os.tmpdir()` and removed in teardown so nothing is
  * scratched into the repo.
  */
 
-const NOT_JSON_MESSAGE = /is an invalid JSON literal/;
-const TRUNCATED_JSON_MESSAGE = /Expected depth to be zero at the end of the JSON payload/;
+const INVALID_JSON_MESSAGE = 'The uploaded file is not valid JSON.';
 
 /** Run a callback with a Gallery API context and an admin bearer token. */
 async function galleryApi<T>(fn: (ctx: APIRequestContext, token: string) => Promise<T>): Promise<T> {
@@ -163,10 +143,10 @@ test.describe('Edge Cases and Negative Testing', () => {
   test('Invalid Upload Files', async ({ galleryAuthenticatedPage: page }) => {
     await gotoGalleryAdmin(page);
 
-    // Any error notification this app could raise renders as one of these. Asserting
-    // they stay absent is the honest encoding of the silent-failure behaviour.
-    const errorSheet = page.locator('app-system-message');
-    const anyDialog = page.getByRole('dialog');
+    // `.last()`: MatSnackBar dismisses the previous snackbar (with an exit animation) when a
+    // new one opens, so two `mat-snack-bar-container` elements can briefly coexist in the DOM
+    // — the exiting one and the newly-opened one. The most recently attached is always last.
+    const snackBar = page.locator('mat-snack-bar-container').last();
 
     const uploadCollectionButton = page.getByRole('button', { name: 'Upload Collection' });
     await expect(uploadCollectionButton).toBeEnabled();
@@ -180,19 +160,15 @@ test.describe('Edge Cases and Negative Testing', () => {
       notJsonPath
     );
 
-    // expect: the upload is rejected. The API refuses to import the file — 500 rather
-    // than a 400, because the JsonException is unmapped (see the header comment).
+    // expect: the upload is rejected with a 400 naming the real problem, not a generic 500.
     expect(notJsonResponse.ok()).toBe(false);
-    expect(notJsonResponse.status()).toBe(500);
-    expect((await notJsonResponse.json()).title).toMatch(NOT_JSON_MESSAGE);
+    expect(notJsonResponse.status()).toBe(400);
+    expect((await notJsonResponse.json()).title).toBe(INVALID_JSON_MESSAGE);
 
-    // expect (real behaviour, NOT the plan's): nothing tells the user. The UI just
-    // returns to an interactive state — the re-enabled button is the store's
-    // setLoading(false) landing in the DOM, which also proves the client observed the
-    // failure rather than hanging.
+    // expect: an error notification tells the user the upload failed, and the UI recovers
+    // to an interactive state.
+    await expect(snackBar).toContainText(INVALID_JSON_MESSAGE);
     await expect(uploadCollectionButton).toBeEnabled();
-    await expect(errorSheet).toHaveCount(0);
-    await expect(anyDialog).toHaveCount(0);
 
     // 2. Attempt to upload a malformed JSON file as a collection.
     // Structurally-broken JSON: an object that is opened and never closed.
@@ -204,16 +180,14 @@ test.describe('Edge Cases and Negative Testing', () => {
       malformedPath
     );
 
-    // expect: the malformed structure is rejected, with a message naming the structural
-    // problem (an unclosed object) rather than a generic failure.
+    // expect: rejected the same way — both a non-JSON file and truncated JSON raise
+    // JsonException server-side, so both surface the same "not valid JSON" message.
     expect(malformedResponse.ok()).toBe(false);
-    expect(malformedResponse.status()).toBe(500);
-    expect((await malformedResponse.json()).title).toMatch(TRUNCATED_JSON_MESSAGE);
+    expect(malformedResponse.status()).toBe(400);
+    expect((await malformedResponse.json()).title).toBe(INVALID_JSON_MESSAGE);
 
-    // Again silent, and again recovered.
+    await expect(snackBar).toContainText(INVALID_JSON_MESSAGE);
     await expect(uploadCollectionButton).toBeEnabled();
-    await expect(errorSheet).toHaveCount(0);
-    await expect(anyDialog).toHaveCount(0);
 
     // Neither attempt created anything. Deserialization fails before any DB write, so no
     // collection should carry the malformed fixture's name — nor the " - Admin User"
@@ -249,21 +223,20 @@ test.describe('Edge Cases and Negative Testing', () => {
       exhibitNotJsonPath
     );
 
-    // expect: the upload is rejected with the same unhandled-JsonException 500.
+    // expect: the same fix applies to the exhibit upload endpoint.
     expect(exhibitResponse.ok()).toBe(false);
-    expect(exhibitResponse.status()).toBe(500);
-    expect((await exhibitResponse.json()).title).toMatch(NOT_JSON_MESSAGE);
+    expect(exhibitResponse.status()).toBe(400);
+    expect((await exhibitResponse.json()).title).toBe(INVALID_JSON_MESSAGE);
 
-    // expect (real behaviour): silent here too, and the pane recovers to interactive.
+    // expect: notified and recovered here too.
     //
     // Note `selectFile()` calls `collectionDataService.setActive('')` before uploading,
     // which looks like it would collapse the table and take the upload button with it.
     // It does not: the `selectActiveId` subscription guards on `if (activeId && ...)`, so
     // the empty id is ignored and `selectedCollectionId` keeps its value. Verified live —
     // the button is still present and enabled after the failure.
+    await expect(snackBar).toContainText(INVALID_JSON_MESSAGE);
     await expect(page.getByRole('button', { name: 'Upload Exhibit' })).toBeEnabled();
-    await expect(errorSheet).toHaveCount(0);
-    await expect(anyDialog).toHaveCount(0);
 
     // Nothing was imported: the host collection still has no exhibits.
     const exhibitsInHost = await galleryApi(async (ctx, token) => {

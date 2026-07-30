@@ -884,12 +884,6 @@ export async function seedExhibitForAdmin(
 
     // Step 4: Create a Team on that Exhibit
     const teamName = `${teamNamePrefix} ${timestamp}`;
-    // shortName is deliberately set, even though the API accepts a team without one.
-    // `AdminTeamsComponent.sortTeams()` does an unguarded `a.shortName.toLowerCase()`
-    // (see gallery/gallery-app-bugs.md §5), so a null-shortName team in the shared team
-    // store makes the Exhibit Teams list throw and render no rows as soon as a second
-    // team exists. Seeding a shortName keeps that app bug from turning every teams spec
-    // into a cross-worker flake. Remove this note if/when §5 is fixed; keep the value.
     const teamResponse = await apiContext.post(`${Services.Gallery.API}/api/teams`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       data: {

@@ -28,23 +28,6 @@ test.describe('Collection Management', () => {
   });
 
   test('Copy Collection', async ({ galleryAuthenticatedPage: page }) => {
-    // SKIPPED: the Copy button in the Gallery admin Collections list is wired to a
-    // no-op. `AdminCollectionsComponent.copyCollection(id)` (gallery.ui,
-    // src/app/components/admin/admin-collections/admin-collections.component.ts)
-    // only calls `permissionDataService.loadCollectionPermissions()` — it never calls
-    // `collectionDataService.copy(id)`, so no collection is ever copied.
-    //
-    // Verified against the running stack:
-    //   * Clicking Copy issues ZERO requests to /api/collections (network capture).
-    //   * The backend endpoint itself works: POST /api/collections/{id}/copy returns
-    //     201 and names the copy "<original name> - <current user name>"
-    //     (Gallery.Api CollectionService.privateCollectionCopyAsync, line ~157).
-    //
-    // So this is a UI wiring defect, not a test defect. The assertions below are the
-    // correct expectations and should pass once the UI calls the copy service.
-    // Full writeup, with source locations and a suggested fix: gallery/gallery-app-bugs.md §2.
-    test.skip(true, 'Gallery UI Copy button is a no-op: copyCollection() never calls collectionDataService.copy() (UI defect; API endpoint works)');
-
     const testCollectionName = `Copy Test Collection ${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
     // Gallery.Api CollectionService.privateCollectionCopyAsync names the copy
     // `<original name> - <current user's name>`, so the copied name is deterministic.

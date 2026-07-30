@@ -64,6 +64,37 @@ test.describe('Exhibit Management', () => {
     return { collectionName: collection.name, namesInCreationOrder };
   }
 
+  /**
+   * The Exhibits table paginates at [pageSize]="10", so a 3-exhibit collection (as
+   * `seedSortableExhibits` above creates) never exercises the paginator. Seed 12
+   * exhibits instead, named so that name-ascending order, name-descending order, and
+   * creation-date order each split across the 10/2 page boundary differently — proving
+   * the paginator and the sort are both really re-slicing the data, not coincidentally
+   * agreeing with each other.
+   *
+   * Letters are a permutation of A-L: alphabetical order is exactly A..L, but the
+   * creation order below is scrambled, so "sorted by name" and "sorted by date" name
+   * different rows as page 1 vs. page 2.
+   */
+  const PAGINATED_LETTERS_IN_CREATION_ORDER = ['C', 'A', 'B', 'F', 'D', 'E', 'I', 'G', 'H', 'L', 'J', 'K'];
+
+  async function seedPaginatedSortableExhibits(): Promise<{
+    collectionName: string;
+    namesInCreationOrder: string[];
+  }> {
+    const suffix = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    const collection = await apiCreateCollection(`Exhibit Sorting Pagination Test ${suffix}`);
+    collectionId = collection.id;
+
+    const namesInCreationOrder = PAGINATED_LETTERS_IN_CREATION_ORDER.map(
+      (letter) => `Sort Exhibit ${letter} ${suffix}`
+    );
+    for (const name of namesInCreationOrder) {
+      await apiCreateExhibit(collectionId, name);
+    }
+    return { collectionName: collection.name, namesInCreationOrder };
+  }
+
   test('Exhibit List Sorting - headers respond to clicks', async ({ galleryAuthenticatedPage: page }) => {
     const { collectionName, namesInCreationOrder } = await seedSortableExhibits();
 
@@ -75,9 +106,8 @@ test.describe('Exhibit Management', () => {
     await expect(page.locator('tr.element-row')).toHaveCount(namesInCreationOrder.length);
 
     // Every documented column is a real, clickable MatSort header, and clicking it
-    // advances the sort state ascending -> descending -> none. This is the part of the
-    // feature that currently works; the row-reordering half is broken upstream (see
-    // the skipped test below).
+    // advances the sort state ascending -> descending -> none. The row-reordering
+    // effect of each click is asserted separately below.
     for (const column of SORTABLE_COLUMNS) {
       const header = page.getByRole('columnheader', { name: column });
       const headerButton = header.getByRole('button');
@@ -97,29 +127,7 @@ test.describe('Exhibit Management', () => {
     }
   });
 
-  // APP BUG: clicking a sort header updates `aria-sort` but never reorders the rows.
-  //
-  // Root cause is in the Gallery UI, not in this test. In
-  // gallery.ui/src/app/components/admin/admin-exhibits/admin-exhibits.component.html
-  // the <table> is wrapped in `@if (!isLoading && selectedCollectionId)`, so at the
-  // time `ngAfterViewInit()` runs in admin-exhibits.component.ts the `@ViewChild(MatSort)`
-  // and `@ViewChild(MatPaginator)` queries resolve to undefined. The assignments
-  //   this.dataSource.sort = this.matSort;
-  //   this.dataSource.paginator = this.paginator;
-  // therefore store `undefined` and are never retried once the table renders, leaving
-  // the MatTableDataSource permanently unsorted and unpaginated.
-  //
-  // Observed evidence (Gallery admin > Exhibits, collection with 12 seeded exhibits):
-  //   - all 12 rows render even though the paginator declares [pageSize]="10"
-  //   - the paginator range label reads " 0 of 0 " instead of " 1 - 10 of 12 "
-  //   - clicking Name cycles aria-sort ascending/descending/none with an unchanged row order
-  // The sibling admin-collections component gets this right because its table is not
-  // behind a `selectedCollectionId` guard, so its ViewChildren resolve in time.
-  //
-  // Re-enable once the Gallery UI wires sort/paginator after the table exists (e.g. via
-  // a setter-based @ViewChild or by moving the assignment out of ngAfterViewInit).
-  // Full writeup, with source locations and a suggested fix: gallery/gallery-app-bugs.md §1.
-  test.skip('Exhibit List Sorting - rows reorder by column', async ({ galleryAuthenticatedPage: page }) => {
+  test('Exhibit List Sorting - rows reorder by column', async ({ galleryAuthenticatedPage: page }) => {
     const { collectionName, namesInCreationOrder } = await seedSortableExhibits();
     const ascendingByName = [...namesInCreationOrder].sort();
 
@@ -147,5 +155,48 @@ test.describe('Exhibit Management', () => {
     // expect: Exhibits are sorted by creation date. They were seeded in
     // `namesInCreationOrder`, so ascending date order matches that order.
     await expect.poll(() => exhibitNameColumn(page), { timeout: 10000 }).toEqual(namesInCreationOrder);
+  });
+
+  test('Exhibit List Sorting - paginator reflects range and pages through rows', async ({
+    galleryAuthenticatedPage: page,
+  }) => {
+    const { collectionName, namesInCreationOrder } = await seedPaginatedSortableExhibits();
+    const ascendingByName = [...namesInCreationOrder].sort();
+
+    await gotoGalleryAdmin(page);
+    await gotoAdminSection(page, 'Exhibits');
+    await selectCollection(page, collectionName);
+
+    const paginatorRange = page.getByRole('status');
+    const nextPage = page.getByRole('button', { name: 'Next page' });
+    const previousPage = page.getByRole('button', { name: 'Previous page' });
+
+    // With [pageSize]="10" and 12 seeded exhibits, only page 1's 10 rows render, and
+    // the range label reflects that — not "0 of 0" (the dead-paginator symptom) and
+    // not all 12 rows on a single page.
+    await expect(page.locator('tr.element-row')).toHaveCount(10);
+    await expect(paginatorRange).toHaveText(`1 – 10 of ${namesInCreationOrder.length}`);
+    await expect(previousPage).toBeDisabled();
+    await expect(nextPage).toBeEnabled();
+
+    // Sort by Name ascending so which rows land on page 1 vs. page 2 is deterministic.
+    const nameHeader = page.getByRole('columnheader', { name: 'Name' });
+    await nameHeader.getByRole('button').click();
+    await expect(nameHeader).toHaveAttribute('aria-sort', 'ascending');
+    await expect.poll(() => exhibitNameColumn(page), { timeout: 10000 }).toEqual(ascendingByName.slice(0, 10));
+
+    // Paging forward shows the remaining 2 rows and updates the range label.
+    await nextPage.click();
+    await expect(page.locator('tr.element-row')).toHaveCount(2);
+    await expect(paginatorRange).toHaveText(`11 – ${namesInCreationOrder.length} of ${namesInCreationOrder.length}`);
+    await expect.poll(() => exhibitNameColumn(page), { timeout: 10000 }).toEqual(ascendingByName.slice(10));
+    await expect(nextPage).toBeDisabled();
+    await expect(previousPage).toBeEnabled();
+
+    // Paging back restores page 1.
+    await previousPage.click();
+    await expect(page.locator('tr.element-row')).toHaveCount(10);
+    await expect(paginatorRange).toHaveText(`1 – 10 of ${namesInCreationOrder.length}`);
+    await expect.poll(() => exhibitNameColumn(page), { timeout: 10000 }).toEqual(ascendingByName.slice(0, 10));
   });
 });

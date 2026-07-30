@@ -34,57 +34,19 @@ async function openCollectionCardsPanel(page: Page, collectionName: string) {
   // clicking it fires a collection Download.
   await row.getByRole('cell', { name: collectionName }).click();
 
-  // Retry the section-header click: a concurrent rebuild (see
-  // `ensureCardsPanel`) can collapse the panel again immediately after it opens,
-  // or tear down the header between resolving and clicking it.
   const cardsPanel = page.getByRole('region', { name: 'Cards' });
-  await expect(async () => {
-    if (!(await cardsPanel.isVisible().catch(() => false))) {
-      await page.getByRole('button', { name: 'Cards', exact: true }).click({ timeout: 5_000 });
-    }
-    await expect(cardsPanel).toBeVisible({ timeout: 5_000 });
-  }).toPass();
+  await page.getByRole('button', { name: 'Cards', exact: true }).click();
+  await expect(cardsPanel).toBeVisible();
   return cardsPanel;
 }
 
-/**
- * Re-open the Cards panel if it has collapsed, and re-apply the row filter.
- *
- * The panel is destroyed by traffic this test never causes.
- * `admin-collections.component.ts` subscribes to `collectionQuery.selectAll()`
- * and rebuilds `collectionList` with `{ ...collection }` clones on every
- * emission, reassigning `dataSource.data`. `<tr mat-row>` has no `trackBy`, so
- * the rows are torn down and rebuilt; the expanded detail sits behind
- * `@if (element.id === expandedCollectionId)`, so `<app-admin-cards>` and the
- * Cards `mat-expansion-panel` are destroyed and recreated collapsed.
- *
- * The store emits on any admin-group SignalR broadcast:
- * `MainHub.GetAdminIdList` adds every ViewCollections holder to
- * `AdminCollectionGroup`, so a collection created or deleted by any other
- * concurrently-running spec (this config uses 2 local workers) collapses this
- * panel mid-test. Cached Locators are therefore not stable across awaits.
- */
+/** The Cards panel, filtered to `filterText`. */
 async function ensureCardsPanel(
   page: Page,
   collectionName: string,
   filterText: string
 ): Promise<Locator> {
   const cardsPanel = page.getByRole('region', { name: 'Cards' });
-  if (!(await cardsPanel.isVisible().catch(() => false))) {
-    // The rebuild keeps the collection row expanded — `expandedCollectionId`
-    // lives on the component, not the row object — so the detail subtree and its
-    // section headers are still mounted and only the inner
-    // `mat-expansion-panel` reverted to collapsed. Re-clicking the section
-    // header is enough and avoids a full re-navigation, which would be slower
-    // and would widen the window for another rebuild.
-    const sectionHeader = page.getByRole('button', { name: 'Cards', exact: true });
-    if (await sectionHeader.isVisible().catch(() => false)) {
-      await sectionHeader.click();
-    } else {
-      await openCollectionCardsPanel(page, collectionName);
-    }
-    await expect(cardsPanel).toBeVisible({ timeout: 10_000 });
-  }
   const panelSearch = cardsPanel.getByRole('textbox', { name: 'Search' });
   if ((await panelSearch.inputValue().catch(() => null)) !== filterText) {
     await panelSearch.fill(filterText);
@@ -92,19 +54,15 @@ async function ensureCardsPanel(
   return cardsPanel;
 }
 
-/** Assert a card row's presence, tolerating a panel rebuild mid-check. */
+/** Assert a card row's presence. */
 async function expectCardRowCount(
   page: Page,
   collectionName: string,
   cardName: string,
   expected: number
 ) {
-  await expect(async () => {
-    const panel = await ensureCardsPanel(page, collectionName, cardName);
-    await expect(panel.getByRole('button', { name: `Delete ${cardName}` })).toHaveCount(expected, {
-      timeout: 5_000,
-    });
-  }).toPass();
+  const panel = await ensureCardsPanel(page, collectionName, cardName);
+  await expect(panel.getByRole('button', { name: `Delete ${cardName}` })).toHaveCount(expected);
 }
 
 /** Cached Gallery API bearer token (one Keycloak round-trip per worker). */
@@ -222,18 +180,11 @@ test.describe('Card Management', () => {
     // `<mat-expansion-panel disabled>` whose `<mat-expansion-panel-header>`
     // carries aria-disabled="true"; Playwright treats descendants of an
     // aria-disabled ancestor as disabled and would wait out the full timeout.
-    //
-    // Wrapped in toPass because a concurrent panel rebuild can detach the row
-    // between resolving the button and clicking it.
-    await expect(async () => {
-      const panel = await ensureCardsPanel(page, collectionName, editCardName);
-      await panel
-        .getByRole('button', { name: `Edit ${editCardName}` })
-        .click({ force: true, timeout: 5_000 });
-      // The dialog title is hardcoded to "Edit Card" in
-      // admin-card-edit-dialog.component.html.
-      await expect(page.getByRole('dialog', { name: 'Edit Card' })).toBeVisible({ timeout: 5_000 });
-    }).toPass();
+    const editPanel = await ensureCardsPanel(page, collectionName, editCardName);
+    await editPanel.getByRole('button', { name: `Edit ${editCardName}` }).click({ force: true });
+    // The dialog title is hardcoded to "Edit Card" in
+    // admin-card-edit-dialog.component.html.
+    await expect(page.getByRole('dialog', { name: 'Edit Card' })).toBeVisible();
 
     const editDialog = page.getByRole('dialog', { name: 'Edit Card' });
 
@@ -257,21 +208,13 @@ test.describe('Card Management', () => {
     expect(updateResponse.status()).toBe(200);
     await expect(editDialog).toHaveCount(0);
 
-    await expect(async () => {
-      const panel = await ensureCardsPanel(page, collectionName, editedCardName);
-      await expect(panel.getByRole('button', { name: `Edit ${editedCardName}` })).toHaveCount(1, {
-        timeout: 5_000,
-      });
-      await expect(panel).toContainText(editedCardDescription, { timeout: 5_000 });
-    }).toPass();
+    const editedPanel = await ensureCardsPanel(page, collectionName, editedCardName);
+    await expect(editedPanel.getByRole('button', { name: `Edit ${editedCardName}` })).toHaveCount(1);
+    await expect(editedPanel).toContainText(editedCardDescription);
 
     // The pre-edit name is gone from the list.
-    await expect(async () => {
-      const panel = await ensureCardsPanel(page, collectionName, editCardName);
-      await expect(panel.getByRole('button', { name: `Edit ${editCardName}` })).toHaveCount(0, {
-        timeout: 5_000,
-      });
-    }).toPass();
+    const preEditPanel = await ensureCardsPanel(page, collectionName, editCardName);
+    await expect(preEditPanel.getByRole('button', { name: `Edit ${editCardName}` })).toHaveCount(0);
 
     // ---------------------------------------------------------------------
     // 2. Delete a card
@@ -279,16 +222,11 @@ test.describe('Card Management', () => {
     // deleteCard() in admin-cards.component.ts raises a
     // CrucibleDialogService.confirm with title 'Delete Card'.
     const openDeleteConfirm = async (cardName: string) => {
-      await expect(async () => {
-        const panel = await ensureCardsPanel(page, collectionName, cardName);
-        await panel
-          .getByRole('button', { name: `Delete ${cardName}` })
-          .click({ force: true, timeout: 5_000 });
-        await expect(page.getByRole('dialog').filter({ hasText: 'Delete Card' })).toBeVisible({
-          timeout: 5_000,
-        });
-      }).toPass();
-      return page.getByRole('dialog').filter({ hasText: 'Delete Card' });
+      const panel = await ensureCardsPanel(page, collectionName, cardName);
+      await panel.getByRole('button', { name: `Delete ${cardName}` }).click({ force: true });
+      const confirm = page.getByRole('dialog').filter({ hasText: 'Delete Card' });
+      await expect(confirm).toBeVisible();
+      return confirm;
     };
 
     const confirmDialog = await openDeleteConfirm(deleteCardName);
@@ -317,18 +255,11 @@ test.describe('Card Management', () => {
     // expect: Associated articles are handled appropriately
     //
     // "Appropriately" here means the article is never orphaned: the delete is
-    // refused and the article survives. It is refused the blunt way, though —
-    // CardService.DeleteAsync does a bare `Cards.Remove` with no cascade or
-    // restrict rule for Article.CardId, so EF Core surfaces an
-    // InvalidOperationException that the API returns as HTTP 500 "Referenced
-    // entity does not exist. Please verify all referenced entities exist." The
-    // UI then raises a generic "Internal Server Error" dialog rather than a
-    // meaningful "this card still has articles" message.
-    //
-    // The 500 is pinned deliberately: it is reproducible, and pinning it means
-    // this test starts failing (correctly) the moment the API is fixed, at which
-    // point this block should be rewritten to assert whichever behaviour the fix
-    // chooses — a 4xx with a readable message, or cascading the articles.
+    // rejected with a 409 Conflict naming the blocking article(s)
+    // (`CardService.DeleteAsync` counts `Articles.CardId == id` and throws a
+    // `ConflictException` with a singular/plural message — see
+    // `gallery.api/Gallery.Api/Services/CardService.cs`), and the article
+    // survives.
     // ---------------------------------------------------------------------
     await expectCardRowCount(page, collectionName, linkedCardName, 1);
     const linkedConfirm = await openDeleteConfirm(linkedCardName);
@@ -338,15 +269,15 @@ test.describe('Card Management', () => {
       ),
       linkedConfirm.getByRole('button', { name: 'Delete', exact: true }).click(),
     ]);
-    expect(
-      linkedDeleteResponse.status(),
-      'Known API defect: deleting a card that still has articles returns 500'
-    ).toBe(500);
+    expect(linkedDeleteResponse.status()).toBe(409);
+    expect((await linkedDeleteResponse.json()).title).toBe(
+      'This card has 1 article. Delete or reassign them before deleting the card.'
+    );
 
     // The failure is surfaced to the user rather than silently swallowed.
-    const errorDialog = page.getByRole('dialog').filter({ hasText: 'Internal Server Error' });
+    const errorDialog = page.getByRole('dialog').filter({ hasText: 'Conflict' });
     await expect(errorDialog).toContainText(
-      'Referenced entity does not exist. Please verify all referenced entities exist.'
+      'This card has 1 article. Delete or reassign them before deleting the card.'
     );
 
     // The error dialog is aria-modal, so everything behind it is aria-hidden and
@@ -365,5 +296,10 @@ test.describe('Card Management', () => {
     expect(
       (remainingArticles.body as Array<{ name: string }>).map((a) => a.name)
     ).toContain(linkedArticleName);
+
+    // A card WITHOUT articles still deletes successfully — the fix only blocks
+    // deletes that would orphan an article, not deletes in general. The
+    // `deleteCardName` card deleted via the UI above (204, removed from the list)
+    // already covers this path.
   });
 });

@@ -56,36 +56,19 @@ async function openCollectionArticlesPanel(
   // Edit/Copy/Download/Delete buttons and clicking it triggers a Download.
   await row.getByRole('cell', { name: collectionName }).click();
 
-  // Retry the section-header click: a concurrent rebuild (see
-  // `ensureArticlesPanel`) can collapse the panel again immediately after it
-  // opens, or tear down the header between resolving and clicking it.
   const articlesPanel = page.getByRole('region', { name: 'Articles' });
-  await expect(async () => {
-    if (!(await articlesPanel.isVisible().catch(() => false))) {
-      await page.getByRole('button', { name: 'Articles', exact: true }).click({ timeout: 5_000 });
-    }
-    await expect(articlesPanel).toBeVisible({ timeout: 5_000 });
-  }).toPass();
+  await page.getByRole('button', { name: 'Articles', exact: true }).click();
+  await expect(articlesPanel).toBeVisible();
   return articlesPanel;
 }
 
 /**
- * Re-open the Articles panel if it has collapsed, and re-apply the row filter.
+ * The Articles panel, filtered to `filterText` if given.
  *
- * Beyond the datetime-picker backdrop noted below, the panel is also destroyed
- * by traffic this test never causes. `admin-collections.component.ts` subscribes
- * to `collectionQuery.selectAll()` and rebuilds `collectionList` with
- * `{ ...collection }` clones on every emission, reassigning `dataSource.data`.
- * `<tr mat-row>` has no `trackBy`, so the rows are torn down and rebuilt; the
- * expanded detail sits behind `@if (element.id === expandedCollectionId)`, so
- * `<app-admin-articles>` and the Articles `mat-expansion-panel` are destroyed
- * and recreated collapsed.
- *
- * The store emits on any admin-group SignalR broadcast:
- * `MainHub.GetAdminIdList` adds every ViewCollections holder to
- * `AdminCollectionGroup`, so a collection created or deleted by any other
- * concurrently-running spec (this config uses 2 local workers) collapses this
- * panel mid-test. Cached Locators are therefore not stable across awaits.
+ * Driving the ngx-mat-datetime-picker opens a nested dialog whose backdrop can
+ * collapse the collection row's expansion panel behind it, so callers that
+ * exercise the date picker re-open via `openCollectionArticlesPanel` afterwards
+ * rather than assuming this helper's handle is still mounted.
  */
 async function ensureArticlesPanel(
   page: Page,
@@ -93,21 +76,6 @@ async function ensureArticlesPanel(
   filterText?: string
 ): Promise<Locator> {
   const articlesPanel = page.getByRole('region', { name: 'Articles' });
-  if (!(await articlesPanel.isVisible().catch(() => false))) {
-    // The rebuild keeps the collection row expanded — `expandedCollectionId`
-    // lives on the component, not the row object — so the detail subtree and its
-    // section headers are still mounted and only the inner
-    // `mat-expansion-panel` reverted to collapsed. Re-clicking the section
-    // header is enough and avoids a full re-navigation, which would be slower
-    // and would widen the window for another rebuild.
-    const sectionHeader = page.getByRole('button', { name: 'Articles', exact: true });
-    if (await sectionHeader.isVisible().catch(() => false)) {
-      await sectionHeader.click();
-    } else {
-      await openCollectionArticlesPanel(page, collectionName, { fromHome: false });
-    }
-    await expect(articlesPanel).toBeVisible({ timeout: 10_000 });
-  }
   if (filterText !== undefined) {
     const panelSearch = articlesPanel.getByRole('textbox', { name: 'Search' });
     if ((await panelSearch.inputValue().catch(() => null)) !== filterText) {
@@ -201,17 +169,11 @@ test.describe('Article Management', () => {
     await openCollectionArticlesPanel(page, collectionName);
 
     // expect: Article creation interface is accessible
-    // Wrapped in toPass because a concurrent panel rebuild can detach the button
-    // between resolving it and clicking it.
-    await expect(async () => {
-      const panel = await ensureArticlesPanel(page, collectionName);
-      const addButton = panel.getByRole('button', { name: 'Add an Article' });
-      await expect(addButton).toBeVisible({ timeout: 5_000 });
-      await addButton.click({ timeout: 5_000 });
-      await expect(page.getByRole('dialog', { name: 'Add Article' })).toBeVisible({
-        timeout: 5_000,
-      });
-    }).toPass();
+    const panel = await ensureArticlesPanel(page, collectionName);
+    const addButton = panel.getByRole('button', { name: 'Add an Article' });
+    await expect(addButton).toBeVisible();
+    await addButton.click();
+    await expect(page.getByRole('dialog', { name: 'Add Article' })).toBeVisible();
 
     const dialog = page.getByRole('dialog', { name: 'Add Article' });
 
@@ -324,13 +286,9 @@ test.describe('Article Management', () => {
     await openCollectionArticlesPanel(page, collectionName, { fromHome: false });
 
     // The panel paginates, so filter by the unique name first.
-    await expect(async () => {
-      const panel = await ensureArticlesPanel(page, collectionName, articleName);
-      await expect(panel.getByRole('button', { name: `Edit ${articleName}` })).toHaveCount(1, {
-        timeout: 5_000,
-      });
-      await expect(panel).toContainText(cardName, { timeout: 5_000 });
-    }).toPass();
+    const createdPanel = await ensureArticlesPanel(page, collectionName, articleName);
+    await expect(createdPanel.getByRole('button', { name: `Edit ${articleName}` })).toHaveCount(1);
+    await expect(createdPanel).toContainText(cardName);
 
     // Every field set through the dialog round-tripped to the API. This is the
     // real assertion behind "created successfully" — the list row only shows

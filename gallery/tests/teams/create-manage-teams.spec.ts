@@ -33,20 +33,12 @@ import { request as pwRequest, type APIRequestContext, type Page } from '@playwr
  * paired response plus the resulting row state, not by a sleep.
  *
  * This spec creates its OWN collection + exhibit rather than using the worker-scoped
- * `seededExhibit`, for two reasons:
- *
- *  1. It mutates the exhibit's team list, and `seededExhibit` is worker-scoped, so any
- *     residue would leak into later tests in the same worker.
- *  2. There is a real UI crash in `admin-teams.component.ts` that would otherwise block
- *     this scenario: `sortTeams()` does `a.shortName.toLowerCase()` with no null guard,
- *     and `Team.ShortName` is nullable server-side (`Gallery.Api.Data/Models/Team.cs`).
- *     The team seeded by `seedExhibitForAdmin` is created with a name only, so as soon
- *     as a second team exists the sort comparator runs, dereferences that null, and
- *     Angular's ErrorHandler pops a "TypeError — Cannot read properties of null
- *     (reading 'toLowerCase')" sheet instead of rendering the new row. Verified live:
- *     adding a team to the seeded exhibit reproduces it every time. Starting from an
- *     empty team list keeps this spec's subject (create/edit/delete) testable while that
- *     bug stands; a regression test for the null-shortName sort belongs with the fix.
+ * `seededExhibit`: it mutates the exhibit's team list (create, rename, delete), and
+ * `seededExhibit` is shared across every other test in the worker — `view-exhibit-teams`
+ * and `team-selector` both assert directly against its one seeded team. Perturbing that
+ * shared team list, even temporarily, would make this spec's outcome depend on
+ * scheduling order relative to those other specs. A dedicated exhibit keeps the mutation
+ * fully contained.
  */
 
 /** Run a callback with a Gallery API context and an admin bearer token. */
