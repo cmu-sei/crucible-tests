@@ -495,6 +495,51 @@ export async function apiCreateExhibit(
 }
 
 /**
+ * Create a team on an exhibit via the API.
+ *
+ * `name`, `shortName` and `email` are all nullable on `TeamEntity` (see
+ * gallery.api `Gallery.Api.Data/Models/Team.cs`), and the API accepts an explicit
+ * `null` as readily as an omitted field — `POST /api/teams` answers 201 and
+ * `GET /api/exhibits/{id}/teams` reads the value back as `null`. That matters:
+ * specs covering the admin team list's null-tolerance need to seed exactly such a
+ * row, and doing it through the UI is impossible because the edit dialog always
+ * submits a string.
+ *
+ * Pass `name: null` (or `shortName: null`) deliberately; leaving a key out is
+ * equivalent. Teams are cascade-deleted with their exhibit, which is in turn
+ * cascade-deleted with its collection, so `apiDeleteCollectionById` in teardown
+ * cleans up everything this creates.
+ */
+export async function apiCreateTeam(
+  exhibitId: string,
+  team: { name?: string | null; shortName?: string | null; email?: string | null } = {}
+): Promise<{ id: string; name: string | null; shortName: string | null }> {
+  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
+  try {
+    const token = await getGalleryApiToken(apiContext);
+    const response = await apiContext.post(`${Services.Gallery.API}/api/teams`, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      data: {
+        name: team.name ?? null,
+        shortName: team.shortName ?? null,
+        email: team.email ?? null,
+        exhibitId,
+      },
+    });
+    if (!response.ok()) {
+      throw new Error(`Failed to create team: ${response.status()} ${await response.text()}`);
+    }
+    const created: { id: string; name: string | null; shortName: string | null } = await response.json();
+    console.log(
+      `Seeded team: name=${JSON.stringify(created.name)} shortName=${JSON.stringify(created.shortName)} (${created.id})`
+    );
+    return created;
+  } finally {
+    await apiContext.dispose();
+  }
+}
+
+/**
  * Set an exhibit's current move/inject via the API.
  *
  * Advancing an exhibit mutates persistent state, and `seededExhibit` is
