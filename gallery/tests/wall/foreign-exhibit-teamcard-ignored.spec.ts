@@ -87,21 +87,28 @@ import {
  *
  * ## Why the pass cannot be vacuous
  *
- * Three guards, all asserted before the property:
+ * Four guards, all asserted before the property:
  *
  *   - **Control 1** flips B's *own* TeamCard off and on again *while the user is still a
  *     member of B*, asserting both transitions render. This proves `TeamCardUpdated`
  *     frames reach this tab and that the Wall's `teamCardQuery.selectAll()`
- *     subscription recomputes — i.e. branch 3's *accept* side and the whole delivery
- *     chain work. It has to happen before the membership drop: `GetGroups` addresses a
- *     TeamCard only to users on *that TeamCard's* team, so once the user leaves B's
- *     team, B's own TeamCard events legitimately stop arriving. (Discovered by running
- *     this control after the drop and watching it fail.)
+ *     subscription recomputes — i.e. the whole delivery chain works. Note it exercises
+ *     the predicate's *authoritative* branch, not branch 3: B's own team is in the store
+ *     with a matching `exhibitId`, so the decision never reaches the fallback. (Confirmed
+ *     by instrumenting the predicate: these events decide on the authoritative branch.
+ *     Mutating it breaks this control; mutating only the fallback does not.) It has to
+ *     happen before the membership drop: `GetGroups` addresses a TeamCard only to users on
+ *     *that TeamCard's* team, so once the user leaves B's team, B's own TeamCard events
+ *     legitimately stop arriving. (Discovered by running this control after the drop and
+ *     watching it fail.)
  *   - **Frame-delivery assertion** reads the actual websocket frames and asserts that
  *     the foreign `TeamCardUpdated` was received by this tab. This is direct evidence
  *     of delivery rather than an inference from the source's group plumbing — the whole
  *     spec is meaningless if the frame never arrives, so it is asserted rather than
  *     assumed.
+ *   - **Foreign-card precondition** asserts the foreign `CardUpdated` also arrived, so the
+ *     leaked TeamCard has a card to flip. Without this the spec passes against the
+ *     *pre-fix* predicate — verified by experiment. See the assertion at step 5.
  *   - **Ordering guard** renames the local card *after* the foreign event and waits for
  *     the new title. SignalR preserves frame order on one connection, so once the
  *     rename has rendered, the foreign frame's handler has already run. The final
@@ -183,11 +190,15 @@ test.describe('Wall View Functionality', () => {
     // foreign event can be asserted rather than assumed. Registered before the first
     // navigation so the Wall's connection is captured.
     const teamCardFrames: string[] = [];
+    const cardFrames: string[] = [];
     page.on('websocket', ws => {
       ws.on('framereceived', frame => {
         const payload = String(frame.payload);
         if (payload.includes('"TeamCardUpdated"')) {
           teamCardFrames.push(payload);
+        }
+        if (payload.includes('"CardUpdated"')) {
+          cardFrames.push(payload);
         }
       });
     });
@@ -229,9 +240,26 @@ test.describe('Wall View Functionality', () => {
     //    collection (`isCardInActiveExhibit`), and the collection is shared, so this is
     //    accepted by design — the card being *present* is not the bug. What must not
     //    happen is a foreign TeamCard flipping it onto the wall.
+    cardFrames.length = 0;
     await apiRenameCard(foreignCard.id, collectionId, foreignCardName, {
       description: 'foreign card, now in the shared collection store',
     });
+
+    // expect: the foreign card really did reach this tab's card store. This step is a
+    // *precondition* of the whole test, not a behaviour under test, and it must be
+    // asserted rather than assumed: `setShownCardList` iterates the card store and looks
+    // TeamCards up by `cardId`, so a leaked foreign TeamCard is invisible unless its Card
+    // is present too. Verified by experiment — with this step's effect absent, the spec
+    // goes GREEN against the pre-fix predicate, because there is no card for the leaked
+    // TeamCard to flip. If `CardHandler`'s fan-out is ever narrowed, or
+    // `isCardInActiveExhibit` starts rejecting cross-exhibit cards, this assertion fails
+    // loudly instead of the spec silently testing nothing.
+    await expect
+      .poll(
+        () => cardFrames.filter(payload => payload.includes(foreignCard.id)).length,
+        { message: 'the foreign CardUpdated frame should have been delivered to this tab' }
+      )
+      .toBeGreaterThan(0);
 
     // 6. THE EVENT UNDER TEST — flip the FOREIGN TeamCard (exhibit A's team) to shown.
     //    Pre-fix this was accepted into the teamCard store and, because

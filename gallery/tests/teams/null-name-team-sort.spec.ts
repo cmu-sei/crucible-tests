@@ -29,9 +29,14 @@ import { openExhibitTeamsPanel, teamRowShortNames, teamRowFullNames } from './nu
  *
  * The failure is not confined to the offending row. `getSortedTeams()` sorts the whole
  * array in place and the exception escapes `Array.prototype.sort`, so `sortedTeams` is
- * never assigned and the `@for (team of sortedTeams; ...)` loop renders **nothing** —
- * the entire list disappears for every exhibit, not just the one holding the null-name
- * team. That is why the assertions below check both that rows are present *and* that
+ * never assigned and the `@for (team of sortedTeams; ...)` loop renders **nothing** — the
+ * entire list disappears, not just the offending row. It is confined to the exhibit that
+ * holds the null-name team, though: `getFilteredTeams()` filters on
+ * `t.exhibitId === this.exhibitId` *before* the array reaches the comparator, so a sibling
+ * exhibit's panel never sees the bad row. (`b3bce54`'s commit message says "for every
+ * exhibit"; that clause overstates the blast radius — the mechanism it describes is
+ * otherwise accurate.) That is why the assertions below check both that rows are present
+ * *and* that
  * the null-name team is among them: "list is non-empty" is what regresses, and
  * "the null-name row is still listed" is what proves the guard neutralises the null
  * rather than dropping the record.

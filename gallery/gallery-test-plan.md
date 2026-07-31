@@ -187,6 +187,24 @@ Gallery is a content management application for the Crucible cybersecurity train
   3. Navigate back to the Wall view
     - expect: The unread article count on the corresponding card decreases
 
+#### 3.6. A TeamCard for another exhibit does not change this Wall
+
+**File:** `tests/wall/foreign-exhibit-teamcard-ignored.spec.ts`
+
+Regression cover for `gallery.ui` `4fc3104`. TeamCard SignalR events fan out beyond the
+exhibit being viewed, so the client filters them by exhibit; a foreign TeamCard must not
+flip a card onto this Wall.
+
+**Steps:**
+  1. Seed one collection with two exhibits, view the Wall on exhibit B as a member of B's
+     team, and confirm only B's own card is shown
+    - expect: Only B's card is on the Wall
+  2. Flip B's own TeamCard off and on again
+    - expect: Both transitions render, proving the event chain reaches this tab
+  3. Flip a TeamCard belonging to a team of the *other* exhibit to shown
+    - expect: The foreign event is received by the browser but ignored — the Wall still
+      shows only B's own card
+
 ### 4. Archive Functionality
 
 **Seed:** `tests/seed.spec.ts`
@@ -546,6 +564,22 @@ Gallery is a content management application for the Crucible cybersecurity train
     - expect: Exhibits are sorted by current move value
   5. Click the 'Inject' column header
     - expect: Exhibits are sorted by current inject value
+
+#### 6.9. Expanded exhibit detail panel stays open across an exhibit update
+
+**File:** `tests/exhibits/exhibit-detail-panel-survives-update.spec.ts`
+
+Regression cover for `gallery.ui` `f585bdf`. The exhibits table needs a `trackBy` so a store
+emission patches rows instead of rebuilding them; without it, an expanded row's detail panel
+is destroyed mid-interaction.
+
+**Steps:**
+  1. Expand an exhibit row, then expand its 'Exhibit Teams' sub-panel
+    - expect: The sub-panel is open and its content is visible
+  2. Update a *different* exhibit in the same collection, so the exhibit store emits
+    - expect: The sibling row's Move/Inject cells change, proving the update reached the
+      component
+    - expect: The expanded sub-panel is still open with its content still visible
 
 #### 6.10. Card Teams panel tolerates a team or card with no name
 
@@ -981,6 +1015,35 @@ records never touch the shared exhibit.
     - expect: Team name is displayed (e.g. 'Team: CONTROL')
   2. Navigate to the Archive view and observe the team indicator
     - expect: The same team is displayed
+
+#### 13.4. Sorting Exhibit Teams by Full Name tolerates a team with no name
+
+**File:** `tests/teams/null-name-team-sort.spec.ts`
+
+Regression cover for `gallery.ui` `b3bce54`. `Team.name` is nullable and `POST /api/teams`
+accepts a null one, so the sort comparator must not assume it is present.
+
+**Steps:**
+  1. Seed an exhibit with two named teams and one whose `name` is null, then open its
+     Exhibit Teams panel in admin
+    - expect: All three teams are listed
+  2. Click the "Full Name" column header to sort ascending, then again for descending
+    - expect: The list still renders every team in both directions — the null-name team
+      sorts as an empty value rather than blanking the whole list
+
+#### 13.5. Searching Exhibit Teams tolerates a team with no name or no short name
+
+**File:** `tests/teams/null-name-team-filter.spec.ts`
+
+Regression cover for `gallery.ui` `5eaa8b2`. Companion to 13.4 for the filter predicate,
+which needs a non-empty search string as well as a null-valued team.
+
+**Steps:**
+  1. Seed teams with a null `name` and with a null `shortName`, then open the Exhibit Teams
+     panel and type a term matching the null-name team's short name
+    - expect: The null-name team is listed — it still matches on `shortName`
+  2. Type a term that matches no team
+    - expect: Zero rows, distinguishing a correct empty filter from a crash
 
 ### 14. Integration and API
 
