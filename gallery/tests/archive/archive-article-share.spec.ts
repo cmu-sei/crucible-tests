@@ -258,22 +258,18 @@ test.describe('Archive Functionality', () => {
       expect(shareResponse.status()).toBe(200);
       await expect(dialog).toHaveCount(0);
 
+      // expect: Success message appears. Asserted before the unread-count poll below
+      // (which can take up to 10s) because the snackbar's `duration: 5000` means it
+      // auto-dismisses well within that window — checking it after the poll would pass
+      // vacuously regardless of whether the snackbar ever appeared.
+      await expect(page.locator('mat-snack-bar-container')).toContainText('Article shared.');
+
       // expect: Article is shared with the selected teams. Proven at the data layer:
       // the target user on team B now has an (unread) copy of the article, which it
       // had no other route to.
       await expect
         .poll(() => unreadCount(api, exhibit.id, targetUserId), { timeout: 10000 })
         .toBe(1);
-
-      // expect: Success message appears.
-      // DELIBERATE assertion of current (wrong) behaviour: Gallery shows no
-      // confirmation at all. `archive.component.ts#openShareDialog` just closes the
-      // dialog and `UserArticleDataService.shareUserArticle` only flips a loading
-      // flag — there is no MatSnackBar on the success path (contrast
-      // `wall.component.ts#advanceExhibit`, which does open one on error). Reported
-      // as an app bug. Once a confirmation is added, replace this with a positive
-      // assertion on the snackbar text.
-      await expect(page.locator('mat-snack-bar-container')).toHaveCount(0);
     } finally {
       await api.dispose();
     }
