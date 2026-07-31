@@ -611,12 +611,21 @@ export async function apiRemoveUserFromTeam(teamId: string, userId: string): Pro
   }
 }
 
-/** Create a card in a collection via the API. Cascade-deleted with the collection. */
+/**
+ * Create a card in a collection via the API. Cascade-deleted with the collection.
+ *
+ * `name` is deliberately typed `string | null`. `CardEntity.Name` (gallery.api
+ * `Gallery.Api.Data/Models/Card.cs`) carries no `[Required]` and the column is
+ * nullable, so `POST /api/cards` answers **201** for both an explicit `null` and an
+ * omitted field and `GET /api/collections/{id}/cards` reads the value back as `null`
+ * — verified live. This mirrors `apiCreateTeam`'s nullable `name`/`shortName` and is
+ * the only way to seed such a row: the admin card dialog always submits a string.
+ */
 export async function apiCreateCard(
   collectionId: string,
-  name: string,
+  name: string | null,
   options: { move?: number; inject?: number; description?: string } = {}
-): Promise<{ id: string; name: string }> {
+): Promise<{ id: string; name: string | null }> {
   const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
   try {
     const token = await getGalleryApiToken(apiContext);

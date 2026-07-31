@@ -547,6 +547,40 @@ Gallery is a content management application for the Crucible cybersecurity train
   5. Click the 'Inject' column header
     - expect: Exhibits are sorted by current inject value
 
+#### 6.10. Card Teams panel tolerates a team or card with no name
+
+**File:** `tests/exhibits/null-name-card-teams-panel.spec.ts`
+
+Regression cover for `gallery.ui` `db05d15`, on the "Card Teams" sub-panel of an expanded
+exhibit row — the sibling of "Exhibit Teams". `Team.name` and `Card.name` are both nullable
+and `POST /api/teams` and `POST /api/cards` each accept a null one, so neither the sort
+comparator nor the search predicate may assume a name is present. Companion to 13.4/13.5,
+which cover the same class of defect in the Exhibit Teams panel.
+
+Pre-fix the failure is not a degraded row: the `TypeError` reaches Angular's global
+`ErrorHandler`, which opens a modal error sheet over the whole Administration screen, and it
+does so on row expansion alone. Both tests seed their own collection so the malformed
+records never touch the shared exhibit.
+
+**Steps:**
+  1. Seed an exhibit with three TeamCards — one fully named, one whose team `name` is null,
+     one whose card `name` is null — then expand the exhibit row and its 'Card Teams' panel
+    - expect: The panel renders, with no application error sheet
+    - expect: All three rows are listed, each null-valued row identifiable by the name it
+      does carry in the other column
+  2. Click the 'Team' column header to sort ascending, then again for descending
+    - expect: Every row still renders, in the exact expected order, with the null team name
+      sorting as an empty value
+  3. Click the 'Card' column header to sort ascending, then again for descending
+    - expect: Same, for the null card name — the second, independent call site
+  4. Type the card name of the row whose *team* name is null, then the team name of the row
+     whose *card* name is null
+    - expect: Each search finds its row — a null name is neutralised without suppressing
+      the other field's match
+  5. Type a term that matches no row, then clear the search
+    - expect: Zero rows, distinguishing a correct empty filter from a crash; clearing
+      restores all three
+
 ### 7. User Management
 
 **Seed:** `tests/seed.spec.ts`
