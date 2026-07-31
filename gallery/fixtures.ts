@@ -539,6 +539,212 @@ export async function apiCreateTeam(
   }
 }
 
+/** The Gallery user id of the `admin` account, read from `GET /api/users`. */
+export async function apiGetAdminUserId(): Promise<string> {
+  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
+  try {
+    const token = await getGalleryApiToken(apiContext);
+    const response = await apiContext.get(`${Services.Gallery.API}/api/users`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    });
+    if (!response.ok()) {
+      throw new Error(`Failed to list users: ${response.status()} ${await response.text()}`);
+    }
+    const users: Array<{ id: string; name: string }> = await response.json();
+    const admin = users.find(u => u.name?.toLowerCase().includes('admin'));
+    if (!admin) {
+      throw new Error('Admin user not found in the Gallery database');
+    }
+    return admin.id;
+  } finally {
+    await apiContext.dispose();
+  }
+}
+
+/**
+ * Add a user to a team via the API, returning the TeamUser id.
+ *
+ * Team membership is what makes an exhibit appear in "My Exhibits" and what
+ * `GET /api/exhibits/{id}/my-teams` (the Wall's `loadMine`) answers from, so specs
+ * that need to be *inside* an exhibit have to create this row. Cascade-deleted with
+ * the team.
+ */
+export async function apiAddUserToTeam(teamId: string, userId: string): Promise<{ id: string }> {
+  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
+  try {
+    const token = await getGalleryApiToken(apiContext);
+    const response = await apiContext.post(`${Services.Gallery.API}/api/teamusers`, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      data: { teamId, userId, isObserver: false },
+    });
+    if (!response.ok()) {
+      throw new Error(`Failed to add user to team: ${response.status()} ${await response.text()}`);
+    }
+    return await response.json();
+  } finally {
+    await apiContext.dispose();
+  }
+}
+
+/**
+ * Remove a user from a team via the API.
+ *
+ * `DELETE /api/teams/{teamId}/users/{userId}` is the by-ids form, so the caller does
+ * not need the TeamUser row's own id. Dropping the membership is what turns
+ * `GET /api/exhibits/{id}/my-teams` into an *authoritative empty* for that user —
+ * `TeamService.GetMineByExhibitAsync` returns `[]` for a non-member — which is the
+ * state `signalr.service.ts`'s TeamCard predicate has to reason about.
+ */
+export async function apiRemoveUserFromTeam(teamId: string, userId: string): Promise<void> {
+  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
+  try {
+    const token = await getGalleryApiToken(apiContext);
+    const response = await apiContext.delete(
+      `${Services.Gallery.API}/api/teams/${teamId}/users/${userId}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!response.ok() && response.status() !== 404) {
+      throw new Error(`Failed to remove user from team: ${response.status()} ${await response.text()}`);
+    }
+  } finally {
+    await apiContext.dispose();
+  }
+}
+
+/** Create a card in a collection via the API. Cascade-deleted with the collection. */
+export async function apiCreateCard(
+  collectionId: string,
+  name: string,
+  options: { move?: number; inject?: number; description?: string } = {}
+): Promise<{ id: string; name: string }> {
+  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
+  try {
+    const token = await getGalleryApiToken(apiContext);
+    const response = await apiContext.post(`${Services.Gallery.API}/api/cards`, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      data: {
+        name,
+        description: options.description ?? 'Auto-seeded card for Playwright tests',
+        move: options.move ?? 0,
+        inject: options.inject ?? 0,
+        collectionId,
+      },
+    });
+    if (!response.ok()) {
+      throw new Error(`Failed to create card: ${response.status()} ${await response.text()}`);
+    }
+    return await response.json();
+  } finally {
+    await apiContext.dispose();
+  }
+}
+
+/**
+ * Rename a card via the API.
+ *
+ * `PUT /api/cards/{id}` broadcasts `CardUpdated`, which `signalr.service.ts` upserts
+ * into the (collection-scoped) card store. A card's name is rendered as the Wall's
+ * `mat-card-title`, so a rename is an independently-observable consequence of a
+ * SignalR frame — useful as a liveness marker on the same connection.
+ */
+export async function apiRenameCard(
+  cardId: string,
+  collectionId: string,
+  name: string,
+  options: { move?: number; inject?: number; description?: string } = {}
+): Promise<void> {
+  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
+  try {
+    const token = await getGalleryApiToken(apiContext);
+    const response = await apiContext.put(`${Services.Gallery.API}/api/cards/${cardId}`, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      data: {
+        id: cardId,
+        name,
+        description: options.description ?? 'Auto-seeded card for Playwright tests',
+        move: options.move ?? 0,
+        inject: options.inject ?? 0,
+        collectionId,
+      },
+    });
+    if (!response.ok()) {
+      throw new Error(`Failed to update card: ${response.status()} ${await response.text()}`);
+    }
+  } finally {
+    await apiContext.dispose();
+  }
+}
+
+/** Create a TeamCard via the API. Cascade-deleted with its team or card. */
+export async function apiCreateTeamCard(
+  teamId: string,
+  cardId: string,
+  options: { isShownOnWall?: boolean; canPostArticles?: boolean; move?: number; inject?: number } = {}
+): Promise<{ id: string }> {
+  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
+  try {
+    const token = await getGalleryApiToken(apiContext);
+    const response = await apiContext.post(`${Services.Gallery.API}/api/teamcards`, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      data: {
+        teamId,
+        cardId,
+        move: options.move ?? 0,
+        inject: options.inject ?? 0,
+        isShownOnWall: options.isShownOnWall ?? true,
+        canPostArticles: options.canPostArticles ?? true,
+      },
+    });
+    if (!response.ok()) {
+      throw new Error(`Failed to create team card: ${response.status()} ${await response.text()}`);
+    }
+    return await response.json();
+  } finally {
+    await apiContext.dispose();
+  }
+}
+
+/**
+ * Set a TeamCard's `isShownOnWall` via the API.
+ *
+ * `PUT /api/teamCards/{id}` broadcasts `TeamCardUpdated` to the TeamCard's own id
+ * group, `AdminExhibitGroup`, and *every user on the TeamCard's team*
+ * (`TeamCardHandler.GetGroups`) — so a user who belongs to teams in more than one
+ * exhibit receives these for all of them, which is exactly the cross-exhibit
+ * delivery that `isTeamCardInActiveExhibit` exists to filter.
+ *
+ * The PUT is a full replace, so every field has to be sent.
+ */
+export async function apiSetTeamCardShownOnWall(
+  teamCardId: string,
+  teamId: string,
+  cardId: string,
+  isShownOnWall: boolean,
+  options: { canPostArticles?: boolean; move?: number; inject?: number } = {}
+): Promise<void> {
+  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
+  try {
+    const token = await getGalleryApiToken(apiContext);
+    const response = await apiContext.put(`${Services.Gallery.API}/api/teamCards/${teamCardId}`, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      data: {
+        id: teamCardId,
+        teamId,
+        cardId,
+        move: options.move ?? 0,
+        inject: options.inject ?? 0,
+        isShownOnWall,
+        canPostArticles: options.canPostArticles ?? true,
+      },
+    });
+    if (!response.ok()) {
+      throw new Error(`Failed to update team card: ${response.status()} ${await response.text()}`);
+    }
+  } finally {
+    await apiContext.dispose();
+  }
+}
+
 /**
  * Set an exhibit's current move/inject via the API.
  *
