@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Gallery bug-fix report — 20 bugs fixed</title>
+<title>Gallery bug-fix report — 21 bugs fixed</title>
 <style>
   :root{
     --bg:#0f1115; --panel:#171a21; --panel2:#1d212a; --line:#2b303c;
@@ -103,19 +103,19 @@
 
 <header class="top">
   <h1>Gallery bug-fix report</h1>
-  <p class="sub">All <b>20</b> defects recorded in <code>gallery/gallery-app-bugs.md</code> fixed across
+  <p class="sub">All <b>21</b> defects recorded in <code>gallery/gallery-app-bugs.md</code> fixed across
   <code>gallery.api</code> and <code>gallery.ui</code>, one bug per commit, then the Playwright
   suite brought back into line with the corrected behaviour and verified against a live stack.
   <b>No open bugs remain.</b></p>
-  <p class="meta">2026-07-30 (§1–§16) &nbsp;·&nbsp; 2026-07-31 (A–D) &nbsp;·&nbsp; branches: gallery.api <b>bug-fixes</b>, gallery.ui <b>bug-fixes</b>, crucible-tests <b>gallery-test-fixes</b> &nbsp;·&nbsp; nothing pushed, no PR opened</p>
+  <p class="meta">2026-07-30 (§1–§16) &nbsp;·&nbsp; 2026-07-31 (A–E) &nbsp;·&nbsp; branches: gallery.api <b>bug-fixes</b>, gallery.ui <b>bug-fixes</b>, crucible-tests <b>gallery-test-fixes</b> &nbsp;·&nbsp; nothing pushed, no PR opened</p>
 
   <div class="tiles">
-    <div class="tile ok"><div class="n">20 / 20</div><div class="l">bugs fixed</div></div>
+    <div class="tile ok"><div class="n">21 / 21</div><div class="l">bugs fixed</div></div>
     <div class="tile api"><div class="n">7</div><div class="l">API commits</div></div>
-    <div class="tile ui"><div class="n">16</div><div class="l">UI commits</div></div>
-    <div class="tile ok"><div class="n">89</div><div class="l">passing (chromium)</div></div>
+    <div class="tile ui"><div class="n">17</div><div class="l">UI commits</div></div>
+    <div class="tile ok"><div class="n">91</div><div class="l">passing (chromium)</div></div>
     <div class="tile ok"><div class="n">0</div><div class="l">failing</div></div>
-    <div class="tile ok"><div class="n">4</div><div class="l">new regression specs</div></div>
+    <div class="tile ok"><div class="n">5</div><div class="l">new regression specs</div></div>
   </div>
 </header>
 
@@ -125,7 +125,7 @@
     <li><a href="#decisions">Decisions you made, and why they mattered</a></li>
     <li><a href="#api">The 7 API commits</a></li>
     <li><a href="#ui">The 12 UI commits (first pass)</a></li>
-    <li><a href="#followon">The 4 follow-on bugs (A–D)</a></li>
+    <li><a href="#followon">The 5 follow-on bugs (A–E)</a></li>
     <li><a href="#verify">Live-stack verification</a></li>
     <li><a href="#tests">Test-suite changes</a></li>
     <li><a href="#judgement">Where subagents pushed back</a></li>
@@ -136,10 +136,9 @@
 <div class="card w">
   <h4>Read this first if you saw the earlier version of this report</h4>
   <p>The first pass fixed
-  §1–§16 and <em>filed</em> four new bugs (A–D) found along the way. Those four are now fixed too, in
+  §1–§16 and <em>filed</em> four new bugs (A–D) found along the way. Those four are now fixed too, plus a fifth (E) that the whole-branch review found, in
   four more <code>gallery.ui</code> commits, and all four carry a regression spec that was verified to
-  fail against the pre-fix code. Section&nbsp;05 is new; the tiles, section&nbsp;06 and
-  section&nbsp;09 have been updated. Sections 03 and 04 describe the first pass and are unchanged.</p>
+  fail against the pre-fix code. Section&nbsp;05 is new; the tiles, section&nbsp;07 and section&nbsp;09 have been updated. Sections 03 and 04 describe the first pass and are unchanged.</p>
 </div>
 
 <h2 id="how"><span class="num">01</span>How the work was run</h2>
@@ -526,7 +525,7 @@ on success so a failure can be retried. The reviewer checked every settle path f
 dialog and confirmed loading state clears either way.</p>
 </div></details>
 
-<h2 id="followon"><span class="num">05</span>The 4 follow-on bugs (A–D)</h2>
+<h2 id="followon"><span class="num">05</span>The 5 follow-on bugs (A–E)</h2>
 <p class="lede">Found while fixing §1–§16 and filed rather than fixed, because each belonged in its
 own commit. Now fixed, in four more <code>gallery.ui</code> commits — and unlike the first pass,
 <b>every one carries a regression spec proven to fail against the pre-fix code</b>.</p>
@@ -538,8 +537,29 @@ own commit. Now fixed, in four more <code>gallery.ui</code> commits — and unli
 <tr><td class="sha">5eaa8b2</td><td><b>B</b> — <code>admin-teams</code> filter threw on a null <code>name</code>/<code>shortName</code></td><td>§5</td><td><code>teams/null-name-team-filter.spec.ts</code></td></tr>
 <tr><td class="sha">f585bdf</td><td><b>C</b> — admin <b>Exhibits</b> table had no <code>trackBy</code>, so a store emission collapsed the expanded detail panel</td><td>§10 (fixed Collections)</td><td><code>exhibits/exhibit-detail-panel-survives-update.spec.ts</code></td></tr>
 <tr><td class="sha">4fc3104</td><td><b>D</b> — <code>isTeamCardInActiveExhibit</code> inferred "is the store loaded for this exhibit?" from the store's <em>contents</em></td><td>§14 (pre-existing)</td><td><code>wall/foreign-exhibit-teamcard-ignored.spec.ts</code></td></tr>
+<tr><td class="sha">db05d15</td><td><b>E</b> — <code>admin-team-cards</code> dereferenced <code>getTeamName()</code>/<code>getCardName()</code> unguarded in its filter and sort</td><td>A and B, in the sibling panel</td><td><code>exhibits/null-name-card-teams-panel.spec.ts</code></td></tr>
 </tbody>
 </table>
+
+<div class="card w">
+  <h4>Bug E exists because the final review looked at A–D as a set</h4>
+  <p>A, B, C and D each passed their own review. The whole-branch review — one agent, seeing all
+  four together for the first time, asked what the set left <em>half-done</em> — found a fifth
+  instance of the same defect in the panel next door: <b>Card Teams</b>, the sibling sub-panel of
+  the same expanded exhibit row whose <b>Exhibit Teams</b> panel A and B had just fixed. Fed by the
+  same global team store, so the very null-name team A and B were fixed to tolerate crashes it.</p>
+  <p>Per-bug reviews structurally cannot find this: each one sees a single diff and correctly
+  reports it as complete. Worth noting A, B and C were <em>themselves</em> discovered the same way,
+  as siblings of the first pass's §5 and §10 — so this is the third time the pattern has paid out.
+  I verified E's reachability myself before dispatching a fix
+  (<code>mat-sort-header="teamId"</code> is a real clickable header,
+  <code>admin-team-cards.component.html:54</code>).</p>
+  <p><b>E's blast radius is genuinely wider than A's.</b> Unlike <code>admin-teams</code>,
+  <code>admin-team-cards</code> never filters its lists by <code>exhibitId</code> — it renders the
+  global store, and <code>GetByExhibitAsync</code> returns every card in the <em>collection</em>. So
+  one null-named team or card blanks that panel for every exhibit in the collection. The guard fixes
+  the crash; the unscoped rendering is pre-existing and was left alone.</p>
+</div>
 
 <details class="bug"><summary><span class="pill p-ui">UI</span>A &amp; B — null-name team crashes<span class="tag">b3bce54, 5eaa8b2</span></summary>
 <div class="body">
@@ -733,8 +753,28 @@ interception, so the app repo was never touched.</p>
 <tr><td><code>teams/null-name-team-filter</code></td><td>B</td><td><b>0 elements</b> after <code>fill()</code>, pre-filter baseline having passed</td></tr>
 <tr><td><code>exhibits/exhibit-detail-panel-survives-update</code></td><td>C</td><td><code>aria-expanded="false"</code>, <em>after</em> the sibling Move/Inject guards passed</td></tr>
 <tr><td><code>wall/foreign-exhibit-teamcard-ignored</code></td><td>D</td><td>2 cards on the Wall instead of 1, after the frame-delivery guard passed</td></tr>
+<tr><td><code>exhibits/null-name-card-teams-panel</code></td><td>E</td><td>A modal error sheet on row expansion — see below</td></tr>
 </tbody>
 </table>
+
+<div class="card w">
+  <h4>Two things the spec work taught us that the fixes alone did not</h4>
+  <p><b>A null-name crash is not a silent empty list.</b> The <code>TypeError</code> reaches
+  Angular's global <code>ErrorHandler</code>, which opens a modal <code>MatBottomSheet</code> naming
+  the error and <code>aria-hidden</code>s the admin screen behind it. For E it fires on <em>row
+  expansion alone</em>, before the sub-panel is even opened, because
+  <code>&lt;app-admin-team-cards&gt;</code> sits in the detail row's markup. So E's spec fails pre-fix
+  while merely opening the panel — a harsher symptom than the "list renders zero rows" that A and B
+  produce, and one that breaks every locator underneath it.</p>
+  <p><b>A regression spec can fail correctly pre-fix and still pass for the wrong reason.</b> Review
+  of D's spec found it would go <em>green against the buggy predicate</em> if one unasserted
+  precondition were ever lost: the foreign <em>card</em> has to be in the store for the leaked
+  foreign TeamCard to have anything to flip, since <code>setShownCardList</code> looks TeamCards up
+  by <code>cardId</code>. That step was performed but never asserted. It now asserts the
+  <code>CardUpdated</code> frame arrives. The general lesson: when the property under test is "X does
+  not happen", assert every precondition that makes X <em>possible</em> — otherwise the test can pass
+  because X was impossible, not because it was prevented.</p>
+</div>
 
 <p>All four assert the real symptom rather than "no crash". A and B pin exact row order in both sort
 directions, so they also fail on a dropped row or a sort that silently didn't run; B's no-match step
@@ -743,8 +783,8 @@ distinguishes "correctly filtered to zero" from "crashed to zero".</p>
 <h3>Result</h3>
 <pre>./run-tests.sh gallery        <span class="c">// chromium</span>
 
-  <span class="g">89 passed</span>   <span class="y">2 skipped</span>   <span class="g">0 failed</span></pre>
-<p>85 at the start of this work, plus the 4 new specs. The 2 remaining skips are <b>pre-existing
+  <span class="g">91 passed</span>   <span class="y">2 skipped</span>   <span class="g">0 failed</span></pre>
+<p>85 at the start of this work, plus the 5 new specs (E's covers two paths). The 2 remaining skips are <b>pre-existing
 test-plan limitations, unrelated to any of these fixes</b>: the archive view renders no status
 indicator at all (<code>status</code> appears only in a filter predicate and a sort comparator), so two
 "reflected in the archive view" scenarios cannot be asserted without asserting something the view does
@@ -839,7 +879,7 @@ were corrections to <em>me</em>.</p>
 
 <h2 id="notrun"><span class="num">09</span>What I did not do</h2>
 <ul class="tight">
-  <li><b>No PR, nothing pushed</b> — as you asked. All 27 commits are local on the three branches.</li>
+  <li><b>No PR, nothing pushed</b> — as you asked. All 28 commits are local on the three branches.</li>
   <li><b>No existing commits rebased or squashed.</b> The commits already on <code>bug-fixes</code>
   when I started were left untouched and built on. The one amend was to bug D's own commit, in the
   fix round that corrected its message — it was never pushed and stayed one commit.</li>
@@ -863,11 +903,11 @@ were corrections to <em>me</em>.</p>
 
 <footer>
   <p><span class="kbd">gallery.api</span> 7 commits on <code>bug-fixes</code> ·
-     <span class="kbd">gallery.ui</span> 16 commits on <code>bug-fixes</code> ·
+     <span class="kbd">gallery.ui</span> 17 commits on <code>bug-fixes</code> ·
      <span class="kbd">crucible-tests</span> <code>cd8668e</code>, <code>aff754a</code>,
      <code>0e090e3</code>, <code>19deffa</code> on <code>gallery-test-fixes</code></p>
   <p>All three working trees clean. <code>dotnet build</code> 0 errors (24 pre-existing package
-  warnings). <code>npm run build</code> exit 0. Gallery suite <b>89 passed / 0 failed / 2 skipped on
+  warnings). <code>npm run build</code> exit 0. Gallery suite <b>91 passed / 0 failed / 2 skipped on
   chromium</b> against a live Aspire stack; the 2 skips are pre-existing test-plan limitations (the
   archive view renders no status indicator at all), unrelated to any of this work.</p>
 </footer>

@@ -19,7 +19,7 @@ rather than merely re-run.
 
 ---
 
-## Status: all 20 recorded bugs are FIXED (§1–§16 on 2026-07-30, A–D on 2026-07-31)
+## Status: all 21 recorded bugs are FIXED (§1–§16 on 2026-07-30, A–E on 2026-07-31)
 
 Every defect recorded in this document has been fixed on the `bug-fixes` branch of the
 relevant repository and verified against a running Aspire stack. **There are no open bugs.**
@@ -29,7 +29,7 @@ commit bodies are the record.
 | Repo | Branch | Commits |
 |---|---|---|
 | `gallery.api` | `bug-fixes` | `87b546d`, `e008baa`, `9e2dda8`, `f50b391`, `784ae3d`, `46cfa54`, `7797209` |
-| `gallery.ui` | `bug-fixes` | `f0a8a3f`, `7f4a836`, `4d22a85`, `ee3c613`, `ca9acf5`, `5f08f25`, `0a37a10`, `9f7603a`, `8fb05c7`, `4fc3f98`, `023e011`, `8b85554`, `b3bce54`, `5eaa8b2`, `f585bdf`, `4fc3104` |
+| `gallery.ui` | `bug-fixes` | `f0a8a3f`, `7f4a836`, `4d22a85`, `ee3c613`, `ca9acf5`, `5f08f25`, `0a37a10`, `9f7603a`, `8fb05c7`, `4fc3f98`, `023e011`, `8b85554`, `b3bce54`, `5eaa8b2`, `f585bdf`, `4fc3104`, `db05d15` |
 
 Fixed, with the section number they were filed under: §1 admin-Exhibits sort/pagination,
 §2 Collections Copy no-op, §3 Wall advance error message, §4 collection JSON upload 500,
@@ -52,11 +52,11 @@ The suite was updated in the same pass: three `test.skip()`s were removed, five 
 deliberately asserted buggy behavior were flipped to assert the correct behavior, and the
 `.first()` / `toPass()` workarounds that existed only because of §10 and §14 were deleted.
 
-### The four follow-on bugs (A–D), fixed 2026-07-31
+### The five follow-on bugs (A–E), fixed 2026-07-31
 
-These were found *while* fixing the 16 above — each was the same class of defect as something
-just fixed, in a neighbouring code path the original entry didn't cover. All four were in
-`gallery.ui` only.
+These were found *while* fixing the 16 above (A–D) and during the whole-branch review of
+those fixes (E) — each was the same class of defect as something just fixed, in a
+neighbouring code path the original entry didn't cover. All five were in `gallery.ui` only.
 
 | Was | Defect | Commit |
 |---|---|---|
@@ -64,6 +64,15 @@ just fixed, in a neighbouring code path the original entry didn't cover. All fou
 | B | `admin-teams` filter predicate threw on a null `name`/`shortName`; a null-name team must still match on `shortName` | `5eaa8b2` |
 | C | admin **Exhibits** table had no `trackBy` (§10 fixed Collections only), so a store emission rebuilt every row and collapsed the expanded detail panel | `f585bdf` |
 | D | `isTeamCardInActiveExhibit` inferred "is the store loaded for this exhibit?" from the store's *contents*, so a store holding only a third exhibit's teams let a fourth exhibit's TeamCard through | `4fc3104` |
+| E | `admin-team-cards` (the **Card Teams** panel, sibling of the one A and B fixed) dereferenced `getTeamName()`/`getCardName()` unguarded in its filter predicate and its `teamId`/`cardId` sort cases | `db05d15` |
+
+E is worth reading if you are hunting for more of this class. It was found only by a
+whole-branch review looking at A–D *together* and asking what the set left half-done — the
+per-bug reviews structurally could not see it. Its blast radius is genuinely wider than A's:
+`admin-team-cards` never filters its lists by `exhibitId`, so it renders the global store, and
+`GetByExhibitAsync` returns every card in the *collection*. One null-named team or card blanks
+that panel for **every** exhibit in the collection, not just its own. The guard fixes the crash;
+the unscoped rendering is pre-existing and untouched.
 
 Two design decisions worth recording for D, because the obvious fix was not the one taken:
 
@@ -87,11 +96,25 @@ Two design decisions worth recording for D, because the obvious fix was not the 
   exhibit and holds no matching team — previously that accepted every foreign TeamCard for as
   long as the user stayed there.
 
-All four are now covered by tests (they were not when filed): `gallery/tests/teams/null-name-team-sort.spec.ts`,
+All five are now covered by tests (they were not when filed): `gallery/tests/teams/null-name-team-sort.spec.ts`,
 `null-name-team-filter.spec.ts`, `gallery/tests/exhibits/exhibit-detail-panel-survives-update.spec.ts`,
-and `gallery/tests/wall/foreign-exhibit-teamcard-ignored.spec.ts`. Each was verified to **fail
+`gallery/tests/exhibits/null-name-card-teams-panel.spec.ts`, and
+`gallery/tests/wall/foreign-exhibit-teamcard-ignored.spec.ts`. Each was verified to **fail
 against the pre-fix code and pass after**, by rebuilding the served bundle from pre-fix source
 (and, in review, by patching the served bundle in-flight via route interception).
+
+Two things learned while writing those specs, worth knowing before you write another:
+
+- **A null-name crash is not a silent empty list.** The `TypeError` reaches Angular's global
+  `ErrorHandler`, which opens a modal `MatBottomSheet` naming the error and `aria-hidden`s the
+  admin screen behind it. For E it fires on *row expansion alone*, before the sub-panel is
+  opened, because `<app-admin-team-cards>` is in the detail row's markup. A spec asserting only
+  "the list is empty" will fail in a confusing way; expect the sheet.
+- **A regression spec can pass for the wrong reason even when it fails correctly pre-fix.** The D
+  spec needed the foreign *card* in the store for the leaked foreign TeamCard to have anything to
+  flip. That precondition was unasserted, and with its effect absent the spec went green against
+  the buggy predicate. It now asserts the `CardUpdated` frame arrives. When the property under
+  test is "X does not happen", assert every precondition that makes X *possible*.
 
 ---
 
