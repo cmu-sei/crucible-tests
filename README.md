@@ -293,18 +293,18 @@ Some tests are skipped pending fixes in upstream Crucible services. These use `t
 | gallery | `Edit Existing Article - changes reflected in the archive view` (`gallery/tests/articles/edit-article.spec.ts`) | The archive template never renders `article.status`; it exists only in the filter predicate and sort comparator, so an edit cannot be observed there. The wall half is asserted in full. |
 | gallery | `Article Status Workflow - status displayed in the archive view` (`gallery/tests/articles/article-status.spec.ts`) | Same cause as above — the archive has no status indicator at all. All five statuses are asserted on the wall, which does render them. |
 
-Gallery app defects found while building its suite — including several where a test is
-deliberately pinned to current buggy behaviour rather than skipped — are written up in
-[gallery/gallery-app-bugs.md](gallery/gallery-app-bugs.md), with the exact source location,
-a suggested fix, and what to change in the tests once each is fixed. Two of the entries there
-are **retractions** of findings that turned out to be defects in this test suite rather than in
-Gallery; they are kept, with evidence, so nobody re-chases them.
+Gallery app defects found while building its suite are written up in
+[gallery/gallery-app-bugs.md](gallery/gallery-app-bugs.md). **All 20 recorded defects are now
+fixed** on the `bug-fixes` branch of `Gallery.Api` / `Gallery.Ui`, and each has a regression
+spec verified to fail against the pre-fix code — so no Gallery spec is currently pinned to
+buggy behaviour. That file now records what was fixed and why, and keeps a
+"Related non-bug findings" section worth reading before concluding you have found a new
+defect: several entries there are things that looked exactly like app bugs and were not,
+including two **retractions** of findings that were defects in this test suite rather than in
+Gallery.
 
-Several Gallery specs are deliberately pinned to current buggy behaviour rather than skipped —
-including one that asserts *no* success snackbar appears (§15) and one that asserts an exhibit
-click lands on the Archive rather than the Wall (§16). Those assertions will fail when the app is
-fixed, which is intended: they are tripwires, not accidents. Each carries a comment saying so.
-Do not "repair" them by loosening the assertion — check the bug file first.
+The two Gallery skips in the table above are test-plan limitations (the archive view renders no
+status indicator at all), not app bugs, and are not tracked in that file.
 
 ## Troubleshooting
 

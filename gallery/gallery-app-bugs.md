@@ -4,27 +4,32 @@ These are defects in the **Gallery application** (`/mnt/data/crucible/gallery`),
 tests. They were found while writing/repairing `gallery/tests/**`, and each was confirmed
 from source and/or against the running stack — none is inferred from a test failure alone.
 
-Where a bug blocks a documented test-plan scenario, the spec carries a `test.skip()` with a
-pointer to this file, and `README.md`'s "Skipped tests" table has a row. Where the app is
-merely *wrong but testable*, the test asserts the actual behavior and says so in a comment,
-so the assertion is deliberate rather than an accident to be "fixed" later.
+**As of 2026-07-31 there are no open bugs in this file.** Everything recorded here has been
+fixed and is covered by a regression spec. What remains below is the record of what was
+fixed and why, plus a "Related non-bug findings" section that is worth reading before
+concluding you have found a new defect — several entries there are things that looked
+exactly like app bugs and were not.
 
-**Please tell the test suite when these are fixed** — several tests are pinned to the current
-(buggy) behavior and should be tightened, not merely re-run. Each entry lists exactly what
-to change.
+When a new bug *is* found, the convention is: if it blocks a documented test-plan scenario,
+the spec carries a `test.skip()` pointing here and `README.md`'s "Skipped tests" table gets a
+row; if the app is merely *wrong but testable*, the spec asserts the actual behavior with a
+comment saying so, so the assertion reads as deliberate rather than as an accident to be
+"fixed" later. Either way, record what a fix should change, so the suite can be tightened
+rather than merely re-run.
 
 ---
 
-## Status: the original 16 bugs are all FIXED (2026-07-30)
+## Status: all 20 recorded bugs are FIXED (§1–§16 on 2026-07-30, A–D on 2026-07-31)
 
-The 16 defects originally recorded here were fixed on the `bug-fixes` branch of each
-repository and verified against a running Aspire stack. They have been removed from this
-document; the sections below track only what is still **open**.
+Every defect recorded in this document has been fixed on the `bug-fixes` branch of the
+relevant repository and verified against a running Aspire stack. **There are no open bugs.**
+Fixed entries are removed from this file rather than kept as history — git history and the
+commit bodies are the record.
 
 | Repo | Branch | Commits |
 |---|---|---|
 | `gallery.api` | `bug-fixes` | `87b546d`, `e008baa`, `9e2dda8`, `f50b391`, `784ae3d`, `46cfa54`, `7797209` |
-| `gallery.ui` | `bug-fixes` | `f0a8a3f`, `7f4a836`, `4d22a85`, `ee3c613`, `ca9acf5`, `5f08f25`, `0a37a10`, `9f7603a`, `8fb05c7`, `4fc3f98`, `023e011`, `8b85554` |
+| `gallery.ui` | `bug-fixes` | `f0a8a3f`, `7f4a836`, `4d22a85`, `ee3c613`, `ca9acf5`, `5f08f25`, `0a37a10`, `9f7603a`, `8fb05c7`, `4fc3f98`, `023e011`, `8b85554`, `b3bce54`, `5eaa8b2`, `f585bdf`, `4fc3104` |
 
 Fixed, with the section number they were filed under: §1 admin-Exhibits sort/pagination,
 §2 Collections Copy no-op, §3 Wall advance error message, §4 collection JSON upload 500,
@@ -47,117 +52,78 @@ The suite was updated in the same pass: three `test.skip()`s were removed, five 
 deliberately asserted buggy behavior were flipped to assert the correct behavior, and the
 `.first()` / `toPass()` workarounds that existed only because of §10 and §14 were deleted.
 
----
+### The four follow-on bugs (A–D), fixed 2026-07-31
 
-## Open bugs
+These were found *while* fixing the 16 above — each was the same class of defect as something
+just fixed, in a neighbouring code path the original entry didn't cover. All four were in
+`gallery.ui` only.
 
-Found 2026-07-30 while fixing the 16 above. All three are the *same class* of defect as
-something that was just fixed, in a neighbouring code path that the original entry did not
-cover. None is fixed, and none currently blocks a test.
+| Was | Defect | Commit |
+|---|---|---|
+| A | `admin-teams` sort comparator threw on a team with a null `name` (the `case 'name'` arm §5 deliberately left alone), blanking the whole team list | `b3bce54` |
+| B | `admin-teams` filter predicate threw on a null `name`/`shortName`; a null-name team must still match on `shortName` | `5eaa8b2` |
+| C | admin **Exhibits** table had no `trackBy` (§10 fixed Collections only), so a store emission rebuilt every row and collapsed the expanded detail panel | `f585bdf` |
+| D | `isTeamCardInActiveExhibit` inferred "is the store loaded for this exhibit?" from the store's *contents*, so a store holding only a third exhibit's teams let a fourth exhibit's TeamCard through | `4fc3104` |
 
-### A. `admin-teams` sort crashes on a team with no name
+Two design decisions worth recording for D, because the obvious fix was not the one taken:
 
-**Severity:** same as the fixed §5 — an admin page renders no rows. Reachable by a click.
+- The fix **records** which exhibit the store was loaded for (`TeamDataService.loadedExhibitId`)
+  rather than clearing the store on exhibit change, as this document originally suggested.
+  Clearing shared state that admin's `loadByExhibitId` also writes would have made the admin
+  Teams panel dependent on call ordering in `toggleExpand`.
+- The marker is **set on success, cleared on error, cleared in `unload()`, and untouched while
+  a load is in flight**. An earlier revision also cleared it on load *entry*; that was removed
+  because `home-app` re-fires `loadMine()` on every `queryParamMap` emission — i.e. on every
+  Wall/Archive toggle and every card click — which opened a one-RTT accept window for foreign
+  TeamCards on essentially every navigation. The explicit error-path clear is load-bearing:
+  without it, a failed load following a successful one leaves the marker confident over an
+  emptied store, and the predicate then rejects every TeamCard for that exhibit.
 
-**File:** `gallery.ui/src/app/components/admin/admin-teams/admin-teams.component.ts`
-(`sortTeams()`, `case 'name'`)
+  The predicate deliberately still **accepts** when the store describes some *other* exhibit
+  (the literal shape this document filed as D). The store genuinely cannot answer whether a
+  team of the active exhibit exists, and `8b85554` exists because an earlier attempt at this
+  predicate failed *closed* and dropped legitimate events. Uncertainty must accept. What the
+  fix actually closes is the case where the store was authoritatively loaded for the active
+  exhibit and holds no matching team — previously that accepted every foreign TeamCard for as
+  long as the user stayed there.
 
-```ts
-(a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1) *
-```
-
-`Team.name` is `name?: string | null` (`gallery.ui/src/app/generated/api/model/team.ts:32`),
-so this is the identical unguarded `.toLowerCase()` that §5 fixed one case below, in the
-`default`/`shortName` branch. It was left out of the §5 fix deliberately, to keep that commit
-to one defect.
-
-**Reachable:** yes, independently confirmed — `admin-teams.component.html:22` renders
-`<div class="header-cell one-cell" mat-sort-header="name">`, a real clickable sortable
-column header. Because the team store is global and the list re-sorts on every store
-emission, one null-name team makes the whole list throw mid-render and show nothing.
-
-**Suggested fix.** Guard it exactly as the `email` and (now) `shortName` cases are:
-`const aName = a.name ? a.name.toLowerCase() : '';`
-
-**Test impact.** Not covered. Worth a case once fixed.
-
-### B. `admin-teams` filter crashes on a null name or short name
-
-**Severity:** same class as A; needs a non-empty search string as well as a null-valued team.
-
-**File:** `gallery.ui/src/app/components/admin/admin-teams/admin-teams.component.ts`
-(`getFilteredTeams()`, the filter predicate — around lines 180-181)
-
-```ts
-a.shortName.toLowerCase().includes(...)
-a.name.toLowerCase().includes(...)
-```
-
-Both fields are nullable per the generated model; neither is guarded.
-
-**Reachable:** yes — `getFilteredTeams` is called from the team-store subscription, from
-`sortChanged`, and from `applyFilter`, which is wired to the template's search input. The
-predicate only runs once `this.filterString` is non-empty, so it needs one extra
-precondition compared to A, but it is still user-triggerable.
-
-**Suggested fix.** Same guard as A, applied to both fields in the predicate.
-
-**Test impact.** Not covered.
-
-### C. Admin → Exhibits table has no `trackBy`
-
-**Severity:** same as the fixed §10 — a rebuilt row destroys any expanded detail panel.
-
-**Files:**
-- `gallery.ui/src/app/components/admin/admin-exhibits/admin-exhibits.component.html`
-  (the `*matRowDef` row definition)
-- `gallery.ui/src/app/components/admin/admin-collections/admin-collections.component.html`
-  is the reference — it now has `[trackBy]="trackByFn"` and a matching component method.
-
-§10 fixed the **Collections** table only. The **Exhibits** table has the identical gap,
-confirmed while fixing §10 and again during review. It was left out to keep that commit to
-one defect.
-
-**Suggested fix.** Mirror the §10 fix: add `[trackBy]` keyed on `exhibit.id` to the row
-definition plus the component method. Note `trackBy` is a single table-level input shared by
-all row definitions, so one binding covers a `multiTemplateDataRows` table's detail row too.
-
-**Test impact.** Some panel-interaction scaffolding in `gallery/tests/cards/` and
-`gallery/tests/articles/` was checked against this during the §10 cleanup and confirmed
-*not* to be protecting against the Exhibits table, so nothing is currently pinned to it.
-If a spec ever expands an Exhibits row and loses the panel, this is why.
-
-### D. Shared `TeamStore` can hold a third exhibit's teams
-
-**Severity:** Low, and pre-existing. Noted during the §14 fix review rather than introduced
-by it.
-
-**Files:** `gallery.ui/src/app/services/signalr.service.ts` (`isTeamCardInActiveExhibit`),
-`gallery.ui/src/app/components/admin/admin-exhibits/admin-exhibits.component.ts` (~`:218`,
-`loadByExhibitId`), `gallery.ui/src/app/data/team/team-data.service.ts`
-
-The §14 fix distinguishes "team absent because the store is stale" from "team absent because
-it belongs to another exhibit" by asking whether the store holds *any* team of the active
-exhibit. That is correct for the two-exhibit case it was built for. But the team store is
-shared and is never cleared on exhibit exit (`unload()` has no callers), and admin's
-`loadByExhibitId` writes the same store. So if the store holds only some *unrelated third*
-exhibit's teams while the active exhibit is B, the discriminator is false and an event for a
-*fourth* exhibit is accepted rather than dropped.
-
-This is the accept-on-uncertainty design used elsewhere in that file — it fails open, so the
-worst case is the pre-fix behavior for an unusual store state, never a dropped legitimate
-event.
-
-**Suggested fix.** Clear the team store when the active exhibit changes, so the store's
-contents always describe exactly one exhibit. That would also let the predicate be a
-straightforward `exhibitId` comparison.
-
-**Test impact.** None; not covered.
+All four are now covered by tests (they were not when filed): `gallery/tests/teams/null-name-team-sort.spec.ts`,
+`null-name-team-filter.spec.ts`, `gallery/tests/exhibits/exhibit-detail-panel-survives-update.spec.ts`,
+and `gallery/tests/wall/foreign-exhibit-teamcard-ignored.spec.ts`. Each was verified to **fail
+against the pre-fix code and pass after**, by rebuilding the served bundle from pre-fix source
+(and, in review, by patching the served bundle in-flight via route interception).
 
 ---
 
 ## Related non-bug findings (context, no action needed)
 
+- **`POST /api/teams` accepts a null `name` and a null `shortName`.** Verified live: both
+  omitted and explicitly `null` return **201** and read back as `null` from
+  `GET /api/exhibits/{id}/teams`. `TeamEntity.Name`/`ShortName` carry no `[Required]` and the
+  columns are nullable. This is what makes bugs A and B reachable at all, and it is how their
+  regression specs seed. Arguably the API should require a display name — a hardening
+  suggestion, not a defect. If it ever starts rejecting them, those two specs become
+  unreachable and should be re-examined rather than deleted.
+- **TeamCard SignalR events fan out wider than "the team's own users".**
+  `TeamCardHandler.GetGroups` sends to the TeamCard's id, `MainHub.EXHIBIT_GROUP`
+  (`"AdminExhibitGroup"`), *and* every user in the TeamCard's team. Confirmed by websocket
+  frame capture that a user viewing exhibit B does receive a `TeamCardUpdated` for a team of
+  exhibit A via the per-user group, using `Join` (not `JoinAdmin`). This is why the client-side
+  exhibit-scoping predicate has to exist. Related, and worth knowing: `startConnection` never
+  stops the previous connection when `applicationArea` changes, so an admin→home navigation can
+  leave a connection still joined to `EXHIBIT_GROUP` while the handlers evaluate as `home`.
+- **A TeamCard event only reaches users on that TeamCard's team.** Corollary of the above, and
+  a trap when writing tests: remove a user from a team and their client legitimately stops
+  receiving that team's TeamCard events. A control assertion that depends on receiving them
+  must run *before* any membership change.
+- **`npm run lint` in `gallery.ui` is broken for every file**, not just the ones you are
+  editing: ESLint 9 rejects the `env` key in the legacy `.eslintrc.js`
+  (`A config object is using the "env" key, which is not supported in flat config system`).
+  `npm run build` is therefore the only working automated gate in that repo. Migrating to flat
+  config is out of scope for a bug-fix commit but is worth doing.
+- **`ng build` deletes `dist/browser/serve.json`**, which `npx serve` needs for SPA rewrites.
+  If you rebuild the UI bundle by hand to test a change against `:4723`, recreate that file or
+  deep links 404.
 - **`POST /api/exhibits/json` copies the whole collection.** `UploadJsonAsync` calls
   `privateExhibitCopyAsync(..., copyTheCollection: true)`, so importing an exhibit creates a
   *new* collection. That is intended behaviour, but it silently doubled test data until the

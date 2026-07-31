@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Gallery bug-fix report — 2026-07-30</title>
+<title>Gallery bug-fix report — 20 bugs fixed</title>
 <style>
   :root{
     --bg:#0f1115; --panel:#171a21; --panel2:#1d212a; --line:#2b303c;
@@ -103,18 +103,19 @@
 
 <header class="top">
   <h1>Gallery bug-fix report</h1>
-  <p class="sub">All 16 defects recorded in <code>gallery/gallery-app-bugs.md</code> fixed across
+  <p class="sub">All <b>20</b> defects recorded in <code>gallery/gallery-app-bugs.md</code> fixed across
   <code>gallery.api</code> and <code>gallery.ui</code>, one bug per commit, then the Playwright
-  suite brought back into line with the corrected behaviour and verified against a live stack.</p>
-  <p class="meta">2026-07-30 &nbsp;·&nbsp; branches: gallery.api <b>bug-fixes</b>, gallery.ui <b>bug-fixes</b>, crucible-tests <b>gallery-test-fixes</b> &nbsp;·&nbsp; nothing pushed, no PR opened</p>
+  suite brought back into line with the corrected behaviour and verified against a live stack.
+  <b>No open bugs remain.</b></p>
+  <p class="meta">2026-07-30 (§1–§16) &nbsp;·&nbsp; 2026-07-31 (A–D) &nbsp;·&nbsp; branches: gallery.api <b>bug-fixes</b>, gallery.ui <b>bug-fixes</b>, crucible-tests <b>gallery-test-fixes</b> &nbsp;·&nbsp; nothing pushed, no PR opened</p>
 
   <div class="tiles">
-    <div class="tile ok"><div class="n">16 / 16</div><div class="l">bugs fixed</div></div>
+    <div class="tile ok"><div class="n">20 / 20</div><div class="l">bugs fixed</div></div>
     <div class="tile api"><div class="n">7</div><div class="l">API commits</div></div>
-    <div class="tile ui"><div class="n">12</div><div class="l">UI commits</div></div>
-    <div class="tile ok"><div class="n">85</div><div class="l">tests passing</div></div>
+    <div class="tile ui"><div class="n">16</div><div class="l">UI commits</div></div>
+    <div class="tile ok"><div class="n">89</div><div class="l">passing (chromium)</div></div>
     <div class="tile ok"><div class="n">0</div><div class="l">failing</div></div>
-    <div class="tile open"><div class="n">4</div><div class="l">new bugs filed</div></div>
+    <div class="tile ok"><div class="n">4</div><div class="l">new regression specs</div></div>
   </div>
 </header>
 
@@ -123,18 +124,27 @@
     <li><a href="#how">How the work was run</a></li>
     <li><a href="#decisions">Decisions you made, and why they mattered</a></li>
     <li><a href="#api">The 7 API commits</a></li>
-    <li><a href="#ui">The 12 UI commits</a></li>
+    <li><a href="#ui">The 12 UI commits (first pass)</a></li>
+    <li><a href="#followon">The 4 follow-on bugs (A–D)</a></li>
     <li><a href="#verify">Live-stack verification</a></li>
     <li><a href="#tests">Test-suite changes</a></li>
     <li><a href="#judgement">Where subagents pushed back</a></li>
-    <li><a href="#open">New bugs found (still open)</a></li>
     <li><a href="#notrun">What I did not do</a></li>
   </ol>
 </nav>
 
+<div class="card w">
+  <h4>Read this first if you saw the earlier version of this report</h4>
+  <p>The first pass fixed
+  §1–§16 and <em>filed</em> four new bugs (A–D) found along the way. Those four are now fixed too, in
+  four more <code>gallery.ui</code> commits, and all four carry a regression spec that was verified to
+  fail against the pre-fix code. Section&nbsp;05 is new; the tiles, section&nbsp;06 and
+  section&nbsp;09 have been updated. Sections 03 and 04 describe the first pass and are unchanged.</p>
+</div>
+
 <h2 id="how"><span class="num">01</span>How the work was run</h2>
 <p class="lede">Subagent-driven development: one implementer per bug, then an independent reviewer
-per bug, with a ledger surviving between them. 13 implementation tasks, 13 reviews, one fix round.</p>
+per bug, with a ledger surviving between them. Across both passes: 19 implementation tasks, 19 reviews, two fix rounds.</p>
 
 <p>Each bug became a task brief with the cause pre-diagnosed from source, so implementers never had
 to re-derive it. Each finished commit went to a fresh reviewer that got the brief, the implementer's
@@ -149,9 +159,17 @@ with a real defect and went through one fix round; details in
 alone was touched by three separate bugs (§2, §10, §7), so those were serialised and each implementer
 was told the others' commits already existed and must not be reverted or swept in.</p>
 
+<p>The second pass (A–D) ran the same way: six more tasks, six reviews, one more fix round on bug D.
+Two changes to how it was run, both because of what the first pass revealed. First, <b>every fix got a
+regression spec</b>, and each spec had to be demonstrated to fail against the pre-fix code — not merely
+to pass against the fixed one. Second, where an implementer or reviewer raised a substantive objection,
+I verified it in the source myself before acting on it, rather than relaying it downstream. That
+mattered twice: once to confirm a reviewer's finding was real before requiring a fix, and once to
+confirm an implementer's deviation from my own brief was correct.</p>
+
 <h2 id="decisions"><span class="num">02</span>Decisions you made, and why they mattered</h2>
-<p class="lede">Four questions had no single defensible answer, so I asked before dispatching any
-work. Each one changed the resulting code.</p>
+<p class="lede">Six questions had no single defensible answer, so I asked before dispatching the work.
+Each one changed the resulting code — and one of them corrected me.</p>
 
 <div class="card q">
   <h4>§11 — deleting a card that still has articles</h4>
@@ -208,6 +226,38 @@ work. Each one changed the resulting code.</p>
   identically. So it was a no-op and was discarded; the regenerated model snapshot was committed so
   the next developer's migration stays clean. Had we skipped the check, we'd have either shipped a
   pointless migration or left the snapshot lying.</p>
+</div>
+
+<div class="card q">
+  <h4>D — how to fix the shared <code>TeamStore</code> (second pass)</h4>
+  <p class="lbl">Your choice</p>
+  <p><b>Track which exhibit the store was loaded for</b> and compare against that — rather than
+  clearing the store whenever the active exhibit changes, which is what the bug document itself
+  suggested.</p>
+  <p class="lbl">Why it mattered</p>
+  <p>The document's suggestion would have worked and would have let the predicate become a plain
+  <code>exhibitId</code> comparison — but the team store is shared, and admin's
+  <code>toggleExpand</code> calls <code>setActive(id)</code> immediately before
+  <code>loadByExhibitId(id)</code>. Clearing on active-exhibit change would have made the admin Teams
+  panel silently dependent on that call ordering. Your choice left every existing write path alone and
+  made the predicate exact instead of heuristic. It also turned out to be the harder option to get
+  right — see bug D in <a href="#followon">the follow-on section</a> for the two traps it took a review
+  and a fix round to clear.</p>
+</div>
+
+<div class="card q">
+  <h4>Coverage — which fixes get a regression spec (second pass)</h4>
+  <p class="lbl">Your choice</p>
+  <p><b>All four.</b> You overrode my initial recommendation, which was to cover only A and B and skip
+  C and D as having no observable UI signal.</p>
+  <p class="lbl">Why it mattered</p>
+  <p>I was wrong, and it's the most consequential correction in this pass. Both C and D turned out to be
+  observable — but only via non-obvious signals that had to be found rather than assumed. C's spec
+  mutates a <em>sibling</em> exhibit and asserts that sibling's own cells change before checking the
+  panel, which is what makes it a real test instead of a vacuous one. D's spec required capturing
+  websocket frames to first establish that a foreign <code>TeamCardUpdated</code> even reaches the
+  browser. Neither would exist if I'd had my way, and the two hardest bugs in this pass would have
+  shipped with no regression cover at all.</p>
 </div>
 
 <h2 id="api"><span class="num">03</span>The 7 API commits</h2>
@@ -343,7 +393,7 @@ card's collection. The unique index on <code>TeamUsers</code> is on the <em>pair
 was provably safe given the join-path constraint — see <a href="#judgement">§07</a>.</p>
 </div></details>
 
-<h2 id="ui"><span class="num">04</span>The 12 UI commits</h2>
+<h2 id="ui"><span class="num">04</span>The 12 UI commits (first pass)</h2>
 <p class="lede">Branch <code>bug-fixes</code> on <code>gallery.ui</code>. Oldest first.</p>
 
 <table>
@@ -476,7 +526,103 @@ on success so a failure can be retried. The reviewer checked every settle path f
 dialog and confirmed loading state clears either way.</p>
 </div></details>
 
-<h2 id="verify"><span class="num">05</span>Live-stack verification</h2>
+<h2 id="followon"><span class="num">05</span>The 4 follow-on bugs (A–D)</h2>
+<p class="lede">Found while fixing §1–§16 and filed rather than fixed, because each belonged in its
+own commit. Now fixed, in four more <code>gallery.ui</code> commits — and unlike the first pass,
+<b>every one carries a regression spec proven to fail against the pre-fix code</b>.</p>
+
+<table>
+<thead><tr><th>Commit</th><th>Bug</th><th>Same class as</th><th>Regression spec</th></tr></thead>
+<tbody>
+<tr><td class="sha">b3bce54</td><td><b>A</b> — <code>admin-teams</code> sort threw on a null <code>name</code>, blanking the whole team list</td><td>§5 (fixed the <code>shortName</code> arm)</td><td><code>teams/null-name-team-sort.spec.ts</code></td></tr>
+<tr><td class="sha">5eaa8b2</td><td><b>B</b> — <code>admin-teams</code> filter threw on a null <code>name</code>/<code>shortName</code></td><td>§5</td><td><code>teams/null-name-team-filter.spec.ts</code></td></tr>
+<tr><td class="sha">f585bdf</td><td><b>C</b> — admin <b>Exhibits</b> table had no <code>trackBy</code>, so a store emission collapsed the expanded detail panel</td><td>§10 (fixed Collections)</td><td><code>exhibits/exhibit-detail-panel-survives-update.spec.ts</code></td></tr>
+<tr><td class="sha">4fc3104</td><td><b>D</b> — <code>isTeamCardInActiveExhibit</code> inferred "is the store loaded for this exhibit?" from the store's <em>contents</em></td><td>§14 (pre-existing)</td><td><code>wall/foreign-exhibit-teamcard-ignored.spec.ts</code></td></tr>
+</tbody>
+</table>
+
+<details class="bug"><summary><span class="pill p-ui">UI</span>A &amp; B — null-name team crashes<span class="tag">b3bce54, 5eaa8b2</span></summary>
+<div class="body">
+<p class="lbl">Cause</p>
+<p><code>Team.name</code> and <code>Team.shortName</code> are both <code>string | null</code> in the
+generated model. §5 guarded the <code>default</code>/<code>shortName</code> arm of the sort switch;
+the <code>case 'name'</code> arm and the filter predicate were left unguarded, deliberately, to keep
+that commit to one defect.</p>
+<p class="lbl">Why it blanked the whole list</p>
+<p>The component re-sorts on every team-store emission, so the <code>TypeError</code> escaped
+<code>Array.sort</code> and <code>sortedTeams</code> was never reassigned — the template rendered
+<b>zero rows</b>, not just a misplaced one. That is the symptom the specs assert, which makes them
+strictly stronger than a crash check.</p>
+<p class="lbl">Verified reachable, not assumed</p>
+<p>I probed the live API first: <code>POST /api/teams</code> with <code>name</code> omitted
+<em>or</em> explicitly <code>null</code> returns <b>201</b> and reads back as <code>null</code>. Had
+it rejected them, both bugs would have been unreachable in practice and the right answer would have
+been to say so rather than write specs.</p>
+<p class="lbl">One thing the specs deliberately assert</p>
+<p>A null-name team must still <em>match the filter on its <code>shortName</code></em>. A guard that
+neutralised the whole predicate would stop the crash while silently breaking search — passing a
+"doesn't throw" test while being wrong. The reviewer hand-traced all five null/empty combinations to
+confirm the implementation takes the independent-OR-branches form.</p>
+</div></details>
+
+<details class="bug"><summary><span class="pill p-ui">UI</span>C — Exhibits table row rebuild<span class="tag">f585bdf</span></summary>
+<div class="body">
+<p class="lbl">Cause</p>
+<p>Without <code>trackBy</code>, CdkTable's differ has no stable row identity, so every exhibit-store
+emission diffs each row as removed-then-added and destroys its view. That matters here because the
+sub-panels inside the expanded detail row are <code>mat-expansion-panel</code>s with no
+<code>[expanded]</code> binding — their open state lives in the destroyed DOM, so the panel comes
+back collapsed and any work in progress in it is lost.</p>
+<p class="lbl">The interesting question, answered from source</p>
+<p>The table is <code>multiTemplateDataRows</code>, so each exhibit backs <em>two</em> rendered rows
+and a bare <code>item.id</code> returns the <b>same key for both</b>. A reviewer traced the installed
+<code>@angular/cdk</code> and <code>@angular/core</code> to confirm that is correct rather than a
+duplicate-key bug: <code>DefaultIterableDiffer</code> supports duplicate track keys via
+<code>_DuplicateMap</code>, resolving the two consecutive render rows to distinct records. Since
+<code>trackBy</code> is a single table-level input consuming the already-interleaved render rows,
+binding once is not a style choice — it is the only API surface that exists.</p>
+<p class="lbl">Proven non-vacuous two ways</p>
+<p>A <code>trackBy</code> spec can pass for the wrong reason if the store emission never actually
+reaches the component. So the spec mutates a <em>sibling</em> exhibit and asserts that sibling's
+Move/Inject cells change <b>before</b> touching the panel — those cells are re-rendered only by the
+subscription under test. Review confirmed the ordering is load-bearing by emptying the SignalR
+handler: the spec then failed <em>at the guard</em> rather than passing vacuously.</p>
+</div></details>
+
+<details class="bug"><summary><span class="pill p-ui">UI</span>D — TeamCard events scoped by store contents<span class="tag">4fc3104</span></summary>
+<div class="body">
+<p class="lbl">Cause</p>
+<p>§14's predicate resolved a TeamCard's exhibit through its Team, and when the team was absent it
+guessed "stale vs foreign" by asking whether the store held <em>any</em> team of the active exhibit.
+The team store is shared — admin's <code>loadByExhibitId</code> writes it too, and nothing clears it
+on exhibit exit — so its contents are not a reliable statement about the active exhibit.</p>
+<p class="lbl">The fix, and why not the obvious one</p>
+<p>It <b>records</b> which exhibit the store was loaded for rather than clearing the store on exhibit
+change (this document's original suggestion). Clearing shared state that admin also writes would have
+made the admin Teams panel dependent on call ordering inside <code>toggleExpand</code>.</p>
+<p class="lbl">Where this nearly went wrong — twice</p>
+<p>The first revision also cleared the marker on load <em>entry</em>. That looked safer and was
+worse: <code>home-app</code> re-fires <code>loadMine()</code> on <em>every</em> query-param emission —
+every Wall/Archive toggle, every card click — so it opened a one-RTT window accepting foreign
+TeamCards on essentially every navigation, where the old code rejected them. I verified that re-fire
+in the source before requiring its removal.</p>
+<p>Removing it then exposed a second trap the implementer caught and I had not asked for: with no
+entry clear, a <em>failed</em> load following a successful one leaves the marker confident over an
+emptied store, and the predicate rejects every TeamCard for that exhibit. So the error paths now clear
+it explicitly. Final discipline: <b>set on success, cleared on error, cleared in <code>unload()</code>,
+untouched in flight.</b></p>
+<p class="lbl">What it deliberately does not fix</p>
+<p>When the store describes some <em>other</em> exhibit — the literal shape this document filed as D —
+the predicate still <b>accepts</b>. The store genuinely cannot answer whether a team of the active
+exhibit exists, and <code>8b85554</code> exists precisely because an earlier attempt failed
+<em>closed</em> and dropped legitimate events. Uncertainty must accept. What the fix closes is the
+case where the store was authoritatively loaded for the active exhibit and holds no matching team —
+which previously accepted every foreign TeamCard for as long as the user stayed there. The first
+commit body claimed the opposite; that was caught in review and corrected, since a misleading
+explanation of a high-risk predicate is a defect in its own right.</p>
+</div></details>
+
+<h2 id="verify"><span class="num">06</span>Live-stack verification</h2>
 <p class="lede">Beyond the E2E suite, I exercised the API fixes directly against the running stack —
 because several were intermittent or status-code-only, which specs would not have distinguished.</p>
 
@@ -515,7 +661,7 @@ because several were intermittent or status-code-only, which specs would not hav
   file part arguably ought to be a 400 rather than a 500 in its own right.</p>
 </div>
 
-<h2 id="tests"><span class="num">06</span>Test-suite changes</h2>
+<h2 id="tests"><span class="num">07</span>Test-suite changes</h2>
 <p class="lede">One commit on <code>gallery-test-fixes</code>: <code>cd8668e</code>, 21 files,
 +375 −1456. The deletions are the point — most of this work was removing scaffolding that existed
 only to accommodate bugs.</p>
@@ -572,21 +718,89 @@ loudly. That design worked — each one failed exactly as intended.</p>
   removing it would have introduced a real flake.</p>
 </div>
 
-<h3>Result</h3>
-<pre>npx playwright test gallery/tests/ --project=chromium --workers=1
+<h3>Four new regression specs (second pass)</h3>
+<p>The first pass changed existing specs; the second pass <em>added</em> four, one per bug. Each was
+demonstrated to <b>fail against the pre-fix code and pass after</b> — which is the whole point, and is
+stronger than the first pass managed. The mechanism: <code>:4723</code> serves
+<code>dist/browser</code> via <code>npx serve</code>, so the bundle can be rebuilt from pre-fix source
+in seconds; review instead patched the served <code>main.js</code> in-flight via Playwright route
+interception, so the app repo was never touched.</p>
 
-  <span class="g">85 passed</span>   <span class="y">2 skipped</span>   <span class="g">0 failed</span>   (3.0m)</pre>
-<p>The 2 remaining skips are <b>pre-existing test-plan limitations, unrelated to these fixes</b>: the
-archive view renders no status indicator at all (<code>status</code> appears only in a filter
-predicate and a sort comparator), so two "reflected in the archive view" scenarios cannot be
-asserted without asserting something the view does not show.</p>
+<table>
+<thead><tr><th>Spec</th><th>Pins</th><th>Pre-fix failure observed</th></tr></thead>
+<tbody>
+<tr><td><code>teams/null-name-team-sort</code></td><td>A</td><td>Full Name column → <b>0 elements</b>, after a 3-row baseline passed — so the collapse is attributable to the sort click, not a load failure</td></tr>
+<tr><td><code>teams/null-name-team-filter</code></td><td>B</td><td><b>0 elements</b> after <code>fill()</code>, pre-filter baseline having passed</td></tr>
+<tr><td><code>exhibits/exhibit-detail-panel-survives-update</code></td><td>C</td><td><code>aria-expanded="false"</code>, <em>after</em> the sibling Move/Inject guards passed</td></tr>
+<tr><td><code>wall/foreign-exhibit-teamcard-ignored</code></td><td>D</td><td>2 cards on the Wall instead of 1, after the frame-delivery guard passed</td></tr>
+</tbody>
+</table>
+
+<p>All four assert the real symptom rather than "no crash". A and B pin exact row order in both sort
+directions, so they also fail on a dropped row or a sort that silently didn't run; B's no-match step
+distinguishes "correctly filtered to zero" from "crashed to zero".</p>
+
+<h3>Result</h3>
+<pre>./run-tests.sh gallery        <span class="c">// chromium</span>
+
+  <span class="g">89 passed</span>   <span class="y">2 skipped</span>   <span class="g">0 failed</span></pre>
+<p>85 at the start of this work, plus the 4 new specs. The 2 remaining skips are <b>pre-existing
+test-plan limitations, unrelated to any of these fixes</b>: the archive view renders no status
+indicator at all (<code>status</code> appears only in a filter predicate and a sort comparator), so two
+"reflected in the archive view" scenarios cannot be asserted without asserting something the view does
+not show.</p>
+<p>Firefox additionally shows 3 failures (<code>archive-combined-filters</code>,
+<code>concurrent-operations</code>, <code>delete-system-role</code>) — all <code>locator.click</code>
+timeouts, all confirmed pre-existing by reproducing them with the new specs stashed. The 85/0/2 figure
+this work started from was chromium-only, so there may never have been an all-browser baseline.</p>
 <p>Because §10 and §14 were specifically about <em>cross-spec interference</em>, the cleanup was also
 confirmed with <b>two <code>--workers=2</code> passes</b> over the archive/cards/articles groups —
 the configuration whose ~1-in-2 flake those workarounds existed for. Both clean.</p>
 
-<h2 id="judgement"><span class="num">07</span>Where subagents pushed back</h2>
-<p class="lede">Two moments where an agent declined the instruction and was right to. Both are
-recorded because in each case the obvious fix was the wrong one.</p>
+<h2 id="judgement"><span class="num">08</span>Where subagents pushed back</h2>
+<p class="lede">Five moments where an agent declined an instruction — mine or the plan's — and was
+right to. Recorded because in each case the obvious fix was the wrong one, and because two of them
+were corrections to <em>me</em>.</p>
+
+<div class="card w">
+  <h4>D — an implementer refused a brief that would have broken the error path</h4>
+  <p>I told it to drop the marker's clear-at-start writes and set the marker on success only. It did
+  that, then went one step further than instructed and added an explicit clear to <em>both</em> error
+  callbacks — flagging the addition rather than burying it.</p>
+  <p>It was right, and the reasoning is subtle: the clear-at-start write had been passively doing the
+  error path's job. Remove it alone, and a <em>failed</em> load following a <em>successful</em> load for
+  the same exhibit leaves the marker confidently naming an exhibit whose store the error path just
+  emptied — so the predicate would then reject every TeamCard for that exhibit until the next
+  successful load. That is exactly the fail-closed mode the design exists to prevent. My instruction
+  would have traded a transient over-acceptance for a persistent dropped-event bug. The re-review
+  independently confirmed the addition is load-bearing.</p>
+</div>
+
+<div class="card w">
+  <h4>D's spec — an implementer tested a different code path than I specified, correctly</h4>
+  <p>I briefed a spec covering the predicate's <em>authoritative</em> branch: team resolves from the
+  store to a different exhibit → reject. The implementer covered a different branch instead and
+  explained why: that branch is <b>byte-for-byte identical</b> before and after the fix, so a spec on it
+  could not fail against the pre-fix code — it would have been precisely the vacuous spec I'd warned it
+  against in the same brief. Worse, the branch is <em>unreachable</em> for a foreign team anyway, since
+  an earlier commit stops foreign teams entering the store at all.</p>
+  <p>I verified the byte-identical claim myself with <code>git show</code> before accepting it. The
+  property I actually cared about — a foreign TeamCard must not reach the Wall's store — is pinned;
+  just through the arm that genuinely decides it.</p>
+</div>
+
+<div class="card w">
+  <h4>A reviewer refused to certify bug C's spec without testing the test</h4>
+  <p>A <code>trackBy</code> spec can pass for the wrong reason: if the store emission never reaches the
+  component, nothing rebuilds the row, and the panel stays open for reasons unrelated to the fix. Rather
+  than reason about this, the reviewer patched the served bundle two ways — first reverting
+  <code>trackBy</code> (spec failed at the panel assertion, correct symptom), then leaving the fix intact
+  but emptying the SignalR handler (spec failed <em>earlier</em>, at the emission guard). That second run
+  is the one that matters: it proves the spec cannot pass vacuously.</p>
+  <p>It also found that pointing <code>trackByFn</code> at a shared constant made the spec <em>pass</em>,
+  because a constant key is more stable than the real fix — a useful reminder that the spec detects
+  "no stable row identity", which is the actual defect.</p>
+</div>
 
 <div class="card w">
   <h4>§14 — the review caught a fail-closed filter</h4>
@@ -623,47 +837,39 @@ recorded because in each case the obvious fix was the wrong one.</p>
   notifications.</p>
 </div>
 
-<h2 id="open"><span class="num">08</span>New bugs found (still open)</h2>
-<p class="lede">Filed in <code>gallery/gallery-app-bugs.md</code>, which now tracks only what is
-open. Three are the same <em>class</em> as something just fixed, in a neighbouring path that the
-original entry didn't cover — each deliberately left out to keep its commit to one defect.</p>
-
-<table>
-<thead><tr><th></th><th>Bug</th><th>Same class as</th><th>Reachable?</th></tr></thead>
-<tbody>
-<tr><td class="sha">A</td><td><code>admin-teams</code> sort crashes on null <code>name</code></td><td>§5 (fixed <code>shortName</code>)</td><td><b>Yes</b> — <code>mat-sort-header="name"</code> is a real clickable header; one null-name team blanks the list</td></tr>
-<tr><td class="sha">B</td><td><code>admin-teams</code> filter crashes on null <code>name</code>/<code>shortName</code></td><td>§5</td><td><b>Yes</b> — needs a non-empty search string as well</td></tr>
-<tr><td class="sha">C</td><td>Admin <b>Exhibits</b> table has no <code>trackBy</code></td><td>§10 (fixed Collections)</td><td>Yes — same panel-collapse mechanism</td></tr>
-<tr><td class="sha">D</td><td>Shared <code>TeamStore</code> can hold a third exhibit's teams</td><td>§14 (pre-existing)</td><td>Low severity — fails <em>open</em>, so worst case is pre-fix behaviour</td></tr>
-</tbody>
-</table>
-<p>A and B were confirmed reachable independently by a reviewer, not just asserted: both fields are
-<code>string | null</code> in the generated model, and both code paths are user-triggerable. None
-currently blocks a test, so nothing is skipped for them.</p>
-
 <h2 id="notrun"><span class="num">09</span>What I did not do</h2>
 <ul class="tight">
-  <li><b>No PR, nothing pushed</b> — as you asked. All 20 commits are local on the three branches.</li>
-  <li><b>No existing commits rebased, squashed or amended.</b> The two API and two UI commits already
-  on <code>bug-fixes</code> when I started were left untouched and built on.</li>
-  <li><b>Fixed the four new bugs above.</b> They're the same class as ones just fixed, so it was
-  tempting — but each belongs in its own commit, and filing them was the instruction. They're
-  documented and ready to pick up.</li>
+  <li><b>No PR, nothing pushed</b> — as you asked. All 27 commits are local on the three branches.</li>
+  <li><b>No existing commits rebased or squashed.</b> The commits already on <code>bug-fixes</code>
+  when I started were left untouched and built on. The one amend was to bug D's own commit, in the
+  fix round that corrected its message — it was never pushed and stayed one commit.</li>
+  <li><b>Fixed anything not in the bug document.</b> Several genuine fragilities surfaced during
+  review and are recorded as findings rather than patched: <code>startConnection</code> never stops
+  the previous connection on an area change; <code>GetMineByExhibitAsync</code> uses
+  <code>SingleOrDefaultAsync</code> where a duplicate <code>TeamUser</code> would 500;
+  <code>TeamDeleted</code> is the one unfiltered SignalR delete handler. None was in scope.</li>
+  <li><b>Fixed the Firefox failures.</b> Three specs fail on Firefox
+  (<code>archive-combined-filters</code>, <code>concurrent-operations</code>,
+  <code>delete-system-role</code>) with <code>locator.click</code> timeouts. Confirmed pre-existing by
+  reproducing them with the new specs stashed. Worth knowing: the 85/0/2 baseline this work started
+  from was <b>chromium-only</b>, so there may never have been an all-browser baseline.</li>
+  <li><b>Migrated <code>gallery.ui</code> to ESLint flat config.</b> <code>npm run lint</code> is
+  broken for <em>every</em> file there — ESLint 9 rejects the legacy <code>env</code> key — so
+  <code>npm run build</code> was the only working automated gate. Out of scope for a bug-fix commit,
+  but it should be fixed.</li>
   <li><b>Ran the suite against minikube.</b> Verification was Aspire-only; per the repo's own notes a
   handful of specs hardcode <code>localhost:4xxx</code> and won't pass there without per-test work.</li>
-  <li><b>Cross-browser.</b> Everything ran <code>--project=chromium</code>.</li>
-  <li><b>Left the plan scaffolding in the repo.</b> The working plan file was deleted before
-  committing — the bug document now carries the decisions and outcomes, so the scaffolding was
-  redundant.</li>
 </ul>
 
 <footer>
   <p><span class="kbd">gallery.api</span> 7 commits on <code>bug-fixes</code> ·
-     <span class="kbd">gallery.ui</span> 12 commits on <code>bug-fixes</code> ·
-     <span class="kbd">crucible-tests</span> <code>cd8668e</code> on <code>gallery-test-fixes</code></p>
+     <span class="kbd">gallery.ui</span> 16 commits on <code>bug-fixes</code> ·
+     <span class="kbd">crucible-tests</span> <code>cd8668e</code>, <code>aff754a</code>,
+     <code>0e090e3</code>, <code>19deffa</code> on <code>gallery-test-fixes</code></p>
   <p>All three working trees clean. <code>dotnet build</code> 0 errors (24 pre-existing package
-  warnings). <code>npm run build</code> exit 0. Gallery suite 85 passed / 0 failed / 2 skipped
-  against a live Aspire stack.</p>
+  warnings). <code>npm run build</code> exit 0. Gallery suite <b>89 passed / 0 failed / 2 skipped on
+  chromium</b> against a live Aspire stack; the 2 skips are pre-existing test-plan limitations (the
+  archive view renders no status indicator at all), unrelated to any of this work.</p>
 </footer>
 
 </div>
