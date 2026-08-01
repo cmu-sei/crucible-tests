@@ -444,3 +444,17 @@ BP-6 is unfixed**, and it is not a test-quality problem:
 Fixing it requires an application change (`UserHandler.HandleCreateOrUpdate` should not await
 the SignalR fan-out on the request path), which the instructions put out of scope. It is written
 up as BP-6 with the reproduction, the source line, and the restart workaround.
+
+## Final state (end of session)
+
+Last run, on a freshly restarted stack with `.auth/` re-provisioned:
+
+> **139 tests: 125 passed, 0 failed, 14 skipped** (`expected=124 flaky=1 unexpected=0`)
+
+Worst BP-6 state observed came just before it: **even `GET /api/users` hung** (8s cap) while the
+UI served in 1ms — previously only writes hung. `aspire resource blueprint-api restart` failed;
+a full `aspire stop`/`start` cleared it. So the defect escalates from "writes hang" to "the API
+stops answering" the longer the process lives.
+
+**Session totals:** 15 commits. 112 -> 125 passing, 1 -> 0 failing, 19 -> 14 skipped,
+11 -> 16 documented app bugs, 206 -> 81 sleep/networkidle, ~14 -> 3 bare `test.skip()`.
