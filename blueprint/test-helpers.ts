@@ -674,6 +674,120 @@ export async function deleteTeam(token: string, teamId: string): Promise<void> {
 }
 
 /**
+ * Put a user on a MSEL team. Returns the TeamUser join record, whose `id` is what
+ * `removeUserFromTeam` takes. `POST /api/teamusers` answers **201**.
+ *
+ * Team membership is what the join flow keys off — see `seedJoinableMsel`.
+ */
+export async function addUserToTeam(
+  token: string,
+  teamId: string,
+  userId: string
+): Promise<{ id: string; teamId: string; userId: string }> {
+  const r = await blueprintCall<any>(token, '/api/teamusers', {
+    method: 'POST',
+    body: { teamId, userId },
+  });
+  if (!r.ok) {
+    throw new Error(`addUserToTeam failed (${r.status}): ${r.text}`);
+  }
+  return {
+    id: r.data.id as string,
+    teamId: r.data.teamId as string,
+    userId: r.data.userId as string,
+  };
+}
+
+/**
+ * Remove a user from a team, by **TeamUser join id**. Swallows 404.
+ */
+export async function removeUserFromTeam(token: string, teamUserId: string): Promise<void> {
+  const r = await blueprintCall(token, `/api/teamusers/${teamUserId}`, { method: 'DELETE' });
+  if (!r.ok && r.status !== 404) {
+    console.warn(`removeUserFromTeam(${teamUserId}) returned ${r.status}: ${r.text}`);
+  }
+}
+
+/**
+ * Seed a MSEL that shows up on the current user's **Join an Event** surface.
+ *
+ * `GET /api/my-join-msels` (which feeds both the dashboard's Join card and the /join page)
+ * is backed by `MselService.GetMyJoinInvitationMselsAsync`, and it requires all three of:
+ *   1. `msel.Status == Deployed`,
+ *   2. `msel.PlayerViewId != null`, and
+ *   3. the current user being on one of that MSEL's teams.
+ *
+ * Miss any one and the list comes back empty — which is why specs in
+ * `launch-and-join-workflows/` and `event-dashboard-and-navigation/` used to self-skip.
+ * Verified live: with all three satisfied, `my-join-msels` returns the seeded MSEL; the join
+ * surface has no other prerequisite.
+ *
+ * `playerViewId` is a plain settable field, so no real Player view is needed — the join list
+ * only checks it for non-null. Note it must be set with a **full GET-then-PUT**: the update
+ * path maps the whole view model, so a partial body nulls everything omitted.
+ *
+ * Caller must delete: `deleteMsel` removes the MSEL and cascades its teams; the TeamUser row
+ * goes with the team. Returns the ids needed either way.
+ */
+export async function seedJoinableMsel(
+  token: string,
+  userId: string,
+  opts: { name?: string; teamName?: string } = {}
+): Promise<{ mselId: string; mselName: string; teamId: string; teamUserId: string }> {
+  const name = opts.name ?? tempBlueprintName('TestBP-Join');
+
+  const msel = await createMsel(token, {
+    name,
+    description: 'Seeded to appear on the Join an Event surface',
+    status: 'Deployed',
+  });
+
+  // PlayerViewId is not settable on create, so patch it in. Full GET-then-PUT — see above.
+  const current = await blueprintCall<any>(token, `/api/msels/${msel.id}`);
+  if (!current.ok) {
+    throw new Error(`seedJoinableMsel: GET msel failed (${current.status}): ${current.text}`);
+  }
+  const put = await blueprintCall(token, `/api/msels/${msel.id}`, {
+    method: 'PUT',
+    body: { ...current.data, playerViewId: randomUUID() },
+  });
+  if (!put.ok) {
+    throw new Error(`seedJoinableMsel: PUT playerViewId failed (${put.status}): ${put.text}`);
+  }
+
+  const team = await createTeam(token, msel.id, {
+    name: opts.teamName ?? tempBlueprintName('TestBP-JoinTeam'),
+    shortName: 'TJT',
+  });
+  const teamUser = await addUserToTeam(token, team.id, userId);
+
+  return { mselId: msel.id, mselName: name, teamId: team.id, teamUserId: teamUser.id };
+}
+
+/**
+ * The Blueprint user id for the account the tests authenticate as (`admin`).
+ *
+ * Resolved by name from `GET /api/users` rather than hardcoded, since the id is
+ * database-generated. Used by join-flow seeding, which must put *this* user on a team.
+ */
+export async function getCurrentBlueprintUserId(
+  token: string,
+  displayName = 'Admin User'
+): Promise<string> {
+  const r = await blueprintCall<any[]>(token, '/api/users');
+  if (!r.ok) {
+    throw new Error(`getCurrentBlueprintUserId: GET users failed (${r.status}): ${r.text}`);
+  }
+  const match = r.data?.find((u: any) => u.name === displayName);
+  if (!match) {
+    throw new Error(
+      `getCurrentBlueprintUserId: no user named "${displayName}" in ${r.data?.length ?? 0} users`
+    );
+  }
+  return match.id as string;
+}
+
+/**
  * List all teams for a given MSEL.
  */
 export async function listTeams(

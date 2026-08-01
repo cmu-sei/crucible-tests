@@ -5,13 +5,30 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
-import { getBlueprintToken } from '../../test-helpers';
+import { getBlueprintToken, tempBlueprintName } from '../../test-helpers';
 
-const INJECT_NAME = 'Copy Test Inject';
-const CATALOG_NAME = 'Copy Inject Test Catalog';
-const INJECT_TYPE_NAME = 'Copy Inject Test Inject Type';
+test.describe('Admin - Inject Types and Catalogs Management', () => {
+  // Unique per test run (tempBlueprintName) so concurrent runs / leftover rows from a
+  // prior interrupted run never collide with, or get cascade-deleted alongside, this
+  // spec's own records. Also makes these rows auto-purgeable by the TEMP_NAME_PATTERN
+  // shape the teardown purge matches on.
+  let INJECT_NAME: string;
+  let CATALOG_NAME: string;
+  let INJECT_TYPE_NAME: string;
 
-async function cleanupTestRecords(): Promise<void> {
+  test.beforeEach(() => {
+    INJECT_TYPE_NAME = tempBlueprintName('CopyInjIT');
+    CATALOG_NAME = tempBlueprintName('CopyInjCat');
+    INJECT_NAME = tempBlueprintName('CopyInj');
+  });
+
+  // Cleanup runs in afterEach (not inline at the end of the test body) so a mid-test
+  // failure still deletes what this test created. Catalogs are deleted before inject
+  // types: deleting an inject type CASCADE-DELETES every catalog that references it, so
+  // deleting inject-type-first here would either no-op (catalog already gone) or, if a
+  // future step read stale state, destroy the catalog out from under a still-running
+  // assertion.
+  test.afterEach(async () => {
     const token = await getBlueprintToken();
     const headers = { Authorization: `Bearer ${token}` };
 
@@ -36,15 +53,6 @@ async function cleanupTestRecords(): Promise<void> {
         }
       }
     }
-}
-
-test.describe('Admin - Inject Types and Catalogs Management', () => {
-  test.beforeEach(async () => {
-    await cleanupTestRecords();
-  });
-
-  test.afterEach(async () => {
-    await cleanupTestRecords();
   });
 
   test('Copy Inject', async ({ blueprintAuthenticatedPage: page }) => {
@@ -93,9 +101,9 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
     ).first();
     await expect(addInjectTypeButton).toBeVisible({ timeout: 5000 });
     await addInjectTypeButton.click();
-    await page.waitForTimeout(500);
 
-    // 4. Fill in the inject type name
+    // 4. Fill in the inject type name — the dialog's name field appearing IS the
+    // signal that the "add" dialog opened; no fixed sleep needed.
     const injectTypeNameField = page.locator(
       'input[formControlName="name"], input[placeholder*="Name"]'
     ).first();
@@ -128,9 +136,8 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
     const addCatalogButton = page.getByRole('button', { name: 'Add new Catalog' });
     await expect(addCatalogButton).toBeVisible({ timeout: 5000 });
     await addCatalogButton.click();
-    await page.waitForTimeout(500);
 
-    // 9. Fill in catalog name
+    // 9. Fill in catalog name — waiting for this field IS the signal the dialog opened.
     const catalogNameField = page.locator('input[placeholder*="Name"]').first();
     await expect(catalogNameField).toBeVisible({ timeout: 5000 });
     await catalogNameField.fill(CATALOG_NAME);
@@ -146,10 +153,15 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
     const injectTypeCombobox = page.getByRole('combobox', { name: /Inject Type/i }).first();
     await expect(injectTypeCombobox).toBeVisible({ timeout: 5000 });
     await injectTypeCombobox.click();
-    await page.waitForTimeout(300);
-    const firstOption = page.locator('mat-option, [role="option"]').first();
-    await expect(firstOption).toBeVisible({ timeout: 5000 });
-    await firstOption.click();
+    // Select this spec's own inject type by name, not whatever happens to render first —
+    // the option list is global across concurrently-running specs, and picking the first
+    // option binds this catalog to a sibling spec's inject type. Deleting that sibling's
+    // inject type in its own teardown then CASCADE-DELETEs this catalog mid-test.
+    const injectTypeOption = page
+      .locator('mat-option, [role="option"]')
+      .filter({ hasText: INJECT_TYPE_NAME });
+    await expect(injectTypeOption).toBeVisible({ timeout: 5000 });
+    await injectTypeOption.click();
 
     // 12. Save the catalog
     const catalogSaveButton = page.locator('button:has-text("Save"), button[type="submit"]').first();
@@ -169,9 +181,9 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
     const addInjectButton = injectList.getByRole('button', { name: 'Add Inject' });
     await expect(addInjectButton).toBeVisible({ timeout: 5000 });
     await addInjectButton.click();
-    await page.waitForTimeout(300);
 
-    // 15. Choose "New Inject" from the menu
+    // 15. Choose "New Inject" from the menu — waiting for the menu item below is the
+    // real signal that the mat-menu finished opening.
     const newInjectMenuItem = page.locator('button[mat-menu-item]:has-text("New Inject"), button:has-text("New Inject")').first();
     await expect(newInjectMenuItem).toBeVisible({ timeout: 5000 });
     await newInjectMenuItem.click();
@@ -239,9 +251,9 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
     });
     await expect(copyInjectButton).toBeVisible({ timeout: 5000 });
     await copyInjectButton.click();
-    await page.waitForTimeout(500);
 
-    // 20. The "Create an Inject" dialog opens with a pre-filled copy
+    // 20. The "Create an Inject" dialog opens with a pre-filled copy — waitForSelector
+    // below is the real signal.
     await page.waitForSelector('mat-dialog-container', { timeout: 5000 });
     const copyDialog = page.locator('mat-dialog-container').first();
     await expect(copyDialog).toBeVisible({ timeout: 5000 });
