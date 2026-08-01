@@ -10,14 +10,13 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
   test('View Inject Types List', async ({ blueprintAuthenticatedPage: page }) => {
     // 1. Navigate to Admin section and select 'Inject Types'
     await page.goto(`${Services.Blueprint.UI}/admin`);
-    await page.waitForLoadState('networkidle');
+    await expect(page).toHaveURL(/\/admin/, { timeout: 10000 });
 
     const injectTypesNav = page.locator(
       'mat-list-item:has-text("Inject Types"), a:has-text("Inject Types"), button:has-text("Inject Types")'
     ).first();
     await expect(injectTypesNav).toBeVisible({ timeout: 5000 });
     await injectTypesNav.click();
-    await page.waitForLoadState('networkidle');
 
     // expect: Inject Types list is displayed with Name and Description columns
     const injectTypesTable = page.locator('table, [class*="inject-types-table"]').first();

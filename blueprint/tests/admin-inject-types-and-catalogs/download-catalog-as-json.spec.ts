@@ -6,11 +6,44 @@
 
 import { test, expect, Services } from '../../fixtures';
 import { readFileSync } from 'fs';
-
-const CATALOG_NAME = 'Download JSON Test Catalog';
-const INJECT_TYPE_NAME = 'Download JSON Test Inject Type';
+import { getBlueprintToken, tempBlueprintName } from '../../test-helpers';
 
 test.describe('Admin - Inject Types and Catalogs Management', () => {
+  // Unique per run so concurrent runs / leftovers from an interrupted prior run never
+  // collide, and the teardown purge auto-sweeps by the tempBlueprintName shape.
+  let CATALOG_NAME: string;
+  let INJECT_TYPE_NAME: string;
+
+  test.beforeEach(() => {
+    CATALOG_NAME = tempBlueprintName('DownloadCat');
+    INJECT_TYPE_NAME = tempBlueprintName('DownloadCatIT');
+  });
+
+  // Cleanup runs in afterEach (not inline at the end of the test body) so a mid-test
+  // failure still deletes what this test created. Catalogs are deleted before inject
+  // types: deleting an inject type CASCADE-DELETES every catalog that still references it.
+  test.afterEach(async () => {
+    const token = await getBlueprintToken();
+    const headers = { Authorization: `Bearer ${token}` };
+
+    for (const [endpoint, name] of [
+      ['/api/catalogs', CATALOG_NAME],
+      ['/api/injectTypes', INJECT_TYPE_NAME],
+    ] as const) {
+      const response = await fetch(`${Services.Blueprint.API}${endpoint}`, { headers });
+      if (!response.ok) continue;
+
+      for (const record of (await response.json()) as Array<{ id: string; name: string }>) {
+        if (record.name === name) {
+          await fetch(`${Services.Blueprint.API}${endpoint}/${record.id}`, {
+            method: 'DELETE',
+            headers,
+          });
+        }
+      }
+    }
+  });
+
   test('Download Catalog as JSON', async ({ blueprintAuthenticatedPage: page }) => {
     await page.goto(`${Services.Blueprint.UI}/admin`);
     await expect(page).toHaveURL(/\/admin/, { timeout: 10000 });
@@ -21,43 +54,12 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
       await expect(navItem).toBeVisible({ timeout: 5000 });
       await navItem.click();
       // Wait for the section heading or content to be visible
-      await expect(page.locator(`h1:has-text("${section}"), h2:has-text("${section}"), [class*="title"]:has-text("${section}"), mat-toolbar:has-text("${section}")`).first()).toBeVisible({ timeout: 5000 }).catch(async () => {
-        // Fallback: wait for add button or list content to appear
-        await page.waitForTimeout(500);
-      });
+      await expect(page.locator(`h1:has-text("${section}"), h2:has-text("${section}"), [class*="title"]:has-text("${section}"), mat-toolbar:has-text("${section}")`).first()).toBeVisible({ timeout: 5000 });
     };
-
-    // Helper: delete all rows whose delete button name matches a pattern
-    const deleteAllMatching = async (namePattern: RegExp) => {
-      let deleteBtn = page.getByRole('button', { name: namePattern }).first();
-      while (await deleteBtn.isVisible().catch(() => false)) {
-        await deleteBtn.click();
-        const confirmDialog = page.locator(
-          '[role="dialog"], .mat-dialog-container, [class*="dialog"]'
-        ).first();
-        await expect(confirmDialog).toBeVisible({ timeout: 5000 });
-        const confirmButton = page.locator(
-          'button:has-text("Confirm"), button:has-text("Delete"), button:has-text("Yes"), button:has-text("OK")'
-        ).last();
-        await confirmButton.click();
-        // Wait for dialog to close
-        await expect(confirmDialog).not.toBeVisible({ timeout: 5000 }).catch(() => {});
-        await page.waitForTimeout(500);
-        deleteBtn = page.getByRole('button', { name: namePattern }).first();
-      }
-    };
-
-    // ── Step 0: Pre-cleanup ──────────────────────────────────────────────────
-
-    // 1. Navigate to Catalogs and delete any leftover test catalog
-    await navigateTo('Catalogs');
-    await deleteAllMatching(new RegExp(`^Delete ${CATALOG_NAME}`));
-
-    // 2. Navigate to Inject Types and delete any leftover test inject type
-    await navigateTo('Inject Types');
-    await deleteAllMatching(new RegExp(`^Delete ${INJECT_TYPE_NAME}`));
 
     // ── Step 1: Create a prerequisite Inject Type ────────────────────────────
+
+    await navigateTo('Inject Types');
 
     // 3. Click add button to create a new inject type
     const addInjectTypeButton = page.locator(
@@ -65,7 +67,6 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
     ).first();
     await expect(addInjectTypeButton).toBeVisible({ timeout: 5000 });
     await addInjectTypeButton.click();
-    await page.waitForTimeout(500);
 
     // 4. Fill in the inject type name
     const injectTypeNameField = page.locator(
@@ -100,7 +101,6 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
     const addCatalogButton = page.getByRole('button', { name: 'Add new Catalog' });
     await expect(addCatalogButton).toBeVisible({ timeout: 5000 });
     await addCatalogButton.click();
-    await page.waitForTimeout(500);
 
     // 9. Fill in catalog name
     const nameField = page.locator('input[placeholder*="Name"]').first();
@@ -114,14 +114,19 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
     await expect(descField).toBeVisible({ timeout: 5000 });
     await descField.fill('Test catalog for download JSON test');
 
-    // 11. Select the inject type from the combobox
+    // 11. Select this spec's own inject type from the combobox, not whatever happens
+    // to render first. The option list is global across concurrently-running specs;
+    // picking blindly binds this catalog to a sibling spec's inject type, and that
+    // sibling's teardown CASCADE-DELETEs this catalog when it deletes its own
+    // inject type.
     const injectTypeCombobox = page.getByRole('combobox', { name: /Inject Type/i }).first();
     await expect(injectTypeCombobox).toBeVisible({ timeout: 5000 });
     await injectTypeCombobox.click();
-    await page.waitForTimeout(300);
-    const firstOption = page.locator('mat-option, [role="option"]').first();
-    await expect(firstOption).toBeVisible({ timeout: 5000 });
-    await firstOption.click();
+    const injectTypeOption = page
+      .locator('mat-option, [role="option"]')
+      .filter({ hasText: INJECT_TYPE_NAME });
+    await expect(injectTypeOption).toBeVisible({ timeout: 5000 });
+    await injectTypeOption.click();
 
     // 12. Save the catalog
     const saveButton = page.locator('button:has-text("Save"), button[type="submit"]').first();
@@ -154,13 +159,6 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
       expect(data).toBeDefined();
     }
 
-    // ── Step 4: Cleanup ──────────────────────────────────────────────────────
-
-    // 15. Delete the catalog (still on Catalogs page)
-    await deleteAllMatching(new RegExp(`^Delete ${CATALOG_NAME}`));
-
-    // 16. Navigate to Inject Types and delete the test inject type
-    await navigateTo('Inject Types');
-    await deleteAllMatching(new RegExp(`^Delete ${INJECT_TYPE_NAME}`));
+    // Cleanup happens in afterEach (via the API) so a mid-test failure still cleans up.
   });
 });

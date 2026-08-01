@@ -764,6 +764,101 @@ export async function seedJoinableMsel(
   return { mselId: msel.id, mselName: name, teamId: team.id, teamUserId: teamUser.id };
 }
 
+// ============================================================================
+// Invitations (what actually authorises a join)
+// ============================================================================
+//
+// Appearing on the Join surface and being *allowed to join* are two separate gates, and
+// they are easy to conflate:
+//
+//   * `GET /api/my-join-msels` (see `seedJoinableMsel`) only needs Deployed +
+//     PlayerViewId + team membership. That is what renders the card.
+//   * `POST /api/msels/{id}/join` runs `MselService.JoinMselByInvitationAsync`, which
+//     first checks `GetMyDeployedMselIdsAsync` — the set of MSELs whose `PlayerViewId`
+//     is a **Player view the user is really in**. A seeded `playerViewId` is a synthetic
+//     guid, so that check misses and the invitation branch is taken instead. With no
+//     Invitation row the API answers **403 "No invitations exist for MSEL {id}."**
+//
+// Verified live: clicking Join on a `seedJoinableMsel` MSEL with no invitation is a 403;
+// after `createInvitation` the same click answers 200 with the Player View id. So any
+// spec that drives the join *button* (not just the card) must seed an invitation too.
+
+export interface CreateInvitationOptions {
+  /** Restrict to an email domain (e.g. '@localhost'). Empty/omitted means any user. */
+  emailDomain?: string;
+  /** Expiry. Defaults to 24h out — must be in the future or the invitation is ignored. */
+  expirationDateTime?: Date;
+  /** Seat cap. Defaults to 50; `userCount` must stay below it or the invitation is invalid. */
+  maxUsersAllowed?: number;
+}
+
+/**
+ * Create an Invitation for a MSEL team, which is what makes `POST /api/msels/{id}/join`
+ * succeed. `POST /api/invitations` answers **201**.
+ *
+ * Cleanup: the invitation is cascade-deleted with its MSEL (verified — the invitation id
+ * 404s after `deleteMsel`), so a spec that already deletes the MSEL needs no separate
+ * teardown. `deleteInvitation` is provided for specs that outlive their MSEL.
+ *
+ * Note the API serialises the integer fields as **strings** (`"maxUsersAllowed": "50"`),
+ * so they are returned as `number` here only after an explicit cast by the caller if needed.
+ */
+export async function createInvitation(
+  token: string,
+  mselId: string,
+  teamId: string,
+  opts: CreateInvitationOptions = {}
+): Promise<{ id: string; mselId: string; teamId: string }> {
+  const expiration =
+    opts.expirationDateTime ?? new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+  const r = await blueprintCall<any>(token, '/api/invitations', {
+    method: 'POST',
+    body: {
+      mselId,
+      teamId,
+      emailDomain: opts.emailDomain ?? '',
+      expirationDateTime: expiration.toISOString(),
+      maxUsersAllowed: opts.maxUsersAllowed ?? 50,
+      userCount: 0,
+      isTeamLeader: false,
+      wasDeactivated: false,
+    },
+  });
+  if (!r.ok) {
+    throw new Error(`createInvitation failed (${r.status}): ${r.text}`);
+  }
+
+  return {
+    id: r.data.id as string,
+    mselId: r.data.mselId as string,
+    teamId: r.data.teamId as string,
+  };
+}
+
+/** Delete an invitation by id. Swallows 404 so teardown is idempotent. */
+export async function deleteInvitation(token: string, invitationId: string): Promise<void> {
+  const r = await blueprintCall(token, `/api/invitations/${invitationId}`, { method: 'DELETE' });
+  if (!r.ok && r.status !== 404) {
+    console.warn(`deleteInvitation(${invitationId}) returned ${r.status}: ${r.text}`);
+  }
+}
+
+/**
+ * The MSELs the current user may join — `GET /api/my-join-msels`, the exact call that
+ * feeds the dashboard's Join card and the /join page.
+ *
+ * Specs use this to assert their seeding precondition really landed before driving the UI,
+ * so a missing card is reported as "the seed failed" rather than as "the UI is broken".
+ */
+export async function listMyJoinMsels(token: string): Promise<any[]> {
+  const r = await blueprintCall<any[]>(token, '/api/my-join-msels');
+  if (!r.ok) {
+    throw new Error(`listMyJoinMsels failed (${r.status}): ${r.text}`);
+  }
+  return r.data ?? [];
+}
+
 /**
  * The Blueprint user id for the account the tests authenticate as (`admin`).
  *
@@ -971,23 +1066,32 @@ export async function removeUnitFromMsel(token: string, mselUnitId: string): Pro
  * led to the belief that tests cannot make one — hence specs that mutated a *pre-existing*
  * shared user row instead. They can: this endpoint works directly, so a spec that needs a
  * user should seed its own and delete it in teardown.
+ *
+ * `roleId` is honoured by POST (verified: the 201 body echoes it back), so a spec that needs
+ * a user who *already has* a role — e.g. one testing role removal — can seed that starting
+ * state here instead of driving the UI twice. Omit it and the user is created with
+ * `roleId: null`, which the admin Users table renders as "None Locally".
  */
 export async function createBlueprintUser(
   token: string,
-  options: { id?: string; name?: string } = {}
-): Promise<{ id: string; name: string }> {
+  options: { id?: string; name?: string; roleId?: string } = {}
+): Promise<{ id: string; name: string; roleId: string | null }> {
   const id = options.id ?? randomUUID();
   const name = options.name ?? tempBlueprintName('TestBP-User');
 
   const r = await blueprintCall<any>(token, '/api/users', {
     method: 'POST',
-    body: { id, name },
+    body: { id, name, roleId: options.roleId ?? null },
   });
   if (!r.ok) {
     throw new Error(`createBlueprintUser failed (${r.status}): ${r.text}`);
   }
 
-  return { id: r.data.id as string, name: r.data.name as string };
+  return {
+    id: r.data.id as string,
+    name: r.data.name as string,
+    roleId: (r.data.roleId ?? null) as string | null,
+  };
 }
 
 /**
@@ -998,6 +1102,25 @@ export async function deleteBlueprintUser(token: string, userId: string): Promis
   if (!r.ok && r.status !== 404) {
     console.warn(`deleteBlueprintUser(${userId}) returned ${r.status}: ${r.text}`);
   }
+}
+
+/**
+ * Fetch a single user by id. Use this to prove a role change made in the UI actually
+ * persisted server-side.
+ *
+ * This matters more than usual for the role dropdown: `UserDataService.updateStore` calls
+ * akita's `EntityStore.add()`, which *skips* ids already in the store, so a role change
+ * never reaches the local store at all. The dropdown only looks correct because mat-select
+ * holds its own selection. A UI-text assertion therefore proves almost nothing on its own —
+ * always pair it with a `getBlueprintUser` check on `roleId`.
+ * See BP-14 in `blueprint/blueprint-app-bugs.md`.
+ */
+export async function getBlueprintUser(token: string, userId: string): Promise<any> {
+  const r = await blueprintCall<any>(token, `/api/users/${userId}`);
+  if (!r.ok) {
+    throw new Error(`getBlueprintUser(${userId}) failed (${r.status}): ${r.text}`);
+  }
+  return r.data;
 }
 
 /**
@@ -1065,6 +1188,45 @@ export async function listMselUnits(token: string, mselId: string): Promise<any[
     throw new Error(`listMselUnits failed (${r.status}): ${r.text}`);
   }
   return r.data ?? [];
+}
+
+// ============================================================================
+// System roles
+// ============================================================================
+
+/**
+ * List the system roles (Administrator, Content Developer, Observer, plus any custom ones).
+ *
+ * The path is `/api/system-roles` — kebab-case. `/api/roles` and `/api/systemRoles` are both
+ * 404s, which has previously been mistaken for "there is no roles endpoint". This is the same
+ * endpoint the admin Users table's role dropdown is fed from (`SystemRoleDataService.roles$`),
+ * so the ids here line up exactly with the `mat-option` values rendered there.
+ */
+export async function listSystemRoles(token: string): Promise<any[]> {
+  const r = await blueprintCall<any[]>(token, '/api/system-roles');
+  if (!r.ok) {
+    throw new Error(`listSystemRoles failed (${r.status}): ${r.text}`);
+  }
+  return r.data ?? [];
+}
+
+/**
+ * Resolve a system role by its display name — the same string the role dropdown shows.
+ *
+ * Throws (listing what does exist) rather than returning undefined, so a spec that assigns
+ * a role fails loudly on a renamed/removed role instead of silently asserting against
+ * `undefined`.
+ */
+export async function getSystemRoleByName(token: string, name: string): Promise<any> {
+  const roles = await listSystemRoles(token);
+  const role = roles.find((r: any) => r.name === name);
+  if (!role) {
+    throw new Error(
+      `getSystemRoleByName: no system role named "${name}". ` +
+        `Available: ${roles.map((r: any) => r.name).join(', ') || '(none)'}`
+    );
+  }
+  return role;
 }
 
 // NOTE: there is deliberately no `assignTeamToOrganization` helper.
@@ -1164,6 +1326,147 @@ export async function navigateToMselSection(
   const navItem = mselSectionItem(page, sectionName);
   await expect(navItem).toBeVisible({ timeout: 15000 });
   await navItem.click();
+}
+
+/**
+ * Open an admin section (Users, Roles, Units, ...) and wait for its table to render.
+ *
+ * `/admin` is a single Angular component: `gotoSection()` only flips `selectedTab`, so the
+ * URL never changes and there is no `/admin/users` route to navigate to. The sidebar item
+ * must actually be clicked. Scoped to `.appitems-container` because the collapsed and
+ * expanded sidenavs both exist in the template and only one is rendered at a time.
+ *
+ * @param page - Playwright Page object
+ * @param section - Sidebar label, e.g. 'Users' or 'Roles'
+ */
+export async function gotoBlueprintAdminSection(page: Page, section: string): Promise<void> {
+  await page.goto(`${Services.Blueprint.UI}/admin`, { waitUntil: 'domcontentloaded' });
+
+  const sidebarItem = page
+    .locator('.appitems-container mat-list-item')
+    .filter({ hasText: section })
+    .first();
+  await expect(sidebarItem).toBeVisible({ timeout: 30000 });
+  await sidebarItem.click();
+
+  await expect(page.locator('table').first()).toBeVisible({ timeout: 15000 });
+}
+
+/**
+ * Locate a single row in the admin Users table by exact user name, filtering the list first
+ * so the row is guaranteed to be on page 1.
+ *
+ * Two traps this exists to avoid:
+ *
+ * 1. **The table paginates at 20 rows** (`[pageSize]="20"` on the paginator), and a
+ *    freshly-seeded user sorts by name wherever its prefix falls — very often page 2+.
+ *    Scanning `table tbody tr` unfiltered silently misses it.
+ * 2. **The Search box is `(keyup)`-bound, not a formControl** — `applyFilter($event.target.value)`
+ *    fires on keyup only. `fill()` sets the value without dispatching keyup, so the list does
+ *    *not* filter and every subsequent locator resolves against the unfiltered table. Type with
+ *    `pressSequentially()`. (The /build MSEL list is the opposite: it uses `[formControl]`, where
+ *    `fill()` is correct — see `findMselRowByName`.)
+ *
+ * Returning one scoped row locator also keeps concurrent specs from colliding: every
+ * `mat-select` / cell lookup must hang off *this* row, never off `page`, or a parallel spec
+ * mutating a different user re-renders the table under the assertion.
+ *
+ * @param page - Playwright Page object, already on the Users admin section
+ * @param name - The exact (unique) user name to filter and match on
+ * @returns A locator for the single `tr` holding that user
+ */
+export async function findAdminUserRowByName(page: Page, name: string) {
+  const searchBox = page.getByRole('textbox', { name: /search/i });
+  await expect(searchBox).toBeVisible({ timeout: 15000 });
+
+  // Clear whatever is there, then type — keyup is what drives the filter.
+  await searchBox.click();
+  await searchBox.press('ControlOrMeta+a');
+  await searchBox.press('Backspace');
+  await searchBox.pressSequentially(name);
+
+  const row = page.locator('table tbody tr').filter({ hasText: name });
+  await expect(row).toHaveCount(1, { timeout: 15000 });
+  return row;
+}
+
+/**
+ * The visible role label for a user row — the mat-select *trigger* text, not the whole
+ * `mat-select`.
+ *
+ * Read `.mat-mdc-select-value`, never `matSelect.textContent()`: while the dropdown is open
+ * the panel's `mat-option`s are children of the `mat-select` element, so `textContent()`
+ * returns the selection concatenated with every option
+ * ("ObserverNone LocallyContent DeveloperAdministrator..."). A `toContainText('Observer')`
+ * against that passes no matter which role is selected — a tautology. The trigger element
+ * holds only the current selection.
+ */
+export function adminUserRoleLabel(row: ReturnType<Page['locator']>) {
+  return row.locator('.mat-mdc-select-value');
+}
+
+/**
+ * Open a user row's role dropdown and return a locator scoped to *that* select's overlay
+ * panel.
+ *
+ * mat-select renders its panel in a CDK overlay at the end of `<body>`, so the options are
+ * not inside the row and a bare `page.locator('mat-option')` matches every open panel on the
+ * page. The panel id is exposed as `aria-controls` on the `mat-select` — but only once it is
+ * open, so this must be read after the click.
+ */
+export async function openAdminUserRolePanel(page: Page, row: ReturnType<Page['locator']>) {
+  const roleSelect = row.locator('mat-select');
+  await expect(roleSelect).toBeVisible({ timeout: 15000 });
+  await roleSelect.click();
+
+  const panelId = await roleSelect.getAttribute('aria-controls');
+  if (!panelId) {
+    throw new Error(
+      'openAdminUserRolePanel: mat-select has no aria-controls after being clicked — ' +
+        'the panel did not open.'
+    );
+  }
+  const panel = page.locator(`#${panelId}`);
+  await expect(panel).toBeVisible({ timeout: 15000 });
+  return panel;
+}
+
+/**
+ * Set a user's role via the admin Users table dropdown, and wait for the change to reach the
+ * server.
+ *
+ * The response wait is armed *before* the option click so the PUT cannot be missed, and it
+ * matches `/api/users/{id}` specifically — matching the bare collection would also accept a
+ * concurrent spec's PUT for a different user and let a no-op pass.
+ *
+ * @param page - Playwright Page object, on the Users admin section
+ * @param row - The user's row, from `findAdminUserRowByName`
+ * @param userId - The user's id, used to match the PUT that must result
+ * @param roleLabel - Option text to select, e.g. 'Observer' or 'None Locally'
+ */
+export async function setAdminUserRole(
+  page: Page,
+  row: ReturnType<Page['locator']>,
+  userId: string,
+  roleLabel: string
+): Promise<void> {
+  const panel = await openAdminUserRolePanel(page, row);
+
+  const option = panel.getByRole('option', { name: roleLabel, exact: true });
+  await expect(option).toBeVisible({ timeout: 15000 });
+
+  const put = page.waitForResponse(
+    (res) =>
+      res.url().includes(`/api/users/${userId}`) &&
+      res.request().method() === 'PUT' &&
+      res.status() === 200,
+    { timeout: 30000 }
+  );
+  await option.click();
+  await put;
+
+  // The overlay closing is the UI's own proof the selection was committed.
+  await expect(panel).toBeHidden({ timeout: 15000 });
 }
 
 // ============================================================================

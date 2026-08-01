@@ -220,3 +220,69 @@ returns MSELs where the user is on a team AND `msel.Status == Deployed` AND
 Note the launch button is `title="Start {{ msel.name }}"`, so it is precisely locatable once a
 card exists; the old specs used `button:has-text("Start")` plus invalid comma-combined
 `text=A, text=B` selectors (which match zero elements — `text=` engines cannot be comma-joined).
+
+## Accessibility: two `test.fixme()`s were hiding real defects behind wrong measurements
+
+Both were bare `test.fixme()`s with explanatory comments. Verified each claim against the
+running app; both comments were partly wrong, and one was wrong in a way that mattered.
+
+**BP-13 (mobile layout).** The comment claimed `document.body.scrollWidth` is "~466px at a
+375px mobile viewport". Measured: `body.scrollWidth` is **375**. So the spec's central
+assertion `expect(bodyWidth).toBeLessThanOrEqual(375)` **would have passed** — the metric could
+not detect the defect its own comment described. 466 is the right edge of *one overflowing
+element*, not the document width.
+
+The real defect, at 375x667:
+
+| route | `documentElement.scrollWidth` | overflows? | widest element right edge |
+|---|---:|---|---:|
+| `/` | 375 | no | 466px |
+| `/admin` | 375 | no | 585px |
+| `/build` | 375 | no | **708px** |
+
+Elements sit up to 333px beyond the right edge *and* the document does not scroll
+horizontally, so they are clipped and unreachable. Rewritten to assert every visible
+interactive element's right edge is within the viewport — confirmed it reports 7 offenders on
+`/` today.
+
+**BP-12 (screen reader).** Landmarks are genuinely absent everywhere (no
+`role="main"|navigation|banner|contentinfo`, no `<main>/<nav>/<header>/<footer>` in any
+template). But "the application does not use semantic HTML heading elements (h1-h6)" is too
+strong — templates hold 3 `<h1>`, 10 `<h2>`, 4 `<h3>`, 5 `<h4>`; they are just absent from the
+primary surfaces. Measured: `/` and `/build` have **no headings at all**, `/admin` has one
+`<h2>`, none has a landmark. Confirmed the assertion fails today (0 headings on `/`).
+
+Both are now `test.skip(true, 'BP-n: ...')` with correct assertions intact, and both were
+**verified to fail when unskipped** — a skip whose assertion is wrong is no better than a
+deleted one. Also removed the old sampling pattern (`.slice(0, 5)` over inputs/buttons/links,
+which left the rest unchecked and hid which element failed) and the `if (count > 0)` guards
+that made whole sections assert nothing.
+
+## Housekeeping
+
+`.playwright-mcp/` (scratch downloads from the playwright-test MCP server) was not gitignored,
+and a stray xlsx from a generator agent's exploration got committed. Removed and ignored.
+
+## Measurement caveat: a 5.4m "regression" that was really CPU contention
+
+A `scenario-events-management/` run at 2 workers took **5.4 minutes** with one timeout
+(`delete-scenario-event`), against 30s previously — which looked like a fresh BP-6 instance.
+It was not. At that moment three subagents were each running their own Playwright suites:
+`pgrep -f "playwright|chromium"` reported **11 live processes** on a 16-core box, and the same
+directory finished in **36.4s at 1 worker** immediately afterwards.
+
+Independent checks that ruled out the app:
+- `aspire describe` — blueprint-api and blueprint-ui both `Healthy`.
+- `aspire logs blueprint-api` — request handling at **1-3ms** (`GET /api/msels` 2.9ms,
+  health/ready 1.3ms). No timeout, pool-exhaustion, lock or deadlock messages.
+- Idle API latency: 4-10ms over three probes.
+- Disk: 840G free; `test-results/` 12K. (The run also logged
+  `ENOENT: ...playwright-artifacts-2/*.zip`, a symptom of a killed/contended worker rather
+  than a cause.)
+
+**Lesson for the final verification:** timing and flakiness measurements are only valid when
+nothing else is running. The 5x-consecutive-green runs at the end must be done with **no
+subagents active**, or the result is unreadable. This also means BP-6's original diagnosis
+("the API stops answering for >10s" at 2 workers) may itself have been contaminated by
+concurrent agent activity — worth re-measuring on an idle machine before treating it as an app
+defect.

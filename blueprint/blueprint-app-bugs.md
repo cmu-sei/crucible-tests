@@ -356,6 +356,29 @@ dirty so the user can retry without retyping.
 is `test.skip`-ed pointing here. It asserts a user-visible error appears when a save fails —
 correct as written; un-skip once errors are surfaced.
 
+**Same defect, second code path — End Event / archive.** `mselDataService.archive()`
+(`msel-data.service.ts` ~line 473) has an error callback whose entire body is
+`this.mselStore.setLoading(false)`. The error is neither passed to `ErrorService` nor
+surfaced anywhere, so a failed End Event is completely silent.
+
+Reproduction: seed a Deployed MSEL, open `/manage?msel={id}`, `page.route` the
+`**/api/msels/*/archive` call to a 500, click **End Event** → **Yes**. Observed with the
+archive answering 500:
+- Snackbar / bottom-sheet / `[role="alert"]` containers: **0** (checked
+  `mat-snack-bar-container`, `simple-snack-bar`, `.mat-mdc-snack-bar-container`,
+  `[role="alert"]`, `mat-bottom-sheet-container`, `app-system-message`).
+- Page text contains no /error|fail|unable|problem/ match.
+- The page stays on `/manage` with **End Event still enabled**, i.e. visually identical to
+  "you haven't ended it yet" — which is at least less misleading than the save case, but the
+  user is told nothing about *why* nothing happened. Only the browser console shows the 500.
+
+Note the *successful* path has no notification either: polled every 500ms for 3s after a
+200 archive response and found zero snackbars. The plan item for 8.4 ("Success notification
+is displayed") therefore describes unimplemented behaviour;
+`launch-and-join-workflows/manage-deployed-event.spec.ts` asserts the real confirmation
+signal instead (status becomes Archived server-side, and `/manage` redirects to the
+dashboard) and documents this in its header.
+
 ---
 
 ## BP-10 — xlsx import discards every scenario event's time, replacing it with `rowIndex * 60`
@@ -573,6 +596,155 @@ viewport or the container becomes scrollable. Either is acceptable; silently cli
 **Blocked test:** `blueprint/tests/accessibility-and-usability/responsive-layout-mobile-view.spec.ts`
 `test.skip`-ed pointing here, asserting no element's right edge exceeds the viewport width — the
 metric that actually detects this.
+
+---
+
+## BP-14 — A user's role change never reaches the local store, so the admin Users table shows a stale role after any SPA re-render
+
+**Severity:** low-medium — no data loss (the server is correct), but an admin who changes a role
+and navigates within `/admin` is shown the **old** role and can reasonably conclude the change
+did not take.
+
+**Where:** `blueprint.ui` `UserDataService.updateStore` —
+`/mnt/data/crucible/blueprint/blueprint.ui/src/app/data/user/user-data.service.ts`.
+
+**Diagnosis:** `updateStore` is the sole write path for user changes (it is called both from the
+`update()` HTTP response and from the SignalR `UserUpdated` handler), and it uses akita's
+`EntityStore.add()`:
+
+```ts
+updateStore(user: User) {
+  this.userStore.add(user);
+  this.userStore.ui.upsert(user.id, this.userQuery.ui.getEntity(user.id));
+}
+```
+
+`add()` is insert-only. Akita's `addEntities` skips any entity whose id is already present
+(`node_modules/@datorama/akita/src/lib/addEntities.js`: `if (hasEntity(state.entities, entity[idKey]) === false)`),
+returning `null` and not touching state when nothing is new. Since the user is already in the
+store, the updated `roleId` is silently discarded.
+
+This looks like a straightforward `add`/`upsert` slip rather than a deliberate choice, on two
+pieces of evidence:
+- **Every other data service uses `upsert` in its update path** — `move`, `catalog`,
+  `catalog-inject`, `catalog-unit`, `invitation`, `inject-type` all end their `updateStore`
+  with `xStore.upsert(x.id, x)` and reserve `add(...)` for the create path.
+- **This same file already uses `upsert` correctly** ten lines earlier: `loadById()` does
+  `this.userStore.upsert(_user.id, { ..._user })`.
+
+The change *looks* applied only because `mat-select` keeps its own selection independently of the
+`[value]` binding it was given.
+
+**Reproduction** (verified against the live stack, `/api/users` + `/admin` → Users):
+1. `POST /api/users` `{"id":"<uuid>","name":"BugProbe"}` → 201, `roleId: null`.
+2. In `/admin` → Users, filter to that user and set its role dropdown to `Observer`.
+3. `PUT /api/users/{id}` fires and returns **200**; `GET /api/users/{id}` reports
+   `roleId: "1da3027e-..."` (Observer). Server state is correct.
+4. Without reloading, click sidebar `Roles`, then sidebar `Users` again, and re-filter to the user.
+
+**Observed:** the role cell renders **"None Locally"** — the pre-change value. A full page load
+(`page.goto('/admin')`) *does* show `Observer`, because that re-fetches via `load()` → `userStore.set()`,
+which replaces state wholesale and so is unaffected.
+
+**Expected:** `this.userStore.upsert(user.id, user)` in `updateStore`, so an updated user replaces
+the stored copy and every consumer of `UserQuery.selectAll()` re-renders with the new role. Note
+this also affects the SignalR path, so a role changed in one browser is never reflected in another
+open admin session.
+
+**Not blocking any test.** `assign-role-to-user.spec.ts` and `remove-role-from-user.spec.ts` assert
+persistence via `GET /api/users/{id}` plus a re-check after a *full page load*, both of which are
+correct behaviour today. They deliberately do **not** assert the SPA-re-render case, so they will
+keep passing after this is fixed.
+
+**Testing note:** this bug is why those specs must not assert role state from the UI label alone —
+and why `adminUserRoleLabel()` reads `.mat-mdc-select-value` rather than the `mat-select`. While the
+dropdown is open the panel's `mat-option`s are DOM children of the `mat-select`, so
+`matSelect.textContent()` returns `"ObserverNone LocallyContent DeveloperAdministrator…"` — every
+option concatenated. A `toContainText('Observer')` against that passes regardless of which role is
+selected, i.e. it is a tautology. The previous versions of both specs asserted exactly that way.
+
+---
+
+## BP-15 — Integration names never render: the deployed-integration name lookups are all blocked by CORS
+
+**Severity:** medium — the MSEL Config tab is meant to show a human-readable name beside
+each deployed integration's GUID. It always shows only the raw GUID, so a user has no way
+to tell *which* Player view / Gallery collection / CITE evaluation / Steamfitter scenario a
+MSEL is wired to without copying the id into another app.
+
+**Where:** `blueprint.ui/src/app/components/msel-info/msel-info.component.ts`
+`fetchIntegrationNames()` (~line 870). It issues browser-side `HttpClient` GETs straight at
+the other services' APIs:
+
+```ts
+this.http.get<any>(`${playerApiUrl}/views/${this.msel.playerViewId}`)      // line ~884
+this.http.get<any>(`${galleryApiUrl}/collections/${...}`)
+this.http.get<any>(`${citeApiUrl}/evaluations/${...}`)
+this.http.get<any>(`${steamfitterApiUrl}/scenarios/${...}`)
+```
+
+Those APIs do not allow the Blueprint UI origin, so every one of these is rejected at
+preflight and each name stays `''`.
+
+**Reproduction (browser):** seed a MSEL with `usePlayer: true`, a real `playerViewId`, and
+`status: 'Deployed'` (the method returns early for any other status), then open the MSEL →
+Config tab. Observed in the console:
+
+```
+Access to XMLHttpRequest at 'http://localhost:4300/api/views/<id>' from origin
+'http://localhost:4725' has been blocked by CORS policy: Response to preflight request
+doesn't pass access control check...
+Failed to load Player View name: HttpErrorResponse
+```
+
+`.integration-name` is never rendered (element count 0), while `.integration-guid` renders
+correctly. Zero requests to the Player API appear in Playwright's response log, confirming
+the browser dropped them at preflight.
+
+**Reproduction (curl) — the CORS side, no browser needed.** Preflight from the Blueprint UI
+origin gets no `Access-Control-Allow-Origin` on **any** of the four services:
+
+```
+for P in 4300 4722 4720 4400; do
+  curl -si -X OPTIONS "http://localhost:$P/api/views/00000000-0000-0000-0000-000000000000" \
+    -H "Origin: http://localhost:4725" \
+    -H "Access-Control-Request-Method: GET" \
+    -H "Access-Control-Request-Headers: authorization"
+done
+# -> 204, but no Access-Control-Allow-* headers on all four
+```
+
+The same preflight sent with each service's *own* UI origin succeeds, e.g. for Player:
+
+```
+curl -si -X OPTIONS http://localhost:4300/api/views/... -H "Origin: http://localhost:4301" ...
+# -> 204 + Access-Control-Allow-Origin: http://localhost:4301
+```
+
+**Diagnosis:** each service's `CorsPolicy:Origins` allowlist omits Blueprint's UI origin.
+`player.api/Player.Api/appsettings.json` lists only `4301`/`4303`; CITE lists `4721`;
+Gallery lists `4723`/`4721`; Steamfitter lists `4401`. `AllowAnyOrigin` is `false` in all
+four. The Aspire AppHost only widens this for Alloy's API
+(`CorsPolicy__Origins__0 = http://localhost:4403`, `__1 = http://localhost:8081`) — nothing
+adds `http://localhost:4725`. Note the *token* is fine: the Blueprint OIDC client requests
+`player cite gallery player-vm steamfitter` scopes, and the same request from a non-browser
+client (curl / Playwright APIRequestContext) returns **200**. This is purely CORS.
+
+**Two candidate fixes, and they differ in kind:**
+1. **Deployment fix** — add the Blueprint UI origin to each service's `CorsPolicy:Origins`
+   (in the Aspire AppHost and the Minikube values). Cheap, but it has to be repeated for
+   every topology and every new consumer.
+2. **Application fix** — have Blueprint's own API proxy the lookups (it already holds
+   client credentials for all four services in `IntegrationService`), so the browser only
+   ever talks to its own origin. This is the more robust option and removes the
+   cross-origin dependency entirely.
+
+**Blocked test:** `player-integration-view-association.spec.ts` carries a second test,
+`Player Integration - View Name Displayed`, `test.skip`-ed pointing here. Its assertion
+(`expect(playerRow.locator('.integration-name')).toHaveText(playerViewName)`) is correct as
+written — confirmed to **fail** with "element(s) not found" when the skip is lifted, so it
+has teeth and will pass once the name loads. Un-skip it then. The equivalent Gallery, CITE
+and Steamfitter names are broken the same way.
 
 ---
 

@@ -146,7 +146,7 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
     // Record the count of rows carrying this spec's catalog name before copy (starts
     // at 1: the original). Scoped by name, not the whole (shared, concurrently-mutated)
     // table, so a sibling spec creating/deleting its own catalog can't shift this count.
-    const catalogNameRows = page.locator('table tbody tr').filter({ hasText: CATALOG_NAME });
+    const catalogNameRows = page.locator('mat-row, tr[mat-row]').filter({ hasText: CATALOG_NAME });
     await expect(catalogNameRows).toHaveCount(1);
 
     // ── Step 3: Copy the catalog ─────────────────────────────────────────────

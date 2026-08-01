@@ -66,29 +66,67 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
       await navItem.click();
       await expect(
         page.locator(`h1:has-text("${section}"), h2:has-text("${section}"), [class*="title"]:has-text("${section}"), mat-toolbar:has-text("${section}")`).first()
-      ).toBeVisible({ timeout: 5000 }).catch(async () => {
-        // Fallback: wait for content to settle
-        await page.waitForTimeout(500);
-      });
+      ).toBeVisible({ timeout: 5000 });
     };
 
-    // Helper: expand a catalog row and open the Injects expansion panel
-    const expandCatalogInjects = async (catalogName: string) => {
-      // 1. Click the catalog row to expand it
-      const catalogRow = page
-        .getByRole('button', { name: `Edit ${catalogName} catalog` })
-        .locator('xpath=ancestor::mat-row[1]');
-      await expect(catalogRow).toBeVisible({ timeout: 5000 });
-      await catalogRow.click();
-      const detailRow = catalogRow.locator('xpath=following-sibling::mat-row[contains(@class, "detail-row")][1]');
+    // Helper: the catalog's own row/detail-row, re-resolved fresh on every call (never
+    // cached across a re-render — see ensureInjectsPanelOpen below for why that matters).
+    const catalogRowFor = (catalogName: string) =>
+      page.getByRole('button', { name: `Edit ${catalogName} catalog` }).locator('xpath=ancestor::mat-row[1]');
+    const detailRowFor = (dataRow: ReturnType<typeof page.locator>) =>
+      dataRow.locator('xpath=following-sibling::mat-row[contains(@class, "detail-row")][1]');
 
-      // 2. Open the "Injects" expansion panel within the expanded detail
-      const injectsPanel = detailRow.locator('mat-expansion-panel').filter({ hasText: 'Injects' });
-      const panelHeader = injectsPanel.getByRole('button', { name: 'Injects' });
-      await expect(panelHeader).toBeVisible({ timeout: 5000 });
-      await panelHeader.click();
-      await expect(injectsPanel.locator('app-inject-list')).toBeVisible({ timeout: 5000 });
-      return detailRow;
+    // Helper: ensure a catalog's row is expanded and its Injects panel is open, then
+    // return the (freshly-resolved) detail row and its app-inject-list.
+    //
+    // This is deliberately idempotent and safe to re-run rather than a single
+    // click-and-hope: AdminCatalogListComponent's mat-table has no trackBy, and every
+    // catalog/inject-type/inject mutation on the shared admin stack broadcasts over
+    // SignalR to every open admin session (Blueprint.Api Hubs/MainHub.cs
+    // AdminDataGroup). A sibling spec's unrelated mutation running concurrently at
+    // --workers 2 causes a full-table re-render that destroys and recreates every
+    // detail row's app-inject-list/mat-expansion-panel — silently re-collapsing an
+    // already-opened Injects panel even though the parent row's own expanded/collapsed
+    // state (tracked separately, by id, in the list component) survives. Wrapping the
+    // whole check-and-open sequence in `toPass` lets a re-render that lands mid-sequence
+    // self-heal on retry instead of failing the test.
+    //
+    // `forceReload` navigates to Inject Types and back to Catalogs first. Toggling the
+    // "Injects" mat-expansion-panel header alone does NOT destroy/recreate its
+    // app-inject-list (Angular Material doesn't unmount panel content on collapse
+    // here), so InjectListComponent.ngOnInit()'s loadByCatalog() GET never re-fires —
+    // whether a just-saved/copied inject shows up depends entirely on winning a race
+    // against the SignalR self-echo, which is unreliable under concurrent load.
+    // AdminContainerComponent only renders <app-admin-catalog-list> while
+    // selectedTab === 'Catalogs' (see admin-container.component.html's `@if`), so
+    // navigating away and back destroys and recreates the whole catalog list — and,
+    // with it, any expanded row's app-inject-list — forcing a real fresh GET.
+    const ensureInjectsPanelOpen = async (catalogName: string, opts: { forceReload?: boolean } = {}) => {
+      if (opts.forceReload) {
+        await navigateTo('Inject Types');
+        await navigateTo('Catalogs');
+      }
+      let injectList!: ReturnType<typeof page.locator>;
+      await expect(async () => {
+        const catalogRow = catalogRowFor(catalogName);
+        await expect(catalogRow).toBeVisible({ timeout: 3000 });
+        let detailRow = detailRowFor(catalogRow);
+        if (!(await detailRow.isVisible().catch(() => false))) {
+          await catalogRow.click({ timeout: 3000 });
+          detailRow = detailRowFor(catalogRow);
+          await expect(detailRow).toBeVisible({ timeout: 3000 });
+        }
+
+        const candidateInjectList = detailRow.locator('app-inject-list');
+        if (!(await candidateInjectList.locator('table').isVisible().catch(() => false))) {
+          const panelHeader = detailRow.getByRole('button', { name: 'Injects' });
+          await expect(panelHeader).toBeVisible({ timeout: 3000 });
+          await panelHeader.click({ timeout: 3000 });
+          await expect(candidateInjectList.locator('table')).toBeVisible({ timeout: 3000 });
+        }
+        injectList = candidateInjectList;
+      }).toPass({ timeout: 20000 });
+      return injectList;
     };
 
     // ── Step 1: Create a prerequisite Inject Type ────────────────────────────
@@ -174,24 +212,28 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
     // ── Step 3: Create an Inject inside the Catalog ──────────────────────────
 
     // 13. Expand the catalog row and open the Injects panel
-    const catalogDetailRow = await expandCatalogInjects(CATALOG_NAME);
+    await ensureInjectsPanelOpen(CATALOG_NAME);
 
-    // 14. Click the "Add Inject" button (plus icon in the inject list header)
-    const injectList = catalogDetailRow.locator('app-inject-list');
-    const addInjectButton = injectList.getByRole('button', { name: 'Add Inject' });
-    await expect(addInjectButton).toBeVisible({ timeout: 5000 });
-    await addInjectButton.click();
-
-    // 15. Choose "New Inject" from the menu — waiting for the menu item below is the
-    // real signal that the mat-menu finished opening.
-    const newInjectMenuItem = page.locator('button[mat-menu-item]:has-text("New Inject"), button:has-text("New Inject")').first();
-    await expect(newInjectMenuItem).toBeVisible({ timeout: 5000 });
-    await newInjectMenuItem.click();
-
-    // 16. Wait for the inject create/edit dialog to open
-    // Angular Material dialogs render as mat-dialog-container. Use a specific selector for the inject dialog
-    // that distinguishes it from the catalog dialog (inject dialog has "Name of the Inject" title attribute)
-    await page.waitForSelector('input[title="The Name of the Inject"]', { timeout: 10000 });
+    // 14/15/16. Click "Add Inject", choose "New Inject", then wait for the create
+    // dialog to open. As noted on ensureInjectsPanelOpen above, a sibling spec's
+    // unrelated mutation running concurrently at --workers 2 can force a full-table
+    // re-render (silently re-collapsing this catalog's Injects panel, or replacing its
+    // "Add Inject" button with a new DOM node) at any point in this sequence. Retry the
+    // whole re-open-panel → click-through-dialog sequence so a re-render landing
+    // mid-sequence self-heals instead of failing the test.
+    await expect(async () => {
+      const injectList = await ensureInjectsPanelOpen(CATALOG_NAME);
+      const addInjectButton = injectList.getByRole('button', { name: 'Add Inject' });
+      await expect(addInjectButton).toBeVisible({ timeout: 3000 });
+      await addInjectButton.click({ timeout: 3000 });
+      const newInjectMenuItem = page.locator('button[mat-menu-item]:has-text("New Inject"), button:has-text("New Inject")').first();
+      await expect(newInjectMenuItem).toBeVisible({ timeout: 3000 });
+      await newInjectMenuItem.click({ timeout: 3000 });
+      // Angular Material dialogs render as mat-dialog-container. Use a specific selector
+      // for the inject dialog that distinguishes it from the catalog dialog (inject
+      // dialog has "Name of the Inject" title attribute).
+      await expect(page.locator('input[title="The Name of the Inject"]')).toBeVisible({ timeout: 3000 });
+    }).toPass({ timeout: 20000 });
 
     // 17. Fill in inject name using the title attribute for precise targeting
     const nameInput = page.locator('input[title="The Name of the Inject"]').first();
@@ -218,48 +260,37 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
     expect((await createInjectResponse).ok(), 'create inject response').toBeTruthy();
     await expect(injectDialog).not.toBeVisible({ timeout: 15000 });
 
-    // The client closes the dialog before it updates the list. Recreate the panel after
-    // the POST completes so its list loads the persisted catalog injects.
-    const reloadInjectsPanel = async () => {
-      const panel = catalogDetailRow.locator('mat-expansion-panel').filter({ hasText: 'Injects' });
-      const header = panel.getByRole('button', { name: 'Injects' });
-      await expect(header).toBeVisible({ timeout: 5000 });
-      if ((await header.getAttribute('aria-expanded')) === 'true') {
-        await header.click();
-      }
-      await header.click();
-      await expect(panel.locator('app-inject-list')).toBeVisible({ timeout: 5000 });
-    };
-
-    await reloadInjectsPanel();
-
+    // The client closes the dialog before it updates the list without re-fetching it
+    // (see ensureInjectsPanelOpen's forceReload doc above) — force a real reload by
+    // navigating away and back so this assertion checks freshly-fetched server state,
+    // not a race against the SignalR self-echo.
+    let injectList = await ensureInjectsPanelOpen(CATALOG_NAME, { forceReload: true });
     // expect: The inject appears in the list
     await expect(injectList.getByRole('cell', { name: INJECT_NAME, exact: true })).toBeVisible({
       timeout: 10000,
     });
 
     // Record the count of inject rows before copy
-    const injectRows = injectList.locator('mat-row, tr[mat-row]');
-    const initialInjectCount = await injectRows.count();
+    const initialInjectCount = await injectList.locator('mat-row, tr[mat-row]').count();
     expect(initialInjectCount).toBeGreaterThan(0);
 
     // ── Step 4: Copy the Inject ──────────────────────────────────────────────
 
-    // 19. Click the copy button for the inject
-    const copyInjectButton = injectList.getByRole('button', {
-      name: new RegExp(`^Copy ${INJECT_NAME}`),
-    });
-    await expect(copyInjectButton).toBeVisible({ timeout: 5000 });
-    await copyInjectButton.click();
+    // 19. Click the copy button for the inject, then wait for the pre-filled copy
+    // dialog to open. Retried as a unit for the same concurrent-re-render reason as the
+    // add-inject sequence above.
+    await expect(async () => {
+      injectList = await ensureInjectsPanelOpen(CATALOG_NAME);
+      const copyInjectButton = injectList.getByRole('button', {
+        name: new RegExp(`^Copy ${INJECT_NAME}`),
+      });
+      await expect(copyInjectButton).toBeVisible({ timeout: 3000 });
+      await copyInjectButton.click({ timeout: 3000 });
+      // expect: Dialog contains "Create an Inject" title
+      await expect(page.locator('mat-dialog-container').filter({ hasText: 'Create' })).toBeVisible({ timeout: 3000 });
+    }).toPass({ timeout: 20000 });
 
-    // 20. The "Create an Inject" dialog opens with a pre-filled copy — waitForSelector
-    // below is the real signal.
-    await page.waitForSelector('mat-dialog-container', { timeout: 5000 });
-    const copyDialog = page.locator('mat-dialog-container').first();
-    await expect(copyDialog).toBeVisible({ timeout: 5000 });
-
-    // expect: Dialog contains "Create an Inject" title
-    await expect(copyDialog).toContainText('Create', { timeout: 5000 });
+    const copyDialog = page.locator('mat-dialog-container').filter({ hasText: 'Create' });
 
     // 21. Save the copy (name and description are pre-filled from the original)
     const copyDialogSaveButton = copyDialog.getByRole('button', { name: 'Save' }).first();
@@ -276,16 +307,14 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
 
     // ── Step 5: Verify the copy exists ──────────────────────────────────────
 
-    await reloadInjectsPanel();
-
-    // 22. Verify the inject count increased by 1
-    // Use expect with retry to allow for async data reload after copy
+    // 22/23. Verify the inject count increased by 1, and the original inject name is
+    // still visible (both original and copy). Force a real reload (see above) so the
+    // count reflects freshly-fetched server state.
+    injectList = await ensureInjectsPanelOpen(CATALOG_NAME, { forceReload: true });
     await expect(async () => {
-      const newInjectCount = await injectRows.count();
+      const newInjectCount = await injectList.locator('mat-row, tr[mat-row]').count();
       expect(newInjectCount).toBeGreaterThan(initialInjectCount);
     }).toPass({ timeout: 10000 });
-
-    // 23. Verify the original inject name is still visible (both original and copy)
     await expect(
       injectList.getByRole('cell', { name: INJECT_NAME, exact: true }).first()
     ).toBeVisible({ timeout: 5000 });

@@ -6,135 +6,115 @@
 //
 // Test: Remove Role from User
 //
-// In Blueprint, user roles are managed via the Users admin section at /admin.
-// The Users table has columns: ID, Name, Role. Each user row has a mat-select
-// combobox in the Role column. Available roles are:
-//   "None Locally", "Observer", "Content Developer", "Administrator"
+// In Blueprint, system roles are managed via the Users admin section at /admin (a SPA tab —
+// the URL does not change). Each user row's Role cell holds a mat-select whose first option
+// is a literal "None Locally", which maps to `roleId: null`. "Removing" a role therefore
+// means selecting "None Locally".
 //
-// "Removing" a role means setting the role dropdown back to "None Locally".
+// This test seeds its OWN user via `POST /api/users`, and seeds it *with* a role (the POST
+// body honours `roleId`), so the precondition "this user has a role to remove" is
+// established directly instead of by hunting the shared users table for a row that happens
+// to have one. The seeded user is deleted in afterEach.
 //
 // This test:
-//   1. Navigates to the admin section and clicks "Users" in the sidebar
-//   2. Verifies the users table is visible with expected columns
-//   3. Finds a user with a non-"None Locally" role, OR assigns "Observer" to
-//      a "None Locally" user first so there is always a role to remove
-//   4. Sets that user's role to "None Locally" (removing the role)
-//   5. Verifies the role was removed (dropdown shows "None Locally")
-//   6. Reverts the user back to their original role to keep test data clean
+//   1. Seeds a uniquely-named user already holding the Observer role (beforeEach)
+//   2. Opens the Users admin section and filters the list down to that user
+//   3. Asserts the seeded user really does start with the role — the precondition that
+//      makes "removal" meaningful
+//   4. Selects "None Locally" for that row
+//   5. Asserts the row's role label falls back to "None Locally"
+//   6. Asserts `GET /api/users/{id}` reports `roleId: null` — proving the removal persisted
+//      rather than only clearing the mat-select's local selection
 
 import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import {
+  getBlueprintToken,
+  createBlueprintUser,
+  deleteBlueprintUser,
+  getBlueprintUser,
+  getSystemRoleByName,
+  tempBlueprintName,
+  gotoBlueprintAdminSection,
+  findAdminUserRowByName,
+  setAdminUserRole,
+  adminUserRoleLabel,
+} from '../../test-helpers';
 
-// ---------------------------------------------------------------------------
-// Helper: navigate to admin section and click a sidebar item
-// ---------------------------------------------------------------------------
-async function gotoAdminSection(page: any, section: string) {
-  await page.goto(`${Services.Blueprint.UI}/admin`);
-  await page.waitForLoadState('domcontentloaded');
+/** The role the seeded user starts with, and which this spec then removes. */
+const ROLE_TO_REMOVE = 'Observer';
 
-  // Wait for the admin sidebar to load
-  const sidebarItem = page.locator('.appitems-container mat-list-item').filter({ hasText: section }).first();
-  await expect(sidebarItem).toBeVisible({ timeout: 15000 });
-  await sidebarItem.click();
-  await page.waitForLoadState('domcontentloaded');
-
-  // Wait for the table to appear as proof the section loaded
-  await page.locator('table').first().waitFor({ state: 'visible', timeout: 10000 });
-}
+/** The dropdown option that clears a user's role (maps to `roleId: null`). */
+const NO_ROLE_LABEL = 'None Locally';
 
 test.describe('User and Role Management', () => {
+  let token: string;
+  let userId: string;
+  let userName: string;
+  let roleId: string;
+
+  test.beforeEach(async () => {
+    token = await getBlueprintToken();
+    userName = tempBlueprintName('RemoveRole-User');
+    roleId = (await getSystemRoleByName(token, ROLE_TO_REMOVE)).id;
+
+    // Seed our own user, already holding the role, rather than searching the shared users
+    // table for one that has a role and reverting it afterwards. Setup via the API also keeps
+    // the removal itself as the single UI action under test.
+    const created = await createBlueprintUser(token, { name: userName, roleId });
+    userId = created.id;
+
+    // Setup must actually have taken effect, or step 4 would be "removing" nothing.
+    expect(created.roleId).toBe(roleId);
+  });
+
+  test.afterEach(async () => {
+    // Runs even when the test body throws, so a mid-test failure cannot leak the user.
+    await deleteBlueprintUser(token, userId);
+  });
+
   test('Remove Role from User', async ({ blueprintAuthenticatedPage: page }) => {
     await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
 
-    // 2. Navigate to Users admin section
-    // expect: Users admin section is visible with user table
-    await gotoAdminSection(page, 'Users');
+    // 2. Navigate to the Users admin section
+    // expect: Users admin section is visible with the user table
+    await gotoBlueprintAdminSection(page, 'Users');
 
-    // expect: Users table is visible with ID, Name, Role columns
-    const usersTable = page.locator('table');
-    await expect(usersTable).toBeVisible({ timeout: 10000 });
-
-    // expect: Table has expected column headers
+    // expect: Table has the expected column headers
     await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible({ timeout: 5000 });
     await expect(page.getByRole('columnheader', { name: 'Role' })).toBeVisible({ timeout: 5000 });
 
-    // 3. Find a user row with a role dropdown
-    // expect: At least one user is visible in the table
-    const allUserRows = page.locator('table tbody tr').filter({
-      has: page.locator('mat-select'),
-    });
-    await expect(allUserRows.first()).toBeVisible({ timeout: 5000 });
+    // 3. Filter the (paginated) list down to the seeded user and scope everything below to
+    // that one row. Never index into the unfiltered table — the seeded row rarely lands on
+    // page 1, and a row picked by position can be a user another spec is concurrently editing.
+    const userRow = await findAdminUserRowByName(page, userName);
+    await expect(userRow).toContainText(userId);
 
-    const rowCount = await allUserRows.count();
+    // expect: The precondition holds — the row shows the role that is about to be removed.
+    // Without this, a "shows None Locally at the end" assertion would also pass for a user
+    // that never had a role.
+    const roleLabel = adminUserRoleLabel(userRow);
+    await expect(roleLabel).toHaveText(ROLE_TO_REMOVE);
 
-    // Look for a user that already has a non-"None Locally" role
-    let targetRowIndex = -1;
-    let originalRole = '';
-    let assignedRoleForTest = false;
+    // ...and it holds server-side too, not just as a rendered label.
+    expect((await getBlueprintUser(token, userId)).roleId).toBe(roleId);
 
-    for (let i = 0; i < rowCount; i++) {
-      const row = allUserRows.nth(i);
-      const roleSelect = row.locator('mat-select');
-      const roleText = (await roleSelect.textContent()) ?? '';
-      if (!roleText.trim().includes('None Locally') && roleText.trim() !== '') {
-        targetRowIndex = i;
-        originalRole = roleText.trim();
-        break;
-      }
-    }
+    // 4. Remove the role by selecting "None Locally"
+    await setAdminUserRole(page, userRow, userId, NO_ROLE_LABEL);
 
-    // If no user has a non-"None Locally" role, assign "Observer" to the first
-    // user so we have something to remove in this test
-    if (targetRowIndex === -1) {
-      const firstRow = allUserRows.first();
-      const firstRoleSelect = firstRow.locator('mat-select');
-      await firstRoleSelect.click();
+    // 5. expect: The row's role label falls back to "None Locally"
+    await expect(roleLabel).toHaveText(NO_ROLE_LABEL);
 
-      const observerOption = page.locator('mat-option').filter({ hasText: 'Observer' });
-      await expect(observerOption).toBeVisible({ timeout: 5000 });
-      await observerOption.click();
+    // 6. expect: The removal persisted server-side — `roleId` is back to null.
+    // This is the assertion with teeth: the mat-select holds its own selection independently
+    // of the app's store, so the label alone would read "None Locally" even if the PUT had
+    // never been applied.
+    const persisted = await getBlueprintUser(token, userId);
+    expect(persisted.roleId).toBeNull();
 
-      // Wait for the dropdown to update with the new selection
-      await expect(firstRoleSelect).toContainText('Observer', { timeout: 5000 });
-
-      targetRowIndex = 0;
-      originalRole = 'None Locally';
-      assignedRoleForTest = true;
-    }
-
-    // 4. Open the role dropdown for the target user and select "None Locally"
-    // expect: Role is removed (set to "None Locally")
-    const targetRow = allUserRows.nth(targetRowIndex);
-    const roleSelect = targetRow.locator('mat-select');
-    await expect(roleSelect).toBeVisible({ timeout: 5000 });
-
-    await roleSelect.click();
-
-    const noneLocallyOption = page.locator('mat-option').filter({ hasText: 'None Locally' }).first();
-    await expect(noneLocallyOption).toBeVisible({ timeout: 5000 });
-    await noneLocallyOption.click();
-
-    // 5. Verify the role was removed (dropdown shows "None Locally")
-    // expect: Role dropdown now shows "None Locally"
-    await expect(roleSelect).toContainText('None Locally', { timeout: 5000 });
-
-    // 6. Revert: Restore the original role to avoid side effects
-    // Re-open the dropdown (if it closed after the first selection)
-    const matOptions = page.locator('mat-option');
-    if (!(await matOptions.first().isVisible({ timeout: 1000 }).catch(() => false))) {
-      await roleSelect.click();
-      // Wait for options to appear
-      await expect(matOptions.first()).toBeVisible({ timeout: 5000 });
-    }
-
-    const originalOption = page.locator('mat-option').filter({ hasText: originalRole }).first();
-    if (await originalOption.isVisible({ timeout: 2000 })) {
-      await originalOption.click();
-      // Wait for the dropdown to update with the new selection - the assertion above already verifies
-      // the dropdown displays the original role text
-      await expect(roleSelect).toContainText(originalRole, { timeout: 5000 });
-    } else {
-      // Fallback: close dropdown without changing (role should still be "None Locally")
-      await page.keyboard.press('Escape');
-    }
+    // expect: ...and a fresh load of the users list still shows no role, so the removal
+    // survives beyond the component that made it.
+    await gotoBlueprintAdminSection(page, 'Users');
+    const reloadedRow = await findAdminUserRowByName(page, userName);
+    await expect(adminUserRoleLabel(reloadedRow)).toHaveText(NO_ROLE_LABEL);
   });
 });

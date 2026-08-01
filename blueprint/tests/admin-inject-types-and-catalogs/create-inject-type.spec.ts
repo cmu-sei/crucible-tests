@@ -5,11 +5,41 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
-
-const INJECT_TYPE_NAME = 'Create Inject Type Test';
-const DATA_FIELD_NAME = 'Create Inject Type Test Data Field';
+import { getBlueprintToken, tempBlueprintName } from '../../test-helpers';
 
 test.describe('Admin - Inject Types and Catalogs Management', () => {
+  // Unique per run so concurrent runs / leftovers from an interrupted prior run never
+  // collide, and the teardown purge auto-sweeps by the tempBlueprintName shape.
+  let INJECT_TYPE_NAME: string;
+  let DATA_FIELD_NAME: string;
+
+  test.beforeEach(() => {
+    INJECT_TYPE_NAME = tempBlueprintName('CreateIT');
+    DATA_FIELD_NAME = tempBlueprintName('CreateITField');
+  });
+
+  // Cleanup runs in afterEach (not inline at the end of the test body) so a mid-test
+  // failure still deletes what this test created. DataFields belong to the InjectType
+  // and are cascade-deleted with it (Blueprint.Api.Data DataFieldEntityConfiguration:
+  // InjectType -> DataFields is DeleteBehavior.Cascade), so deleting the inject type is
+  // sufficient cleanup for both.
+  test.afterEach(async () => {
+    const token = await getBlueprintToken();
+    const headers = { Authorization: `Bearer ${token}` };
+
+    const response = await fetch(`${Services.Blueprint.API}/api/injectTypes`, { headers });
+    if (!response.ok) return;
+
+    for (const record of (await response.json()) as Array<{ id: string; name: string }>) {
+      if (record.name === INJECT_TYPE_NAME) {
+        await fetch(`${Services.Blueprint.API}/api/injectTypes/${record.id}`, {
+          method: 'DELETE',
+          headers,
+        });
+      }
+    }
+  });
+
   test('Create Inject Type', async ({ blueprintAuthenticatedPage: page }) => {
     await page.goto(`${Services.Blueprint.UI}/admin`);
     await expect(page.locator('mat-list-item').first()).toBeVisible({ timeout: 10000 });
@@ -22,27 +52,7 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
       await expect(page.locator('mat-toolbar, [class*="topbar"], table').first()).toBeVisible({ timeout: 5000 });
     };
 
-    // Helper: delete all rows whose delete button name matches a pattern
-    const deleteAllMatching = async (namePattern: RegExp) => {
-      let deleteBtn = page.getByRole('button', { name: namePattern }).first();
-      while (await deleteBtn.isVisible().catch(() => false)) {
-        await deleteBtn.click();
-        const confirmDialog = page.locator(
-          '[role="dialog"], .mat-dialog-container, [class*="dialog"]'
-        ).first();
-        await expect(confirmDialog).toBeVisible({ timeout: 5000 });
-        const confirmButton = page.locator(
-          'button:has-text("Confirm"), button:has-text("Delete"), button:has-text("Yes"), button:has-text("OK")'
-        ).last();
-        await confirmButton.click();
-        deleteBtn = page.getByRole('button', { name: namePattern }).first();
-      }
-    };
-
-    // ── Step 0: Pre-cleanup ──────────────────────────────────────────────────
-
     await navigateTo('Inject Types');
-    await deleteAllMatching(new RegExp(`^Delete ${INJECT_TYPE_NAME}`));
 
     // ── Step 1: Create the Inject Type ───────────────────────────────────────
 
@@ -132,8 +142,6 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
       page.locator('mat-cell', { hasText: DATA_FIELD_NAME }).locator('visible=true').first()
     ).toBeVisible({ timeout: 10000 });
 
-    // ── Step 7: Cleanup ──────────────────────────────────────────────────────
-
-    await deleteAllMatching(new RegExp(`^Delete ${INJECT_TYPE_NAME}`));
+    // Cleanup happens in afterEach (via the API) so a mid-test failure still cleans up.
   });
 });
