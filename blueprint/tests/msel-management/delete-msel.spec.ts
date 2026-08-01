@@ -2,108 +2,161 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 // spec: specs/blueprint-test-plan.md
-// seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
+import {
+  getBlueprintToken,
+  createMsel,
+  deleteMsel,
+  tempBlueprintName,
+  findMselRowByName,
+} from '../../test-helpers';
 
+/**
+ * Deleting a MSEL from the /build list, including the confirm/cancel paths and the
+ * template guard.
+ *
+ * The delete control's markup is easy to get wrong, and the previous version of this spec
+ * did: it looked for `button[title*="Delete"]` inside the row, which matches nothing. In
+ * `msel-list.component.html` the trash button carries **no** `title` of its own — the
+ * tooltip lives on a wrapping `<span [title]="getDeleteTooltip(element)">`, and the button
+ * is identified only by its `mdi-trash-can-outline` icon. The row's titled buttons are
+ * "Download <name>" and "Copy <name>".
+ *
+ * Delete is disabled when: the app isn't ready, the user lacks manage permission, the MSEL
+ * status is `Deployed`, or the MSEL `isTemplate`. The template case is asserted here.
+ *
+ * The confirm dialog is Angular Material's, reached via `getByRole('dialog')`; it renders
+ * "Are you sure that you want to delete <name>?" with NO / YES buttons (see
+ * `msel-list.component.ts` `delete()`).
+ */
 test.describe('MSEL Management', () => {
-  test('Delete MSEL', async ({ blueprintAuthenticatedPage: page }) => {
-    await page.goto(`${Services.Blueprint.UI}/build`);
+  let token: string;
+  let mselId: string;
+  let templateMselId: string;
+  let mselName: string;
+  let templateMselName: string;
 
-    // 1. Navigate to MSELs list
-    await expect(page).toHaveURL(/.*\/build.*/, { timeout: 10000 });
-    await page.waitForLoadState('networkidle');
+  test.beforeEach(async () => {
+    token = await getBlueprintToken();
+    mselName = tempBlueprintName('TestBP-Delete');
+    templateMselName = tempBlueprintName('TestBP-DeleteTemplate');
 
-    // expect: MSELs list is visible
-    const mselRows = page.getByRole('row').filter({ hasNotText: 'Name Description Template Status Created By Date Created Date Modified' });
-    const initialCount = await mselRows.count();
+    const created = await createMsel(token, {
+      name: mselName,
+      description: 'Test MSEL for deletion',
+      isTemplate: false,
+    });
+    mselId = created.id;
 
-    if (initialCount === 0) {
-      test.skip();
-      return;
-    }
+    const template = await createMsel(token, {
+      name: templateMselName,
+      description: 'Template MSEL — delete must be disabled',
+      isTemplate: true,
+    });
+    templateMselId = template.id;
+  });
 
-    // Find a non-template MSEL to delete (template MSELs have disabled delete buttons)
-    // Get all delete buttons and find the first enabled one
-    const deleteButtons = page.getByRole('button', { name: /Delete .+/ });
-    const deleteButtonCount = await deleteButtons.count();
-
-    let deleteButton = null;
-    for (let i = 0; i < deleteButtonCount; i++) {
-      const btn = deleteButtons.nth(i);
-      const isEnabled = await btn.isEnabled().catch(() => false);
-      if (isEnabled) {
-        deleteButton = btn;
-        break;
+  test.afterEach(async () => {
+    // The non-template MSEL is deleted through the UI as part of the test; deleting again
+    // is a no-op (deleteMsel swallows 404), which keeps cleanup correct if the test failed
+    // before reaching the delete.
+    for (const [label, id] of [
+      ['MSEL', mselId],
+      ['template MSEL', templateMselId],
+    ] as Array<[string, string]>) {
+      try {
+        if (id) await deleteMsel(token, id);
+      } catch (err) {
+        console.warn(`Cleanup failed for ${label} ${id}: ${err}`);
       }
     }
+  });
 
-    if (!deleteButton) {
-      console.log('No enabled delete buttons found - all MSELs may be templates');
-      test.skip();
-      return;
-    }
+  test('Delete MSEL', async ({ blueprintAuthenticatedPage: page }) => {
+    await page.goto(`${Services.Blueprint.UI}/build`, { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('table').first()).toBeVisible({ timeout: 15000 });
 
-    await expect(deleteButton).toBeVisible({ timeout: 5000 });
+    // findMselRowByName types into the Search box first, so the row is on page 1 despite
+    // the ~19 pre-existing MSELs and pagination.
+    const mselRow = await findMselRowByName(page, mselName);
+    await expect(mselRow).toBeVisible();
 
-    // 2. Click the delete icon for a non-template MSEL
+    // The trash button has no title/aria-label — identify it by its icon.
+    const deleteButton = mselRow.locator('button:has(mat-icon[fontIcon="mdi-trash-can-outline"])');
+    await expect(deleteButton).toBeVisible();
+    await expect(deleteButton).toBeEnabled();
+
+    // --- Cancel path: the MSEL must survive ---
     await deleteButton.click();
 
-    // expect: A confirmation dialog appears asking to confirm deletion
-    await page.waitForTimeout(500);
-    const confirmDialog = page.locator(
-      '[role="dialog"], [class*="dialog"], [class*="modal"], .mat-dialog-container'
-    ).first();
-    await expect(confirmDialog).toBeVisible({ timeout: 5000 });
+    const confirmDialog = page.getByRole('dialog').first();
+    await expect(confirmDialog).toBeVisible({ timeout: 10000 });
+    await expect(confirmDialog.getByText(new RegExp(`delete ${mselName}`))).toBeVisible();
 
-    // 3. Click 'Cancel'
-    const cancelButton = page.locator(
-      'button:has-text("Cancel"), button:has-text("No")'
-    ).first();
-    await cancelButton.click();
+    await confirmDialog.getByRole('button', { name: /^NO$/i }).click();
+    await expect(confirmDialog).not.toBeVisible({ timeout: 10000 });
 
-    // expect: The dialog closes
-    await page.waitForTimeout(500);
-    await expect(confirmDialog).not.toBeVisible();
+    // Still present in the UI...
+    await expect(mselRow).toBeVisible();
+    // ...and still present server-side, which is the assertion that actually matters.
+    const afterCancel = await fetch(`${Services.Blueprint.API}/api/msels/${mselId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(afterCancel.status).toBe(200);
 
-    // expect: The MSEL is not deleted
-    const countAfterCancel = await mselRows.count();
-    expect(countAfterCancel).toBe(initialCount);
-
-    // Click the delete icon again
+    // --- Confirm path ---
     await deleteButton.click();
+    await expect(confirmDialog).toBeVisible({ timeout: 10000 });
 
-    // expect: Confirmation dialog appears again
-    await expect(confirmDialog).toBeVisible({ timeout: 5000 });
-
-    // Click 'Confirm' or 'Delete' button to confirm deletion
-    const confirmButton = page.locator(
-      'button:has-text("Delete"), button:has-text("Confirm"), button:has-text("Yes"), button:has-text("OK")'
-    ).last();
-    await confirmButton.click();
-
-    // expect: The MSEL is deleted successfully
-    await page.waitForLoadState('networkidle');
-
-    // expect: The MSEL is removed from the list
-    const countAfterDelete = await mselRows.count();
-    expect(countAfterDelete).toBeLessThan(initialCount);
-
-    // 4. Observe the delete button on a template MSEL
-    // expect: The delete button is disabled for template MSELs
-    // Find a row with the template checkbox checked
-    const templateRows = page.locator(
-      'table tbody tr:has(mat-checkbox input[type="checkbox"]:checked)'
+    // Pair the confirm click with the DELETE it triggers, so the write is known-complete.
+    const deleteResponse = page.waitForResponse(
+      (r) => r.url().includes(`/api/msels/${mselId}`) && r.request().method() === 'DELETE',
+      { timeout: 15000 }
     );
-    const templateRowCount = await templateRows.count();
+    await confirmDialog.getByRole('button', { name: /^YES$/i }).click();
+    expect((await deleteResponse).status()).toBe(204);
 
-    if (templateRowCount > 0) {
-      const templateDeleteButton = templateRows.first().locator(
-        'button[title*="Delete"], button[aria-label*="Delete"], button:has(mat-icon:has-text("delete"))'
-      ).first();
-      const deleteDisabled = await templateDeleteButton.isDisabled().catch(() => true);
-      // expect: Delete button is disabled for template MSELs
-      expect(deleteDisabled).toBe(true);
-    }
+    await expect(confirmDialog).not.toBeVisible({ timeout: 10000 });
+
+    // Gone server-side. This SHOULD be a clean 404, but Blueprint currently answers 500
+    // with a NullReferenceException stack trace for any nonexistent MSEL id — app bug
+    // BP-4, see blueprint/blueprint-app-bugs.md. Accepting 500 here keeps this spec
+    // focused on the delete behaviour it is actually testing instead of failing on a
+    // separate, already-reported API defect. Tighten this to exactly 404 once BP-4 is
+    // fixed; the assertion below proves the record is really gone either way.
+    const afterDelete = await fetch(`${Services.Blueprint.API}/api/msels/${mselId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(
+      [404, 500],
+      `GET on a deleted MSEL returned ${afterDelete.status}; expected 404 (or 500 while BP-4 is open)`
+    ).toContain(afterDelete.status);
+    // Independent of status code: the MSEL must no longer be in the list payload.
+    const remaining = (await (
+      await fetch(`${Services.Blueprint.API}/api/msels`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    ).json()) as Array<{ id: string }>;
+    expect(remaining.map((m) => m.id)).not.toContain(mselId);
+
+    // Gone from the list too — search is still filtered to this name, so the row must go.
+    await expect(page.getByRole('row').filter({ hasText: mselName })).toHaveCount(0, {
+      timeout: 15000,
+    });
+
+    // --- Template guard: delete must be disabled for a template MSEL ---
+    const templateRow = await findMselRowByName(page, templateMselName);
+    await expect(templateRow).toBeVisible();
+
+    const templateDeleteButton = templateRow.locator(
+      'button:has(mat-icon[fontIcon="mdi-trash-can-outline"])'
+    );
+    await expect(templateDeleteButton).toBeDisabled();
+
+    // The tooltip explaining why lives on the wrapping span, not the button.
+    await expect(
+      templateRow.locator('span[title="Cannot delete template MSELs"]')
+    ).toHaveCount(1);
   });
 });

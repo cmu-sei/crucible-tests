@@ -5,6 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
+import { getBlueprintToken } from '../../test-helpers';
 
 const CATALOG_NAME = 'Create Catalog Test';
 const INJECT_TYPE_NAME = 'Create Catalog Test Inject Type';
@@ -13,6 +14,31 @@ const UNIT_SHORT_NAME = 'CCTU';
 const INJECT_NAME = 'Create Catalog Test Inject';
 
 test.describe('Admin - Inject Types and Catalogs Management', () => {
+  test.afterEach(async () => {
+    const token = await getBlueprintToken();
+    const headers = { Authorization: `Bearer ${token}` };
+
+    for (const [endpoint, name] of [
+      ['/api/catalogs', CATALOG_NAME],
+      ['/api/injectTypes', INJECT_TYPE_NAME],
+      ['/api/units', UNIT_NAME],
+    ] as const) {
+      const response = await fetch(`${Services.Blueprint.API}${endpoint}`, { headers });
+      if (!response.ok) {
+        continue;
+      }
+
+      for (const record of (await response.json()) as Array<{ id: string; name: string }>) {
+        if (record.name === name) {
+          await fetch(`${Services.Blueprint.API}${endpoint}/${record.id}`, {
+            method: 'DELETE',
+            headers,
+          });
+        }
+      }
+    }
+  });
+
   test('Create Catalog', async ({ blueprintAuthenticatedPage: page }) => {
     await page.goto(`${Services.Blueprint.UI}/admin`);
 
@@ -136,10 +162,11 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
     const injectTypeCombobox = page.getByRole('combobox', { name: /Inject Type/i }).first();
     await expect(injectTypeCombobox).toBeVisible({ timeout: 5000 });
     await injectTypeCombobox.click();
-    await page.waitForTimeout(300);
-    const firstOption = page.locator('mat-option, [role="option"]').first();
-    await expect(firstOption).toBeVisible({ timeout: 5000 });
-    await firstOption.click();
+    const injectTypeOption = page
+      .locator('mat-option, [role="option"]')
+      .filter({ hasText: INJECT_TYPE_NAME });
+    await expect(injectTypeOption).toBeVisible({ timeout: 5000 });
+    await injectTypeOption.click();
 
     const saveButton = page.locator('button:has-text("Save"), button[type="submit"]').first();
     await expect(saveButton).toBeEnabled({ timeout: 5000 });
@@ -160,61 +187,59 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
     const editCatalogButton = page.getByRole('button', { name: `Edit ${CATALOG_NAME} catalog` });
     await expect(editCatalogButton).toBeVisible({ timeout: 5000 });
     // Traverse up three levels: button -> mat-cell -> mat-row
-    const catalogDataRow = editCatalogButton.locator('..').locator('..').locator('..');
+    const catalogDataRow = editCatalogButton.locator('xpath=ancestor::mat-row[1]');
     await catalogDataRow.click();
-    await page.waitForTimeout(500);
+    const catalogDetailRow = catalogDataRow.locator(
+      'xpath=following-sibling::mat-row[contains(@class, "detail-row")][1]'
+    );
 
     // ── Step 6: Expand "Units with access" section ───────────────────────────
 
     // The detail row for our catalog is the last in the list; its expansion panels
     // become visible after clicking the data row. Use .last() to target our catalog's panel.
-    const unitsWithAccessPanel = page.locator('mat-expansion-panel-header').filter({ hasText: /Units with access/i }).last();
+    const unitsWithAccessPanel = catalogDetailRow.getByRole('button', { name: 'Units with access' });
     await expect(unitsWithAccessPanel).toBeVisible({ timeout: 5000 });
     await unitsWithAccessPanel.click();
-    await page.waitForTimeout(500);
 
     // ── Step 7: Expand "Add a Unit" and add the unit to the catalog ──────────
 
     // "Add a Unit" is a sub-panel inside "Units with access". Expand it to see available units.
-    const addAUnitPanel = page.locator('mat-expansion-panel-header').filter({ hasText: /Add a Unit/i }).last();
+    const addAUnitPanel = catalogDetailRow.getByRole('button', { name: 'Add a Unit' });
     await expect(addAUnitPanel).toBeVisible({ timeout: 5000 });
     await addAUnitPanel.click();
-    await page.waitForTimeout(500);
 
     // Click the "Add <SHORT_NAME> to this catalog" button for our test unit
-    const addUnitToCatalogButton = page.getByRole('button', {
-      name: new RegExp(`Add ${UNIT_SHORT_NAME} to this catalog`, 'i'),
-    }).first();
+    const catalogUnits = catalogDetailRow.locator('app-catalog-units');
+    const addUnitToCatalogButton = catalogUnits.getByRole('button', {
+      name: `Add ${UNIT_SHORT_NAME} to this catalog`,
+    });
     await expect(addUnitToCatalogButton).toBeVisible({ timeout: 5000 });
     await addUnitToCatalogButton.click();
-    await page.waitForTimeout(500);
 
     // Verify the unit now appears in the "Units with access" list:
     // after adding, a "Remove <SHORT_NAME> from this catalog" button appears
     await expect(
-      page.getByRole('button', { name: new RegExp(`Remove ${UNIT_SHORT_NAME} from this catalog`, 'i') }).first()
+      catalogUnits.getByRole('button', { name: `Remove ${UNIT_SHORT_NAME} from this catalog` })
     ).toBeVisible({ timeout: 5000 });
 
     // ── Step 8: Expand "Injects" section and add an inject to the catalog ────
 
     // The "Injects" expansion panel is in the same detail row as "Units with access".
     // Use .last() to target our catalog's panel (the most recently expanded row).
-    const injectsPanel = page.locator('mat-expansion-panel-header').filter({ hasText: /^Injects$/i }).last();
+    const injectsPanel = catalogDetailRow.getByRole('button', { name: 'Injects' });
     await expect(injectsPanel).toBeVisible({ timeout: 5000 });
     await injectsPanel.click();
-    await page.waitForTimeout(500);
 
     // Click the "Add Inject" button (plus-circle icon) to open the add menu
-    const addInjectButton = page.locator('button[title="Add Inject"]').last();
+    const injectList = catalogDetailRow.locator('app-inject-list');
+    const addInjectButton = injectList.getByRole('button', { name: 'Add Inject' });
     await expect(addInjectButton).toBeVisible({ timeout: 5000 });
     await addInjectButton.click();
-    await page.waitForTimeout(300);
 
     // Click "New Inject" from the dropdown menu
     const newInjectMenuItem = page.locator('button[mat-menu-item]:has-text("New Inject"), button.mat-menu-item:has-text("New Inject"), [role="menuitem"]:has-text("New Inject")').first();
     await expect(newInjectMenuItem).toBeVisible({ timeout: 5000 });
     await newInjectMenuItem.click();
-    await page.waitForTimeout(500);
 
     // Fill in the inject name
     const injectNameField = page.locator('input[placeholder="Name (required)"]').last();
@@ -227,13 +252,24 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
     await injectDescField.fill('Test inject description');
 
     // Save the inject
-    const injectSaveButton = page.locator('button:has-text("Save")').last();
+    const injectDialog = page.locator('mat-dialog-container').last();
+    await expect(injectDialog).toBeVisible({ timeout: 5000 });
+    const injectSaveButton = injectDialog.getByRole('button', { name: 'Save' });
     await expect(injectSaveButton).toBeEnabled({ timeout: 5000 });
     await injectSaveButton.click();
-    await page.waitForTimeout(500);
+    await expect(injectDialog).not.toBeVisible({ timeout: 15000 });
+
+    // Saving an inject collapses this panel. Reopen the panel for the catalog
+    // being tested before asserting the persisted inject.
+    if (!(await injectList.isVisible())) {
+      await injectsPanel.click();
+      await expect(injectList).toBeVisible({ timeout: 5000 });
+    }
 
     // Verify the inject appears in the Injects list
-    await expect(page.locator(`text=${INJECT_NAME}`).first()).toBeVisible({ timeout: 5000 });
+    await expect(injectList.getByRole('cell', { name: INJECT_NAME, exact: true })).toBeVisible({
+      timeout: 5000,
+    });
 
     // ── Step 9: Cleanup ──────────────────────────────────────────────────────
 

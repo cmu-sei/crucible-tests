@@ -2,53 +2,102 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 // spec: specs/blueprint-test-plan.md
-// seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect } from '../../fixtures';
+import {
+  getBlueprintToken,
+  createMsel,
+  deleteMsel,
+  createScenarioEvent,
+  deleteScenarioEvent,
+  navigateToMselSection,
+} from '../../test-helpers';
 
+/**
+ * The MSEL Playbook's two print actions.
+ *
+ * Both app handlers (`printpage()` and `printAllEvents()` in
+ * `msel-playbook.component.ts`) do the same thing: swap `document.body.innerHTML` for the
+ * printable area, call `window.print()`, then immediately `location.reload()`.
+ *
+ * That reload is why the previous version of this spec failed while looking correct: it
+ * stubbed `window.print` to set `window.__printCalled = true`, but the reload destroys the
+ * JS context before the assertion runs, so the flag always read back false. `window.print`
+ * genuinely IS invoked — verified by recording the call somewhere that survives a reload.
+ * This is a test bug, not an application defect.
+ *
+ * The stub records into `sessionStorage`, which persists across the reload within the same
+ * tab. It also suppresses the real print dialog, which would otherwise block the run.
+ */
 test.describe('MSEL Playbook', () => {
+  let token: string;
+  let mselId: string;
+  let eventId: string;
+
+  test.beforeEach(async () => {
+    token = await getBlueprintToken();
+    const msel = await createMsel(token);
+    mselId = msel.id;
+
+    // The playbook needs at least one scenario event to have anything to print.
+    const event = await createScenarioEvent(token, mselId, {
+      description: 'Test scenario event for playbook',
+      deltaSeconds: 0,
+      moveNumber: 1,
+    });
+    eventId = event.id;
+  });
+
+  test.afterEach(async () => {
+    try {
+      if (eventId) await deleteScenarioEvent(token, eventId);
+    } catch (err) {
+      console.warn(`Cleanup failed for event ${eventId}: ${err}`);
+    }
+    try {
+      if (mselId) await deleteMsel(token, mselId);
+    } catch (err) {
+      console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+    }
+  });
+
   test('Print MSEL Playbook', async ({ blueprintAuthenticatedPage: page }) => {
-    // Navigate to a MSEL's Playbook section
-    await page.goto(`${Services.Blueprint.UI}/build`);
-    await page.waitForLoadState('networkidle');
-
-    // Use the specific MSEL "Project Lagoon TTX - Admin User" which has the test data
-    const mselLink = page.getByRole('link', { name: 'Project Lagoon TTX - Admin User' });
-    await expect(mselLink).toBeVisible({ timeout: 5000 });
-    await mselLink.click();
-    await page.waitForLoadState('networkidle');
-
-    const playbookNav = page.getByText('MSEL Playbook');
-    await expect(playbookNav).toBeVisible({ timeout: 5000 });
-    await playbookNav.click();
-    await page.waitForLoadState('networkidle');
-
-    // 1. Navigate to MSEL Playbook and click 'Print MSEL Playbook' button
-    const printButton = page.getByRole('button', { name: 'Print MSEL Playbook' });
-    await expect(printButton).toBeVisible({ timeout: 5000 });
-
-    // Set up dialog listener to dismiss the print dialog
-    page.on('dialog', async (dialog) => {
-      await dialog.dismiss().catch(() => {});
+    // Stub window.print before any app code runs. sessionStorage survives the
+    // location.reload() the print handlers trigger; a plain window property would not.
+    await page.addInitScript(() => {
+      window.print = () => {
+        const count = Number(sessionStorage.getItem('__printCount') ?? '0') + 1;
+        sessionStorage.setItem('__printCount', String(count));
+      };
     });
 
-    // Listen for print events via window.print mock
-    const printCalled = await page.evaluate(() => {
-      return new Promise<boolean>((resolve) => {
-        const originalPrint = window.print;
-        window.print = () => {
-          window.print = originalPrint;
-          resolve(true);
-        };
-        setTimeout(() => resolve(false), 3000);
-      });
-    });
+    await navigateToMselSection(page, mselId, 'MSEL Playbook');
 
-    await printButton.click();
+    const printCount = () =>
+      page.evaluate(() => Number(sessionStorage.getItem('__printCount') ?? '0'));
 
-    // expect: The browser's print dialog opens (window.print called)
-    // expect: The printable area content is prepared for printing
-    // The print function call is the expected outcome; actual dialog is OS-level
-    await page.waitForTimeout(1000);
+    const printCurrentPageButton = page.getByRole('button', { name: 'Print Current Page' });
+    const printAllEventsButton = page.getByRole('button', { name: 'Print All Events' });
+
+    await expect(printCurrentPageButton).toBeVisible({ timeout: 15000 });
+    await expect(printAllEventsButton).toBeVisible({ timeout: 10000 });
+
+    // Nothing has printed yet.
+    expect(await printCount()).toBe(0);
+
+    // --- Print Current Page ---
+    await printCurrentPageButton.click();
+
+    // The handler reloads the page; wait for the playbook to come back rather than sleeping,
+    // then read the counter that survived it.
+    await expect(printCurrentPageButton).toBeVisible({ timeout: 15000 });
+    await expect.poll(printCount, { timeout: 15000 }).toBe(1);
+
+    // --- Print All Events ---
+    // This handler expands pageSize to every event, prints, then restores and reloads.
+    await printAllEventsButton.click();
+
+    await expect(printAllEventsButton).toBeVisible({ timeout: 15000 });
+    await expect.poll(printCount, { timeout: 15000 }).toBe(2);
   });
 });

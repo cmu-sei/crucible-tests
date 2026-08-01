@@ -52,6 +52,13 @@ const PROVISION: ProvisionTarget[] = [
     // reliable "authenticated shell is up" marker for CITE.
     appShellSelector: 'app-root mat-toolbar',
   },
+  {
+    app: 'blueprint',
+    homeUrl: Services.Blueprint.UI,
+    // mat-toolbar renders only after the OIDC client resolves a user, so it is a
+    // reliable "authenticated shell is up" marker for Blueprint.
+    appShellSelector: 'app-root mat-toolbar',
+  },
 ];
 
 /**

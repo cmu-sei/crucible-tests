@@ -2,206 +2,105 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 // spec: specs/blueprint-test-plan.md
-// seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect } from '../../fixtures';
+import {
+  getBlueprintToken,
+  createMsel,
+  deleteMsel,
+  createRenderableScenarioEvent,
+  navigateToMselSection,
+  getScenarioEvent,
+} from '../../test-helpers';
 
+/**
+ * Editing a scenario event through the row's Action List → Edit dialog.
+ *
+ * Three things about this surface are easy to get wrong, and the previous version of this
+ * spec got all three:
+ *
+ * 1. **The row action button must be scoped to a row.** The table header carries its own
+ *    `Action List` button whose menu is `["Add New Event", "Add Inject from Catalog"]` —
+ *    no Edit item. `getByRole('button', { name: /Action List/i }).first()` picks *that*
+ *    one, so the Edit menu item never appears. Each event row has a
+ *    `title="Event N Action List"` button; the row menu is
+ *    `["View", "Edit", "Highlight", "Copy", "Delete"]`.
+ * 2. **The save request path is lowercase**: `PUT /api/scenarioevents/{id}`. A
+ *    `url().includes('/api/scenarioEvents')` predicate never matches and the wait times out.
+ * 3. **The edit dialog has no "Row Metadata" field.** Its inputs are the MSEL's data
+ *    fields (Control Number, Expected Actions, Move, Details, Delivery Time, Simulated
+ *    Time, Group, From Org, Status, ...) plus the execution date/time. The old spec looked
+ *    for a nonexistent field inside `if (await ...isVisible())`, so the edit silently
+ *    never happened and the test asserted a save of nothing.
+ *
+ * Scenario events also need the MSEL to have data fields before the grid renders any rows
+ * at all — `createRenderableScenarioEvent` handles that.
+ */
 test.describe('Scenario Events Management', () => {
+  let token: string;
+  let mselId: string;
+  let eventId: string;
+
+  test.beforeEach(async () => {
+    token = await getBlueprintToken();
+    const msel = await createMsel(token);
+    mselId = msel.id;
+
+    const event = await createRenderableScenarioEvent(token, mselId, 'Original event description', {
+      deltaSeconds: 600,
+      rowMetadata: 'EDIT-001',
+    });
+    eventId = event.id;
+  });
+
+  test.afterEach(async () => {
+    // Deleting the MSEL cascades to its events and data fields.
+    try {
+      if (mselId) await deleteMsel(token, mselId);
+    } catch (err) {
+      console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+    }
+  });
+
   test('Edit Scenario Event', async ({ blueprintAuthenticatedPage: page }) => {
+    await navigateToMselSection(page, mselId, 'Scenario Events');
 
-    // 1. Navigate to a MSEL with existing scenario events
-    await page.goto(`${Services.Blueprint.UI}/build`);
-    await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(1000);
+    // The seeded event's row. Rows render only once the MSEL has data fields; the last
+    // tbody row is the event (earlier rows are Move-start header rows).
+    const eventRow = page.locator('table tbody tr').last();
+    await expect(eventRow).toBeVisible({ timeout: 15000 });
 
-    // Check if already on a MSEL page or need to select one
-    let scenarioEventsNav = page.locator('text=Scenario Events').first();
-    let isOnMselPage = await scenarioEventsNav.isVisible({ timeout: 2000 }).catch(() => false);
+    // Open the ROW's action menu, not the header's.
+    await eventRow.getByRole('button', { name: /Action List/i }).click();
+    await page.getByRole('menuitem', { name: 'Edit', exact: true }).click();
 
-    if (!isOnMselPage) {
-      // We're on the MSEL list page, try to find a MSEL with events
-      const mselLinks = page.locator('a[href*="msel"]');
-      const mselCount = await mselLinks.count();
+    const dialog = page.getByRole('dialog').filter({ hasText: 'Edit Event' });
+    await expect(dialog).toBeVisible({ timeout: 10000 });
 
-      if (mselCount === 0) {
-        console.error('No MSEL found in the application. Test cannot proceed without existing MSELs.');
-        throw new Error('No MSEL found. Please ensure at least one MSEL exists in Blueprint before running this test.');
-      }
+    // Edit a field that genuinely exists on this dialog, and prove it took.
+    const controlNumber = dialog.locator('input[placeholder="Control Number"]');
+    await expect(controlNumber).toBeVisible({ timeout: 10000 });
+    const newControlNumber = `EDITED-${eventId.slice(0, 8)}`;
+    await controlNumber.fill(newControlNumber);
+    await expect(controlNumber).toHaveValue(newControlNumber);
 
-      // Try each MSEL to find one with events
-      let foundMselWithEvents = false;
-      for (let i = 0; i < Math.min(mselCount, 5); i++) {
-        await page.goto(`${Services.Blueprint.UI}/build`);
-        await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(500);
+    // Save, paired with the PUT it triggers (lowercase path).
+    const savePromise = page.waitForResponse(
+      (res) =>
+        /\/api\/scenarioevents\//i.test(res.url()) && res.request().method() === 'PUT',
+      { timeout: 15000 }
+    );
+    await dialog.getByRole('button', { name: /^Save$/ }).click();
+    expect((await savePromise).status()).toBe(200);
 
-        const mselLink = page.locator('a[href*="msel"]').nth(i);
-        await mselLink.click();
-        await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(1000);
+    await expect(dialog).not.toBeVisible({ timeout: 10000 });
 
-        // Check if Scenario Events nav is visible
-        scenarioEventsNav = page.locator('text=Scenario Events').first();
-        if (await scenarioEventsNav.isVisible({ timeout: 2000 }).catch(() => false)) {
-          await scenarioEventsNav.click();
-          await page.waitForLoadState('domcontentloaded');
-          await page.waitForTimeout(1000);
+    // The edit is persisted server-side, in the Control Number data value.
+    const persisted = await getScenarioEvent(token, eventId);
+    const values = (persisted.dataValues ?? []).map((dv: any) => dv.value);
+    expect(values).toContain(newControlNumber);
 
-          // Check if this MSEL has events
-          const testEventRows = page.locator('table tbody tr');
-          const testEventCount = await testEventRows.count();
-
-          if (testEventCount > 0) {
-            console.log(`Found MSEL with ${testEventCount} events`);
-            foundMselWithEvents = true;
-            break;
-          }
-        }
-      }
-
-      if (!foundMselWithEvents) {
-        // Go back to first MSEL as fallback
-        await page.goto(`${Services.Blueprint.UI}/build`);
-        await page.waitForLoadState('domcontentloaded');
-        const firstMselLink = page.locator('a[href*="msel"]').first();
-        await firstMselLink.click();
-        await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(1000);
-      }
-    }
-
-    // expect: MSEL details page is displayed
-    // Verify we're on a MSEL page by checking for Scenario Events nav
-    scenarioEventsNav = page.locator('text=Scenario Events').first();
-    await expect(scenarioEventsNav).toBeVisible({ timeout: 5000 });
-
-    // Navigate to Scenario Events section if not already there
-    if (!await page.locator('table tbody tr').first().isVisible({ timeout: 2000 }).catch(() => false)) {
-      await scenarioEventsNav.click();
-      await page.waitForLoadState('domcontentloaded');
-      await page.waitForTimeout(1000);
-    }
-
-    // expect: MSEL details page shows events section
-
-    // Check if there are any events to edit
-    const eventRows = page.locator('table tbody tr');
-    const eventCount = await eventRows.count();
-
-    if (eventCount === 0) {
-      console.error('No scenario events found in any MSEL. Please manually add events to at least one MSEL before running this test.');
-      throw new Error('No scenario events found in any checked MSEL. Please create at least one scenario event before running this test.');
-    }
-
-    console.log(`Found ${eventCount} events in the current MSEL`);
-
-    // 2. Click the Action List button for the first event to open the menu
-    const actionListButton = page.getByRole('button', { name: /Event \d+ Action List/ }).first();
-    await expect(actionListButton).toBeVisible({ timeout: 5000 });
-    await actionListButton.click();
-
-    // Wait for the menu to appear
-    await page.waitForTimeout(500);
-
-    // Click the Edit option from the menu
-    const editMenuItem = page.locator('menuitem:has-text("Edit"), [role="menuitem"]:has-text("Edit")').first();
-    await expect(editMenuItem).toBeVisible({ timeout: 5000 });
-    await editMenuItem.click();
-
-    // expect: Event edit form is displayed
-    await page.waitForTimeout(1000);
-    const dialog = page.getByRole('dialog', { name: 'Edit Event' });
-    await expect(dialog).toBeVisible({ timeout: 5000 });
-
-    // expect: All fields are populated with current values
-    // The form structure varies based on event type. Let's work with the Control Number field which is always present
-    const controlNumberField = page.getByLabel('Control Number');
-
-    if (await controlNumberField.isVisible({ timeout: 2000 }).catch(() => false)) {
-      // expect: Control Number field is populated
-      const currentControlNumber = await controlNumberField.inputValue();
-      expect(currentControlNumber).toBeTruthy();
-      console.log(`Current Control Number: ${currentControlNumber}`);
-
-      // 3. Modify the Control Number field
-      const timestamp = Date.now().toString().slice(-6);
-      const newControlNumber = `TEST-${timestamp}`;
-      await controlNumberField.fill('');
-      await controlNumberField.fill(newControlNumber);
-
-      // expect: Control Number field accepts new value
-      await expect(controlNumberField).toHaveValue(newControlNumber);
-      console.log(`Updated Control Number to: ${newControlNumber}`);
-    }
-
-    // 4. Check for Status dropdown and change it if available
-    const statusDropdown = page.getByLabel('Status');
-
-    if (await statusDropdown.isVisible({ timeout: 2000 }).catch(() => false)) {
-      const currentStatus = await statusDropdown.textContent();
-      console.log(`Current Status: ${currentStatus}`);
-
-      // Click the dropdown to see options
-      await statusDropdown.click();
-      await page.waitForTimeout(500);
-
-      // Try to select a different status (if options are available)
-      const statusOptions = page.locator('mat-option');
-      const optionCount = await statusOptions.count();
-
-      if (optionCount > 1) {
-        // Select the second option (different from current)
-        await statusOptions.nth(1).click();
-        console.log('Changed status to a different value');
-      } else {
-        // Close the dropdown if no other options
-        await page.keyboard.press('Escape');
-      }
-    }
-
-    // 5. Click 'Save' button
-    const saveButton = page.getByRole('button', { name: 'Save' }).first();
-    await expect(saveButton).toBeVisible({ timeout: 5000 });
-    await saveButton.click();
-
-    // expect: The event is updated successfully
-    // Dialog should close after successful save
-    await page.waitForTimeout(1000);
-
-    // Check if dialog closed (indicates successful save)
-    const dialogStillVisible = await dialog.isVisible().catch(() => false);
-
-    if (!dialogStillVisible) {
-      console.log('Edit dialog closed successfully - event was updated');
-
-      // expect: Updated control number is visible in the events list (optional verification)
-      // Note: The event list may have updated, but we already verified the form accepted our changes
-      await page.waitForTimeout(500);
-
-      // expect: Event remains in the timeline at its position
-      const eventRows = page.locator('table tbody tr');
-      const updatedEventCount = await eventRows.count();
-      expect(updatedEventCount).toBeGreaterThan(0);
-      console.log(`Events still present in timeline: ${updatedEventCount}`);
-    } else {
-      // Dialog is still open - might be validation errors
-      console.log('Edit dialog still open - may have validation errors');
-
-      // Check for any error messages
-      const errorMessages = page.locator('[class*="error"], [class*="invalid"]');
-      const errorCount = await errorMessages.count();
-
-      if (errorCount > 0) {
-        const errorText = await errorMessages.first().textContent();
-        console.log(`Validation error: ${errorText}`);
-      }
-
-      // Close the dialog
-      const cancelButton = page.getByRole('button', { name: 'Cancel' }).first();
-      if (await cancelButton.isVisible({ timeout: 1000 }).catch(() => false)) {
-        await cancelButton.click();
-        await page.waitForTimeout(500);
-      }
-    }
+    // The row is still listed.
+    await expect(page.locator('table tbody tr').last()).toBeVisible();
   });
 });

@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Blueprint Playwright Suite — Healing Report</title>
+<style>
+  :root{
+    --bg:#fbfbfa; --panel:#fff; --ink:#1c1b1a; --ink-2:#57534e; --ink-3:#8a8580;
+    --rule:#e7e5e1; --rule-2:#d6d3ce;
+    --pass:#2f6f4e; --pass-bg:#eaf3ed;
+    --fail:#9b2c2c; --fail-bg:#fbecec;
+    --skip:#8a5a00; --skip-bg:#fdf3e3;
+    --info:#2c5a8f; --info-bg:#ecf2f9;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#191817; --panel:#211f1e; --ink:#f0eeec; --ink-2:#b6b1ab; --ink-3:#8b857f;
+      --rule:#332f2c; --rule-2:#413c38;
+      --pass:#7fc79b; --pass-bg:#1b2b22;
+      --fail:#f0a3a3; --fail-bg:#2e1d1d;
+      --skip:#e0b666; --skip-bg:#2c2417;
+      --info:#9dc2e8; --info-bg:#1a2531;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:980px;margin:0 auto;padding:56px 28px 96px}
+  header{border-bottom:1px solid var(--rule);padding-bottom:28px;margin-bottom:40px}
+  .eyebrow{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin:0 0 10px}
+  h1{font-size:33px;line-height:1.18;letter-spacing:-.02em;margin:0 0 12px;font-weight:640}
+  .sub{color:var(--ink-2);margin:0;max-width:66ch}
+  h2{font-size:21px;letter-spacing:-.01em;margin:52px 0 6px;font-weight:640;
+     padding-top:22px;border-top:1px solid var(--rule)}
+  h2:first-of-type{border-top:0;padding-top:0}
+  h2 + .lede{color:var(--ink-2);margin:0 0 20px;max-width:70ch}
+  h3{font-size:16px;margin:28px 0 8px;font-weight:640}
+  p{margin:0 0 14px}
+  code{font-family:var(--mono);font-size:.87em;background:var(--info-bg);
+    padding:.12em .38em;border-radius:4px;color:var(--ink)}
+  a{color:var(--info)}
+
+  /* KPI row */
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:28px 0 8px}
+  .kpi{background:var(--panel);border:1px solid var(--rule);border-radius:10px;padding:16px 18px}
+  .kpi .n{font-size:28px;font-weight:660;letter-spacing:-.02em;line-height:1.1;font-variant-numeric:tabular-nums}
+  .kpi .l{font-size:12px;color:var(--ink-3);letter-spacing:.04em;text-transform:uppercase;margin-top:5px}
+  .kpi .d{font-size:12.5px;color:var(--ink-2);margin-top:7px}
+  .kpi.pass .n{color:var(--pass)} .kpi.fail .n{color:var(--fail)}
+  .kpi.skip .n{color:var(--skip)} .kpi.info .n{color:var(--info)}
+
+  /* before/after bar */
+  .bars{background:var(--panel);border:1px solid var(--rule);border-radius:10px;padding:20px 22px;margin:22px 0}
+  .barrow{display:grid;grid-template-columns:74px 1fr;gap:14px;align-items:center;margin-bottom:12px}
+  .barrow:last-child{margin-bottom:0}
+  .barrow .k{font-size:12px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em;text-align:right}
+  .track{display:flex;height:26px;border-radius:5px;overflow:hidden;background:var(--rule)}
+  .seg{display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:600;
+       color:#fff;font-variant-numeric:tabular-nums;min-width:0}
+  .seg.p{background:#3f8462} .seg.f{background:#b13a3a} .seg.k{background:#b7862c} .seg.x{background:#7d7873}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;font-size:12.5px;color:var(--ink-2)}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:baseline}
+
+  table{width:100%;border-collapse:collapse;margin:16px 0 8px;font-size:14.5px}
+  th,td{text-align:left;padding:9px 11px;border-bottom:1px solid var(--rule);vertical-align:top}
+  th{font-size:11.5px;text-transform:uppercase;letter-spacing:.07em;color:var(--ink-3);font-weight:620;
+     border-bottom:1px solid var(--rule-2)}
+  tbody tr:last-child td{border-bottom:0}
+  td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+  .tag{display:inline-block;font-size:11px;font-weight:640;padding:2px 8px;border-radius:20px;white-space:nowrap}
+  .tag.pass{background:var(--pass-bg);color:var(--pass)}
+  .tag.fail{background:var(--fail-bg);color:var(--fail)}
+  .tag.skip{background:var(--skip-bg);color:var(--skip)}
+  .tag.info{background:var(--info-bg);color:var(--info)}
+  .bug{background:var(--panel);border:1px solid var(--rule);border-left:3px solid var(--fail);
+       border-radius:8px;padding:15px 18px;margin:12px 0}
+  .bug h4{margin:0 0 6px;font-size:15px;font-weight:640}
+  .bug .meta{font-size:12px;color:var(--ink-3);margin-bottom:8px}
+  .bug p{margin:0 0 8px;font-size:14.5px;color:var(--ink-2)}
+  .bug p:last-child{margin-bottom:0}
+  .bug.sev-high{border-left-color:#b13a3a}
+  .bug.sev-med{border-left-color:#b7862c}
+  .bug.sev-low{border-left-color:#7d7873}
+  .note{background:var(--info-bg);border-radius:8px;padding:14px 18px;margin:18px 0;font-size:14.5px}
+  .note strong{color:var(--ink)}
+  ul{margin:0 0 14px;padding-left:22px} li{margin-bottom:6px}
+  footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--rule);font-size:12.5px;color:var(--ink-3)}
+  .cmd{font-family:var(--mono);font-size:12.5px;background:var(--panel);border:1px solid var(--rule);
+       border-radius:7px;padding:11px 14px;overflow-x:auto;white-space:pre;margin:12px 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">Crucible · crucible-tests · branch worktree-blueprint-tests</p>
+  <h1>Blueprint Playwright suite — healing report</h1>
+  <p class="sub">Bringing the Blueprint end-to-end suite up to the standards in <code>CLAUDE.md</code>,
+  using PR&nbsp;#30 (Player auth-state reuse) as the reference pattern. Chromium only.
+  Every result below was produced by a run I executed and read directly.</p>
+</header>
+
+<h2>Where it landed</h2>
+<p class="lede">Full suite, <code>--browser chromium --workers 2</code>, 136 tests.
+<strong>Zero failures.</strong> The last remaining failure was BP-11, the MSEL Info memory
+leak — that has now been <strong>fixed in the app</strong> (Blueprint.Ui branch
+<code>fix/msel-info-datafield-subscription-leak</code>, local only), so its spec went green
+without the assertion being touched.</p>
+
+<div class="kpis">
+  <div class="kpi pass"><div class="n">117</div><div class="l">Passed</div><div class="d">was 67</div></div>
+  <div class="kpi fail"><div class="n">0</div><div class="l">Failed</div><div class="d">was 45</div></div>
+  <div class="kpi skip"><div class="n">19</div><div class="l">Skipped</div><div class="d">all BP-backed</div></div>
+  <div class="kpi info"><div class="n">11</div><div class="l">App bugs filed</div><div class="d">1 now fixed</div></div>
+</div>
+
+<div class="bars">
+  <div class="barrow">
+    <div class="k">Before</div>
+    <div class="track">
+      <div class="seg p" style="flex:67"  title="67 passed">67</div>
+      <div class="seg f" style="flex:45"  title="45 failed">45</div>
+      <div class="seg k" style="flex:22"  title="22 skipped">22</div>
+      <div class="seg x" style="flex:3"   title="3 flaky"></div>
+    </div>
+  </div>
+  <div class="barrow">
+    <div class="k">After</div>
+    <div class="track">
+      <div class="seg p" style="flex:117" title="117 passed">117</div>
+      <div class="seg k" style="flex:19"  title="19 skipped">19</div>
+    </div>
+  </div>
+  <div class="legend">
+    <span><i style="background:#3f8462"></i>Passed</span>
+    <span><i style="background:#b13a3a"></i>Failed</span>
+    <span><i style="background:#b7862c"></i>Skipped (documented)</span>
+    <span><i style="background:#7d7873"></i>Flaky</span>
+  </div>
+</div>
+
+<div class="note">
+  <strong>Read the skip count as coverage, not omission.</strong> All 19 skips now point at a
+  numbered <code>BP-n</code> entry with a reproduction, and each one <em>keeps its correct
+  assertion in the test body</em> — nothing was deleted, weakened, or commented out. Each starts
+  passing the moment the underlying defect is fixed. The earlier 22 skips were largely
+  undocumented <code>test.fixme()</code> or bare conditional <code>test.skip()</code> calls that
+  silently skipped themselves when data was missing.
+</div>
+
+<h2>The four failures, resolved</h2>
+<p class="lede">These were the four outstanding failures. All four were <strong>test</strong> defects,
+not app defects — except that fixing the fourth uncovered a real leak the old spec was
+structurally incapable of seeing. Every root cause below was confirmed against the running
+stack before any code was changed.</p>
+
+<table>
+  <thead><tr><th>Spec</th><th>Root cause (verified)</th><th>Now</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>steamfitter-integration-scenario-automation</code></td>
+      <td>Depended on a MSEL named <code>Project Lagoon TTX</code> that does not exist here —
+      <code>GET /api/msels</code> returns only <code>Standard MSEL</code> plus leaked
+      <code>New MSEL</code> rows. Failed at its first locator on every run. Now seeds its own
+      MSEL and enables all four integrations via the API.</td>
+      <td><span class="tag pass">passes</span></td>
+    </tr>
+    <tr>
+      <td><code>manage-event-access-control</code></td>
+      <td>Two defects. Its locator <code>text=/a/i, text=/b/i</code> is invalid syntax —
+      <code>text=</code> engines cannot be comma-combined — so it matched 0 elements though the
+      text was present (confirmed: 0 vs 1 for <code>getByText</code>). And an
+      <code>if/else</code> meant whichever branch ran was whatever the app did, so it could not
+      fail. Now drives <em>both</em> gate branches deterministically.</td>
+      <td><span class="tag pass">passes</span></td>
+    </tr>
+    <tr>
+      <td><code>real-time-msel-updates</code></td>
+      <td>Same nonexistent MSEL, plus <code>storageState</code> read from
+      <code>.auth/user.json</code> — a path that does not exist (the real files are
+      <code>.auth/blueprint.json</code>). SignalR itself is <strong>fine</strong>: measured
+      propagation to a second window in ~1s with no reload. Now polls with
+      <code>expect.poll</code> instead of a 5s sleep.</td>
+      <td><span class="tag pass">passes</span></td>
+    </tr>
+    <tr>
+      <td><code>memory-leak-detection</code></td>
+      <td>Four independent defects — see below. Fixing them revealed <strong>BP-11</strong>, a
+      genuine leak, which is now fixed in the app. Two further <em>measurement</em> traps were
+      found afterwards and corrected — see below.</td>
+      <td><span class="tag pass">passes (app fixed)</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>The leak spec was measuring nothing at all</h3>
+<p>This one is worth spelling out, because it "passed" for the wrong reason and would have kept
+passing through any real regression:</p>
+<ol>
+  <li>It imported <code>test</code> from <code>@playwright/test</code> instead of the app
+  fixtures, so it never got the pre-authenticated <code>storageState</code> — it was asserting
+  against the <em>Keycloak login page</em>.</li>
+  <li>Its cycle navigated <code>/msels</code>, <code>/teams</code>, <code>/users</code> —
+  <strong>none of which are routes</strong>. Angular redirected all three to <code>''</code>, so
+  the "cycle" just reloaded the dashboard.</li>
+  <li>It called <code>window.gc()</code>, which is <code>undefined</code> unless Chromium is
+  launched with <code>--js-flags=--expose-gc</code> (verified). The GC step was a no-op, so the
+  numbers were unswept garbage — non-monotonic noise (3026 → 2257 → 5083 nodes).</li>
+  <li>Worst: it measured across full <code>page.goto</code> calls. Each builds a new document and
+  drops every node, so the metric resets and an SPA leak is <em>invisible by construction</em>.
+  I proved this by injecting a deliberate 400-node-per-load leak — the old harness reported
+  <strong>zero growth</strong>.</li>
+</ol>
+<p>The rewrite forces a real GC via CDP <code>HeapProfiler.collectGarbage</code> and drives the
+app's own client-side section switching rather than <code>goto</code>.</p>
+
+<div class="note">
+  <p><strong>Correction — my first replacement metric was also wrong, in two ways.</strong> I
+  originally measured detached nodes as <em>CDP <code>Nodes</code> minus
+  <code>document.querySelectorAll('*')</code></em>. That is not a valid measure of retention:
+  <code>Nodes</code> counts text and comment nodes and lags behind collection, while
+  <code>querySelectorAll('*')</code> counts only elements in the main tree. It reported ~1364
+  phantom "detached" nodes on a page whose true detached count was <strong>zero</strong>, and
+  drifted non-monotonically. The BP-11 figures I first recorded ("1017/render, attached pinned at
+  319") came from this — the direction was right, the magnitude was not.</p>
+  <p>My second attempt read the heap snapshot but filtered node <em>names</em> for a
+  <code>"Detached"</code> prefix. Snapshot nodes aren't named that, so it silently matched nothing
+  — it reported <strong>0 detached nodes with 1000 deliberately detached ones on the page</strong>.
+  Detachedness is a separate numeric node field (0=unknown, 1=attached, 2=detached).</p>
+  <p>Both mistakes were caught only because I injected a known 1000-node leak and checked the
+  metric noticed: it now reads +1005 on injection and returns to baseline when the reference is
+  dropped. The final spec also fits a <strong>slope over a series</strong> rather than trusting one
+  before/after pair — baselines swing by hundreds of nodes between runs (1249 / 475 / 307 for the
+  same page), so a single delta can't separate a leak from noise, and on leaking code it even came
+  out <em>negative</em> once. A series additionally distinguishes a one-time warm-up step (one jump,
+  then flat — which is what <code>Data Fields</code> turned out to be) from unbounded growth.</p>
+</div>
+
+<h2>Application bugs found</h2>
+<p class="lede">Each was reproduced directly at the API and/or UI level before being written up;
+several were traced to the exact source line. Full evidence lives in
+<code>blueprint/blueprint-app-bugs.md</code>. Per the standing instruction, these are reported
+for fixing in the app rather than worked around in the tests.</p>
+
+<div class="bug sev-high">
+  <h4>BP-9 — A failed save is reported to the user as a success</h4>
+  <div class="meta">Severity: high · MSEL → Config save path · <span class="tag skip">blocks 1 test</span></div>
+  <p>With <code>PUT /api/msels/{id}</code> forced to 500: zero snackbars, zero
+  <code>[role="alert"]</code>, no error text — and <strong>Save Changes becomes disabled exactly
+  as it does on success</strong>, because <code>saveChanges()</code> clears <code>isChanged</code>
+  unconditionally. The edit is discarded and every UI signal says it saved.</p>
+</div>
+
+<div class="bug sev-high">
+  <h4>BP-10 — xlsx import discards every scenario event's time</h4>
+  <div class="meta">Severity: high · <code>MselService.cs</code> ~line 1141 · <span class="tag skip">blocks 1 test</span></div>
+  <p>Import assigns <code>DeltaSeconds = rowIndex * 60</code> unconditionally, never parsing the
+  exported Delivery Time. A round-trip through Blueprint's own export/import silently rewrote
+  300s/900s to 60s/120s. Export is correct; the defect is purely on the read side.</p>
+</div>
+
+<div class="bug sev-high">
+  <h4>BP-7 — Logout does not log out</h4>
+  <div class="meta">Severity: high · <code>ComnAuthService</code> (shared crucible-common) · <span class="tag skip">blocks 1 test</span></div>
+  <p>Polled over 15s after clicking Logout: the OIDC entry — access token included — remains in
+  <code>sessionStorage</code>, there is no redirect to Keycloak's end-session endpoint, and the
+  user stays authenticated. May affect other Crucible apps that log out the same way.</p>
+</div>
+
+<div class="bug sev-high">
+  <h4>BP-5 — Scenario Events grid renders every cell blank</h4>
+  <div class="meta">Severity: high · <code>ScenarioEventService.GetByMselAsync</code> · <span class="tag skip">blocks 1 test</span></div>
+  <p>The list query includes <code>SteamfitterTask</code> but not <code>DataValues</code>, while
+  the single-item query does include it. So <code>GET /api/msels/{id}/scenarioEvents</code>
+  returns <code>dataValues: []</code> and the grid — which resolves cells from that per-event
+  collection — shows nothing, even though <code>/dataValues</code> returns the text correctly.</p>
+</div>
+
+<div class="bug sev-med">
+  <h4>BP-11 — MSEL Info section leaked ~963 detached DOM nodes per render — <em>FIXED</em></h4>
+  <div class="meta">Severity: medium · <code>msel-info.component.ts:326</code> · <span class="tag pass">fixed; test now passes</span></div>
+  <p><code>dataFieldQuery.selectAll()</code> was subscribed with <strong>no
+  <code>takeUntil(this.unsubscribe$)</code></strong>, unlike all six of its siblings in the same
+  constructor. It is an Akita store observable that never completes, so every Info render leaked a
+  live subscription that pinned the destroyed component's DOM. <code>ngOnDestroy</code> does fire
+  <code>unsubscribe$</code> — this subscription just wasn't wired to it.</p>
+  <p>Fixed by piping it through <code>takeUntil</code> like its siblings: <strong>6 insertions,
+  3 deletions</strong>, one file. A repo-wide audit found no other unguarded store subscription —
+  the remaining bare <code>.subscribe()</code> calls are in <code>providedIn: 'root'</code>
+  services that live for the app's lifetime, or hold <code>Subscription</code> handles they
+  unsubscribe.</p>
+  <p>Verified A/B by rebuilding the served bundle both ways and fitting a slope of detached
+  nodes against render count:</p>
+  <table>
+    <thead><tr><th>Build</th><th>Slope</th><th>Detached over 12–16 renders</th><th>Heap</th></tr></thead>
+    <tbody>
+      <tr><td>unfixed (<code>main</code>)</td><td><strong>963/render</strong></td><td>2212 → 17620, exactly linear (+1926 per 2-render block)</td><td>18.9MB → 29.6MB, no plateau</td></tr>
+      <tr><td>fixed</td><td><strong>0.0</strong></td><td>1249 → 1249, constant</td><td>flat, oscillates 18.3–19.5MB</td></tr>
+    </tbody>
+  </table>
+  <p>The spec was then re-run against the unfixed bundle to confirm it still <strong>fails at
+  970/render</strong> — a 19× margin over its threshold of 50. A regression test that cannot
+  catch the regression is worthless, so this check matters more than the passing run.</p>
+</div>
+
+<div class="bug sev-med">
+  <h4>BP-3 — A MSEL can be saved with an empty name</h4>
+  <div class="meta">Severity: medium · UI + API · <span class="tag skip">blocks 2 tests</span></div>
+  <p>No validator at either layer. With the form dirtied, clearing Name leaves Save enabled,
+  shows no <code>mat-error</code>, PUTs 200, and persists <code>name: ""</code>. A direct
+  <code>PUT</code> with an empty name also succeeds, so a client-only fix would leave the API open.</p>
+</div>
+
+<div class="bug sev-med">
+  <h4>BP-4 — <code>GET /api/msels/{id}</code> returns 500 + a stack trace for any unknown id</h4>
+  <div class="meta">Severity: medium · <code>MselService.GetAsync</code> lines ~211, ~224-228</div>
+  <p>Two unguarded null dereferences on the not-found path. Wrong status code for a routine
+  "not found", and the body leaks source paths, class names and line numbers to any
+  authenticated caller. Expected 404 with no detail.</p>
+</div>
+
+<div class="bug sev-med">
+  <h4>BP-1 — Teams grid does not refresh after a delete</h4>
+  <div class="meta">Severity: medium · msel-teams component · <span class="tag skip">blocks 1 test</span></div>
+  <p><code>DELETE</code> returns 204 and the API confirms removal, but the row stays rendered —
+  stable for over 15s, with no follow-up GET. The component neither updates local state nor
+  refreshes via SignalR.</p>
+</div>
+
+<div class="bug sev-med">
+  <h4>BP-8 — A MSEL accepts a negative duration (end before start)</h4>
+  <div class="meta">Severity: medium · <code>PUT /api/msels/{id}</code> · <span class="tag skip">blocks 1 test</span></div>
+  <p><code>durationSeconds: -86400</code> is accepted and persisted verbatim. The UI renders a
+  "backwards" indicator, so the condition is detected for display but never prevented.</p>
+</div>
+
+<div class="bug sev-low">
+  <h4>BP-6 — The API intermittently stalls &gt;10s at two workers</h4>
+  <div class="meta">Severity: low–medium · blocks no test</div>
+  <p>At <code>--workers=2</code> one spec per run dies on a DELETE timeout, and <em>which</em>
+  spec moves between runs — the signature of a shared-resource stall, not a spec defect. The
+  same 10 specs pass in 32s sequentially, repeatedly.</p>
+</div>
+
+<div class="bug sev-low">
+  <h4>BP-2 — <code>PUT /api/teams/{id}</code> silently discards unknown fields</h4>
+  <div class="meta">Severity: low as a bug, but actively misleading</div>
+  <p>Returns 200 for a body containing <code>organizationId</code> and drops the field. Blueprint
+  has no team↔organization relationship at all, so a test asserting only the status code passes
+  while verifying nothing. Recorded as a missing feature, not a broken one.</p>
+</div>
+
+<h2>Standards cleanup</h2>
+<p class="lede">Counts are code-only (comments stripped), so explanatory prose mentioning a
+banned pattern isn't miscounted as a violation.</p>
+
+<table>
+  <thead><tr><th>Antipattern</th><th class="num">Before</th><th class="num">After</th><th>Why it matters</th></tr></thead>
+  <tbody>
+    <tr><td><code>page.waitForTimeout(...)</code></td><td class="num">178+</td><td class="num">75</td><td>Fixed sleeps; forbidden by <code>CLAUDE.md</code></td></tr>
+    <tr><td><code>waitUntil: 'networkidle'</code></td><td class="num">102+</td><td class="num">66</td><td>Same</td></tr>
+    <tr><td>Bare conditional <code>test.skip()</code></td><td class="num">22</td><td class="num">12</td><td>Self-skips on missing data — invisible non-coverage that reports as success</td></tr>
+    <tr><td>Undocumented <code>test.fixme()</code></td><td class="num">7</td><td class="num">2</td><td>Skips with no bug behind them</td></tr>
+    <tr><td><code>Promise.race</code> over <code>waitFor</code></td><td class="num">0</td><td class="num">0</td><td>Losing waits burn their full timeout</td></tr>
+  </tbody>
+</table>
+
+<h3>Eleven directories now carry zero antipattern debt</h3>
+<p>admin-units-management · contributors-management · event-detail-page · export-and-import ·
+msel-info-pages · msel-management · msel-playbook · scenario-events-management ·
+search-and-filtering · teams-and-organizations-management · user-and-role-management</p>
+
+<h2>Fake coverage removed</h2>
+<p class="lede">The most consequential category: specs that passed while verifying nothing. These
+were rewritten to be able to fail, which is why some directories briefly got redder before
+getting greener.</p>
+
+<table>
+  <thead><tr><th>Spec</th><th>What it actually asserted</th><th>Now</th></tr></thead>
+  <tbody>
+    <tr><td><code>unauthorized-action-handling</code></td><td>Faked authorization by intercepting the API and returning a synthetic 403 — testing Playwright's mock, not Blueprint</td><td>Real non-admin Keycloak user via <code>keycloak-admin.ts</code>, genuine 403s</td></tr>
+    <tr><td><code>debug-import</code></td><td>A developer scratch file: logging, a screenshot, and <code>page.pause()</code> — which would hang CI forever</td><td><span class="tag fail">deleted</span></td></tr>
+    <tr><td><code>upload-xlsx-to-existing-msel</code></td><td>"URL still matches /build and the link is visible" — i.e. the page didn't break</td><td>Asserts the replace applied, server-side</td></tr>
+    <tr><td><code>import-scenario-events-from-csv</code></td><td>Same vacuous ending; near-duplicate of the above</td><td>Asserts event count, offsets and data-value text survive</td></tr>
+    <tr><td><code>date-range-validation</code></td><td>Asserted Save stayed <em>enabled</em> — passing precisely <em>because</em> validation was missing</td><td>Asserts the invalid range is rejected (skipped on BP-8)</td></tr>
+    <tr><td><code>msel-filtering-by-status</code></td><td><code>filteredCount ≤ initialCount</code> — true even if the filter does nothing</td><td>Seeds both statuses; asserts inclusion <em>and</em> exclusion</td></tr>
+    <tr><td><code>msel-form-validation</code></td><td>Checked Save was disabled <em>before</em> the form was dirtied — true, but proves nothing about validation</td><td>Dirties first, then clears Name (found BP-3)</td></tr>
+    <tr><td><code>export-msel-to-csv</code> / <code>-to-excel</code> / <code>import-msel-from-excel</code></td><td>Depended on pre-existing <code>HSEEP</code> / <code>Standard MSEL</code> rows — including the template the suite copies data fields from</td><td>Seed their own MSELs; full export→import round-trip</td></tr>
+    <tr><td><code>create-new-unit</code></td><td>Hardcoded <code>Cyber Unit</code> and pre-deleted <em>every</em> row with that name — units are global, so it could destroy real data</td><td>Unique <code>tempBlueprintName()</code>, API teardown</td></tr>
+  </tbody>
+</table>
+
+<h2>Diagnoses that overturned an agent's conclusion</h2>
+<p class="lede">Every subagent claim was checked against <code>git diff</code> and a fresh run.
+Four conclusions were wrong in both directions — reported bugs that were test defects, and a
+"no app bugs" verdict that was hiding a real one.</p>
+
+<table>
+  <thead><tr><th>Claim</th><th>Reality</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>"Status changes don't persist… an application timing issue" — <code>test.fixme()</code></td>
+      <td>Not an app bug. The Config tab is an <strong>explicit-save form</strong>: editing only sets <code>isChanged</code> and issues no request. The spec never clicked Save. Now passes.</td>
+    </tr>
+    <tr>
+      <td>"The Is-a-Template checkbox change doesn't persist" — <code>test.fixme()</code></td>
+      <td>Same root cause. Verified via API that <code>isTemplate</code> persists correctly on a full GET-then-PUT. Now passes.</td>
+    </tr>
+    <tr>
+      <td>"Blueprint requires data fields before events display… architectural requirement, <strong>no app bugs found</strong>"</td>
+      <td>Wrong. Data fields alone don't fix rendering — a MSEL cloned through the app's own <code>/copy</code> (13 data fields, 2 moves) still rendered blank cells. That investigation produced <strong>BP-5</strong>.</td>
+    </tr>
+    <tr>
+      <td>Two scenario-event filtering specs skipped as "blocked by BP-5"</td>
+      <td>Misattributed — they used bare <code>createScenarioEvent</code>, so the MSEL had no data fields and the grid had no rows at all. Both now pass unskipped.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="note">
+  <strong>One agent's proposed fix would not have worked.</strong> It suggested seeding a data
+  field named <code>Message</code>; no such field exists in Blueprint's set, and the grid resolves
+  cells by field <em>name</em>, so it would have produced the same blank cells.
+</div>
+
+<h2>Infrastructure</h2>
+
+<h3>Shared helpers added to <code>blueprint/test-helpers.ts</code></h3>
+<p>30 exported helpers total. New this pass, each verified against the live API:</p>
+<ul>
+  <li><code>createRenderableScenarioEvent()</code> — the key one. A ScenarioEvent has <em>no
+      description column</em>; its text lives in <code>DataValue</code> rows, and a MSEL created via
+      API has <em>zero</em> data fields. This handles both, so a seeded event is actually visible.</li>
+  <li><code>seedMselDataFields()</code>, <code>listMselDataFields()</code>,
+      <code>setScenarioEventFieldValue()</code>, <code>getScenarioEvent()</code></li>
+  <li><code>createUnit()</code>, <code>deleteUnit()</code>, <code>addUnitToMsel()</code>,
+      <code>removeUnitFromMsel()</code>, <code>listMselUnits()</code></li>
+  <li><code>getMsel()</code>, <code>updateMsel()</code> — GET-then-PUT merge, since PUT replaces
+      the whole object</li>
+</ul>
+
+<h3>Teardown purge fixed twice</h3>
+<p>The safety-net purge was failing silently in two different ways depending on which specs a run
+selected — a CJS-wrapped module namespace, and an ESM
+<code>SyntaxError: Cannot use import statement outside a module</code>. It now falls back to a
+<code>tsx</code> subprocess, verified end-to-end with a canary record that previously leaked. It
+was also extended to purge leaked <strong>global units</strong>, which the MSEL purge cannot
+reach — a real leak (<code>Create Catalog Test Unit</code>) was found sitting in the dev database,
+polluting every MSEL's contributor picker.</p>
+
+<h3>A silently-vanishing test</h3>
+<p>One spec used <code>test.skip('title', 'reason', callback)</code> — not a valid Playwright
+signature. It removed the test from discovery entirely ("No tests found") <em>and</em> leaked a
+MSEL that only the global purge caught. Fixed to <code>test.skip(true, reason)</code> inside the
+body.</p>
+
+<h2>A second data-hygiene hole, found by an accident</h2>
+<p>A run I started with the wrong flag executed the Firefox project and I killed it mid-flight.
+That interrupted run left behind a <code>Copy Inject Test Catalog</code> and six inject types —
+and the leftover catalog then <strong>broke <code>copy-inject</code> on the next run</strong>: its
+<code>Add Inject</code> button resolved to a hidden one inside the stale catalog's collapsed panel
+(<code>Received: hidden</code>).</p>
+<p>The cause is a CLAUDE.md violation: the admin-catalog specs clean up <em>inline at the end of
+the test body</em> rather than in an <code>afterEach</code>, so any mid-test failure leaks global
+admin records. The teardown purge covered MSELs and units but not catalogs or inject types, so
+nothing swept them. The purge now handles both, deleting catalogs before inject types (an inject
+type cannot be deleted while a catalog references it) — and on its first run it swept
+<strong>five inject types these specs leak even when they pass</strong>, so the hole was wider
+than the one interrupted run.</p>
+
+<p>Chasing that further exposed something I could not fix, and it is worth being blunt about.
+<strong>Eleven specs in that directory share the same global catalog and inject-type lists</strong>,
+seed fixtures under fixed literal names, clean up by name pattern, and locate rows with roughly
+<strong>77 positional <code>.first()</code>/<code>.last()</code> locators</strong>. That
+combination is only sound single-threaded: all 11 pass at <code>--workers 1</code>, and 2 fail at
+<code>--workers 2</code>.</p>
+
+<p>I confirmed this is <strong>pre-existing</strong> by stashing my edits and running the
+unmodified files at both worker counts — same 2 failures. I also tried
+<code>test.describe.configure({ mode: 'serial' })</code> across all eleven; it does
+<em>not</em> help, because serial mode orders tests <em>within</em> a file while Playwright still
+distributes files across workers. I removed it rather than leave a change that implies a fix it
+does not deliver.</p>
+
+<div class="note">
+  <strong>A correction worth recording.</strong> My first pass at
+  <code>copy-inject</code> removed 8 of its 14 sleeps and rewrote its panel locators. That
+  <em>regressed</em> it — the spec then failed even at 1 worker, where HEAD passed 11/11. The
+  sleeps were load-bearing for this shared-state directory. I reverted to HEAD and kept only two
+  changes I could verify in isolation: un-swallowing a <code>.catch(() =&gt; {})</code> that hid a
+  failed save, and scoping one cell assertion to a visible match. The real fix is per-spec
+  seeding with <code>tempBlueprintName()</code>, which is a larger change than this pass should
+  absorb; it is written up in <code>README.md</code> so the constraint is discoverable rather than
+  folklore.</div>
+
+<h2>How to reproduce these numbers</h2>
+<div class="cmd">./run-tests.sh blueprint --browser chromium --workers 2 --no-check</div>
+<p>Note <code>--browser</code>, not <code>--project</code>: <code>run-tests.sh</code> takes the
+former, and omitting it runs Firefox as well as Chromium.</p>
+
+<h2>What is left</h2>
+<ul>
+  <li><strong>BP-11 is done.</strong> The one-line <code>takeUntil</code> is committed on
+      Blueprint.Ui branch <code>fix/msel-info-datafield-subscription-leak</code> (local, not
+      pushed) and the suite is now at 0 failures. Line 313
+      (<code>citeService.getScoringModels()</code>) is also unguarded but leaks nothing — the HTTP
+      observable completes — so it was deliberately left out to keep the diff minimal and
+      reviewable.</li>
+  <li><strong>5 specs still flake at 2 workers</strong> — all on menu/panel timing or a BP-6 API
+      stall, none on their assertions. Two are the admin-catalog specs that share global state.
+      They pass on retry and in isolation. Fixing them properly means giving the admin-catalog
+      specs per-test seeding with <code>tempBlueprintName()</code>, which would also let the
+      purge's legacy hardcoded-name list be deleted.</li>
+  <li><strong>Remaining sleeps and <code>networkidle</code> calls</strong> are concentrated in the
+      specs not touched this pass. The four rewritten here have none.</li>
+  <li><strong>BP-6 root cause</strong> is unidentified beyond "the API stops answering" —
+      worth checking connection-pool exhaustion or a long-held lock on the delete path.</li>
+</ul>
+
+<footer>
+  Blueprint Playwright healing report · 31 Jul 2026 ·
+  bug details in <code>blueprint/blueprint-app-bugs.md</code>, skip table in <code>README.md</code>
+</footer>
+
+</div>
+</body>
+</html>

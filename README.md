@@ -290,6 +290,45 @@ Some tests are skipped pending fixes in upstream Crucible services. These use `t
 | App | Test | Reason |
 |-----|------|--------|
 | gameboard | `Large Data Set Handling - Leaderboard Pagination` (`gameboard/tests/error-handling/leaderboard-pagination.spec.ts`) | `/api/game/{id}/score` performs per-team queries in a loop and times out at 60s for 120 seeded teams. Blocked on batched-query rewrite of `ScoringService.GetGameScore`. |
+| blueprint | `Delete Team` (`teams-and-organizations-management/delete-team.spec.ts`) | **BP-1** — the Teams grid does not refresh after a delete: `DELETE /api/teams/{id}` returns 204 and the API confirms removal, but the row stays rendered (>15s, no follow-up GET). |
+| blueprint | `MSEL Form Validation - empty name is rejected` (`msel-management/msel-form-validation.spec.ts`) | **BP-3** — the MSEL Name field has no validator at either layer. With the form dirtied, clearing Name leaves Save enabled, shows no `mat-error`, PUTs 200, and persists `name: ""`. |
+| blueprint | `Required Field Validation` (`error-handling-and-validation/required-field-validation.spec.ts`) | **BP-3** — same defect, asserted from the missing-`mat-error` angle. |
+| blueprint | `View Scenario Events in MSEL` (`scenario-events-management/view-scenario-events-in-msel.spec.ts`) | **BP-5** — `GET /api/msels/{id}/scenarioEvents` omits `dataValues` (the list query lacks `.Include`), so every Scenario Events grid cell renders blank. |
+| blueprint | `User Logout Flow` (`authentication-and-authorization/user-logout-flow.spec.ts`) | **BP-7** — Logout does nothing: the OIDC token stays in `sessionStorage`, no Keycloak end-session redirect, user stays signed in. |
+| blueprint | `Date Range Validation` (`error-handling-and-validation/date-range-validation.spec.ts`) | **BP-8** — a MSEL accepts a negative `durationSeconds`, i.e. an end time before its start. |
+| blueprint | `API Error Display` (`error-handling-and-validation/api-error-display.spec.ts`) | **BP-9** — a failed save shows no error and disables Save as if it succeeded, so the edit is silently lost. |
+| blueprint | `Import Scenario Events from Excel` (`export-and-import/import-scenario-events-from-csv.spec.ts`) | **BP-10** — xlsx import discards each event's exported time and assigns `rowIndex * 60`, silently rewriting the timeline. |
+| ~~blueprint~~ | ~~`Memory Leak Detection`~~ — **BP-11 is fixed; this test now passes** | **BP-11 (resolved)** — the MSEL Info section retained ~963 detached DOM nodes per render (`msel-info.component.ts:326` subscribed `dataFieldQuery.selectAll()` without `takeUntil`). Fixed in Blueprint.Ui branch `fix/msel-info-datafield-subscription-leak` (local, unpushed). The spec was verified to still fail against the unfixed build, so it guards the regression. |
+
+### Blueprint `admin-inject-types-and-catalogs` requires `--workers 1`
+
+All 11 specs in `blueprint/tests/admin-inject-types-and-catalogs/` pass reliably at
+`--workers 1` but 2 of them fail at `--workers 2`. This is **pre-existing** — verified by
+running the unmodified files at both worker counts.
+
+The cause is structural, not a bad selector: these specs share the **same global catalog and
+inject-type lists**, seed fixtures under fixed literal names, clean up by name pattern, and
+locate rows with ~77 positional `.first()`/`.last()` locators. Run concurrently, one spec's
+cleanup deletes rows another is mid-way through using, and a positional locator resolves to a
+sibling's row (or a hidden one in a collapsed panel). Note `test.describe.configure({ mode:
+'serial' })` does **not** fix this — it orders tests within a file but Playwright still
+distributes files across workers.
+
+Making them 2-worker-safe means giving each spec its own uniquely-named fixtures via
+`tempBlueprintName()` and scoping every locator to its own row, per the test-data-hygiene
+rules in `CLAUDE.md`. Until then, run this directory with `--workers 1`; the rest of the
+Blueprint suite is fine at 2. Their inline (rather than `afterEach`) cleanup also leaks on
+failure, which is why `purgeAllBlueprintTestData` now sweeps catalogs and inject types.
+
+Every blueprint skip above keeps its **correct** assertion in the test body — nothing is
+deleted, weakened, or commented out — so each one starts passing as soon as the underlying
+defect is fixed. BP-11 is the worked example: the assertion was left in its correct failing
+form, the app defect was fixed, and the spec went green without being touched. Full
+reproductions and evidence for BP-1 … BP-10 are in
+[`blueprint/blueprint-app-bugs.md`](blueprint/blueprint-app-bugs.md), which also records
+BP-4 (`GET /api/msels/{id}` returns 500 + a stack trace for a nonexistent id) and BP-6
+(the API intermittently stalls >10s at 2 workers) — neither of which blocks a test — plus a
+list of candidates that turned out to be test defects rather than app bugs.
 
 ## Troubleshooting
 

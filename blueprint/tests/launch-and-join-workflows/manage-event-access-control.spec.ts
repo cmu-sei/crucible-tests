@@ -2,48 +2,79 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 // spec: specs/blueprint-test-plan.md
-// seed: tests/seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services } from '../../fixtures';
+import {
+  getBlueprintToken,
+  createMsel,
+  deleteMsel,
+  tempBlueprintName,
+} from '../../test-helpers';
 
+/**
+ * Verifies both branches of the `/manage` page's access gate.
+ *
+ * `manage.component.html` renders management controls only when
+ * `msel.id && (owner || canEditMsels)`; otherwise it shows the
+ * "You have nothing to manage." panel.
+ *
+ * Rewritten. The previous version had two defects:
+ *
+ * 1. Its locator was malformed. `page.locator('text=/a/i, text=/b/i')` is not valid
+ *    Playwright syntax — `text=` engines cannot be comma-combined — so it matched 0
+ *    elements even though the text is on the page. Verified live: that locator
+ *    returns count 0 while `getByText(/contact your administrator/i)` returns 1.
+ *
+ * 2. It wrapped everything in `if (nothingVisible) … else …`, so whichever branch ran
+ *    was whatever the app happened to do. A spec that adapts to the app's output
+ *    cannot fail, and therefore tests nothing.
+ *
+ * Now: each branch is driven to deterministically. Visiting `/manage` with no `?msel=`
+ * leaves `msel.id` undefined, which must produce the denial panel. Visiting it with a
+ * seeded Deployed MSEL as admin (who holds EditMsels) must produce the End Event control.
+ */
 test.describe('Launch and Join Event Workflows', () => {
   test('Manage Event Access Control', async ({ blueprintAuthenticatedPage: page }) => {
-    // 1. Access manage page for a deployed MSEL as a non-owner without permissions
-    // For this test we test the access control message UI with admin user navigating to manage page
+    // ── Branch 1: no MSEL in context → access denied ────────────────────────────
+    await page.goto(`${Services.Blueprint.UI}/manage`, { waitUntil: 'domcontentloaded' });
 
-    // Navigate to the manage page — this route shows access control messaging
-    // when the user doesn't have management permissions for any active events
-    await page.goto(`${Services.Blueprint.UI}/manage`);
-    await page.waitForLoadState('networkidle');
+    const denialPanel = page.locator('.nothing-to-see-here');
+    await expect(denialPanel).toBeVisible({ timeout: 20000 });
 
-    // expect: The manage page loads
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
+    await expect(page.getByRole('heading', { name: 'You have nothing to manage.' })).toBeVisible();
+    await expect(
+      page.getByText(/If you believe you should have permissions to manage this event, contact your administrator\./i)
+    ).toBeVisible();
 
-    // Check if the 'nothing to manage' message is shown
-    const nothingToManage = page.locator('text=You have nothing to manage.').first();
-    const permissionsMessage = page.locator(
-      'text=/contact your administrator/i, text=/believe you should have permissions/i'
-    ).first();
+    // No management control may leak into the denied state.
+    await expect(page.getByRole('button', { name: 'End Event' })).toHaveCount(0);
 
-    const nothingVisible = await nothingToManage.isVisible({ timeout: 5000 }).catch(() => false);
+    // ── Branch 2: a Deployed MSEL the admin can edit → controls render ──────────
+    const token = await getBlueprintToken();
+    const mselName = tempBlueprintName('TestBP-Manage');
+    const msel = await createMsel(token, {
+      name: mselName,
+      description: 'Seeded Deployed MSEL for the manage-page permitted branch.',
+      // The manage view only renders controls for a Deployed MSEL; any other status
+      // redirects away via post_logout_redirect_uri.
+      status: 'Deployed',
+    });
 
-    if (nothingVisible) {
-      // expect: 'You have nothing to manage.' message is displayed
-      await expect(nothingToManage).toBeVisible({ timeout: 5000 });
+    try {
+      await page.goto(`${Services.Blueprint.UI}/manage?msel=${msel.id}`, {
+        waitUntil: 'domcontentloaded',
+      });
 
-      // expect: 'If you believe you should have permissions to manage this event, contact your administrator.' message is shown
-      await expect(permissionsMessage).toBeVisible({ timeout: 5000 });
+      // The End Event button is the management control gated behind the permission check.
+      await expect(page.getByRole('button', { name: 'End Event' })).toBeVisible({ timeout: 20000 });
 
-      // expect: No management controls are visible
-      const managementControls = page.locator(
-        'button:has-text("End Event"), button:has-text("Manage"), [class*="manage-controls"]'
-      ).first();
-      const controlsVisible = await managementControls.isVisible({ timeout: 2000 }).catch(() => false);
-      expect(controlsVisible).toBe(false);
-    } else {
-      // Admin has management permissions — verify management controls are visible instead
-      const managementContent = page.locator('mat-card, [class*="manage"], [class*="event-list"]').first();
-      await expect(managementContent).toBeVisible({ timeout: 5000 });
+      // The MSEL under management is identified by name, proving the right one loaded.
+      await expect(page.getByText(mselName, { exact: true })).toBeVisible({ timeout: 15000 });
+
+      // The denial panel must be gone in the permitted branch.
+      await expect(denialPanel).toHaveCount(0);
+    } finally {
+      await deleteMsel(token, msel.id);
     }
   });
 });

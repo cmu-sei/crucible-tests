@@ -2,28 +2,41 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 // spec: specs/blueprint-test-plan.md
-// seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
+import {
+  getBlueprintToken,
+  createMsel,
+  deleteMsel,
+  navigateToMsel,
+} from '../../test-helpers';
 
 test.describe('MSEL Info Pages Management', () => {
-  test('Delete MSEL Page', async ({ blueprintAuthenticatedPage: page }) => {
-    // Navigate to the build page and open a MSEL
-    await page.goto(`${Services.Blueprint.UI}/build`);
-    await page.waitForLoadState('networkidle');
+  let token: string;
+  let mselId: string;
 
-    // Open an existing MSEL
-    const mselLink = page.getByRole('link', { name: /Project Lagoon TTX/ }).first();
-    await expect(mselLink).toBeVisible({ timeout: 10000 });
-    await mselLink.click();
-    await expect(page).toHaveURL(/.*\/build\?msel=.*/, { timeout: 10000 });
-    await page.waitForLoadState('networkidle');
+  test.beforeEach(async () => {
+    token = await getBlueprintToken();
+    const msel = await createMsel(token);
+    mselId = msel.id;
+  });
+
+  test.afterEach(async () => {
+    try {
+      if (mselId) await deleteMsel(token, mselId);
+    } catch (err) {
+      console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+    }
+  });
+
+  test('Delete MSEL Page', async ({ blueprintAuthenticatedPage: page }) => {
+    // Navigate to the seeded MSEL
+    await navigateToMsel(page, mselId);
 
     // First, create a new page so we have one to safely delete
     const addPageTab = page.getByRole('tab', { name: 'Add Page' });
     await expect(addPageTab).toBeVisible({ timeout: 5000 });
     await addPageTab.click();
-    await page.waitForLoadState('networkidle');
 
     // Verify new page was created and is selected
     const selectedTab = page.getByRole('tab', { selected: true });
@@ -31,14 +44,13 @@ test.describe('MSEL Info Pages Management', () => {
     const newPageName = (await selectedTab.textContent())?.trim() || 'New Page';
 
     // The page is in edit mode after creation — we need to save or cancel first
-    // Look for the cancel button (X icon) to exit edit mode
+    // Look for the cancel button to exit edit mode
     const cancelButton = page.getByRole('button', { name: /Cancel/ }).first();
     if (await cancelButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       await cancelButton.click();
-      await page.waitForTimeout(500);
     }
 
-    // 1. Click the delete button for this page (button name is "Delete [page name]")
+    // Wait for delete button to become visible (proves edit mode exited)
     const deleteButton = page.getByRole('button', { name: `Delete ${newPageName}` });
     await expect(deleteButton).toBeVisible({ timeout: 5000 });
     await deleteButton.click();
@@ -53,7 +65,6 @@ test.describe('MSEL Info Pages Management', () => {
     await yesButton.click();
 
     // expect: The page is deleted — the specific tab should no longer exist
-    await page.waitForLoadState('networkidle');
     const deletedTab = page.getByRole('tab', { name: newPageName, exact: true });
     await expect(deletedTab).toBeHidden({ timeout: 10000 });
 

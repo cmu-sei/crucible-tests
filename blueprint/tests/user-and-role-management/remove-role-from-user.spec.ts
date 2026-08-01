@@ -36,7 +36,9 @@ async function gotoAdminSection(page: any, section: string) {
   await expect(sidebarItem).toBeVisible({ timeout: 15000 });
   await sidebarItem.click();
   await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(500);
+
+  // Wait for the table to appear as proof the section loaded
+  await page.locator('table').first().waitFor({ state: 'visible', timeout: 10000 });
 }
 
 test.describe('User and Role Management', () => {
@@ -86,12 +88,13 @@ test.describe('User and Role Management', () => {
       const firstRow = allUserRows.first();
       const firstRoleSelect = firstRow.locator('mat-select');
       await firstRoleSelect.click();
-      await page.waitForTimeout(300);
 
       const observerOption = page.locator('mat-option').filter({ hasText: 'Observer' });
       await expect(observerOption).toBeVisible({ timeout: 5000 });
       await observerOption.click();
-      await page.waitForTimeout(500);
+
+      // Wait for the dropdown to update with the new selection
+      await expect(firstRoleSelect).toContainText('Observer', { timeout: 5000 });
 
       targetRowIndex = 0;
       originalRole = 'None Locally';
@@ -105,32 +108,33 @@ test.describe('User and Role Management', () => {
     await expect(roleSelect).toBeVisible({ timeout: 5000 });
 
     await roleSelect.click();
-    await page.waitForTimeout(300);
 
-    const noneLocallyOption = page.locator('mat-option').filter({ hasText: 'None Locally' });
+    const noneLocallyOption = page.locator('mat-option').filter({ hasText: 'None Locally' }).first();
     await expect(noneLocallyOption).toBeVisible({ timeout: 5000 });
     await noneLocallyOption.click();
-    await page.waitForTimeout(500);
 
     // 5. Verify the role was removed (dropdown shows "None Locally")
     // expect: Role dropdown now shows "None Locally"
     await expect(roleSelect).toContainText('None Locally', { timeout: 5000 });
 
     // 6. Revert: Restore the original role to avoid side effects
-    await roleSelect.click();
-    await page.waitForTimeout(300);
+    // Re-open the dropdown (if it closed after the first selection)
+    const matOptions = page.locator('mat-option');
+    if (!(await matOptions.first().isVisible({ timeout: 1000 }).catch(() => false))) {
+      await roleSelect.click();
+      // Wait for options to appear
+      await expect(matOptions.first()).toBeVisible({ timeout: 5000 });
+    }
 
     const originalOption = page.locator('mat-option').filter({ hasText: originalRole }).first();
     if (await originalOption.isVisible({ timeout: 2000 })) {
       await originalOption.click();
+      // Wait for the dropdown to update with the new selection - the assertion above already verifies
+      // the dropdown displays the original role text
+      await expect(roleSelect).toContainText(originalRole, { timeout: 5000 });
     } else {
-      // Fallback: close dropdown without changing
+      // Fallback: close dropdown without changing (role should still be "None Locally")
       await page.keyboard.press('Escape');
     }
-    await page.waitForTimeout(500);
-
-    // expect: Role reverted successfully
-    const finalRole = await roleSelect.textContent();
-    expect(finalRole?.trim()).toBeTruthy();
   });
 });

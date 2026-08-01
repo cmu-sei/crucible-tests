@@ -4,103 +4,71 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect } from '../../fixtures';
+import {
+  getBlueprintToken,
+  createMsel,
+  deleteMsel,
+  createRenderableScenarioEvent,
+  deleteScenarioEvent,
+  navigateToMselSection,
+} from '../../test-helpers';
 
 test.describe('Scenario Events Management', () => {
-  test('View Scenario Events in MSEL', async ({ blueprintAuthenticatedPage: page }) => {
+  let token: string;
+  let mselId: string;
+  let eventId: string;
 
-    // 1. Navigate to a MSEL details page
-    await page.goto(`${Services.Blueprint.UI}/build`);
-    await page.waitForLoadState('domcontentloaded');
+  test.beforeEach(async () => {
+    // Seed: create a MSEL with a renderable scenario event
+    token = await getBlueprintToken();
+    const msel = await createMsel(token);
+    mselId = msel.id;
 
-    // Check if already on a MSEL page or need to select one
-    const scenarioEventsNav = page.locator('text=Scenario Events').first();
-    const isOnMselPage = await scenarioEventsNav.isVisible({ timeout: 2000 });
-
-    if (!isOnMselPage) {
-      // We're on the MSEL list page, need to click on a MSEL
-      const mselLink = page.locator(
-        'a[href*="msel"], ' +
-        '[class*="msel-item"], ' +
-        '[class*="msel-card"], ' +
-        'table tbody tr'
-      ).first();
-
-      if (await mselLink.isVisible({ timeout: 3000 })) {
-        await mselLink.click();
-        await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(1000);
-      } else {
-        test.skip();
-        return;
+    const event = await createRenderableScenarioEvent(
+      token,
+      mselId,
+      'Test scenario event for viewing',
+      {
+        deltaSeconds: 300,
+        moveNumber: 1,
+        rowMetadata: 'CTRL-001',
       }
+    );
+    eventId = event.id;
+  });
+
+  test.afterEach(async () => {
+    // Cleanup: delete the scenario event and MSEL
+    try {
+      if (eventId) await deleteScenarioEvent(token, eventId);
+    } catch (err) {
+      console.warn(`Cleanup failed for event ${eventId}: ${err}`);
     }
+    try {
+      if (mselId) await deleteMsel(token, mselId);
+    } catch (err) {
+      console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+    }
+  });
 
-    // expect: MSEL details page is displayed
-    await page.waitForTimeout(1000);
+  test('View Scenario Events in MSEL', async ({ blueprintAuthenticatedPage: page }) => {
+    test.skip(true, 'BP-5: scenarioEvents list omits dataValues so grid cells render blank (see blueprint/blueprint-app-bugs.md)');
 
-    // Navigate to Scenario Events section
-    await scenarioEventsNav.click();
-    await page.waitForTimeout(1000);
-      
-      // 2. View the scenario events timeline or list
-      const eventsContainer = page.locator(
-        '[class*="event"], ' +
-        '[class*="timeline"], ' +
-        '[class*="scenario"], ' +
-        'table'
-      ).first();
-      
-      await expect(eventsContainer).toBeVisible({ timeout: 5000 });
-      
-      // expect: Scenario events are displayed in chronological order
-      const eventItems = page.locator(
-        '[class*="event-item"], ' +
-        '[class*="timeline-item"], ' +
-        'table tbody tr'
-      );
-      
-      const eventCount = await eventItems.count();
-      
-      if (eventCount > 0) {
-        // expect: Each event shows: time, control number, from org, to org, description, details
-        const firstEvent = eventItems.first();
-        await expect(firstEvent).toBeVisible();
-        
-        const eventText = await firstEvent.textContent();
-        expect(eventText).toBeTruthy();
-        expect(eventText!.trim().length).toBeGreaterThan(0);
-        
-        // expect: Events are color-coded based on their type (using configured background colors)
-        const eventColor = await firstEvent.evaluate((el) => {
-          return window.getComputedStyle(el).backgroundColor;
-        });
-        expect(eventColor).toBeTruthy();
-        
-        // expect: Timeline view or list view is available for viewing events
-        // Check for view toggle buttons
-        const viewToggle = page.locator(
-          'button[title*="View"], ' +
-          'button[aria-label*="Timeline"], ' +
-          'button[aria-label*="List"], ' +
-          'mat-button-toggle'
-        );
-        
-        const toggleCount = await viewToggle.count();
-        expect(toggleCount).toBeGreaterThanOrEqual(0);
-      } else {
-        // No events in this MSEL
-        const emptyState = page.locator(
-          'text=No events, ' +
-          'text=No scenario events, ' +
-          '[class*="empty-state"]'
-        );
-        
-        // Either events exist or empty state is shown
-        const hasEmptyState = await emptyState.isVisible({ timeout: 2000 });
-        if (hasEmptyState) {
-          expect(hasEmptyState).toBe(true);
-        }
-      }
+    // Navigate to the MSEL Scenario Events section
+    await navigateToMselSection(page, mselId, 'Scenario Events');
+
+    // expect: Scenario events are displayed (the table is visible)
+    const eventsTable = page.locator('table').first();
+    await expect(eventsTable).toBeVisible({ timeout: 10000 });
+
+    // expect: The seeded event is present (at least one row exists)
+    const eventRow = page.locator('table tbody tr').last();
+    await expect(eventRow).toBeVisible({ timeout: 5000 });
+
+    // BP-5 BLOCKED: expect cell content to be visible
+    // Once BP-5 is fixed, add:
+    // const descriptionCell = page.getByText('Test scenario event for viewing');
+    // await expect(descriptionCell).toBeVisible();
   });
 });

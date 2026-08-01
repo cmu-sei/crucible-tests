@@ -5,12 +5,48 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
+import { getBlueprintToken } from '../../test-helpers';
 
 const INJECT_NAME = 'Copy Test Inject';
 const CATALOG_NAME = 'Copy Inject Test Catalog';
 const INJECT_TYPE_NAME = 'Copy Inject Test Inject Type';
 
+async function cleanupTestRecords(): Promise<void> {
+    const token = await getBlueprintToken();
+    const headers = { Authorization: `Bearer ${token}` };
+
+    for (const [endpoint, name] of [
+      ['/api/catalogs', CATALOG_NAME],
+      ['/api/injectTypes', INJECT_TYPE_NAME],
+    ] as const) {
+      const response = await fetch(`${Services.Blueprint.API}${endpoint}`, {
+        headers,
+        signal: AbortSignal.timeout(10000),
+      });
+      expect(response.ok, `list ${endpoint} for cleanup`).toBeTruthy();
+
+      for (const record of (await response.json()) as Array<{ id: string; name: string }>) {
+        if (record.name === name) {
+          const deleteResponse = await fetch(`${Services.Blueprint.API}${endpoint}/${record.id}`, {
+            method: 'DELETE',
+            headers,
+            signal: AbortSignal.timeout(10000),
+          });
+          expect(deleteResponse.ok, `delete ${name} during cleanup`).toBeTruthy();
+        }
+      }
+    }
+}
+
 test.describe('Admin - Inject Types and Catalogs Management', () => {
+  test.beforeEach(async () => {
+    await cleanupTestRecords();
+  });
+
+  test.afterEach(async () => {
+    await cleanupTestRecords();
+  });
+
   test('Copy Inject', async ({ blueprintAuthenticatedPage: page }) => {
     await page.goto(`${Services.Blueprint.UI}/admin`);
     await expect(page).toHaveURL(/\/admin/, { timeout: 10000 });
@@ -28,71 +64,28 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
       });
     };
 
-    // Helper: delete all catalog rows whose delete button name matches a pattern
-    const deleteCatalogsMatching = async (namePattern: RegExp) => {
-      let deleteBtn = page.getByRole('button', { name: namePattern }).first();
-      while (await deleteBtn.isVisible().catch(() => false)) {
-        await deleteBtn.click();
-        const confirmDialog = page.locator(
-          '[role="dialog"], .mat-dialog-container, [class*="dialog"]'
-        ).first();
-        await expect(confirmDialog).toBeVisible({ timeout: 5000 });
-        const confirmButton = page.locator(
-          'button:has-text("Confirm"), button:has-text("Delete"), button:has-text("Yes"), button:has-text("OK")'
-        ).last();
-        await confirmButton.click();
-        await expect(confirmDialog).not.toBeVisible({ timeout: 5000 }).catch(() => {});
-        await page.waitForTimeout(500);
-        deleteBtn = page.getByRole('button', { name: namePattern }).first();
-      }
-    };
-
-    // Helper: delete all inject type rows whose delete button name matches a pattern
-    const deleteInjectTypesMatching = async (namePattern: RegExp) => {
-      let deleteBtn = page.getByRole('button', { name: namePattern }).first();
-      while (await deleteBtn.isVisible().catch(() => false)) {
-        await deleteBtn.click();
-        const confirmDialog = page.locator(
-          '[role="dialog"], .mat-dialog-container, [class*="dialog"]'
-        ).first();
-        await expect(confirmDialog).toBeVisible({ timeout: 5000 });
-        const confirmButton = page.locator(
-          'button:has-text("Confirm"), button:has-text("Delete"), button:has-text("Yes"), button:has-text("OK")'
-        ).last();
-        await confirmButton.click();
-        await expect(confirmDialog).not.toBeVisible({ timeout: 5000 }).catch(() => {});
-        await page.waitForTimeout(500);
-        deleteBtn = page.getByRole('button', { name: namePattern }).first();
-      }
-    };
-
     // Helper: expand a catalog row and open the Injects expansion panel
     const expandCatalogInjects = async (catalogName: string) => {
       // 1. Click the catalog row to expand it
-      const catalogRow = page.locator('mat-row, tr[mat-row]').filter({ hasText: catalogName }).first();
+      const catalogRow = page
+        .getByRole('button', { name: `Edit ${catalogName} catalog` })
+        .locator('xpath=ancestor::mat-row[1]');
       await expect(catalogRow).toBeVisible({ timeout: 5000 });
       await catalogRow.click();
-      await page.waitForTimeout(500);
+      const detailRow = catalogRow.locator('xpath=following-sibling::mat-row[contains(@class, "detail-row")][1]');
 
       // 2. Open the "Injects" expansion panel within the expanded detail
-      const injectsPanel = page.locator('mat-expansion-panel').filter({ hasText: 'Injects' }).first();
-      await expect(injectsPanel).toBeVisible({ timeout: 5000 });
-      const panelHeader = injectsPanel.locator('mat-expansion-panel-header').first();
+      const injectsPanel = detailRow.locator('mat-expansion-panel').filter({ hasText: 'Injects' });
+      const panelHeader = injectsPanel.getByRole('button', { name: 'Injects' });
+      await expect(panelHeader).toBeVisible({ timeout: 5000 });
       await panelHeader.click();
-      await page.waitForTimeout(500);
+      await expect(injectsPanel.locator('app-inject-list')).toBeVisible({ timeout: 5000 });
+      return detailRow;
     };
 
-    // ── Step 0: Pre-cleanup ──────────────────────────────────────────────────
-
-    // 1. Navigate to Catalogs and delete any leftover test catalogs
-    await navigateTo('Catalogs');
-    await deleteCatalogsMatching(new RegExp(`^Delete ${CATALOG_NAME}`));
-
-    // 2. Navigate to Inject Types and delete any leftover test inject types
-    await navigateTo('Inject Types');
-    await deleteInjectTypesMatching(new RegExp(`^Delete ${INJECT_TYPE_NAME}`));
-
     // ── Step 1: Create a prerequisite Inject Type ────────────────────────────
+
+    await navigateTo('Inject Types');
 
     // 3. Click add button to create a new inject type
     const addInjectTypeButton = page.locator(
@@ -169,10 +162,11 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
     // ── Step 3: Create an Inject inside the Catalog ──────────────────────────
 
     // 13. Expand the catalog row and open the Injects panel
-    await expandCatalogInjects(CATALOG_NAME);
+    const catalogDetailRow = await expandCatalogInjects(CATALOG_NAME);
 
     // 14. Click the "Add Inject" button (plus icon in the inject list header)
-    const addInjectButton = page.locator('button[title="Add Inject"]').first();
+    const injectList = catalogDetailRow.locator('app-inject-list');
+    const addInjectButton = injectList.getByRole('button', { name: 'Add Inject' });
     await expect(addInjectButton).toBeVisible({ timeout: 5000 });
     await addInjectButton.click();
     await page.waitForTimeout(300);
@@ -202,44 +196,47 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
     const injectDialog = page.locator('mat-dialog-container').first();
     const injectSaveButton = injectDialog.locator('button:has-text("Save")').first();
     await expect(injectSaveButton).toBeEnabled({ timeout: 5000 });
+    const createInjectResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        /^\/api\/catalog\/[^/]+\/injects$/.test(new URL(response.url()).pathname),
+      { timeout: 15000 }
+    );
     await injectSaveButton.click();
-    // Wait for dialog to close
-    await expect(injectDialog).not.toBeVisible({ timeout: 5000 }).catch(() => {});
-    await page.waitForTimeout(500);
+    expect((await createInjectResponse).ok(), 'create inject response').toBeTruthy();
+    await expect(injectDialog).not.toBeVisible({ timeout: 15000 });
 
-    // After saving, the dialog closes and the Injects expansion panel may have collapsed.
-    // Re-open the Injects panel to verify the inject was created and to interact with it.
-    // Helper: ensure the Injects expansion panel is open
-    const ensureInjectsPanelOpen = async () => {
-      const panel = page.locator('mat-expansion-panel').filter({ hasText: 'Injects' }).first();
-      await expect(panel).toBeVisible({ timeout: 5000 });
-      const header = panel.locator('mat-expansion-panel-header').first();
-      // Wait for panel state to settle after any dialog close
-      await page.waitForTimeout(500);
-      // Check if the inject list table is already visible (panel is open)
-      const injectTable = panel.locator('app-inject-list table, app-inject-list .scrolling-region').first();
-      const isTableVisible = await injectTable.isVisible({ timeout: 1000 }).catch(() => false);
-      if (!isTableVisible) {
-        // Panel is collapsed - click to open it
+    // The client closes the dialog before it updates the list. Recreate the panel after
+    // the POST completes so its list loads the persisted catalog injects.
+    const reloadInjectsPanel = async () => {
+      const panel = catalogDetailRow.locator('mat-expansion-panel').filter({ hasText: 'Injects' });
+      const header = panel.getByRole('button', { name: 'Injects' });
+      await expect(header).toBeVisible({ timeout: 5000 });
+      if ((await header.getAttribute('aria-expanded')) === 'true') {
         await header.click();
-        await page.waitForTimeout(800);
       }
+      await header.click();
+      await expect(panel.locator('app-inject-list')).toBeVisible({ timeout: 5000 });
     };
 
-    await ensureInjectsPanelOpen();
+    await reloadInjectsPanel();
 
     // expect: The inject appears in the list
-    await expect(page.getByRole('cell', { name: INJECT_NAME, exact: true })).toBeVisible({ timeout: 10000 });
+    await expect(injectList.getByRole('cell', { name: INJECT_NAME, exact: true })).toBeVisible({
+      timeout: 10000,
+    });
 
     // Record the count of inject rows before copy
-    const injectRows = page.locator('app-inject-list mat-row, app-inject-list tr[mat-row]');
+    const injectRows = injectList.locator('mat-row, tr[mat-row]');
     const initialInjectCount = await injectRows.count();
     expect(initialInjectCount).toBeGreaterThan(0);
 
     // ── Step 4: Copy the Inject ──────────────────────────────────────────────
 
     // 19. Click the copy button for the inject
-    const copyInjectButton = page.getByRole('button', { name: new RegExp(`^Copy ${INJECT_NAME}`) }).first();
+    const copyInjectButton = injectList.getByRole('button', {
+      name: new RegExp(`^Copy ${INJECT_NAME}`),
+    });
     await expect(copyInjectButton).toBeVisible({ timeout: 5000 });
     await copyInjectButton.click();
     await page.waitForTimeout(500);
@@ -255,16 +252,19 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
     // 21. Save the copy (name and description are pre-filled from the original)
     const copyDialogSaveButton = copyDialog.getByRole('button', { name: 'Save' }).first();
     await expect(copyDialogSaveButton).toBeEnabled({ timeout: 5000 });
+    const copyInjectResponse = page.waitForResponse(
+      (response) =>
+        response.request().method() === 'POST' &&
+        /^\/api\/catalog\/[^/]+\/injects$/.test(new URL(response.url()).pathname),
+      { timeout: 15000 }
+    );
     await copyDialogSaveButton.click();
-    // Wait for dialog to close
-    await expect(copyDialog).not.toBeVisible({ timeout: 5000 }).catch(() => {});
-    await page.waitForTimeout(500);
+    expect((await copyInjectResponse).ok(), 'copy inject response').toBeTruthy();
+    await expect(copyDialog).not.toBeVisible({ timeout: 15000 });
 
     // ── Step 5: Verify the copy exists ──────────────────────────────────────
 
-    // After saving the copy dialog, the Injects panel may have collapsed again.
-    // Re-open it to verify the count and content.
-    await ensureInjectsPanelOpen();
+    await reloadInjectsPanel();
 
     // 22. Verify the inject count increased by 1
     // Use expect with retry to allow for async data reload after copy
@@ -274,15 +274,9 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
     }).toPass({ timeout: 10000 });
 
     // 23. Verify the original inject name is still visible (both original and copy)
-    await expect(page.locator(`text=${INJECT_NAME}`).first()).toBeVisible({ timeout: 5000 });
+    await expect(
+      injectList.getByRole('cell', { name: INJECT_NAME, exact: true }).first()
+    ).toBeVisible({ timeout: 5000 });
 
-    // ── Step 6: Cleanup ──────────────────────────────────────────────────────
-
-    // 24. Delete the test catalog (which also removes its injects associations)
-    await deleteCatalogsMatching(new RegExp(`^Delete ${CATALOG_NAME}`));
-
-    // 25. Navigate to Inject Types and delete the test inject type
-    await navigateTo('Inject Types');
-    await deleteInjectTypesMatching(new RegExp(`^Delete ${INJECT_TYPE_NAME}`));
   });
 });

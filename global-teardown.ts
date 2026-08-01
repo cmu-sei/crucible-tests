@@ -21,18 +21,65 @@ loadCrucibleEnv();
  * so everything is wrapped and only logged.
  */
 async function globalTeardown(_config: FullConfig): Promise<void> {
-  if (!pathFiltersIncludeApp('cite')) {
-    console.log('[global-teardown] Skipping CITE test-data purge for non-CITE path-filtered run.');
+  // CITE teardown
+  if (pathFiltersIncludeApp('cite')) {
+    try {
+      const { purgeAllCiteTestData } = await import('./cite/fixtures');
+      await purgeAllCiteTestData();
+    } catch (error) {
+      console.warn(`[global-teardown] CITE test-data purge skipped: ${error}`);
+    }
+  }
+
+  // Blueprint teardown
+  if (pathFiltersIncludeApp('blueprint')) {
+    await purgeBlueprint();
+  }
+}
+
+/**
+ * Purge leftover Blueprint test data, best-effort.
+ *
+ * Importing `blueprint/test-helpers` from inside globalTeardown is unreliable, in two
+ * different ways depending on which specs the run selected:
+ *   - Playwright's loader sometimes hands the module back CJS-wrapped, so the namespace
+ *     holds only `{ default, 'module.exports' }` and a named destructure is `undefined`.
+ *   - Sometimes the transform isn't applied at all and the ESM `import` inside the helper
+ *     throws `SyntaxError: Cannot use import statement outside a module`.
+ *
+ * Either way the purge silently stopped running, which is exactly the failure a safety net
+ * must not have. So: try the in-process import first (fast path, keeps logs inline), and if
+ * that throws for any reason, re-run the purge in a `tsx` subprocess, which compiles the
+ * helper properly. Both paths are wrapped — a teardown failure must never fail a green run.
+ */
+async function purgeBlueprint(): Promise<void> {
+  try {
+    const mod: any = await import('./blueprint/test-helpers');
+    const purge = mod.purgeAllBlueprintTestData ?? mod.default?.purgeAllBlueprintTestData;
+    if (typeof purge !== 'function') {
+      throw new Error('purgeAllBlueprintTestData not found on blueprint/test-helpers');
+    }
+    await purge();
     return;
+  } catch (error) {
+    console.warn(
+      `[global-teardown] Blueprint purge via import failed (${error}); retrying in a subprocess.`
+    );
   }
 
   try {
-    // Imported lazily so a failure loading the CITE fixtures (e.g. stack down) can't
-    // break module resolution for the whole config.
-    const { purgeAllCiteTestData } = await import('./cite/fixtures');
-    await purgeAllCiteTestData();
+    const { execFileSync } = await import('node:child_process');
+    execFileSync(
+      'npx',
+      [
+        'tsx',
+        '-e',
+        "import { purgeAllBlueprintTestData } from './blueprint/test-helpers'; purgeAllBlueprintTestData();",
+      ],
+      { cwd: __dirname, stdio: 'inherit', timeout: 120_000 }
+    );
   } catch (error) {
-    console.warn(`[global-teardown] CITE test-data purge skipped: ${error}`);
+    console.warn(`[global-teardown] Blueprint test-data purge skipped: ${error}`);
   }
 }
 

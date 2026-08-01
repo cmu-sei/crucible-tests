@@ -35,7 +35,6 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
           'button:has-text("Confirm"), button:has-text("Delete"), button:has-text("Yes"), button:has-text("OK")'
         ).last();
         await confirmButton.click();
-        await page.waitForTimeout(500);
         deleteBtn = page.getByRole('button', { name: namePattern }).first();
       }
     };
@@ -52,7 +51,6 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
     ).first();
     await expect(addButton).toBeVisible({ timeout: 5000 });
     await addButton.click();
-    await page.waitForTimeout(500);
 
     // Fill in name
     const nameField = page.locator(
@@ -126,7 +124,13 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
 
     // ── Step 6: Verify the data field appears ────────────────────────────────
 
-    await expect(page.locator(`text=${DATA_FIELD_NAME}`).first()).toBeVisible({ timeout: 5000 });
+    // Scope to a *visible* match. Angular Material renders one cell per expansion panel,
+    // including the collapsed ones, so `.first()` on a bare text match can resolve to a
+    // hidden cell in another panel and fail with "Received: hidden" — which is exactly how
+    // this spec flaked (it failed, then passed on retry).
+    await expect(
+      page.locator('mat-cell', { hasText: DATA_FIELD_NAME }).locator('visible=true').first()
+    ).toBeVisible({ timeout: 10000 });
 
     // ── Step 7: Cleanup ──────────────────────────────────────────────────────
 
