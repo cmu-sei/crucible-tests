@@ -494,6 +494,88 @@ Always prove a leak metric can fail before trusting it to pass.
 
 ---
 
+## BP-12 — No ARIA landmarks anywhere, and the main surfaces have no headings
+
+**Severity:** medium — screen-reader users have no way to skip to content or orient
+themselves. This is an accessibility conformance gap (WCAG 2.1 §1.3.1 Info and
+Relationships, §2.4.1 Bypass Blocks).
+
+**Where:** `blueprint.ui` templates generally.
+
+**Reproduction:** log in and evaluate, on each route, after the toolbar renders:
+```js
+document.querySelectorAll('h1,h2,h3,h4,h5,h6')
+document.querySelectorAll('[role="main"],[role="navigation"],[role="banner"],main,nav,header,footer')
+```
+
+**Observed** (measured on the running app, 1280px viewport):
+
+| Route | headings | landmarks | `document.title` |
+|---|---|---|---|
+| `/` (dashboard) | **none** | **none** | Event Dashboard |
+| `/build` | **none** | **none** | Blueprint |
+| `/admin` | `H2:Administration` | **none** | Blueprint Admin |
+
+A repo-wide grep finds landmarks are absent everywhere:
+`grep -rhoE 'role="(main|navigation|banner|contentinfo)"' src/app/components/` → **no matches**,
+and no `<main>`/`<nav>`/`<header>`/`<footer>` elements are used. Structure is carried entirely by
+`mat-toolbar` / `mat-card-title`, which convey no semantics to assistive technology.
+
+**Note — a partial correction to an earlier claim.** This was previously recorded in a
+`test.fixme()` comment as "the application does not use semantic HTML heading elements
+(h1-h6)". That is too strong: the templates *do* contain 3 `<h1>`, 10 `<h2>`, 4 `<h3>` and 5
+`<h4>`. They just are not on the primary surfaces — the dashboard and `/build` have none at
+all. The **landmark** half of the claim is fully correct.
+
+**Expected:** at minimum a single `<h1>` per route and a `role="main"` (or `<main>`) region;
+ideally `<nav>` for the section list and `<header>` for the toolbar.
+
+**Blocked test:** `blueprint/tests/accessibility-and-usability/screen-reader-compatibility.spec.ts`
+asserts headings and landmarks exist. `test.skip`-ed pointing here, assertions intact.
+
+---
+
+## BP-13 — At a mobile viewport, controls render past the right edge and are unreachable
+
+**Severity:** medium — content is not merely awkward on a phone, it is **inaccessible**: the
+elements extend beyond the viewport and the document does not scroll horizontally, so they are
+clipped with no way to reach them.
+
+**Where:** `blueprint.ui` layout; the topbar/options row in particular. Fixed pixel margins with
+no responsive breakpoints.
+
+**Reproduction:** set the viewport to 375×667, log in, and on each route measure the document's
+scroll width against the widest element's right edge.
+
+**Observed** (375px viewport):
+
+| Route | `documentElement.scrollWidth` | overflows? | widest element right edge |
+|---|---:|---|---:|
+| `/` (dashboard) | 375 | no | **466px** (`div.options-text`, and its button) |
+| `/admin` | 375 | no | **585px** (`div.options-text` / button) |
+| `/build` | 375 | no | **708px** (`div.options-text` / button) |
+
+So on `/build` a control sits 333px beyond the right edge of a 375px screen, and because
+`documentElement.scrollWidth === clientWidth === 375` the page offers **no horizontal scroll** to
+reach it. `app-presence-bar` and `span.view-text` overflow too (574px and 534px on `/build`).
+
+**Note — this corrects the metric in the earlier `test.fixme()` comment**, which claimed
+"`document.body.scrollWidth` is ~466px at a 375px mobile viewport". Measured directly,
+`body.scrollWidth` is **375**, not 466 — 466 is the *right edge of one overflowing element* on the
+dashboard. That matters for testing: `expect(body.scrollWidth).toBeLessThanOrEqual(375)` **passes**
+on this bug, so the original spec's chosen metric could not have detected the very problem it
+described. The defect is real; the measurement was not. (Same class of trap as the two recorded
+under BP-11 — always confirm an a11y/layout metric can fail before trusting it to pass.)
+
+**Expected:** a responsive breakpoint so that at narrow widths content either reflows within the
+viewport or the container becomes scrollable. Either is acceptable; silently clipping is not.
+
+**Blocked test:** `blueprint/tests/accessibility-and-usability/responsive-layout-mobile-view.spec.ts`
+`test.skip`-ed pointing here, asserting no element's right edge exceeds the viewport width — the
+metric that actually detects this.
+
+---
+
 ## Resolved candidates — investigated and closed as TEST defects, not app bugs
 
 These were previously listed here as unconfirmed suspects. Each was reproduced directly and
