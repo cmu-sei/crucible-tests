@@ -59,8 +59,21 @@ test.describe('Export and Import', () => {
     const mselRow = await findMselRowByName(page, mselName);
     await expect(mselRow).toBeVisible();
 
-    /** Open the row's Download menu and save the given format, returning the download. */
+    /**
+     * Open the row's Download menu and save the given format, returning the download.
+     *
+     * The menu must be fully closed before it is re-opened. This helper is called twice, and
+     * an `mat-menu` that is still running its close animation leaves the *previous* overlay in
+     * the DOM: the new menu item then resolves but the click lands on the outgoing panel and
+     * times out ("locator resolved to <button role=menuitem ...> - attempting click action"
+     * repeatedly). Waiting for zero menu panels first makes the second open deterministic —
+     * this was an intermittent failure of exactly that shape.
+     */
+    const menuPanel = page.locator('.mat-mdc-menu-panel');
+
     const downloadFormat = async (menuItem: RegExp) => {
+      await expect(menuPanel).toHaveCount(0);
+
       await mselRow.locator('button[title^="Download "]').click();
 
       const option = page.getByRole('menuitem', { name: menuItem });
@@ -68,7 +81,11 @@ test.describe('Export and Import', () => {
 
       const downloadPromise = page.waitForEvent('download', { timeout: 30000 });
       await option.click();
-      return downloadPromise;
+      const download = await downloadPromise;
+
+      // Menu closes on selection; settle it so the next call starts from a known state.
+      await expect(menuPanel).toHaveCount(0);
+      return download;
     };
 
     // --- xlsx ---
