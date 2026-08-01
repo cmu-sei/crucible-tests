@@ -190,3 +190,33 @@ which is what misled the earlier attempt). Added `createBlueprintUser`, `deleteB
 Rewrote the spec to seed a user, put it in the unit, assign the **Editor** role, and assert it
 persists across a reload. **Proved it has teeth**: with the role-assignment click removed the
 spec fails (`Expected substring "Editor" / Received ""`); restored, it passes.
+
+## `launch-and-join-workflows`: why the bare `test.skip()`s were there
+
+Four specs in this directory self-skipped with bare `test.skip()` when their MSEL cards were
+absent. Traced to source rather than guessed:
+
+`MselService.cs:2203` —
+```csharp
+public async Task<IEnumerable<ViewModels.Msel>> GetMyLaunchInvitationMselsAsync(CancellationToken ct)
+{
+    // DISABLED: Auto-discovery based on email domain matching
+    // Users must now use invitation links directly to launch MSELs
+    return new List<ViewModels.Msel>();
+}
+```
+It returns an empty list **unconditionally**. Verified live: `GET /api/my-launch-msels` -> `[]`
+(200). So the `/launch` page's card list is empty by design, and no amount of seeding makes a
+card appear — the launch flow is reachable only through an invitation link.
+
+This is a deliberate product decision, **not a bug**, so it does not get a BP-n entry. But it
+does mean a spec that drives the launch *cards* can never assert anything, which is exactly why
+those specs degenerated into `if (!visible) test.skip()`.
+
+`/join` is different and IS testable — `GetMyJoinInvitationMselsAsync` (`MselService.cs:2178`)
+returns MSELs where the user is on a team AND `msel.Status == Deployed` AND
+`msel.PlayerViewId != null`. Those are seedable preconditions.
+
+Note the launch button is `title="Start {{ msel.name }}"`, so it is precisely locatable once a
+card exists; the old specs used `button:has-text("Start")` plus invalid comma-combined
+`text=A, text=B` selectors (which match zero elements — `text=` engines cannot be comma-joined).
