@@ -298,37 +298,46 @@ Some tests are skipped pending fixes in upstream Crucible services. These use `t
 | blueprint | `Date Range Validation` (`error-handling-and-validation/date-range-validation.spec.ts`) | **BP-8** — a MSEL accepts a negative `durationSeconds`, i.e. an end time before its start. |
 | blueprint | `API Error Display` (`error-handling-and-validation/api-error-display.spec.ts`) | **BP-9** — a failed save shows no error and disables Save as if it succeeded, so the edit is silently lost. |
 | blueprint | `Import Scenario Events from Excel` (`export-and-import/import-scenario-events-from-csv.spec.ts`) | **BP-10** — xlsx import discards each event's exported time and assigns `rowIndex * 60`, silently rewriting the timeline. |
+| blueprint | `Screen Reader Compatibility` (`accessibility-and-usability/screen-reader-compatibility.spec.ts`) | **BP-12** — no ARIA landmarks on any route, and `/` and `/build` render no headings at all (`/admin` has one `<h2>`). |
+| blueprint | `Responsive Layout - Mobile View` (`accessibility-and-usability/responsive-layout-mobile-view.spec.ts`) | **BP-13** — at a 375px viewport, controls render up to 708px past the right edge while the document does not scroll horizontally, so they are unreachable. |
+| blueprint | `Player Integration - View Name Displayed` (`integration-with-crucible-services/player-integration-view-association.spec.ts`) | **BP-15** — all four deployed-integration name lookups are browser-side calls to the other services' APIs and every one fails CORS preflight, so only a raw GUID renders. |
 | ~~blueprint~~ | ~~`Memory Leak Detection`~~ — **BP-11 is fixed; this test now passes** | **BP-11 (resolved)** — the MSEL Info section retained ~963 detached DOM nodes per render (`msel-info.component.ts:326` subscribed `dataFieldQuery.selectAll()` without `takeUntil`). Fixed in Blueprint.Ui branch `fix/msel-info-datafield-subscription-leak` (local, unpushed). The spec was verified to still fail against the unfixed build, so it guards the regression. |
-
-### Blueprint `admin-inject-types-and-catalogs` requires `--workers 1`
-
-All 11 specs in `blueprint/tests/admin-inject-types-and-catalogs/` pass reliably at
-`--workers 1` but 2 of them fail at `--workers 2`. This is **pre-existing** — verified by
-running the unmodified files at both worker counts.
-
-The cause is structural, not a bad selector: these specs share the **same global catalog and
-inject-type lists**, seed fixtures under fixed literal names, clean up by name pattern, and
-locate rows with ~77 positional `.first()`/`.last()` locators. Run concurrently, one spec's
-cleanup deletes rows another is mid-way through using, and a positional locator resolves to a
-sibling's row (or a hidden one in a collapsed panel). Note `test.describe.configure({ mode:
-'serial' })` does **not** fix this — it orders tests within a file but Playwright still
-distributes files across workers.
-
-Making them 2-worker-safe means giving each spec its own uniquely-named fixtures via
-`tempBlueprintName()` and scoping every locator to its own row, per the test-data-hygiene
-rules in `CLAUDE.md`. Until then, run this directory with `--workers 1`; the rest of the
-Blueprint suite is fine at 2. Their inline (rather than `afterEach`) cleanup also leaks on
-failure, which is why `purgeAllBlueprintTestData` now sweeps catalogs and inject types.
 
 Every blueprint skip above keeps its **correct** assertion in the test body — nothing is
 deleted, weakened, or commented out — so each one starts passing as soon as the underlying
-defect is fixed. BP-11 is the worked example: the assertion was left in its correct failing
-form, the app defect was fixed, and the spec went green without being touched. Full
-reproductions and evidence for BP-1 … BP-10 are in
-[`blueprint/blueprint-app-bugs.md`](blueprint/blueprint-app-bugs.md), which also records
-BP-4 (`GET /api/msels/{id}` returns 500 + a stack trace for a nonexistent id) and BP-6
-(the API intermittently stalls >10s at 2 workers) — neither of which blocks a test — plus a
-list of candidates that turned out to be test defects rather than app bugs.
+defect is fixed. Each skipped assertion has also been **verified to fail when un-skipped**: a
+skip whose assertion is wrong hides the defect just as effectively as a deleted one. BP-11 is
+the worked example of the whole cycle: the assertion was left in its correct failing form, the
+app defect was fixed, and the spec went green without being touched.
+
+Full reproductions and evidence for BP-1 … BP-15 are in
+[`blueprint/blueprint-app-bugs.md`](blueprint/blueprint-app-bugs.md). That file also records
+defects which do **not** block a test, and so have no row above:
+
+- **BP-4** — `GET /api/msels/{id}` returns 500 with a stack trace for a nonexistent id.
+- **BP-6** — `POST` to an entity that has a SignalR handler can wedge the API. The write path
+  awaits `Task.WhenAll` over the hub fan-out
+  (`Infrastructure/EventHandlers/UserHandler.cs`), so one leaked or half-dead client connection
+  blocks it indefinitely. Reproduced outside Playwright: `GET /api/users` in 8ms while
+  `POST /api/users` hung past 25s with no browsers running, zero blocked DB locks, and
+  `aspire resource blueprint-api restart` unable to stop the process. Restarting the API
+  restores 8–22ms writes with no test change. **If a run suddenly shows API timeouts after a
+  long session, restart `blueprint-api` rather than suspecting the specs.**
+- **BP-14** — a user's role change never reaches the local store, so the admin Users table
+  shows a stale role until a full page load (`user-data.service.ts` uses insert-only akita
+  `add()` where all five sibling data services use `upsert()`).
+
+The whole Blueprint suite runs at `--workers 2`. An earlier note here claimed
+`admin-inject-types-and-catalogs` needed `--workers 1` because of "~77 positional locators";
+that was not the mechanism. Deleting an inject type **cascade-deletes every catalog that
+references it**, and five specs bound their catalog to the globally-first `mat-option` — often
+a sibling spec's inject type — so that sibling's cleanup destroyed this spec's catalog
+mid-test. Each spec now selects the inject type it created itself and seeds under
+`tempBlueprintName()`, and the directory is 2-worker-safe.
+
+Note that **concurrent Blueprint suite runs against one stack will sabotage each other**: the
+`globalTeardown` purge deletes every row whose name matches the `tempBlueprintName()` shape,
+including another in-flight run's fixtures. Run the suite once at a time.
 
 ## Troubleshooting
 

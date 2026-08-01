@@ -748,6 +748,61 @@ and Steamfitter names are broken the same way.
 
 ---
 
+## BP-16 — Every catalog row's inject list shows whichever catalog's GET resolved last
+
+**Severity:** medium — on an admin Catalogs page with more than one catalog, the Injects panel
+can display another catalog's injects, or appear to lose an inject that was just created. The
+data is intact; only the rendering is wrong.
+
+**Where:** `blueprint.ui`, two cooperating causes.
+
+1. `components/admin/admin-catalog-list/admin-catalog-list.component.html:104-110` — the
+   `expandedDetail` column mounts **one `<app-inject-list>` per catalog row, unconditionally.**
+   There is no `@if` gate on `expandedElementId`; the `[@detailExpand]` animation and CSS
+   `overflow: hidden` merely *hide* collapsed rows. So on a page with N catalogs, N inject-list
+   components exist and each one's `ngOnInit` calls `loadByCatalog(itsOwnId)`.
+
+2. `data/catalog-inject/catalog-inject-data.service.ts:93-106` — `loadByCatalog` writes the
+   response with an **unfiltered, whole-store replace**:
+
+```ts
+loadByCatalog(catalogId: string) {
+  ...
+  .subscribe(
+    (catalogInjects) => {
+      this.catalogInjectStore.set(catalogInjects);   // <-- full replace, not keyed by catalog
+    },
+    (error) => {
+      this.catalogInjectStore.set([]);              // <-- and an error blanks it for everyone
+    }
+  );
+}
+```
+
+`set()` discards the store's previous contents rather than upserting by catalog. Every mounted
+`app-inject-list` subscribes to that same single store, so **whichever catalog's GET resolves
+last determines what all of them display** — including rows the user never expanded. An error on
+any one of the N requests blanks the list for all of them.
+
+**Reproduction:** with two or more catalogs present, open Admin → Catalogs and expand one
+catalog's Injects panel. The panel's contents depend on request completion order, not on which
+row was expanded. It is a race, so it does not reproduce on every load; it is most visible with
+several catalogs, and it is why a just-created inject can appear to vanish from its own
+catalog.
+
+**Expected:** gate the `expandedDetail` content on `expandedElementId === element.id` so only the
+expanded row mounts a list (this alone removes the concurrency), and/or key the store write per
+catalog (`upsert`, or a store scoped by `catalogId`) instead of replacing it wholesale. The
+error branch should also not blank a store it does not own.
+
+**Test impact:** no spec is skipped for this. The `admin-inject-types-and-catalogs` specs filter
+the admin list down to their own row via the section's Search box before expanding, which avoids
+the race by construction rather than retrying around it. Note this is a *separate* defect from
+the inject-type/catalog cascade delete that was the root cause of that directory's 2-worker
+failures — see the Resolved candidates section.
+
+---
+
 ## Resolved candidates — investigated and closed as TEST defects, not app bugs
 
 These were previously listed here as unconfirmed suspects. Each was reproduced directly and
