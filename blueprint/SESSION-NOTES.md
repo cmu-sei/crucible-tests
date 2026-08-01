@@ -403,3 +403,44 @@ of scope here per the instruction not to modify the API/UI.
   Added a real cross-worker mutex (`acquireAdminCatalogLock`, an `O_EXCL` lockfile with staleness
   reclaim, since Playwright workers are separate processes) so only one worker is on those pages
   at a time. Only these 11 specs serialize; the rest of the suite still runs at 2 workers.
+
+## Final verification attempt: BP-6 makes 5 consecutive runs unachievable
+
+After a full stack restart (fresh API process, `.auth/` deleted, `aspire wait` green on all
+three resources):
+
+| Run | Summary | Strict (`results.json`) |
+|---|---|---|
+| 1 | 125 passed, **0 failed**, 14 skipped | expected=122 flaky=3 unexpected=0 |
+| 2 | 122 passed, **3 failed**, 14 skipped | expected=119 flaky=3 unexpected=3 |
+
+Probed immediately after run 2, with zero browsers running:
+```
+GET  /api/users -> 200 in 0.007s
+POST /api/users -> 000 after 12s
+```
+
+**Fifth confirmed occurrence, always the same signature: reads instant, writes hang.** The
+interval has shortened over the session — early on it took 3-4 full runs to wedge, by the end
+1-2. That is consistent with the mechanism (accumulating hub connections), and it means the
+defect gets *worse* the more the suite is exercised, which is exactly the wrong direction for a
+CI gate.
+
+Also tried restarting `blueprint-api` before every run (`/tmp/final-verify.sh`). It does not
+help, because the API wedges **during** a run, not between runs — a run that starts against a
+healthy API can still lose its later specs.
+
+### Bottom line on the finishing condition
+
+The requested condition — 5 consecutive runs with identical results — is **not reachable while
+BP-6 is unfixed**, and it is not a test-quality problem:
+
+- On a healthy API the suite is **125 passed / 0 failed / 14 skipped**, reproduced many times,
+  including **125/125 with zero retries** (run 2 of the earlier batch) and on a **completely
+  fresh database**.
+- Every failure in every degraded run is `apiRequestContext.fetch` / `waitForResponse` timing
+  out on a **write**, never an assertion about app behaviour being wrong.
+
+Fixing it requires an application change (`UserHandler.HandleCreateOrUpdate` should not await
+the SignalR fan-out on the request path), which the instructions put out of scope. It is written
+up as BP-6 with the reproduction, the source line, and the restart workaround.
