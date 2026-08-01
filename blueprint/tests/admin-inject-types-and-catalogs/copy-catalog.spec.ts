@@ -5,9 +5,23 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
-import { getBlueprintToken, tempBlueprintName } from '../../test-helpers';
+import { getBlueprintToken, tempBlueprintName,
+  acquireAdminCatalogLock,
+  releaseAdminCatalogLock,
+} from '../../test-helpers';
 
 test.describe('Admin - Inject Types and Catalogs Management', () => {
+  // Serialize access to the shared admin Catalogs / Inject Types pages: they are not
+  // safely concurrent because of BP-16 (one unfiltered global inject store shared by an
+  // app-inject-list mounted per row). See acquireAdminCatalogLock in test-helpers.
+  test.beforeEach(async () => {
+    await acquireAdminCatalogLock();
+  });
+
+  test.afterEach(async () => {
+    await releaseAdminCatalogLock();
+  });
+
   // Unique per run so concurrent specs/runs never collide, and so a mid-test failure's
   // leftovers don't need a name-based pre-cleanup pass — the teardown purge sweeps rows
   // matching tempBlueprintName()'s shape automatically.

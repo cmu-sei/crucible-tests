@@ -21,6 +21,8 @@
 import { APIRequestContext, Page, request as playwrightRequest, expect } from '@playwright/test';
 import { Services, waitForFirstVisible } from '../shared-fixtures';
 import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { randomUUID } from 'crypto';
 import { authSessionStatePath } from '../auth-paths';
 
@@ -1467,6 +1469,91 @@ export async function setAdminUserRole(
 
   // The overlay closing is the UI's own proof the selection was committed.
   await expect(panel).toBeHidden({ timeout: 15000 });
+}
+
+// ============================================================================
+// Cross-worker mutex for the shared admin catalog/inject-type surface
+// ============================================================================
+
+/**
+ * Serialize the specs that drive Blueprint's **admin Catalogs / Inject Types** pages.
+ *
+ * These pages are not safely concurrent, and the reason is an application defect (BP-16), not
+ * a test-side one: `admin-catalog-list.component.html` mounts one `<app-inject-list>` per
+ * catalog row *unconditionally* — the `expandedDetail` column has no `@if` gate, only CSS
+ * hides collapsed rows — and each instance's `ngOnInit` calls `loadByCatalog(itsOwnId)`, which
+ * writes with an unfiltered `catalogInjectStore.set(...)`: a whole-store replace rather than an
+ * upsert keyed by catalog. Every mounted list subscribes to that one store, so whichever GET
+ * resolves last wins for all of them. Every admin mutation also broadcasts over SignalR to
+ * every open admin session, re-rendering these tables without a `trackBy`.
+ *
+ * Net effect: two workers on these pages at once will intermittently see each other's data or
+ * lose a just-created row, no matter how carefully each spec is written. The specs already
+ * filter to their own row via the section Search box and retry with `toPass`, which removes
+ * most of it — measured 11/11 pass across 3 consecutive `--workers 1` runs, but a lone flaky
+ * retry per run at `--workers 2`.
+ *
+ * Rather than paper over that with ever-larger retry budgets, take a lock so only one worker
+ * is on these pages at a time. The rest of the Blueprint suite keeps running in parallel, so
+ * this costs far less than dropping the whole suite to one worker — and it is a *correctness*
+ * boundary around a real shared resource, not a sleep.
+ *
+ * Implemented as an exclusive lockfile because Playwright workers are separate processes and
+ * share no memory. `O_EXCL` create is atomic, and a stale lock (from a killed worker) is
+ * reclaimed after `STALE_MS`.
+ *
+ * Usage — in a spec that touches the admin Catalogs or Inject Types pages:
+ * ```ts
+ * test.beforeEach(async () => { await acquireAdminCatalogLock(); });
+ * test.afterEach(async () => { await releaseAdminCatalogLock(); });
+ * ```
+ */
+const ADMIN_LOCK_PATH = path.join(os.tmpdir(), 'blueprint-admin-catalog.lock');
+const ADMIN_LOCK_STALE_MS = 240_000;
+let _holdsAdminLock = false;
+
+/** Take the admin catalog/inject-type lock, waiting for another worker to finish. */
+export async function acquireAdminCatalogLock(timeoutMs = 300_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+
+  for (;;) {
+    try {
+      // 'wx' fails if the path exists — an atomic test-and-set.
+      fs.writeFileSync(ADMIN_LOCK_PATH, `${process.pid}:${Date.now()}`, { flag: 'wx' });
+      _holdsAdminLock = true;
+      return;
+    } catch {
+      // Held by someone else. Reclaim it if the holder died and left it behind.
+      try {
+        const age = Date.now() - fs.statSync(ADMIN_LOCK_PATH).mtimeMs;
+        if (age > ADMIN_LOCK_STALE_MS) {
+          fs.rmSync(ADMIN_LOCK_PATH, { force: true });
+          continue;
+        }
+      } catch {
+        // Vanished between the failed create and the stat — just retry.
+        continue;
+      }
+
+      if (Date.now() > deadline) {
+        throw new Error(
+          `acquireAdminCatalogLock: timed out after ${timeoutMs}ms waiting for ${ADMIN_LOCK_PATH}`
+        );
+      }
+      await new Promise((r) => setTimeout(r, 250));
+    }
+  }
+}
+
+/** Release the admin lock. Safe to call when this worker does not hold it. */
+export async function releaseAdminCatalogLock(): Promise<void> {
+  if (!_holdsAdminLock) return;
+  _holdsAdminLock = false;
+  try {
+    fs.rmSync(ADMIN_LOCK_PATH, { force: true });
+  } catch {
+    /* best effort — a stale lock is reclaimed by age */
+  }
 }
 
 // ============================================================================

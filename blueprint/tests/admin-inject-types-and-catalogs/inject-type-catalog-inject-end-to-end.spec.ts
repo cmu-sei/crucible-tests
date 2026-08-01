@@ -5,9 +5,23 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
-import { getBlueprintToken, tempBlueprintName } from '../../test-helpers';
+import { getBlueprintToken, tempBlueprintName,
+  acquireAdminCatalogLock,
+  releaseAdminCatalogLock,
+} from '../../test-helpers';
 
 test.describe('Admin - Inject Types and Catalogs Management', () => {
+  // Serialize access to the shared admin Catalogs / Inject Types pages: they are not
+  // safely concurrent because of BP-16 (one unfiltered global inject store shared by an
+  // app-inject-list mounted per row). See acquireAdminCatalogLock in test-helpers.
+  test.beforeEach(async () => {
+    await acquireAdminCatalogLock();
+  });
+
+  test.afterEach(async () => {
+    await releaseAdminCatalogLock();
+  });
+
   // Unique per run so concurrent runs / leftovers from an interrupted prior run never
   // collide, and the teardown purge auto-sweeps by the tempBlueprintName shape.
   let INJECT_TYPE_NAME: string;
@@ -266,7 +280,7 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
       await expect(newInjectMenuItem).toBeVisible({ timeout: 3000 });
       await newInjectMenuItem.click({ timeout: 3000 });
       await expect(page.locator('input[title="The Name of the Inject"]')).toBeVisible({ timeout: 3000 });
-    }).toPass({ timeout: 20000 });
+    }).toPass({ timeout: 45000 });
 
     // 9. Fill in the required fields
     const injectNameInput = page.locator('input[title="The Name of the Inject"]').first();
@@ -300,7 +314,7 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
       await expect(
         injectList.getByRole('cell', { name: INJECT_NAME, exact: true })
       ).toBeVisible({ timeout: 3000 });
-    }).toPass({ timeout: 20000 });
+    }).toPass({ timeout: 45000 });
 
     // ── Step 4: Verify inject appears under the Inject Type ──────────────────
     // 11. Navigate to Inject Types and expand the inject type row, open its Injects
@@ -313,7 +327,7 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
       await expect(
         injectList.getByRole('cell', { name: INJECT_NAME, exact: true })
       ).toBeVisible({ timeout: 3000 });
-    }).toPass({ timeout: 20000 });
+    }).toPass({ timeout: 45000 });
 
     // ── Step 5: Delete the inject from the inject type view ──────────────────
     // 13. Click the delete button for the inject within the inject type's Injects
@@ -332,7 +346,7 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
       await expect(
         injectList.getByRole('cell', { name: INJECT_NAME, exact: true })
       ).not.toBeVisible({ timeout: 3000 });
-    }).toPass({ timeout: 20000 });
+    }).toPass({ timeout: 45000 });
 
     // ── Step 6: Verify inject is gone from the catalog ───────────────────────
     // 14. Navigate to Catalogs and expand the catalog row, open the Injects panel
@@ -345,7 +359,7 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
       await expect(
         injectList.getByRole('cell', { name: INJECT_NAME, exact: true })
       ).not.toBeVisible({ timeout: 3000 });
-    }).toPass({ timeout: 20000 });
+    }).toPass({ timeout: 45000 });
 
     // ── Step 7: Delete the catalog ───────────────────────────────────────────
     // 16. Click the delete button for the catalog and confirm

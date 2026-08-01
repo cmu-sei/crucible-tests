@@ -78,9 +78,19 @@ test.describe('Export and Import', () => {
     await page.goto(`${Services.Blueprint.UI}/build`, { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('table').first()).toBeVisible({ timeout: 15000 });
 
+    // This spec opens two different mat-menus in sequence (Download, then Upload). A menu
+    // still running its close animation leaves the outgoing overlay in the DOM, so the next
+    // menu item resolves but the click lands on the stale panel and times out — the observed
+    // failure was exactly that ("waiting for getByRole('menuitem', {name: /Download xlsx
+    // file/i}) - locator resolved to <button role=menuitem ...>", 10s). Settling on zero menu
+    // panels between opens makes the sequence deterministic.
+    const menuPanel = page.locator('.mat-mdc-menu-panel');
+
     // 1. Export the seeded MSEL to use as the import fixture.
     const sourceRow = await findMselRowByName(page, sourceMselName);
     await expect(sourceRow).toBeVisible();
+
+    await expect(menuPanel).toHaveCount(0);
     await sourceRow.locator('button[title^="Download "]').click();
 
     const xlsxOption = page.getByRole('menuitem', { name: /Download xlsx file/i });
@@ -89,6 +99,7 @@ test.describe('Export and Import', () => {
     const downloadPromise = page.waitForEvent('download', { timeout: 30000 });
     await xlsxOption.click();
     const download = await downloadPromise;
+    await expect(menuPanel).toHaveCount(0);
 
     // saveAs works when the browser runs remotely, unlike relying on path().
     downloadPath = path.join(os.tmpdir(), `msel-import-${sourceMselName}.xlsx`);

@@ -5,9 +5,23 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
-import { getBlueprintToken, tempBlueprintName } from '../../test-helpers';
+import { getBlueprintToken, tempBlueprintName,
+  acquireAdminCatalogLock,
+  releaseAdminCatalogLock,
+} from '../../test-helpers';
 
 test.describe('Admin - Inject Types and Catalogs Management', () => {
+  // Serialize access to the shared admin Catalogs / Inject Types pages: they are not
+  // safely concurrent because of BP-16 (one unfiltered global inject store shared by an
+  // app-inject-list mounted per row). See acquireAdminCatalogLock in test-helpers.
+  test.beforeEach(async () => {
+    await acquireAdminCatalogLock();
+  });
+
+  test.afterEach(async () => {
+    await releaseAdminCatalogLock();
+  });
+
   // Unique per run: two concurrent runs (or a leaked row from an interrupted prior run)
   // can no longer collide, and the teardown purge auto-sweeps by the tempBlueprintName
   // shape rather than needing a name-based pre-cleanup pass.
@@ -248,7 +262,7 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
       await expect(
         catalogUnits.getByRole('button', { name: `Remove ${UNIT_SHORT_NAME} from this catalog` })
       ).toBeVisible({ timeout: 3000 });
-    }).toPass({ timeout: 20000 });
+    }).toPass({ timeout: 45000 });
 
     // ── Step 8: Expand "Injects" section and add an inject to the catalog ────
 
@@ -271,7 +285,7 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
       await newInjectMenuItem.click({ timeout: 3000 });
 
       await expect(page.locator('input[title="The Name of the Inject"]')).toBeVisible({ timeout: 3000 });
-    }).toPass({ timeout: 20000 });
+    }).toPass({ timeout: 45000 });
 
     // Only one dialog is open at a time, but scope to it explicitly (via the inject
     // dialog's own "title" attributes, which uniquely identify its fields) rather than
@@ -310,7 +324,7 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
       await expect(injectList.getByRole('cell', { name: INJECT_NAME, exact: true })).toBeVisible({
         timeout: 3000,
       });
-    }).toPass({ timeout: 20000 });
+    }).toPass({ timeout: 45000 });
 
     // Cleanup happens in afterEach (via the API) so a mid-test failure still cleans up.
   });

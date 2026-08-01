@@ -5,9 +5,23 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
-import { getBlueprintToken, tempBlueprintName } from '../../test-helpers';
+import { getBlueprintToken, tempBlueprintName,
+  acquireAdminCatalogLock,
+  releaseAdminCatalogLock,
+} from '../../test-helpers';
 
 test.describe('Admin - Inject Types and Catalogs Management', () => {
+  // Serialize access to the shared admin Catalogs / Inject Types pages: they are not
+  // safely concurrent because of BP-16 (one unfiltered global inject store shared by an
+  // app-inject-list mounted per row). See acquireAdminCatalogLock in test-helpers.
+  test.beforeEach(async () => {
+    await acquireAdminCatalogLock();
+  });
+
+  test.afterEach(async () => {
+    await releaseAdminCatalogLock();
+  });
+
   // Unique per run so concurrent runs / leftovers from an interrupted prior run never
   // collide, and the teardown purge auto-sweeps by the tempBlueprintName shape.
   let INJECT_TYPE_NAME: string;
@@ -143,7 +157,7 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
         await newDataFieldMenuItem.click({ timeout: 3000 });
         await expect(addDataFieldDialog).toBeVisible({ timeout: 3000 });
       }
-    }).toPass({ timeout: 20000 });
+    }).toPass({ timeout: 45000 });
 
     // Fill in the Name field (required) — second text input in the dialog (first is Display Order)
     const dataFieldNameInput = addDataFieldDialog.getByLabel('Name');

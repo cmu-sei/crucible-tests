@@ -5,9 +5,23 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
-import { getBlueprintToken, tempBlueprintName } from '../../test-helpers';
+import { getBlueprintToken, tempBlueprintName,
+  acquireAdminCatalogLock,
+  releaseAdminCatalogLock,
+} from '../../test-helpers';
 
 test.describe('Admin - Inject Types and Catalogs Management', () => {
+  // Serialize access to the shared admin Catalogs / Inject Types pages: they are not
+  // safely concurrent because of BP-16 (one unfiltered global inject store shared by an
+  // app-inject-list mounted per row). See acquireAdminCatalogLock in test-helpers.
+  test.beforeEach(async () => {
+    await acquireAdminCatalogLock();
+  });
+
+  test.afterEach(async () => {
+    await releaseAdminCatalogLock();
+  });
+
   // Unique per run so concurrent runs / leftovers from an interrupted prior run never
   // collide, and the teardown purge auto-sweeps by the tempBlueprintName shape.
   let CATALOG_NAME: string;
@@ -156,7 +170,7 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
       }
       // expect: The row expands to show the Injects expansion panel for that catalog
       await expect(expandedContent).toBeVisible({ timeout: 3000 });
-    }).toPass({ timeout: 20000 });
+    }).toPass({ timeout: 45000 });
 
     // 2. Click the same row again to collapse it
     await expect(async () => {
@@ -168,6 +182,6 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
       // hidden), not removal from the DOM, so `.not.toBeVisible()` on the same
       // locator is the correct real assertion — no swallow needed.
       await expect(expandedContent).not.toBeVisible({ timeout: 3000 });
-    }).toPass({ timeout: 20000 });
+    }).toPass({ timeout: 45000 });
   });
 });

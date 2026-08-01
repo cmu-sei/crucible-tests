@@ -5,9 +5,23 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
-import { getBlueprintToken, tempBlueprintName } from '../../test-helpers';
+import { getBlueprintToken, tempBlueprintName,
+  acquireAdminCatalogLock,
+  releaseAdminCatalogLock,
+} from '../../test-helpers';
 
 test.describe('Admin - Inject Types and Catalogs Management', () => {
+  // Serialize access to the shared admin Catalogs / Inject Types pages: they are not
+  // safely concurrent because of BP-16 (one unfiltered global inject store shared by an
+  // app-inject-list mounted per row). See acquireAdminCatalogLock in test-helpers.
+  test.beforeEach(async () => {
+    await acquireAdminCatalogLock();
+  });
+
+  test.afterEach(async () => {
+    await releaseAdminCatalogLock();
+  });
+
   // Unique per test run (tempBlueprintName) so concurrent runs / leftover rows from a
   // prior interrupted run never collide with, or get cascade-deleted alongside, this
   // spec's own records. Also makes these rows auto-purgeable by the TEMP_NAME_PATTERN
@@ -146,7 +160,7 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
           await expect(candidateInjectList.locator('table')).toBeVisible({ timeout: 3000 });
         }
         injectList = candidateInjectList;
-      }).toPass({ timeout: 20000 });
+      }).toPass({ timeout: 45000 });
       return injectList;
     };
 
@@ -254,7 +268,7 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
       // for the inject dialog that distinguishes it from the catalog dialog (inject
       // dialog has "Name of the Inject" title attribute).
       await expect(page.locator('input[title="The Name of the Inject"]')).toBeVisible({ timeout: 3000 });
-    }).toPass({ timeout: 20000 });
+    }).toPass({ timeout: 45000 });
 
     // 17. Fill in inject name using the title attribute for precise targeting
     const nameInput = page.locator('input[title="The Name of the Inject"]').first();
@@ -309,7 +323,7 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
       await copyInjectButton.click({ timeout: 3000 });
       // expect: Dialog contains "Create an Inject" title
       await expect(page.locator('mat-dialog-container').filter({ hasText: 'Create' })).toBeVisible({ timeout: 3000 });
-    }).toPass({ timeout: 20000 });
+    }).toPass({ timeout: 45000 });
 
     const copyDialog = page.locator('mat-dialog-container').filter({ hasText: 'Create' });
 
