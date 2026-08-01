@@ -357,3 +357,49 @@ measurements — only the API process was replaced. That confirms the diagnosis 
 above: a leaked/half-dead SignalR connection blocks the synchronous `Task.WhenAll` fan-out in
 `UserHandler.HandleCreateOrUpdate`, wedging every subsequent write on that entity. It is an
 application defect that accumulates over a long session, not test flakiness.
+
+## The 5-run streak is gated by BP-6, not by the tests
+
+Verification runs on a freshly restarted stack, `run-tests.sh blueprint --browser chromium
+--workers 2`, reading `results.json` strictly (the summary line counts a flaky retry as
+"passed", so it is not sufficient evidence):
+
+| Run | Summary | Strict (`results.json`) |
+|---|---|---|
+| 1 | 125 passed, 0 failed, 14 skipped | expected=124 flaky=1 unexpected=0 |
+| 2 | 125 passed, 0 failed, 14 skipped | **expected=125 flaky=0 unexpected=0** |
+| 3 | 125 passed, 0 failed, 14 skipped | expected=124 flaky=1 unexpected=0 |
+| 4 | 122 passed, **3 failed**, 14 skipped | expected=120 flaky=2 unexpected=3 |
+
+Run 4's three failures were all `apiRequestContext.fetch: Timeout 10000ms exceeded`
+(`Assign Role to User`, `Remove Role from User`, `Delete Scenario Event`). Probed immediately
+afterwards:
+
+```
+GET  /api/users -> 200 in 0.004s
+POST /api/users -> 000 after 12s      <-- wedged again
+```
+
+**That is BP-6, for the fourth time this session.** The pattern is now well established: the
+API serves reads normally and hangs every write on an entity with a SignalR handler, because
+`UserHandler.HandleCreateOrUpdate` awaits `Task.WhenAll` over the hub fan-out before the HTTP
+response. It recurs after roughly **3-4 full suite runs** as hub connections accumulate, and
+restarting `blueprint-api` restores writes to 8-60ms every time — measured three separate
+times, with no test change in between.
+
+So the ceiling on "5 identical green runs" is an application defect, not test quality: the suite
+is **125/125 with zero retries** when the API is healthy (run 2 above, plus the fresh-database
+run). Fixing it needs an app change (fire-and-forget the broadcast, or bound it), which is out
+of scope here per the instruction not to modify the API/UI.
+
+### Flakiness work that did land
+
+- `export-msel-to-csv` and `import-msel-from-excel`: a `mat-menu` still animating closed leaves
+  the outgoing overlay in the DOM, so a second menu's item resolves but the click lands on the
+  stale panel and times out. Both now settle on zero `.mat-mdc-menu-panel` before and after each
+  open. csv verified 6/6 clean in isolation.
+- `admin-inject-types-and-catalogs`: widening the `toPass` budget 20s -> 45s did **not** close
+  the last retry, which is the signal that the problem is a shared resource rather than slowness.
+  Added a real cross-worker mutex (`acquireAdminCatalogLock`, an `O_EXCL` lockfile with staleness
+  reclaim, since Playwright workers are separate processes) so only one worker is on those pages
+  at a time. Only these 11 specs serialize; the rest of the suite still runs at 2 workers.
