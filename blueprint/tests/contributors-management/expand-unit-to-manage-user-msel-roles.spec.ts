@@ -4,38 +4,33 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 //
-// Test: Expand Unit to Manage User MSEL Roles
+// Test: Expand Unit to Manage User MSEL Roles (plan item 5.4)
 //
-// This test was consolidated from two duplicate specs:
-// - blueprint/tests/contributors-management/expand-unit-to-manage-user-msel-roles.spec.ts (563 lines, UI-driven cleanup)
-// - blueprint/tests/expand-unit-to-manage-user-msel-roles/expand-unit-to-manage-user-msel-roles.spec.ts (459 lines, UI-driven cleanup)
+// Consolidated from two duplicate specs, both of which were previously test.fixme()'d.
 //
-// Both were test.fixme() because UI-driven user deletion was failing. This version uses API-based
-// seeding and cleanup throughout.
+// Two earlier claims about this test were wrong, and both are worth recording because each
+// produced a test that could not fail:
 //
-// Coverage:
-//  - Create a MSEL and a unit via API
-//  - Add the unit to the MSEL's contributors
-//  - Navigate to the Contributors section
-//  - Expand the unit row to show its users
-//  - Verify role checkboxes are displayed
-//  - Toggle a role checkbox and verify the state change
+//  1. "Users can't be seeded — Blueprint provisions them on first Keycloak login, so this
+//     test can only use the admin user." Not true. `POST /api/users` accepts a
+//     client-supplied id and returns 201, and `POST /api/unitusers` (201) puts that user in
+//     a unit. Both are wrapped as `createBlueprintUser` / `addUserToUnit` in test-helpers.
+//     So the unit under test can have a real member, which is the whole point of the
+//     plan item ("expand the unit row to manage its users' MSEL roles").
 //
-// NOTE: This test does NOT create Keycloak users or Blueprint users, because the original test's
-// focus was on the Contributors UI — specifically, expanding a unit row and managing MSEL roles
-// for users already in that unit. The test plan says "click on a unit row to expand it" and
-// "toggle a role checkbox" — it does NOT say "add users to a unit". Since adding users to units
-// via API requires those users to exist in Blueprint's User table first (which appears to be
-// auto-provisioned on first login), and since the focus is on the expand/role-management UI
-// behavior, this test uses the admin user (who already exists) as a stand-in.
+//  2. The role control was located as `mat-checkbox`. There are no checkboxes here. The
+//     expanded row renders, per user, a **multi-select `mat-select` labelled "MSEL Roles"`**
+//     (msel-contributors.component.html). The old locator therefore matched 0 elements, and
+//     an `if (count > 0) ... else assert the row is still visible` fallback hid that: the
+//     else branch re-asserted something proven four lines earlier, so both branches passed
+//     unconditionally and the spec's named behaviour went entirely untested.
 //
-// To fully test user-in-unit scenarios with temporary test users, you would need to:
-// 1. Create Keycloak users
-// 2. Have those users log in once to trigger Blueprint's user auto-provisioning
-// 3. Then add them to units
+// MselRole values come from Blueprint.Api.Data/Enumerations.cs:
+//   Owner=10, Editor=20, Approver=30, MoveEditor=40, Viewer=50, Evaluator=60
 //
-// That workflow is outside the scope of this specific UI test, which is about the Contributors
-// section's expand-unit interface.
+// Coverage: seed a MSEL, a unit and a user; put the user in the unit; add the unit to the
+// MSEL; expand the unit row; assert the seeded user and the MSEL Roles control render;
+// select a role and assert it persists (both in the UI control and via the API).
 
 import { test, expect } from '../../fixtures';
 import {
@@ -44,82 +39,144 @@ import {
   deleteMsel,
   createUnit,
   deleteUnit,
+  createBlueprintUser,
+  deleteBlueprintUser,
+  addUserToUnit,
+  removeUserFromUnit,
   addUnitToMsel,
   removeUnitFromMsel,
+  listUnitUsers,
   tempBlueprintName,
   navigateToMselSection,
 } from '../../test-helpers';
 
 test.describe('Contributors Management', () => {
-  test('Expand Unit to Manage User MSEL Roles', async ({ blueprintAuthenticatedPage: page }) => {
-    const blueprintToken = await getBlueprintToken();
+  let token: string;
+  let mselId: string;
+  let unitId: string;
+  let userId: string;
+  let userName: string;
+  let unitShortName: string;
+  let unitUserId: string | null = null;
+  let mselUnitJoinId: string | null = null;
 
-    const mselName = tempBlueprintName('ExpandUnit-MSEL');
-    const unitName = tempBlueprintName('ExpandUnit-Unit');
-    const unitShortName = 'EU';
+  test.beforeEach(async () => {
+    token = await getBlueprintToken();
 
-    // Seed: create MSEL and unit via API
-    const createdMsel = await createMsel(blueprintToken, {
-      name: mselName,
-      description: 'Test MSEL for expand-unit role management',
+    userName = tempBlueprintName('ExpandUnit-User');
+    unitShortName = `EU${Date.now() % 100000}`;
+
+    const msel = await createMsel(token, {
+      name: tempBlueprintName('ExpandUnit-MSEL'),
+      description: 'Seeded for expand-unit role management',
     });
+    mselId = msel.id;
 
-    const createdUnit = await createUnit(blueprintToken, {
-      name: unitName,
+    const unit = await createUnit(token, {
+      name: tempBlueprintName('ExpandUnit-Unit'),
       shortName: unitShortName,
     });
+    unitId = unit.id;
 
-    let mselUnitJoinId: string | null = null;
+    const user = await createBlueprintUser(token, { name: userName });
+    userId = user.id;
 
-    try {
-      // Add the unit to the MSEL
-      const mselUnit = await addUnitToMsel(blueprintToken, createdMsel.id, createdUnit.id);
-      mselUnitJoinId = mselUnit.id;
+    // Put the user in the unit, then make the unit a MSEL contributor. Order matters only
+    // in that both must exist before the Contributors row can expand to anything useful.
+    unitUserId = (await addUserToUnit(token, unitId, userId)).id;
+    mselUnitJoinId = (await addUnitToMsel(token, mselId, unitId)).id;
 
-      // Navigate to the MSEL's Contributors section
-      await navigateToMselSection(page, createdMsel.id, 'Contributors');
+    // Precondition, asserted rather than assumed: without a real member in the unit the
+    // expanded row is legitimately empty and the role assertions below would be vacuous.
+    const members = await listUnitUsers(token, unitId);
+    expect(
+      members.map((u: any) => u.id),
+      'seeded user must be a member of the seeded unit'
+    ).toContain(userId);
+  });
 
-      // expect: Contributors section is visible
-      const contributorsSection = page.locator('app-msel-contributors, [class*="contributors"]').first();
-      await expect(contributorsSection).toBeVisible({ timeout: 10000 });
+  test.afterEach(async () => {
+    if (mselUnitJoinId) await removeUnitFromMsel(token, mselUnitJoinId);
+    if (unitUserId) await removeUserFromUnit(token, unitUserId);
+    await deleteMsel(token, mselId);
+    await deleteUnit(token, unitId);
+    await deleteBlueprintUser(token, userId);
+    unitUserId = null;
+    mselUnitJoinId = null;
+  });
 
-      // expect: The unit appears in the contributors table
-      const unitRow = page
-        .locator('table tbody tr, mat-row')
-        .filter({ hasText: unitShortName })
-        .first();
-      await expect(unitRow).toBeVisible({ timeout: 10000 });
+  test('Expand Unit to Manage User MSEL Roles', async ({ blueprintAuthenticatedPage: page }) => {
+    await navigateToMselSection(page, mselId, 'Contributors');
 
-      // Click the unit row to expand it
-      await unitRow.click();
+    const contributors = page.locator('app-msel-contributors').first();
+    await expect(contributors).toBeVisible({ timeout: 10000 });
 
-      // expect: The row expands to show the expanded detail area
-      const expandedDetail = page.locator('.expanded-detail-div, .detail-row').first();
-      await expect(expandedDetail).toBeVisible({ timeout: 10000 });
+    // 1. The seeded unit appears as a contributor.
+    const unitRow = page
+      .locator('table tbody tr, mat-row')
+      .filter({ hasText: unitShortName })
+      .first();
+    await expect(unitRow).toBeVisible({ timeout: 10000 });
 
-      // expect: Role checkboxes are shown in the expanded area
-      // Available roles: Editor, Approver, MoveEditor, Owner, Evaluator, Viewer
-      // Since the unit has no users added to it (requires Blueprint user provisioning which
-      // happens on first login), we verify the structure is present even if empty or shows
-      // a message like "No users in this unit".
-      const checkboxes = expandedDetail.locator('mat-checkbox');
-      const checkboxCount = await checkboxes.count();
+    // 2. Expand the unit row.
+    await unitRow.click();
 
-      // If checkboxes exist (unit has users), verify at least one
-      if (checkboxCount > 0) {
-        await expect(checkboxes.first()).toBeVisible({ timeout: 5000 });
-      } else {
-        // If no checkboxes, verify the expanded area is at least visible
-        await expect(expandedDetail).toBeVisible({ timeout: 5000 });
-      }
+    const expandedDetail = page.locator('.expanded-detail-div').first();
+    await expect(expandedDetail).toBeVisible({ timeout: 10000 });
 
-    } finally {
-      // Cleanup: delete all seeded resources via API
-      if (mselUnitJoinId) {
-        await removeUnitFromMsel(blueprintToken, mselUnitJoinId);
-      }
-      await deleteMsel(blueprintToken, createdMsel.id);
-      await deleteUnit(blueprintToken, createdUnit.id);
-    }
+    // expect: the expanded area lists the unit's member.
+    await expect(expandedDetail.getByText(userName, { exact: true })).toBeVisible({
+      timeout: 10000,
+    });
+
+    // 3. The per-user "MSEL Roles" control renders. This is a multi-select mat-select,
+    //    not a checkbox — see the header note.
+    const userDetail = expandedDetail.locator('.unit-detail').filter({ hasText: userName }).first();
+    const rolesSelect = userDetail.getByRole('combobox', { name: /MSEL Roles/i }).first();
+    await expect(rolesSelect).toBeVisible({ timeout: 10000 });
+
+    // 4. Assign a role and assert it persists. `setMselRoles` diffs against the current
+    //    selection and POSTs each addition, so pair the click with that request.
+    await rolesSelect.click();
+
+    const editorOption = page.getByRole('option', { name: 'Editor', exact: true }).first();
+    await expect(editorOption).toBeVisible({ timeout: 10000 });
+
+    const roleAdded = page.waitForResponse(
+      (r) =>
+        r.request().method() === 'POST' &&
+        /\/api\/usermselroles/i.test(new URL(r.url()).pathname) &&
+        r.ok(),
+      { timeout: 15000 }
+    );
+    await editorOption.click();
+    await roleAdded;
+
+    // Close the multi-select overlay so the trigger text can be read.
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('listbox')).toHaveCount(0, { timeout: 10000 });
+
+    // expect: the control now reflects the assigned role.
+    await expect(rolesSelect).toContainText('Editor', { timeout: 10000 });
+
+    // expect: and it really persisted — reload and re-read from a fresh render, so this
+    // proves server state rather than a client-side selection that was never saved.
+    await navigateToMselSection(page, mselId, 'Contributors');
+    const reloadedRow = page
+      .locator('table tbody tr, mat-row')
+      .filter({ hasText: unitShortName })
+      .first();
+    await expect(reloadedRow).toBeVisible({ timeout: 10000 });
+    await reloadedRow.click();
+
+    const reloadedDetail = page.locator('.expanded-detail-div').first();
+    await expect(reloadedDetail).toBeVisible({ timeout: 10000 });
+    const reloadedRolesSelect = reloadedDetail
+      .locator('.unit-detail')
+      .filter({ hasText: userName })
+      .first()
+      .getByRole('combobox', { name: /MSEL Roles/i })
+      .first();
+    await expect(reloadedRolesSelect).toContainText('Editor', { timeout: 10000 });
   });
 });

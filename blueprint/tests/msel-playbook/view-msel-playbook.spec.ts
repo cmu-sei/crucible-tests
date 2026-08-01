@@ -8,7 +8,7 @@ import {
   getBlueprintToken,
   createMsel,
   deleteMsel,
-  createScenarioEvent,
+  createRenderableScenarioEvent,
   deleteScenarioEvent,
   navigateToMselSection,
 } from '../../test-helpers';
@@ -24,11 +24,16 @@ test.describe('MSEL Playbook', () => {
     mselId = msel.id;
 
     // Create at least one scenario event so the playbook has content
-    const event = await createScenarioEvent(token, mselId, {
-      description: 'Test scenario event for playbook',
-      deltaSeconds: 0,
-      moveNumber: 1,
-    });
+    // Use the renderable variant: the playbook renders an event's DataValues, and a MSEL
+    // created via POST /api/msels has no DataFields, so a bare createScenarioEvent yields a
+    // row with nothing in it. (`description`/`moveNumber` are not API fields — see
+    // createScenarioEvent's doc comment.)
+    const event = await createRenderableScenarioEvent(
+      token,
+      mselId,
+      'Test scenario event for playbook',
+      { deltaSeconds: 0 }
+    );
     eventId = event.id;
   });
 

@@ -21,6 +21,7 @@
 import { APIRequestContext, Page, request as playwrightRequest, expect } from '@playwright/test';
 import { Services, waitForFirstVisible } from '../shared-fixtures';
 import fs from 'fs';
+import { randomUUID } from 'crypto';
 import { authSessionStatePath } from '../auth-paths';
 
 // ============================================================================
@@ -117,11 +118,29 @@ async function blueprintCall<T = any>(
  * Generate a unique name for Blueprint test data.
  * Format: `<prefix>-<timestamp>-<random>`.
  *
- * All test-seeded names use the "TestBP-" prefix so global-teardown can find
- * leftovers by prefix and purge them (safety net).
+ * The prefix is free-form (specs use ~50 different ones), so the purge in
+ * `purgeAllBlueprintTestData` must NOT key off any particular prefix — it
+ * matches the `-<13-digit-ms>-<digits>` *shape* this function produces, via
+ * `TEMP_NAME_PATTERN` below. That way a new spec inventing a new prefix is
+ * swept automatically instead of leaking until someone updates an allowlist.
  */
 export function tempBlueprintName(prefix: string = 'TestBP'): string {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
+}
+
+/**
+ * Matches any name produced by `tempBlueprintName`, whatever its prefix:
+ * a trailing `-<epoch-ms>-<random>`. Anchored at the end so a real record
+ * that merely contains digits can't match by accident.
+ *
+ * This is the single source of truth for "is this row test-seeded?" — used by
+ * the teardown purge. Keep it in sync with `tempBlueprintName` above.
+ */
+export const TEMP_NAME_PATTERN = /-\d{13}-\d{1,6}$/;
+
+/** True when `name` looks like something `tempBlueprintName()` generated. */
+export function isTempBlueprintName(name?: string | null): boolean {
+  return !!name && TEMP_NAME_PATTERN.test(name);
 }
 
 // ============================================================================
@@ -280,40 +299,70 @@ export interface CreatedScenarioEvent {
   mselId: string;
 }
 
+/**
+ * `EventType` from Blueprint.Api.Data/Enumerations.cs. The numeric values matter:
+ * the enum starts at 10, so **0 is not a member**.
+ */
+export const ScenarioEventType = {
+  Inject: 10,
+  Information: 20,
+  Facilitation: 30,
+} as const;
+
 export interface CreateScenarioEventOptions {
   /** Delta seconds from MSEL start time. Default 0. */
   deltaSeconds?: number;
-  /** Move number. Default 0. */
-  moveNumber?: number;
   /** Group order. Default 0. */
   groupOrder?: number;
   /** Row metadata (control number). Default empty. */
   rowMetadata?: string;
-  /** Description. Default generated. */
-  description?: string;
+  /**
+   * Event type. Defaults to `ScenarioEventType.Inject` (10) — see the note below on why
+   * leaving this unset is not an option.
+   */
+  scenarioEventType?: number;
 }
 
 /**
  * Create a scenario event on the specified MSEL via the Blueprint API.
  * Returns the event id — pair every call with `deleteScenarioEvent` in test teardown.
  *
- * The POST /api/scenarioEvents endpoint returns an array of scenario events (it can
- * create multiple), so we take the first one from the response.
+ * `POST /api/scenarioEvents` returns an **array** (it can create several), so we take the
+ * first element.
+ *
+ * **`scenarioEventType` must be sent, and must be a real enum value.** `EventType` is
+ * `Inject=10, Information=20, Facilitation=30`; omitting the field persists **0**, which is
+ * not a member of the enum. That silently produces an event the grid renders with **zero
+ * data cells**, because the UI picks a row's columns like this
+ * (`scenario-event-list.component.ts` `rowDataFields`):
+ *
+ * ```ts
+ * (ev.scenarioEventType === EventType.Inject        && df.onScenarioEventList)  ||
+ * (ev.scenarioEventType === EventType.Information   && df.isInformationField)   ||
+ * (ev.scenarioEventType === EventType.Facilitation  && df.isFacilitationField)
+ * ```
+ *
+ * With 0 no branch matches, `rowDataFields` returns `[]`, and every cell is blank no matter
+ * how good the DataValues are. This helper previously omitted the field, so 17 specs seeded
+ * unrenderable events and could only ever assert row *presence*. Verified live:
+ * `POST` without the field echoes back `"scenarioEventType": 0`.
+ *
+ * Note also that the API model has **no `description` and no `moveNumber`**
+ * (`ViewModels/ScenarioEvent.cs`) — an event's text lives in DataValues, and "Move" is a
+ * DataField. Both were previously sent and silently dropped, so a spec passing
+ * `moveNumber: 1` read like a precondition while doing nothing. They are not accepted here.
  */
 export async function createScenarioEvent(
   token: string,
   mselId: string,
   opts: CreateScenarioEventOptions = {}
 ): Promise<CreatedScenarioEvent> {
-  const description = opts.description ?? `Test scenario event created by automation`;
-
   const createBody = {
     mselId,
     deltaSeconds: opts.deltaSeconds ?? 0,
-    moveNumber: opts.moveNumber ?? 0,
     groupOrder: opts.groupOrder ?? 0,
     rowMetadata: opts.rowMetadata ?? '',
-    description,
+    scenarioEventType: opts.scenarioEventType ?? ScenarioEventType.Inject,
     // DataValues can be added later if needed; for basic seeding we leave it empty.
     dataValues: [],
   };
@@ -384,15 +433,48 @@ export async function listScenarioEvents(
 //
 // `createRenderableScenarioEvent` does both and is what scenario-event UI specs should use.
 
-/** The MSEL whose DataField set is copied by `seedMselDataFields`. */
-const STANDARD_MSEL_NAME = 'Standard MSEL';
+/**
+ * The standard 13-DataField set, defined here rather than copied from a pre-existing row.
+ *
+ * These values were captured from the dev stack's `Standard MSEL` template, but they are
+ * declared literally on purpose: `seedMselDataFields` used to locate that MSEL by name and
+ * clone its fields, which made **every** scenario-event spec depend on a row no test creates
+ * — precisely what CLAUDE.md forbids ("Never depend on an existing row... or the current
+ * database shape"). On a freshly-provisioned database that lookup throws and the whole
+ * scenario-events, playbook and event-detail suites fail in `beforeEach`.
+ *
+ * `onScenarioEventList` matters: it is what puts a field in the Scenario Events grid (see
+ * `rowDataFields` in scenario-event-list.component.ts). `Details` and `Expected Actions` are
+ * deliberately false here, matching the template.
+ */
+const STANDARD_DATA_FIELDS: ReadonlyArray<Record<string, unknown>> = [
+  { name: 'Control Number', dataType: 'String', displayOrder: 1, onScenarioEventList: true, onExerciseView: true },
+  { name: 'Move', dataType: 'Integer', displayOrder: 2, onScenarioEventList: true, onExerciseView: false },
+  { name: 'Group', dataType: 'Integer', displayOrder: 3, onScenarioEventList: true, onExerciseView: false },
+  { name: 'Delivery Time', dataType: 'DateTime', displayOrder: 4, onScenarioEventList: true, onExerciseView: true },
+  { name: 'Simulated Time', dataType: 'DateTime', displayOrder: 5, onScenarioEventList: true, onExerciseView: true },
+  { name: 'Assigned To', dataType: 'Organization', displayOrder: 6, onScenarioEventList: true, onExerciseView: true },
+  { name: 'Status', dataType: 'Status', displayOrder: 7, onScenarioEventList: true, onExerciseView: true },
+  { name: 'Title', dataType: 'String', displayOrder: 8, onScenarioEventList: true, onExerciseView: true },
+  { name: 'Description', dataType: 'String', displayOrder: 9, onScenarioEventList: true, onExerciseView: false },
+  { name: 'From Org', dataType: 'Organization', displayOrder: 10, onScenarioEventList: true, onExerciseView: true },
+  { name: 'To Org', dataType: 'TeamsMultiple', displayOrder: 11, onScenarioEventList: true, onExerciseView: true },
+  { name: 'Details', dataType: 'String', displayOrder: 12, onScenarioEventList: false, onExerciseView: false },
+  { name: 'Expected Actions', dataType: 'String', displayOrder: 13, onScenarioEventList: false, onExerciseView: false },
+];
 
 /**
- * Give a MSEL a usable DataField set by copying it from the "Standard MSEL" template
- * (13 fields: Description, Move, Group, Status, Assigned To, From Org, Details, ...).
+ * Give a MSEL the standard 13-DataField set so its scenario events can actually render.
+ *
+ * A MSEL created via `POST /api/msels` has **zero** DataFields — the API only copies them
+ * when *cloning*, and `GET /api/dataFields/templates` is empty on this stack. Without fields
+ * the Scenario Events grid has no columns at all.
+ *
+ * Self-contained: the fields are created from `STANDARD_DATA_FIELDS` above, so this works on
+ * an empty database and does not depend on any pre-existing MSEL.
  *
  * Idempotent: returns immediately if the MSEL already has fields. Note `POST /api/dataFields`
- * answers **200**, not 201.
+ * answers **200**, not 201 — `blueprintCall` checks `ok()` so that is handled.
  *
  * @returns the MSEL's DataFields after seeding.
  */
@@ -400,25 +482,54 @@ export async function seedMselDataFields(token: string, mselId: string): Promise
   const existing = await listMselDataFields(token, mselId);
   if (existing.length > 0) return existing;
 
-  const listRes = await blueprintCall<any[]>(token, '/api/msels');
-  if (!listRes.ok) {
-    throw new Error(`seedMselDataFields: MSEL list failed (${listRes.status}): ${listRes.text}`);
-  }
-  const standard = listRes.data?.find((m: any) => m.name === STANDARD_MSEL_NAME);
-  if (!standard) {
-    throw new Error(
-      `seedMselDataFields: no "${STANDARD_MSEL_NAME}" MSEL to copy DataFields from. ` +
-        `Seed one, or pass explicit fields.`
-    );
+  for (const field of STANDARD_DATA_FIELDS) {
+    const r = await blueprintCall(token, '/api/dataFields', {
+      method: 'POST',
+      body: {
+        ...field,
+        mselId,
+        isChosenFromList: false,
+        isInformationField: false,
+        isFacilitationField: false,
+        isInitiallyHidden: false,
+        dataOptions: [],
+      },
+    });
+    if (!r.ok) {
+      throw new Error(
+        `seedMselDataFields: POST dataFields "${field.name}" failed (${r.status}): ${r.text}`
+      );
+    }
   }
 
-  const sourceFields = await listMselDataFields(token, standard.id);
+  const seeded = await listMselDataFields(token, mselId);
+  if (seeded.length !== STANDARD_DATA_FIELDS.length) {
+    throw new Error(
+      `seedMselDataFields: expected ${STANDARD_DATA_FIELDS.length} DataFields on ${mselId}, got ${seeded.length}`
+    );
+  }
+  return seeded;
+}
+
+/**
+ * Superseded by the literal `STANDARD_DATA_FIELDS` set above. Kept only to copy fields from
+ * an arbitrary source MSEL when a spec genuinely needs to mirror another MSEL's schema.
+ */
+export async function copyMselDataFieldsFrom(
+  token: string,
+  sourceMselId: string,
+  mselId: string
+): Promise<any[]> {
+  const existing = await listMselDataFields(token, mselId);
+  if (existing.length > 0) return existing;
+
+  const sourceFields = await listMselDataFields(token, sourceMselId);
   for (const field of sourceFields) {
     const body: Record<string, unknown> = { ...field, mselId, dataOptions: [] };
     delete body.id;
     const r = await blueprintCall(token, '/api/dataFields', { method: 'POST', body });
     if (!r.ok) {
-      throw new Error(`seedMselDataFields: POST dataFields failed (${r.status}): ${r.text}`);
+      throw new Error(`copyMselDataFieldsFrom: POST dataFields failed (${r.status}): ${r.text}`);
     }
   }
 
@@ -737,6 +848,97 @@ export async function removeUnitFromMsel(token: string, mselUnitId: string): Pro
 }
 
 /**
+ * Create a Blueprint user.
+ *
+ * The id is **client-supplied** (the API does not generate one), so pass a uuid or let
+ * this helper mint one. `POST /api/users` returns **201**.
+ *
+ * Blueprint users are normally auto-provisioned on a user's first Keycloak login, which
+ * led to the belief that tests cannot make one — hence specs that mutated a *pre-existing*
+ * shared user row instead. They can: this endpoint works directly, so a spec that needs a
+ * user should seed its own and delete it in teardown.
+ */
+export async function createBlueprintUser(
+  token: string,
+  options: { id?: string; name?: string } = {}
+): Promise<{ id: string; name: string }> {
+  const id = options.id ?? randomUUID();
+  const name = options.name ?? tempBlueprintName('TestBP-User');
+
+  const r = await blueprintCall<any>(token, '/api/users', {
+    method: 'POST',
+    body: { id, name },
+  });
+  if (!r.ok) {
+    throw new Error(`createBlueprintUser failed (${r.status}): ${r.text}`);
+  }
+
+  return { id: r.data.id as string, name: r.data.name as string };
+}
+
+/**
+ * Delete a Blueprint user by id. Swallows 404 so teardown is idempotent.
+ */
+export async function deleteBlueprintUser(token: string, userId: string): Promise<void> {
+  const r = await blueprintCall(token, `/api/users/${userId}`, { method: 'DELETE' });
+  if (!r.ok && r.status !== 404) {
+    console.warn(`deleteBlueprintUser(${userId}) returned ${r.status}: ${r.text}`);
+  }
+}
+
+/**
+ * Add a user to a unit. Returns the UnitUser join record — its `id` is what
+ * `removeUserFromUnit` takes.
+ *
+ * Membership lives at `POST /api/unitusers` (201). Note the nested
+ * `/api/units/{unitId}/users/{userId}` route is **DELETE-only**, so it cannot be used to
+ * add. Also note `GET /api/units` and `GET /api/units/{id}` both report `users: []`
+ * regardless of membership — read it back via `GET /api/units/{id}/users`, which is
+ * correct.
+ */
+export async function addUserToUnit(
+  token: string,
+  unitId: string,
+  userId: string
+): Promise<{ id: string; unitId: string; userId: string }> {
+  const r = await blueprintCall<any>(token, '/api/unitusers', {
+    method: 'POST',
+    body: { unitId, userId },
+  });
+  if (!r.ok) {
+    throw new Error(`addUserToUnit failed (${r.status}): ${r.text}`);
+  }
+
+  return {
+    id: r.data.id as string,
+    unitId: r.data.unitId as string,
+    userId: r.data.userId as string,
+  };
+}
+
+/**
+ * Remove a user from a unit, by **UnitUser join id**. Swallows 404.
+ */
+export async function removeUserFromUnit(token: string, unitUserId: string): Promise<void> {
+  const r = await blueprintCall(token, `/api/unitusers/${unitUserId}`, { method: 'DELETE' });
+  if (!r.ok && r.status !== 404) {
+    console.warn(`removeUserFromUnit(${unitUserId}) returned ${r.status}: ${r.text}`);
+  }
+}
+
+/**
+ * List the users in a unit. Use this rather than reading `unit.users`, which the unit
+ * endpoints always return empty.
+ */
+export async function listUnitUsers(token: string, unitId: string): Promise<any[]> {
+  const r = await blueprintCall<any[]>(token, `/api/units/${unitId}/users`);
+  if (!r.ok) {
+    throw new Error(`listUnitUsers failed (${r.status}): ${r.text}`);
+  }
+  return r.data ?? [];
+}
+
+/**
  * List the MselUnit records for a MSEL. Each entry carries a nested `unit` object, so
  * `(await listMselUnits(t, id)).map(mu => mu.unit.name)` gives the contributor names.
  *
@@ -874,8 +1076,8 @@ export async function purgeAllBlueprintTestData(): Promise<void> {
       return;
     }
 
-    const testMsels = listRes.data?.filter((m: any) => m.name?.startsWith('TestBP-')) ?? [];
-    console.log(`[Blueprint purge] Found ${testMsels.length} TestBP-* MSEL(s) to delete.`);
+    const testMsels = listRes.data?.filter((m: any) => isTempBlueprintName(m.name)) ?? [];
+    console.log(`[Blueprint purge] Found ${testMsels.length} seeded MSEL(s) to delete.`);
 
     for (const msel of testMsels) {
       try {
@@ -887,15 +1089,19 @@ export async function purgeAllBlueprintTestData(): Promise<void> {
     }
 
     // Units are global, not MSEL-scoped, so deleting the MSELs above does not remove
-    // them — a leaked unit stays in every MSEL's contributor picker forever. Purge by
-    // name prefix as well. `Create Catalog Test Unit` is included because the
-    // admin-catalogs specs seeded it under a non-TestBP- name before this purge existed;
-    // drop that clause once those specs use tempBlueprintName().
+    // them — a leaked unit stays in every MSEL's contributor picker forever.
+    //
+    // Match on the generated-name *shape*, not a prefix allowlist. An earlier version of
+    // this purge matched `TestBP-` plus a hand-maintained list of literal names, while the
+    // specs generate ~50 different prefixes (DeleteUnit-, EditUnit-, SearchMatch-,
+    // ViewUsers-, ViewList1-, ExpandUnit-Unit-, ...). It therefore swept none of them: a
+    // live stack was found holding 11 leaked units. `isTempBlueprintName` closes that class
+    // of hole for good — a new spec with a new prefix is covered automatically.
     const unitsRes = await blueprintCall<any[]>(token, '/api/units');
     if (unitsRes.ok) {
       const testUnits =
         unitsRes.data?.filter(
-          (u: any) => u.name?.startsWith('TestBP-') || u.name === 'Create Catalog Test Unit'
+          (u: any) => isTempBlueprintName(u.name) || u.name === 'Create Catalog Test Unit'
         ) ?? [];
       console.log(`[Blueprint purge] Found ${testUnits.length} test unit(s) to delete.`);
 
@@ -936,7 +1142,7 @@ export async function purgeAllBlueprintTestData(): Promise<void> {
       'Test Upload Inject Type',
     ];
     const isTestAdminRecord = (name?: string) =>
-      !!name && (name.startsWith('TestBP-') || LEGACY_ADMIN_TEST_NAMES.includes(name));
+      !!name && (isTempBlueprintName(name) || LEGACY_ADMIN_TEST_NAMES.includes(name));
 
     // Catalogs first: an inject type cannot be deleted while a catalog still references it.
     for (const [endpoint, label] of [

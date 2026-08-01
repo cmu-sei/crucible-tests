@@ -31,7 +31,6 @@ test.describe('Scenario Events Management', () => {
       'Test scenario event for viewing',
       {
         deltaSeconds: 300,
-        moveNumber: 1,
         rowMetadata: 'CTRL-001',
       }
     );
