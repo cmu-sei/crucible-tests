@@ -127,9 +127,15 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
 
     // ── Step 3: Expand and collapse this spec's own catalog row ──────────────
 
-    // Scope to the row that carries this spec's own catalog name — the Catalogs table
-    // is shared with concurrently-running specs, so a positional `.first()` against the
-    // whole table can resolve to a sibling spec's row.
+    // Filter the Catalogs list down to this spec's own row via the section's own
+    // Search box. The Catalogs table is shared with concurrently-running specs, and
+    // paginates (20/page); once enough catalogs exist, this spec's row can land off
+    // page 1. Filtering also collapses the list to a single row, so a positional
+    // `.first()` below can only ever resolve to this spec's own row.
+    const searchBox = page.locator('input[placeholder*="Search"]').first();
+    await expect(searchBox).toBeVisible({ timeout: 5000 });
+    await searchBox.fill(CATALOG_NAME);
+
     const catalogRow = page
       .getByRole('button', { name: `Edit ${CATALOG_NAME} catalog` })
       .locator('xpath=ancestor::mat-row[1]');

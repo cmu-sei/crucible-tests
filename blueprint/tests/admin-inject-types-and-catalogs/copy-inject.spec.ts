@@ -76,6 +76,30 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
     const detailRowFor = (dataRow: ReturnType<typeof page.locator>) =>
       dataRow.locator('xpath=following-sibling::mat-row[contains(@class, "detail-row")][1]');
 
+    // Helper: filter the Catalogs list down to this spec's own row via the section's
+    // own Search box.
+    //
+    // This closes a real app defect rather than merely retrying around it:
+    // AdminCatalogListComponent mounts one <app-inject-list> PER ROW unconditionally
+    // (admin-catalog-list.component.html's expandedDetail column has no `@if` gating
+    // it on expansion — only CSS visibility does), and every mounted instance's
+    // ngOnInit() calls catalogInjectDataService.loadByCatalog(itsOwnCatalogId), which
+    // does an UNFILTERED `catalogInjectStore.set(...)` — a full replace of the single
+    // global Akita store, not an upsert keyed by catalog. Every app-inject-list
+    // instance's constructor subscribes to that same global store with no filter by
+    // its own catalog, so on a Catalogs page holding multiple catalogs (this suite
+    // alone seeds 10+, and the list paginates at 20/page), whichever catalog's GET
+    // resolves LAST determines what every mounted app-inject-list displays — including
+    // catalogs that never had their row expanded. Search-filtering to this spec's own
+    // catalog name means Angular Material's data source renders only this one row, so
+    // only one app-inject-list instance is ever mounted and there is nothing left to race.
+    const filterCatalogsListTo = async (catalogName: string) => {
+      const searchBox = page.locator('input[placeholder*="Search"]').first();
+      await expect(searchBox).toBeVisible({ timeout: 5000 });
+      await searchBox.fill(catalogName);
+      await expect(catalogRowFor(catalogName)).toBeVisible({ timeout: 5000 });
+    };
+
     // Helper: ensure a catalog's row is expanded and its Injects panel is open, then
     // return the (freshly-resolved) detail row and its app-inject-list.
     //
@@ -91,21 +115,18 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
     // whole check-and-open sequence in `toPass` lets a re-render that lands mid-sequence
     // self-heal on retry instead of failing the test.
     //
-    // `forceReload` navigates to Inject Types and back to Catalogs first. Toggling the
-    // "Injects" mat-expansion-panel header alone does NOT destroy/recreate its
-    // app-inject-list (Angular Material doesn't unmount panel content on collapse
-    // here), so InjectListComponent.ngOnInit()'s loadByCatalog() GET never re-fires —
-    // whether a just-saved/copied inject shows up depends entirely on winning a race
-    // against the SignalR self-echo, which is unreliable under concurrent load.
-    // AdminContainerComponent only renders <app-admin-catalog-list> while
-    // selectedTab === 'Catalogs' (see admin-container.component.html's `@if`), so
-    // navigating away and back destroys and recreates the whole catalog list — and,
-    // with it, any expanded row's app-inject-list — forcing a real fresh GET.
+    // `forceReload` navigates to Inject Types and back to Catalogs first, then
+    // re-applies the search filter above. AdminContainerComponent only renders
+    // <app-admin-catalog-list> while selectedTab === 'Catalogs' (see
+    // admin-container.component.html's `@if`), so navigating away and back destroys
+    // and recreates the whole catalog list, forcing a real fresh GET rather than
+    // depending on the SignalR self-echo's timing.
     const ensureInjectsPanelOpen = async (catalogName: string, opts: { forceReload?: boolean } = {}) => {
       if (opts.forceReload) {
         await navigateTo('Inject Types');
         await navigateTo('Catalogs');
       }
+      await filterCatalogsListTo(catalogName);
       let injectList!: ReturnType<typeof page.locator>;
       await expect(async () => {
         const catalogRow = catalogRowFor(catalogName);

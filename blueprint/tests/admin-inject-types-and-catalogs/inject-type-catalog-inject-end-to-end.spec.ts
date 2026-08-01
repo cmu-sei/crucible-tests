@@ -99,16 +99,34 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
     // Helper: ensure a catalog's row is expanded and its Injects panel is open, then
     // return the (freshly-resolved) app-inject-list within it.
     //
-    // Deliberately idempotent/re-runnable rather than a single click-and-hope:
+    // Filters the Catalogs list to this spec's own catalog name via the section's own
+    // Search box FIRST. This closes a real app defect rather than merely retrying
+    // around it: AdminCatalogListComponent mounts one <app-inject-list> PER ROW
+    // unconditionally (admin-catalog-list.component.html's expandedDetail column has
+    // no `@if` gating it on expansion — only CSS visibility does), and every mounted
+    // instance's ngOnInit() calls catalogInjectDataService.loadByCatalog(itsOwnId),
+    // which does an UNFILTERED `catalogInjectStore.set(...)` — a full replace of the
+    // single global Akita store, not an upsert keyed by catalog. Every app-inject-list
+    // instance's constructor subscribes to that same unfiltered store, so on a Catalogs
+    // page holding multiple catalogs (this suite alone seeds 10+, and the list
+    // paginates at 20/page), whichever catalog's GET resolves LAST determines what
+    // every mounted app-inject-list displays — including catalogs whose row was never
+    // expanded. Filtering to a single matching row means only one app-inject-list
+    // instance is ever mounted, so there is nothing left to race.
+    //
+    // Also deliberately idempotent/re-runnable rather than a single click-and-hope:
     // AdminCatalogListComponent's mat-table has no trackBy, and every catalog/inject-
     // type/inject mutation on the shared admin stack broadcasts over SignalR to every
-    // open admin session (Blueprint.Api Hubs/MainHub.cs AdminDataGroup). A sibling spec's
-    // unrelated mutation running concurrently at --workers 2 causes a full-table
-    // re-render that destroys and recreates every detail row's app-inject-list/
-    // mat-expansion-panel — silently re-collapsing an already-opened Injects panel.
-    // Callers wrap this (and the subsequent action) in `toPass` so a re-render landing
-    // mid-sequence self-heals instead of failing the test.
+    // open admin session (Blueprint.Api Hubs/MainHub.cs AdminDataGroup). A sibling
+    // spec's unrelated mutation running concurrently at --workers 2 can still force a
+    // re-render that re-collapses an already-opened Injects panel even after
+    // filtering. Callers wrap this (and the subsequent action) in `toPass` so a
+    // re-render landing mid-sequence self-heals instead of failing the test.
     const ensureCatalogInjectsPanelOpen = async (catalogName: string) => {
+      const searchBox = page.locator('input[placeholder*="Search"]').first();
+      await expect(searchBox).toBeVisible({ timeout: 3000 });
+      await searchBox.fill(catalogName);
+
       const catalogRow = page
         .getByRole('button', { name: `Edit ${catalogName} catalog` })
         .locator('xpath=ancestor::mat-row[1]');
@@ -129,8 +147,16 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
       return { catalogRow, detailRow, injectList };
     };
 
-    // Helper: same idea, for an inject type's own Injects panel.
+    // Helper: same idea, for an inject type's own Injects panel. AdminInjectTypesComponent's
+    // expandedDetail column DOES gate app-inject-list behind `@if (expandedElementId ===
+    // element.id)` (unlike AdminCatalogListComponent's), so only the currently-expanded
+    // inject type ever mounts one — no cross-row store race here. Still filter via the
+    // section's own Search box so a paginated list can't hide this spec's own row.
     const ensureInjectTypeInjectsPanelOpen = async (injectTypeName: string) => {
+      const searchBox = page.locator('input[placeholder*="Search"]').first();
+      await expect(searchBox).toBeVisible({ timeout: 3000 });
+      await searchBox.fill(injectTypeName);
+
       const injectTypeRow = page.locator('mat-row.element-row, mat-row').filter({ hasText: injectTypeName }).first();
       await expect(injectTypeRow).toBeVisible({ timeout: 3000 });
       let detailRow = detailRowFor(injectTypeRow);

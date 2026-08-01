@@ -171,16 +171,34 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
     // Helper: ensure this spec's catalog row is expanded, returning its (freshly
     // resolved) detail row.
     //
-    // Deliberately idempotent/re-runnable rather than a single click-and-hope:
-    // AdminCatalogListComponent's mat-table has no trackBy, and every catalog/inject-
-    // type/inject/unit mutation on the shared admin stack broadcasts over SignalR to
-    // every open admin session (Blueprint.Api Hubs/MainHub.cs AdminDataGroup). A sibling
-    // spec's unrelated mutation running concurrently at --workers 2 causes a full-table
-    // re-render that destroys and recreates every detail row's expansion panels —
-    // silently re-collapsing an already-opened panel or replacing a button the test is
-    // about to click. Callers wrap the surrounding action in `toPass` so a re-render
-    // landing mid-sequence self-heals instead of failing the test.
+    // Filters the Catalogs list to this spec's own catalog name via the section's own
+    // Search box FIRST. This closes a real app defect rather than merely retrying
+    // around it: AdminCatalogListComponent mounts one <app-inject-list> PER ROW
+    // unconditionally (admin-catalog-list.component.html's expandedDetail column has
+    // no `@if` gating it on expansion — only CSS visibility does), and every mounted
+    // instance's ngOnInit() calls catalogInjectDataService.loadByCatalog(itsOwnId),
+    // which does an UNFILTERED `catalogInjectStore.set(...)` — a full replace of the
+    // single global Akita store, not an upsert keyed by catalog. Every app-inject-list
+    // instance's constructor subscribes to that same unfiltered store, so on a Catalogs
+    // page holding multiple catalogs (this suite alone seeds 10+, and the list
+    // paginates at 20/page), whichever catalog's GET resolves LAST determines what
+    // every mounted app-inject-list displays — including catalogs whose row was never
+    // expanded. Filtering to a single matching row means only one app-inject-list
+    // instance is ever mounted, so there is nothing left to race.
+    //
+    // Also deliberately idempotent/re-runnable rather than a single click-and-hope:
+    // every catalog/inject-type/inject/unit mutation on the shared admin stack
+    // broadcasts over SignalR to every open admin session (Blueprint.Api
+    // Hubs/MainHub.cs AdminDataGroup). A sibling spec's unrelated mutation running
+    // concurrently at --workers 2 can still force a re-render that re-collapses an
+    // already-opened panel or replaces a button the test is about to click. Callers
+    // wrap the surrounding action in `toPass` so a re-render landing mid-sequence
+    // self-heals instead of failing the test.
     const ensureCatalogRowExpanded = async () => {
+      const searchBox = page.locator('input[placeholder*="Search"]').first();
+      await expect(searchBox).toBeVisible({ timeout: 3000 });
+      await searchBox.fill(CATALOG_NAME);
+
       const catalogRow = page
         .getByRole('button', { name: `Edit ${CATALOG_NAME} catalog` })
         .locator('xpath=ancestor::mat-row[1]');
@@ -196,26 +214,33 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
 
     // ── Step 5/6/7: Expand the catalog row, open "Units with access" → "Add a Unit",
     // and add the unit to the catalog. Retried as a unit for the concurrent-re-render
-    // reason above.
+    // reason above. Each panel-open step checks whether it's already open before
+    // clicking, so a retry after a transient failure can't toggle an already-expanded
+    // panel back closed.
     await expect(async () => {
       const { detailRow } = await ensureCatalogRowExpanded();
+      const catalogUnits = detailRow.locator('app-catalog-units');
 
-      const unitsWithAccessPanel = detailRow.getByRole('button', { name: 'Units with access' });
-      await expect(unitsWithAccessPanel).toBeVisible({ timeout: 3000 });
-      await unitsWithAccessPanel.click({ timeout: 3000 });
+      if (!(await catalogUnits.locator('table').isVisible().catch(() => false))) {
+        const unitsWithAccessPanel = detailRow.getByRole('button', { name: 'Units with access' });
+        await expect(unitsWithAccessPanel).toBeVisible({ timeout: 3000 });
+        await unitsWithAccessPanel.click({ timeout: 3000 });
+        await expect(catalogUnits.locator('table')).toBeVisible({ timeout: 3000 });
+      }
 
       // "Add a Unit" is a sub-panel inside "Units with access". Expand it to see
       // available units.
-      const addAUnitPanel = detailRow.getByRole('button', { name: 'Add a Unit' });
-      await expect(addAUnitPanel).toBeVisible({ timeout: 3000 });
-      await addAUnitPanel.click({ timeout: 3000 });
-
-      // Click the "Add <SHORT_NAME> to this catalog" button for our test unit
-      const catalogUnits = detailRow.locator('app-catalog-units');
       const addUnitToCatalogButton = catalogUnits.getByRole('button', {
         name: `Add ${UNIT_SHORT_NAME} to this catalog`,
       });
-      await expect(addUnitToCatalogButton).toBeVisible({ timeout: 3000 });
+      if (!(await addUnitToCatalogButton.isVisible().catch(() => false))) {
+        const addAUnitPanel = detailRow.getByRole('button', { name: 'Add a Unit' });
+        await expect(addAUnitPanel).toBeVisible({ timeout: 3000 });
+        await addAUnitPanel.click({ timeout: 3000 });
+        await expect(addUnitToCatalogButton).toBeVisible({ timeout: 3000 });
+      }
+
+      // Click the "Add <SHORT_NAME> to this catalog" button for our test unit
       await addUnitToCatalogButton.click({ timeout: 3000 });
 
       // Verify the unit now appears in the "Units with access" list: after adding, a

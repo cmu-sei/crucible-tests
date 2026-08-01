@@ -91,6 +91,22 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
 
     // ── Step 3: Expand the inject type row ───────────────────────────────────
 
+    // Filter the Inject Types list down to this spec's own row via the section's own
+    // Search box. AdminInjectTypesComponent.sortChanged() rebuilds its whole
+    // MatTableDataSource from freshly-spread object copies on every emission of
+    // injectTypeQuery.selectAll() — which re-emits on ANY inject type mutation
+    // anywhere on the shared admin stack (a concurrently-running sibling spec's
+    // create/update/delete), not just this row's. With no trackBy on the mat-table,
+    // that tears down and recreates every row, including this one's expanded
+    // DataFields panel and its "Add data Field" menu, mid-click. Filtering to a single
+    // matching row keeps the table small and reduces (though doesn't eliminate, since
+    // the filtered row itself can still re-render) exposure to this churn; the retry
+    // wrapper below is what actually makes the click-through-menu sequence resilient
+    // to a re-render landing mid-sequence.
+    const searchBox = page.locator('input[placeholder*="Search"]').first();
+    await expect(searchBox).toBeVisible({ timeout: 5000 });
+    await searchBox.fill(INJECT_TYPE_NAME);
+
     // Click the inject type row to reveal detail panels
     const injectTypeRow = page.locator('mat-row.element-row').filter({ hasText: INJECT_TYPE_NAME });
     await expect(injectTypeRow).toBeVisible({ timeout: 5000 });
@@ -110,17 +126,24 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
 
     // ── Step 5: Add a data field ─────────────────────────────────────────────
 
-    // Click the "Add data Field" button inside the DataFields panel
-    await addDataFieldButton.click();
-
-    // Click "New Data Field" from the dropdown menu
-    const newDataFieldMenuItem = page.locator('[role="menuitem"]').filter({ hasText: 'New Data Field' });
-    await expect(newDataFieldMenuItem).toBeVisible({ timeout: 5000 });
-    await newDataFieldMenuItem.click();
-
-    // Wait for the "Add a Data Field" dialog to appear
+    // Click "Add data Field" → "New Data Field" and wait for the create dialog. Retried
+    // as a unit: a concurrent sibling spec's inject-type mutation can force a re-render
+    // that detaches the button or menu item mid-click (see note above) — retrying the
+    // whole sequence lets that self-heal instead of failing the test. Each step checks
+    // whether it's already done before acting, so a retry can't toggle an
+    // already-open menu/dialog back closed.
     const addDataFieldDialog = page.locator('[role="dialog"]').filter({ hasText: 'Add a Data Field' });
-    await expect(addDataFieldDialog).toBeVisible({ timeout: 5000 });
+    await expect(async () => {
+      if (!(await addDataFieldDialog.isVisible().catch(() => false))) {
+        const newDataFieldMenuItem = page.locator('[role="menuitem"]').filter({ hasText: 'New Data Field' });
+        if (!(await newDataFieldMenuItem.isVisible().catch(() => false))) {
+          await addDataFieldButton.click({ timeout: 3000 });
+          await expect(newDataFieldMenuItem).toBeVisible({ timeout: 3000 });
+        }
+        await newDataFieldMenuItem.click({ timeout: 3000 });
+        await expect(addDataFieldDialog).toBeVisible({ timeout: 3000 });
+      }
+    }).toPass({ timeout: 20000 });
 
     // Fill in the Name field (required) — second text input in the dialog (first is Display Order)
     const dataFieldNameInput = addDataFieldDialog.getByLabel('Name');

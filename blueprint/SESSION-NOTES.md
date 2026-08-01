@@ -286,3 +286,74 @@ subagents active**, or the result is unreadable. This also means BP-6's original
 ("the API stops answering for >10s" at 2 workers) may itself have been contaminated by
 concurrent agent activity — worth re-measuring on an idle machine before treating it as an app
 defect.
+
+## BP-6 diagnosed: `POST /api/users` wedges the API, and it is NOT test flakiness
+
+The full-suite run after all fixes gave **139 tests: 119 expected, 14 skipped, 4 flaky,
+2 unexpected** — and all six non-green results were API calls timing out at 10s, mostly
+`POST /api/users`. Investigated properly instead of blaming concurrency:
+
+**Reproduced entirely outside Playwright, sequentially, with no browsers running:**
+```
+GET  /api/users  -> 200 in 0.008s      <-- reads are instant
+POST /api/users  -> 000 after 20s      <-- hangs
+POST /api/users  -> 000 after 25s      <-- still hangs, 0 chromium procs
+```
+
+**Not the database.** `pg_stat_activity` on the `blueprint` DB: 7 connections, **0 blocked
+locks**, no query older than 0s. (Note the DB is named `blueprint`, not `blueprint_api` as
+`appsettings.json`'s connection string suggests — Aspire overrides it.)
+
+**Not the service method.** `UserService.CreateAsync` is `Add` + `SaveChangesAsync` + a re-GET;
+nothing blocking.
+
+**It is the synchronous SignalR fan-out on the write path.**
+`Infrastructure/EventHandlers/UserHandler.cs:41-56` — `HandleCreateOrUpdate` builds a task per
+group and **awaits `Task.WhenAll`** on `_mainHub.Clients.Group(groupId).SendAsync(...)` before
+the HTTP request can complete. A leaked or half-dead hub connection therefore blocks the
+POST indefinitely. Reads have no such handler, which is exactly why `GET` stayed at 8ms while
+`POST` hung.
+
+Supporting evidence: `aspire resource blueprint-api restart` **failed** — "Failed to stop
+resource" — i.e. the process was wedged, not merely slow.
+
+This supersedes BP-6's original "not established beyond 'the API stops answering'" diagnosis,
+and it means BP-6 is a **real application defect**, not a test-harness artifact: any write whose
+entity has a SignalR handler can be held hostage by one bad client connection. It also explains
+why the symptom "moves between specs" — it depends on which write happens to run after a
+connection goes stale.
+
+The fix belongs in the app (fire-and-forget the broadcast, or bound it with a timeout /
+`Task.WhenAny`), so it is recorded rather than worked around.
+
+## Fresh-database validation: PASSED
+
+Full reset (user-approved): `aspire stop` -> `docker rm -f crucible-postgres` ->
+`docker volume rm crucible.apphost-80a78300df-postgres-data` -> `aspire start`, then deleted
+`.auth/` so global-setup re-provisioned from scratch.
+
+Fresh DB contents after migrations: **3 MSELs** (`MITRE`, `HSEEP`, `Standard MSEL`), **0 units**,
+**1 user**. So `Standard MSEL` *is* migration-seeded rather than hand-made — but removing the
+`seedMselDataFields` dependency on it was still correct: relying on a specific pre-existing row's
+name and schema is exactly what CLAUDE.md forbids, and the suite no longer breaks if it changes.
+
+**Result: `139 tests: 125 passed, 0 failed, 14 skipped`** — on a database with none of the
+accumulated rows the suite had been running against. This is the real proof that every spec seeds
+what it needs.
+
+Compare the progression:
+
+| Run | Passed | Failed | Flaky | Skipped |
+|---|---:|---:|---:|---:|
+| Baseline (start of session) | 112 | 1 | 4 | 19 |
+| After fixes (wedged API) | 119 | 2 | 4 | 14 |
+| **Fresh DB** | **125** | **0** | **0** | **14** |
+
+### The restart also proved BP-6 is a process-state defect
+
+`POST /api/users` had been hanging indefinitely (>25s, no browsers running). On the freshly
+started API the same call is **8-22ms**. Nothing about the tests changed between those
+measurements — only the API process was replaced. That confirms the diagnosis in the section
+above: a leaked/half-dead SignalR connection blocks the synchronous `Task.WhenAll` fan-out in
+`UserHandler.HandleCreateOrUpdate`, wedging every subsequent write on that entity. It is an
+application defect that accumulates over a long session, not test flakiness.
