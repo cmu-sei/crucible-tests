@@ -231,32 +231,71 @@ Neither of those is a bug; BP-5 is what remains after both are satisfied.
 
 ---
 
-## BP-6 — Blueprint API intermittently stalls >10s under light concurrency (2 workers)
+## BP-6 — Every write wedges once a SignalR client connection goes stale (reads stay instant)
 
-**Severity:** low-to-medium as a product issue, but it directly limits test throughput.
+**Severity:** high. This was originally filed as "the API intermittently stalls under light
+concurrency", diagnosis unknown. It is worse and more specific than that: after enough hub
+connections accumulate, **every write to an entity that has a SignalR handler hangs
+indefinitely**, while reads continue to answer in single-digit milliseconds. A real user in a
+long session sees saves hang forever with the app otherwise looking healthy.
 
-**Where:** `Blueprint.Api` generally; observed on `DELETE /api/msels/{id}` and
-`DELETE /api/scenarioEvents/{id}`.
+**Where:** `Blueprint.Api/Infrastructure/EventHandlers/UserHandler.cs:41-56` (and the sibling
+handlers, which share the shape).
 
-**Reproduction:** run `blueprint/tests/scenario-events-management/` with
-`--workers=2`. With `--workers=1` the same 10 specs pass in 32s, repeatedly.
+```csharp
+protected async Task HandleCreateOrUpdate(UserEntity userEntity, string method, ...)
+{
+    ...
+    tasks.Add(_mainHub.Clients.Group(groupId).SendAsync(method, user, modifiedProperties, cancellationToken));
+    ...
+    await Task.WhenAll(tasks);      // <-- on the HTTP request path
+}
+```
 
-**Observed:** at 2 workers, one spec per run fails with either
-`apiRequestContext.fetch: Timeout 10000ms exceeded` on a DELETE, or
-`page.waitForResponse: Timeout 10000ms exceeded` waiting for a DELETE that the UI issued.
-**Which spec fails moves between runs** (`delete-scenario-event`, then
-`scenario-event-color-coding`), which is the signature of a shared-resource stall rather
-than a defect in any one spec. Sequentially all of them pass every time.
+The handler **awaits the SignalR fan-out before the HTTP request can complete.** One leaked or
+half-dead client connection therefore blocks the write for as long as that send takes to give up.
+Reads have no such handler, which is exactly why they are unaffected.
 
-**Diagnosis:** not established beyond "the API stops answering for >10s". Worth checking for
-DB connection-pool exhaustion, a lock held across a long transaction, or SignalR broadcast
-work on the delete path. Note the suite's `playwright.config.ts` already sets
-`fullyParallel: false`, so this only shows up when a run is explicitly given >1 worker.
+**Reproduction** — no Playwright needed, and no concurrency needed either:
+```
+GET  /api/users  -> 200 in 0.004s      # reads are instant
+POST /api/users  -> 000 after 12s      # hangs (also seen at 15s, 20s, 25s caps)
+```
+Run the Blueprint suite a few times, then issue those two calls with **zero browsers running**.
+Sequential, single-threaded, one client.
 
-**Test impact:** none of the scenario-event specs are skipped for this. They pass at
-`--workers=1`, which is what `playwright.config.ts` defaults to for CI. If a run at 2
-workers shows a lone DELETE timeout that relocates between runs, suspect this rather than
-the spec.
+**Ruled out, with evidence:**
+- **Not the database.** `pg_stat_activity` on the `blueprint` DB during a wedge: 7 connections,
+  **0 blocked locks**, no query older than 0s. (Note the DB is named `blueprint`, not
+  `blueprint_api` as `appsettings.json`'s connection string implies — Aspire overrides it.)
+- **Not the service method.** `UserService.CreateAsync` is `Add` + `SaveChangesAsync` + a re-GET.
+- **Not slowness or load.** Observed at load average ~1 on a 16-core box with nothing else running.
+- **Not test concurrency.** Reproduced with a single `curl`.
+
+**It is process state, and a restart clears it.** Confirmed three separate times: on a
+freshly started `blueprint-api`, `POST /api/users` returns **201 in 8-62ms**; after a few suite
+runs the identical call hangs. Nothing about the tests changed between those measurements. Once
+wedged, `aspire resource blueprint-api restart` can itself fail with "Failed to stop resource",
+i.e. the process is stuck rather than merely slow. In the worst observed state even
+`GET /api/msels` began hanging while the UI still served instantly.
+
+**It degrades over a session.** Early in a session it took 3-4 full suite runs to wedge; by the
+end, 1-2. Consistent with connections accumulating.
+
+**Expected:** do not await the broadcast on the request path — queue it fire-and-forget, or bound
+it (`Task.WhenAny` with a timeout, or `SendAsync` with a cancellation token that actually
+expires). A client that has gone away must not be able to hold a writer hostage.
+
+**Test impact:** no spec is skipped for this, because nothing is wrong with the specs. On a
+healthy API the Blueprint suite is **125 passed / 0 failed / 14 skipped**, reproduced repeatedly
+including once at **125/125 with zero retries** and once against a **completely fresh database**.
+When the API is wedged, runs lose 2-3 specs to `apiRequestContext.fetch` /
+`page.waitForResponse` timeouts on **writes** — never to an assertion about app behaviour.
+
+This is the reason a "5 consecutive identical runs" gate cannot currently be met. Restarting
+`blueprint-api` before a run is not a full workaround either, since the API can wedge *during* a
+run. **If a run suddenly shows write timeouts, restart `blueprint-api` before suspecting the
+specs.**
 
 ---
 
