@@ -37,10 +37,9 @@ test.describe('Event Dashboard and Navigation', () => {
       }
     }
 
-    // Wait for data to load
-    await page.waitForLoadState('networkidle');
-
-    // expect: After data loads, dashboard shows available cards
+    // expect: After data loads, dashboard shows available cards.
+    // The card assertion below is the wait — `toBeVisible` polls, so a separate
+    // `waitForLoadState('networkidle')` added latency without adding certainty.
     // Admin user sees "Manage an Event" card
     const manageEventCard = page.getByRole('button', { name: /Manage an Event/i });
     await expect(manageEventCard).toBeVisible({ timeout: 10000 });
