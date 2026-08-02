@@ -902,6 +902,122 @@ API calls and every assertion was vacuous — which is why this went unnoticed.)
 
 ---
 
+## BP-18 — A client can stop receiving a MSEL's updates for the rest of its session, with no error and no recovery
+
+**Severity:** medium — the user is shown a **stale grid indefinitely**. Their own edits and other
+users' never arrive, nothing reports a problem, and nothing retries. A manual reload fixes it, so
+it reads as "real-time collaboration sometimes just doesn't work".
+
+**Status of the diagnosis:** the *failure* is reproduced and its cause is narrowed to the
+client-side group-join bookkeeping, which contains three independent unguarded paths (below). The
+precise interleaving that triggers it under load is **not** pinned to one of the three, and that
+is stated plainly rather than guessed — see "What was ruled out". Any of the three is worth fixing
+on its own merits.
+
+**Where:** `blueprint.ui/src/app/services/signalr.service.ts` (`startConnection`, `join`,
+`selectMsel`, `clearPresence`) and `components/home-app/home-app.component.ts:155-166`.
+
+**Reproduction:** run the Blueprint suite at `--workers 2`. `real-time-msel-updates` and
+`collaborative-editing-conflict-resolution` fail on a window **never seeing a scenario event that
+was definitely created** (`POST /api/scenarioevents` → 200, row present in the database).
+Reproduced on two consecutive full runs, failing both the first attempt and the retry each time.
+Run either spec alone, the two together at 2 workers, or the whole `real-time-*` directory, and
+they pass — it needs the rest of the suite competing for CPU.
+
+**The three unguarded paths.**
+
+1. **`join()` silently does nothing if the connection is not yet `Connected`, and never retries.**
+
+```ts
+public join() {
+  if (this.hubConnection.state === signalR.HubConnectionState.Connected) {
+    this.hubConnection.invoke('Join' + this.applicationArea);
+    this.isJoined = true;
+    ...
+  }
+}   // no else: isJoined stays false forever
+```
+
+2. **`selectMsel()` retries only the not-connected case.** Connected-but-`!isJoined` falls off the
+   end of the method — no invoke, no retry, no log:
+
+```ts
+public selectMsel(mselId: string) {
+  if (this.hubConnection?.state !== signalR.HubConnectionState.Connected) {
+    setTimeout(() => this.selectMsel(mselId), 500);      // retried
+  } else if (this.isJoined) {
+    ... invoke('selectMsel', [mselId]) ...               // good path
+  }
+  // connected && !isJoined -> silently drops
+}
+```
+
+   `home-app.component.ts` also fires it on a **fixed 1s `setTimeout`** after the connection
+   promise resolves, rather than on the connection's actual state:
+
+```ts
+this.signalRService.startConnection(ApplicationArea.home).then(() => {
+  this.signalRService.join();
+  if (this.selectedMselId) {
+    setTimeout(() => this.signalRService.selectMsel(this.selectedMselId), 1000);
+  }
+});
+```
+
+3. **A reconnect restores `Join` but never re-applies `selectMsel`.** `withAutomaticReconnect`
+   is configured, and:
+
+```ts
+this.hubConnection.onreconnected(() => {
+  this.join();          // rejoins the base groups...
+});                     // ...but the previously selected MSEL is never re-selected
+```
+
+   Server-side, `SelectMsel` is what adds the connection to the MSEL-scoped group, and
+   `MainHub.SelectMsel` *removes the connection from every MSEL group* before re-adding the
+   chosen one (`MainHub.cs:113-117`). So a connection that reconnects mid-session ends up in the
+   base groups but not the MSEL's — permanently, since nothing re-triggers selection.
+
+Every `invoke(...)` on these paths also discards its result (`.catch(() => {})`, commented
+"Ignore errors during rapid navigation"), so a failed group join is indistinguishable from a
+successful one at runtime.
+
+**What was ruled out, with evidence** — this is why the entry does not blame delivery or the
+BP-6 fix:
+
+- **Not broadcast loss or delay in the API.** Measured HTTP-write → SignalR-frame latency for a
+  subscribed client, immediately after the failing runs and without restarting the API:
+  **20/20 delivered, median 4ms, p95 8ms, max 8ms**; again after two full suite runs: 10/10,
+  median 4ms, p95 15ms.
+- **Not the BP-6 wedge.** Writes straight after the failing runs were **201 in 7-14ms**, reads 3ms.
+- **Not the queued-broadcast change made for BP-6.** `HubBroadcaster` logs dropped, timed-out and
+  failed broadcasts; the API logged **zero** of all three. And `real-time-msel-updates`, which
+  was not modified this session, fails identically.
+- **Not the specs contending with each other.** The two failing specs run together at
+  `--workers 2` passed 3/3; the whole `real-time-*` directory at 2 workers passes.
+- **Not lost at page load.** A probe that seeds an event and waits for it to render confirms
+  **both** windows *are* in the MSEL group at the start of the test — and the later push is still
+  missed. So membership is lost mid-test, which is what points at path 3.
+- **Not navigation.** Membership survives re-navigating to the section and a dashboard
+  round-trip (which does call `clearPresence()` → `selectMsel([])`), measured 3/3.
+- **Not one window evicting the other.** Window 1 re-selecting the MSEL does not knock window 2
+  out of the group, measured 4/4.
+
+**Expected:** drive group membership from the connection's real state instead of timers and
+unchecked flags. `join()` should await/retry rather than no-op; `selectMsel()` should handle
+`connected && !isJoined`; `onreconnected` should re-apply the current MSEL selection; and the
+`invoke` results should be awaited so a failed join surfaces instead of being swallowed.
+
+**Test impact:** `real-time-msel-updates`, `real-time-scenario-event-updates` and
+`collaborative-editing-conflict-resolution` all depend on the MSEL group. Their assertions are
+**not** weakened. Each now calls `assertJoinedMselGroup` (`blueprint/test-helpers.ts`) first,
+which proves the client is in the group before propagation is asserted — so when this defect
+strikes, the failure names it instead of implying that SignalR delivery is broken. The two specs
+remain **failing at `--workers 2`** on this defect and are deliberately left failing rather than
+skipped or loosened, because the app is genuinely losing updates.
+
+---
+
 ## Resolved candidates — investigated and closed as TEST defects, not app bugs
 
 These were previously listed here as unconfirmed suspects. Each was reproduced directly and

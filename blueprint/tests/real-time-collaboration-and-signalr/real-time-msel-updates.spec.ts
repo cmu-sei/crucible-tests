@@ -12,6 +12,7 @@ import {
   createMsel,
   deleteMsel,
   createRenderableScenarioEvent,
+  assertJoinedMselGroup,
   tempBlueprintName,
   navigateToMselSection,
 } from '../../test-helpers';
@@ -105,6 +106,18 @@ test.describe('Real-time Collaboration and SignalR', () => {
 
       // Both windows show the same MSEL, at the same starting count.
       const rows2 = page2.locator('table tbody tr');
+      await expect(rows2).toHaveCount(1, { timeout: 20000 });
+
+      // Both clients must actually be in the MSEL's SignalR group before propagation can be
+      // asserted. Under suite load the app's fire-and-forget join loses the race and a client
+      // ends up connected but never added to the group (BP-18) -- which is indistinguishable
+      // from a dropped push unless it is checked explicitly. These probes make the failure name
+      // its real cause.
+      await assertJoinedMselGroup(page, token, mselId);
+      await assertJoinedMselGroup(page2, token, mselId);
+
+      // The probes each add and remove an event, so both grids are back to the baseline count.
+      await expect(rows1).toHaveCount(1, { timeout: 20000 });
       await expect(rows2).toHaveCount(1, { timeout: 20000 });
 
       // ── Create an event in window 1 through the UI ─────────────────────────────

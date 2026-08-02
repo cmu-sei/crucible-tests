@@ -1683,3 +1683,72 @@ export async function purgeAllBlueprintTestData(): Promise<void> {
     console.warn(`[Blueprint purge] Error during cleanup: ${error}`);
   }
 }
+
+// ============================================================================
+// SignalR group-membership probe (BP-18)
+// ============================================================================
+
+/**
+ * Assert that a page's SignalR client has actually joined a MSEL's group, so that a propagation
+ * assertion which follows is testing propagation rather than a lost join.
+ *
+ * Why this exists: joining a MSEL's group is fire-and-forget in the app. `home-app.component.ts`
+ * calls `selectMsel` on a fixed 1s `setTimeout`; `join()` sets `isJoined` only if the connection is
+ * *already* `Connected` at that instant and never retries; and `selectMsel()` handles only the
+ * not-connected case — with the connection up but `isJoined` false it falls through every branch
+ * and silently does nothing. Under load (the full suite at `--workers 2`) a client therefore ends
+ * up connected and receiving `ADMIN_DATA_GROUP` traffic, but never added to the MSEL group, so it
+ * receives none of that MSEL's updates. See **BP-18** in `blueprint-app-bugs.md`.
+ *
+ * Probing it directly is what keeps the propagation specs honest: without this, a lost join looks
+ * identical to "the push never arrived", and the failure blames SignalR delivery — which has been
+ * measured healthy (20/20 delivered, median 4ms, p95 8ms).
+ *
+ * The probe seeds a throwaway scenario event and waits for it to appear. Measured while building
+ * this: a `MselUpdated` description change does **not** reach the DOM (the UI keeps it in an akita
+ * store), but a pushed scenario event does — so the event is the signal, not the description.
+ *
+ * Call this on a page that is already showing the MSEL's Scenario Events section.
+ *
+ * @param page - the page whose client is being checked
+ * @param token - Blueprint API token
+ * @param mselId - the MSEL whose group membership is required
+ * @param timeoutMs - how long to wait for the pushed event to render
+ */
+export async function assertJoinedMselGroup(
+  page: Page,
+  token: string,
+  mselId: string,
+  timeoutMs = 30000
+): Promise<void> {
+  const marker = `BP18Probe-${Date.now()}`;
+  const probe = await createRenderableScenarioEvent(token, mselId, marker, {
+    deltaSeconds: 59 * 60,
+  });
+
+  try {
+    const joined = await page
+      .waitForFunction((m: string) => document.body.innerText.includes(m), marker, {
+        timeout: timeoutMs,
+      })
+      .then(() => true)
+      .catch(() => false);
+
+    if (!joined) {
+      throw new Error(
+        `SignalR: this page never received the pushed scenario event for MSEL ${mselId}, so its ` +
+          `client is not in that MSEL's SignalR group. This is BP-18 — the group join is ` +
+          `fire-and-forget: join() sets isJoined only when the connection is already Connected ` +
+          `and never retries, and selectMsel() silently does nothing when connected && !isJoined. ` +
+          `Broadcast delivery itself measures healthy (20/20, median 4ms), so this is a lost ` +
+          `join, not a lost message. See blueprint/blueprint-app-bugs.md.`
+      );
+    }
+  } finally {
+    try {
+      await deleteScenarioEvent(token, probe.id);
+    } catch (err) {
+      console.warn(`assertJoinedMselGroup: failed to clean up probe event ${probe.id}: ${err}`);
+    }
+  }
+}

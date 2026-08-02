@@ -15,6 +15,7 @@ import {
   setScenarioEventFieldValue,
   getScenarioEvent,
   listMselDataFields,
+  assertJoinedMselGroup,
   tempBlueprintName,
   navigateToMselSection,
 } from '../../test-helpers';
@@ -118,6 +119,13 @@ test.describe('Real-time Collaboration and SignalR', () => {
 
       await navigateToMselSection(page2, mselId, 'Scenario Events');
       await expect(page2.getByText(ORIGINAL).first()).toBeVisible({ timeout: 20000 });
+
+      // Both clients must be in the MSEL's SignalR group before convergence can be asserted.
+      // The app's join is fire-and-forget and loses the race under suite load (BP-18), leaving a
+      // client connected but not in the group -- which looks exactly like a lost push. These
+      // probes make such a failure name its real cause instead of blaming delivery.
+      await assertJoinedMselGroup(page, token, mselId);
+      await assertJoinedMselGroup(page2, token, mselId);
 
       // ── Two writes to the same field, the second from a stale copy ─────────────
       // Capture the DataValue as both windows currently see it, so the second PUT genuinely
