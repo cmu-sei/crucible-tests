@@ -2,140 +2,187 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 // spec: specs/blueprint-test-plan.md
-// seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
-import { chromium, BrowserContext } from '@playwright/test';
-import { authenticateBlueprintWithKeycloak } from '../../fixtures';
+import { test, expect } from '../../fixtures';
+import { chromium } from '@playwright/test';
+import fs from 'fs';
+import { authStatePath, authSessionStatePath } from '../../../auth-paths';
+import {
+  getBlueprintToken,
+  createMsel,
+  deleteMsel,
+  createRenderableScenarioEvent,
+  setScenarioEventFieldValue,
+  getScenarioEvent,
+  listMselDataFields,
+  tempBlueprintName,
+  navigateToMselSection,
+} from '../../test-helpers';
 
+/**
+ * Concurrent edits to the same scenario event: what Blueprint actually does.
+ *
+ * Rewritten, and the assertion is deliberately the opposite of the old one.
+ *
+ * The previous version asserted `expect(hasConflictUI || hasError).toBeTruthy()` after two
+ * windows saved the same event, looking for /conflict/i, /modified by another user/i,
+ * /concurrent edit/i, /outdated/i. **Blueprint implements no such feature.** Measured before
+ * writing this spec:
+ *
+ *   - No optimistic-concurrency support exists anywhere in the API: no `IsConcurrencyToken`,
+ *     no `RowVersion`/`xmin` mapping, and no 412/Precondition-Failed or conflict-exception
+ *     handling in the services.
+ *   - Two clients read the same DataValue, then both PUT it — the second from a now-stale
+ *     copy. Result: `write 1 -> 200`, `write 2 (stale) -> 200`, final value `"WINDOW-2"`.
+ *     Last write wins, silently.
+ *
+ * So the old assertion could only ever pass by accident — and it did, because
+ * `conflictIndicators` included the bare class matches `[class*="error"]` and
+ * `[class*="warning"]`, which match ubiquitous Angular Material classes on a normal page.
+ * It "verified" conflict handling on an app that has none. (It was also comma-joined `text=`
+ * selectors, which Playwright cannot combine, so the text alternatives matched nothing.)
+ * Everything was additionally nested in `if (isVisible)` guards over an unowned MSEL, and it
+ * ended with a `test.skip()` on the else branch.
+ *
+ * This spec asserts the real, currently-correct contract:
+ *   1. last write wins, and
+ *   2. the losing window is not left showing stale data — SignalR pushes the winning value
+ *      to it, so the two windows converge.
+ *
+ * That second part is the genuinely valuable property here, and it is what a user relies on.
+ * If Blueprint ever gains real conflict detection, this spec should fail and be rewritten —
+ * which is the correct outcome, rather than a spec that passes either way.
+ */
 test.describe('Real-time Collaboration and SignalR', () => {
-  test('Collaborative Editing Conflict Resolution', async ({ blueprintAuthenticatedPage: page }) => {
-    // 1. Open two windows, both editing the same scenario event
-    await page.waitForLoadState('networkidle');
-    
-    // Navigate to a MSEL with events
-    const mselLink = page.locator('a[href*="/msel"], div[class*="msel"]').first();
-    let mselUrl = '';
-    
-    if (await mselLink.isVisible({ timeout: 5000 })) {
-      await mselLink.click();
-      await page.waitForLoadState('networkidle');
-      mselUrl = page.url();
+  let token: string;
+  let mselId: string;
+  let eventId: string;
+
+  const ORIGINAL = 'Conflict baseline';
+
+  test.beforeEach(async () => {
+    token = await getBlueprintToken();
+    const msel = await createMsel(token, {
+      name: tempBlueprintName('TestBP-Conflict'),
+      description: 'Seeded to verify concurrent-edit convergence.',
+    });
+    mselId = msel.id;
+
+    const event = await createRenderableScenarioEvent(token, mselId, ORIGINAL, {
+      deltaSeconds: 60,
+    });
+    eventId = event.id;
+  });
+
+  test.afterEach(async () => {
+    try {
+      if (mselId) await deleteMsel(token, mselId);
+    } catch (err) {
+      console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
     }
-    
-    // Find an event to edit
-    const existingEvent = page.locator('[class*="event"], [class*="scenario"]').first();
-    
-    if (await existingEvent.isVisible({ timeout: 5000 })) {
-      // Open edit form in window 1
-      const editButton1 = existingEvent.locator('button[class*="edit"], mat-icon:has-text("edit")').first();
-      
-      if (await editButton1.isVisible({ timeout: 2000 })) {
-        await editButton1.click();
-      } else {
-        await existingEvent.click();
+  });
+
+  test('Collaborative Editing Conflict Resolution', async ({
+    blueprintAuthenticatedPage: page,
+  }) => {
+    // ── Window 1 ────────────────────────────────────────────────────────────────
+    await navigateToMselSection(page, mselId, 'Scenario Events');
+    await expect(page.getByText(ORIGINAL).first()).toBeVisible({ timeout: 20000 });
+
+    // ── Window 2, on the same MSEL ──────────────────────────────────────────────
+    const statePath = authStatePath('blueprint');
+    expect(
+      fs.existsSync(statePath),
+      `expected global-setup to have written ${statePath}`
+    ).toBe(true);
+
+    const sessionPath = authSessionStatePath('blueprint');
+    const sessionState: Array<[string, string]> = fs.existsSync(sessionPath)
+      ? JSON.parse(fs.readFileSync(sessionPath, 'utf8'))
+      : [];
+
+    const browser = await chromium.launch();
+    try {
+      const context2 = await browser.newContext({
+        ignoreHTTPSErrors: true,
+        storageState: statePath,
+      });
+      if (sessionState.length > 0) {
+        await context2.addInitScript((entries: Array<[string, string]>) => {
+          for (const [key, value] of entries) {
+            sessionStorage.setItem(key, value);
+          }
+        }, sessionState);
       }
-      
-      await page.waitForTimeout(1000);
-      
-      // expect: Both windows have the event edit form open
-      const descriptionField1 = page.locator(
-        'input[name="description"], ' +
-        'textarea[name="description"], ' +
-        'input[formControlName="description"]'
-      ).first();
-      
-      await expect(descriptionField1).toBeVisible({ timeout: 5000 });
-      
-      // Open second browser window with the same event
-      const browser = await chromium.launch();
-      const context2 = await browser.newContext({ ignoreHTTPSErrors: true });
       const page2 = await context2.newPage();
-      
-      await authenticateBlueprintWithKeycloak(page2, 'admin', 'admin');
-      await page2.goto(mselUrl);
-      await page2.waitForLoadState('networkidle');
-      
-      // Open edit form in window 2
-      const existingEvent2 = page2.locator('[class*="event"], [class*="scenario"]').first();
-      
-      if (await existingEvent2.isVisible({ timeout: 5000 })) {
-        const editButton2 = existingEvent2.locator('button[class*="edit"], mat-icon:has-text("edit")').first();
-        
-        if (await editButton2.isVisible({ timeout: 2000 })) {
-          await editButton2.click();
-        } else {
-          await existingEvent2.click();
-        }
-        
-        await page2.waitForTimeout(1000);
+
+      await navigateToMselSection(page2, mselId, 'Scenario Events');
+      await expect(page2.getByText(ORIGINAL).first()).toBeVisible({ timeout: 20000 });
+
+      // ── Two writes to the same field, the second from a stale copy ─────────────
+      // Capture the DataValue as both windows currently see it, so the second PUT genuinely
+      // carries a pre-first-write copy rather than a re-read.
+      const full = await getScenarioEvent(token, eventId);
+      const fields = await listMselDataFields(token, mselId);
+      const descField = fields.find((f: any) => f.name === 'Description');
+      expect(descField, 'the seeded MSEL should have a Description DataField').toBeTruthy();
+
+      const staleCopy = (full.dataValues ?? []).find(
+        (d: any) => d.dataFieldId === descField.id
+      );
+      expect(staleCopy, 'the seeded event should have a Description DataValue').toBeTruthy();
+      expect(staleCopy.value).toBe(ORIGINAL);
+
+      const firstWrite = `Window 1 wrote ${Date.now()}`;
+      await setScenarioEventFieldValue(token, eventId, 'Description', firstWrite);
+
+      // Window 2 saves its stale copy. expect: it is accepted (no conflict detection exists).
+      const secondWrite = `Window 2 wrote ${Date.now()}`;
+      const apiBase = process.env.BLUEPRINT_API_URL || 'http://localhost:4724';
+      const staleResponse = await fetch(`${apiBase}/api/dataValues/${staleCopy.id}`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...staleCopy, value: secondWrite }),
+      });
+      expect(
+        staleResponse.status,
+        'Blueprint has no optimistic concurrency, so a stale write is accepted'
+      ).toBe(200);
+
+      // expect: last write wins server-side.
+      const settled = await getScenarioEvent(token, eventId);
+      const settledValue = (settled.dataValues ?? []).find(
+        (d: any) => d.dataFieldId === descField.id
+      )?.value;
+      expect(settledValue).toBe(secondWrite);
+
+      // ── Both windows converge on the winning value, with no reload ─────────────
+      // This is the property that actually protects the user: whichever window lost, neither
+      // is left displaying stale text.
+      for (const [label, target] of [
+        ['window 1', page],
+        ['window 2', page2],
+      ] as const) {
+        await expect
+          .poll(() => target.getByText(secondWrite).count(), {
+            timeout: 30000,
+            intervals: [250, 500, 1000],
+            message: `${label} never converged on the winning value (no reload was performed)`,
+          })
+          .toBeGreaterThan(0);
+
+        await expect
+          .poll(() => target.getByText(firstWrite).count(), {
+            timeout: 15000,
+            intervals: [250, 500, 1000],
+            message: `${label} still shows the overwritten value`,
+          })
+          .toBe(0);
       }
-      
-      // 2. In window 1, modify and save the event
-      const timestamp1 = new Date().toISOString();
-      await descriptionField1.clear();
-      await descriptionField1.fill('Modified in window 1 at ' + timestamp1);
-      
-      const saveButton1 = page.locator('button:has-text("Save"), button[type="submit"]').last();
-      await saveButton1.click();
-      
-      // expect: Event is saved from window 1
-      await page.waitForTimeout(2000);
-      
-      // 3. In window 2, make different changes and try to save
-      const descriptionField2 = page2.locator(
-        'input[name="description"], ' +
-        'textarea[name="description"], ' +
-        'input[formControlName="description"]'
-      ).first();
-      
-      if (await descriptionField2.isVisible({ timeout: 2000 })) {
-        const timestamp2 = new Date().toISOString();
-        await descriptionField2.clear();
-        await descriptionField2.fill('Modified in window 2 at ' + timestamp2);
-        
-        const saveButton2 = page2.locator('button:has-text("Save"), button[type="submit"]').last();
-        await saveButton2.click();
-        
-        // expect: Conflict detection occurs
-        // expect: User is notified that the event was modified by another user
-        // expect: Options to reload, merge, or overwrite are presented
-        
-        await page2.waitForTimeout(2000);
-        
-        // Look for conflict notification, error message, or warning
-        const conflictIndicators = page2.locator(
-          'text=/conflict/i, ' +
-          'text=/modified by another user/i, ' +
-          'text=/concurrent edit/i, ' +
-          'text=/outdated/i, ' +
-          '[class*="error"], ' +
-          '[class*="warning"], ' +
-          '[class*="conflict"]'
-        );
-        
-        // The application should either:
-        // 1. Show a conflict notification
-        // 2. Prevent the save with an error
-        // 3. Force a reload/refresh of the data
-        // 4. Show merge options
-        
-        const hasConflictUI = await conflictIndicators.first().isVisible({ timeout: 5000 }).catch(() => false);
-        
-        // If no explicit conflict UI, check if the save was prevented or if there's a validation error
-        const errorMessage = page2.locator('[class*="error"], [role="alert"]');
-        const hasError = await errorMessage.first().isVisible({ timeout: 2000 }).catch(() => false);
-        
-        // At minimum, we expect some indication of the conflict
-        expect(hasConflictUI || hasError).toBeTruthy();
-      }
-      
-      // Cleanup
+
       await context2.close();
+    } finally {
       await browser.close();
-    } else {
-      // If no events exist, skip test with appropriate message
-      test.skip(await existingEvent.isVisible({ timeout: 1000 }), 'No events available for conflict resolution test');
     }
   });
 });
