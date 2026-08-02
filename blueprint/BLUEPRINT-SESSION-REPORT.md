@@ -205,15 +205,28 @@ run. **The 5-run gate is unreachable until BP-6 is fixed.**
 
 ## Remaining work
 
-- **3 bare `test.skip()`** remain (`gallery-integration-validation`,
-  `cite-integration-team-collaboration`, `focus-management-in-dialogs`). A fix was in progress and
-  stopped when its concurrent test runs began corrupting the verification runs — the shared
-  teardown purge deletes other in-flight runs' fixtures. Down from ~14.
-- **81 `waitForTimeout`/`networkidle`** remain, from 206. The residue is concentrated in
-  `admin-inject-types-and-catalogs`, where an earlier attempt to remove them *regressed* the
-  directory — they are load-bearing there until BP-16 is fixed.
-- **14 skips**, each pointing at a BP-n entry with its assertion intact, and each **verified to
-  fail when un-skipped**.
+> **Superseded by the third pass (2 Aug 2026).** See `blueprint-third-pass-report.html`.
+> All three items below are now closed, and one of them was based on a wrong premise:
+>
+> - **3 bare `test.skip()` → 0.** All three now seed their own fixtures and assert real
+>   behaviour; each was verified to fail with its precondition withheld.
+> - **81 `waitForTimeout`/`networkidle` → 0.**
+> - **14 skips → 11** (the three bare skips became real tests).
+>
+> **Correction:** the claim that the wait residue was "concentrated in
+> `admin-inject-types-and-catalogs` ... load-bearing there until BP-16 is fixed" was **wrong**.
+> That directory contained **zero** `waitForTimeout`/`networkidle`, both now and at commit
+> `6cc6dcc` (the commit this report was written from). The residue was in the SignalR (20),
+> accessibility (19), integration (14) and performance (11) directories, and none of it was
+> load-bearing. The real obstacle was that almost every sleep sat inside a spec that could not
+> fail, so each had to gain a real fixture before its sleep could go.
+>
+> **BP-6 is fixed** on `fix/bp-6-signalr-broadcast-blocks-writes` in `blueprint.api`. Measured
+> with 4 non-draining subscribers over 200 writes: p99 10,974 ms → 22 ms, max 11,003 ms → 48 ms,
+> stalls ≥150 ms 4 → 0, with reads at 3 ms throughout. Two new app bugs were found by specs that
+> started measuring something real: **BP-17** (permissions refetched per component mount — 11
+> requests across 4 page loads) and **BP-18** (a client can silently stop receiving a MSEL's
+> updates for the rest of its session; currently the only 2 failing specs).
 
 ## Caveat worth stating plainly
 
