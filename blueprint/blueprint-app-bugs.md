@@ -842,6 +842,66 @@ failures — see the Resolved candidates section.
 
 ---
 
+## BP-17 — `PermissionDataService` caches permissions but never reuses the cache, so every component refetches them
+
+**Severity:** low-medium — no incorrect behaviour, but `GET /api/me/systempermissions` is
+re-requested once per component mount. Measured **11 times across 4 page loads** during ordinary
+navigation, making it by far the most-requested endpoint in the app (next highest was 4).
+
+**Where:** `blueprint.ui/src/app/data/permission/permission-data.service.ts`.
+
+**Diagnosis:** the service is `providedIn: 'root'`, so it is a singleton for the app's lifetime,
+and it already keeps the result in a private field:
+
+```ts
+private _permissions: SystemPermission[] = [];
+get permissions(): SystemPermission[] { return this._permissions; }
+
+load(): Observable<SystemPermission[]> {
+  return this.permissionsService.getMySystemPermissions().pipe(
+    take(1),
+    tap((x) => (this._permissions = x))
+  );
+}
+```
+
+`load()` unconditionally issues the HTTP request; nothing checks whether `_permissions` is
+already populated, and there is no `shareReplay` on the observable. **15 components call
+`this.permissionDataService.load()` in `ngOnInit`** — `msel-list`, `msel-info`, `msel-teams`,
+`msel-contributors`, `msel-competencies`, `scenario-event-list`, `data-field-list`, `team-users`,
+`card-teams`, `player-application-list`, `player-application-teams`, `starter`, `assessor-page`,
+`landing/manage`, `admin/admin-container`. So the field behaves as a write-only cache: it is
+kept up to date and read by `hasPermission()`, but never consulted to avoid the fetch.
+
+**Reproduction:** load `/build`, `/admin`, a MSEL, then `/build` again, counting requests by
+path. Observed:
+
+```
+/api/me/systempermissions                 11
+/hubs/main/negotiate                       4
+/api/users/{me}                            4
+/api/health/ready                          3
+/api/users                                 3
+/api/units                                 3
+```
+
+Every concurrently-mounting component also fires its own copy, so several of the 11 are
+simultaneous duplicates of a request whose answer cannot change between them.
+
+**Expected:** return the cached value when it is already loaded (or share one in-flight request),
+e.g. cache the observable with `shareReplay(1)` so the singleton fetches once and every caller
+subscribes to the same result. Permissions do change on role edits, so pair it with an explicit
+invalidation hook rather than caching forever.
+
+**Test impact:** none is skipped. `performance-and-optimization/api-call-optimization.spec.ts`
+asserts no endpoint exceeds **12** requests across those four page loads, with an inline comment
+pointing here. That threshold is deliberately just above the measured 11 so the spec fails if the
+duplication gets worse, and it should be tightened once this is fixed. (Its previous version
+navigated to `/msels` and `/teams`, neither of which is a Blueprint route, so it recorded **0**
+API calls and every assertion was vacuous — which is why this went unnoticed.)
+
+---
+
 ## Resolved candidates — investigated and closed as TEST defects, not app bugs
 
 These were previously listed here as unconfirmed suspects. Each was reproduced directly and
