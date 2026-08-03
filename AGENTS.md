@@ -133,7 +133,7 @@ These live at the root (not inside any app dir) because multiple apps use them. 
 - Tests must be independent; the config runs serially but depends on no ordering.
 - **Every test must clean up the data it seeds** — see "Test data hygiene" below.
 - Long-running waits should use the fixture-level timeouts already configured — don't override `actionTimeout`/`navigationTimeout` per call without a reason.
-- When re-enabling a `test.skip(...)`, check the "Skipped tests" table in `README.md` for the upstream tracking issue — some skips are waiting on service-side fixes.
+- When re-enabling a `test.skip(...)`, read the comment above it first — some skips are waiting on a service-side fix and should stay skipped until it lands.
 - **Never adjust a test to work around an app bug just to make it pass.** If you believe
   you've found a legitimate defect in an app's API or UI, document it — see "App bug
   reporting" below — and either assert the actual (buggy) behavior with a comment
@@ -168,9 +168,8 @@ bug inferred from a test failure alone. Each entry should include what's wrong, 
   A reader should be able to tell from the comment alone what would need to happen for the
   test to be rewritten — no external lookup.
 - If the bug blocks a documented test-plan scenario, `test.skip(...)` the spec with a
-  `Pending upstream:` comment, and add a row to the "Skipped tests" table in `README.md`
-  whose Reason column stands on its own (describe the defect and its fix condition, don't
-  point at the writeup).
+  `Pending upstream:` comment. The comment above the skip is the only record a future
+  maintainer gets, so it must name the defect and the condition for re-enabling.
 - If the app is merely wrong but still testable, assert the actual behavior and say so in
   a `Pending upstream:` comment so the assertion reads as deliberate, not an oversight.
 - This documentation is the deliverable for a suspected app bug — do not modify
