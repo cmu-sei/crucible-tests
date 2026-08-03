@@ -79,6 +79,8 @@
   .opt h4{margin:0 0 6px;color:var(--ink);font-size:15px}
   .opt .verdict{font-size:12.5px;margin-top:8px}
   footer{margin-top:60px;padding-top:20px;border-top:1px solid var(--rule);font-size:12.5px;color:var(--ink-3)}
+  .links{background:var(--panel);border:1px solid var(--rule);border-radius:10px;padding:18px 20px;margin:0 0 8px}
+  .links table{font-size:13.5px}
   .toc{background:var(--panel);border:1px solid var(--rule);border-radius:10px;padding:16px 20px;margin:26px 0 0}
   .toc ol{margin:0;padding-left:20px;font-size:14.5px}
   .toc li{margin-bottom:4px}
@@ -108,6 +110,43 @@
     </ol>
   </div>
 </header>
+
+<div class="links">
+  <h3 style="margin:0 0 10px;font-size:14px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);font-weight:620">Browse the code</h3>
+  <table style="margin:0">
+    <thead><tr><th>What</th><th>Where</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>BP-6 fix</strong> (2 commits, 27 files)</td>
+        <td><a href="https://github.com/cmu-sei/Blueprint.Api/tree/fix/bp-6-signalr-broadcast-blocks-writes">Blueprint.Api @ <code>fix/bp-6-signalr-broadcast-blocks-writes</code></a><br>
+            <a href="https://github.com/cmu-sei/Blueprint.Api/compare/main...fix/bp-6-signalr-broadcast-blocks-writes">full diff vs <code>main</code></a> ·
+            <a href="https://github.com/cmu-sei/Blueprint.Api/blob/fix/bp-6-signalr-broadcast-blocks-writes/Blueprint.Api/Infrastructure/SignalR/HubBroadcaster.cs"><code>HubBroadcaster.cs</code></a> ·
+            <a href="https://github.com/cmu-sei/Blueprint.Api/commit/22323aad5be70adf0c258c15135b6597e844887e">commit 1</a> ·
+            <a href="https://github.com/cmu-sei/Blueprint.Api/commit/4fd1561c4719cc3d3412e9da97475e59acbbcc8c">commit 2</a></td>
+      </tr>
+      <tr>
+        <td><strong>This report</strong>, the bug log, and the harnesses</td>
+        <td><a href="https://github.com/cmu-sei/crucible-tests/tree/worktree-blueprint-tests/blueprint">crucible-tests @ <code>worktree-blueprint-tests</code></a><br>
+            <a href="https://github.com/cmu-sei/crucible-tests/blob/worktree-blueprint-tests/blueprint/blueprint-app-bugs.md">BP-1 … BP-18 bug log</a> ·
+            <a href="https://github.com/cmu-sei/crucible-tests/tree/worktree-blueprint-tests/blueprint/bp6-harness">reproduction harnesses</a></td>
+      </tr>
+      <tr>
+        <td><strong>Shared library</strong> the defect originates in</td>
+        <td><a href="https://github.com/cmu-sei/crucible-common-dotnet/blob/main/src/Crucible.Common.EntityEvents/src/Interceptors/EntityEventInterceptor.cs"><code>EntityEventInterceptor.cs</code></a> ·
+            <a href="https://github.com/cmu-sei/crucible-common-dotnet/blob/main/src/Crucible.Common.EntityEvents/Crucible.Common.EntityEvents.csproj">its <code>.csproj</code> (source-distribution packaging)</a> ·
+            <a href="https://github.com/cmu-sei/crucible-common-dotnet/blob/main/.github/workflows/release-package.yml"><code>release-package.yml</code></a></td>
+      </tr>
+      <tr>
+        <td><strong>BP-11</strong> (unrelated, but the suite depends on it)</td>
+        <td><a href="https://github.com/cmu-sei/Blueprint.Ui/tree/fix/msel-info-datafield-subscription-leak">Blueprint.Ui @ <code>fix/msel-info-datafield-subscription-leak</code></a> ·
+            <a href="https://github.com/cmu-sei/Blueprint.Ui/pull/316">PR #316</a></td>
+      </tr>
+    </tbody>
+  </table>
+  <p style="margin:12px 0 0;font-size:13px;color:var(--ink-2)">All branches are pushed but
+  <strong>deliberately not raised as pull requests</strong> — they are for reading and discussion,
+  not review-and-merge. The exception is Blueprint.Ui #316, which predates this work.</p>
+</div>
 
 <div class="kpis">
   <div class="kpi fail"><div class="n">6</div><div class="l">Apps affected</div><div class="d">code-confirmed; +1 likely, unmeasured</div></div>
@@ -152,7 +191,7 @@ the defect is uniform across apps.</p>
 therefore inside the request.</p>
 
 <div class="note warn"><strong>And there is a synchronous variant that is strictly worse.</strong>
-<code>EntityEventInterceptor.SavedChangesInternal</code> (the non-async path, line 87) does:
+<a href="https://github.com/cmu-sei/crucible-common-dotnet/blob/main/src/Crucible.Common.EntityEvents/src/Interceptors/EntityEventInterceptor.cs#L80-L93"><code>EntityEventInterceptor.SavedChangesInternal</code></a> (the non-async path, line 87) does:
 <pre><code>PublishEventsAsync(eventData.Context, default).GetAwaiter().GetResult();</code></pre>
 The same appears at line 168 for the transaction path. Any caller using synchronous
 <code>SaveChanges()</code> therefore <em>blocks a thread-pool thread</em> for the full duration of
@@ -222,13 +261,13 @@ give false negatives.</strong> Recording them because they cost real time:
   confirmed that a <em>reading</em> client in the same groups does receive the frame — otherwise
   "no stall" might simply mean "nothing was ever sent there".</li>
 </ul>
-Harnesses are checked in at <code>blueprint/bp6-harness/</code> (with a README): plain Node, no
+Harnesses are checked in at <a href="https://github.com/cmu-sei/crucible-tests/tree/worktree-blueprint-tests/blueprint/bp6-harness"><code>blueprint/bp6-harness/</code></a> (with a README): plain Node, no
 dependencies, hand-rolled WebSocket framing precisely so the client can stop reading on demand.
 They should move alongside the package if this proposal proceeds.</div>
 
 <h2>4 · The fix as implemented in Blueprint</h2>
-<p class="lede">Branch <code>fix/bp-6-signalr-broadcast-blocks-writes</code> in
-<code>blueprint.api</code> — 2 commits, 27 files, +497/−584.</p>
+<p class="lede">Branch <a href="https://github.com/cmu-sei/Blueprint.Api/tree/fix/bp-6-signalr-broadcast-blocks-writes"><code>fix/bp-6-signalr-broadcast-blocks-writes</code></a> in
+<code>Blueprint.Api</code> — 2 commits, 27 files, +497/−584 (<a href="https://github.com/cmu-sei/Blueprint.Api/compare/main...fix/bp-6-signalr-broadcast-blocks-writes">diff vs main</a>). Pushed for reading; no PR raised.</p>
 
 <p>A <code>HubBroadcaster</code>: a single-reader bounded-channel <code>BackgroundService</code>.
 Handlers hand it a broadcast and return immediately, so the fan-out leaves the request path
@@ -289,7 +328,7 @@ defect. Confirmed by reading each app's <code>PublishEventsAsync</code> and its 
 <table>
   <thead><tr><th>App</th><th>Handler location</th><th class="num"><code>SendAsync</code></th><th>Spelling</th><th>Status</th></tr></thead>
   <tbody>
-    <tr><td><strong>Blueprint</strong></td><td><code>Infrastructure/EventHandlers</code></td><td class="num">51</td><td>A → fixed</td><td><span class="tag pass">fixed (unpushed)</span></td></tr>
+    <tr><td><strong>Blueprint</strong></td><td><code>Infrastructure/EventHandlers</code></td><td class="num">51</td><td>A → fixed</td><td><span class="tag pass">fixed — branch pushed, no PR</span></td></tr>
     <tr><td><strong>Steamfitter</strong></td><td><code>Events/EventHandlers/SignalR</code></td><td class="num">31</td><td>B (sequential)</td><td><span class="tag fail">affected</span></td></tr>
     <tr><td><strong>CITE</strong></td><td><code>Infrastructure/EventHandlers</code></td><td class="num">29</td><td>A (18 × <code>WhenAll</code>)</td><td><span class="tag fail">affected</span></td></tr>
     <tr><td><strong>Gallery</strong></td><td><code>Infrastructure/EventHandlers</code></td><td class="num">27</td><td>A (18 × <code>WhenAll</code>)</td><td><span class="tag fail">affected</span></td></tr>
@@ -506,16 +545,16 @@ node probe-order.mjs http://localhost:4724 "$TOKEN" 20
 # 3. Precondition check (run before trusting any negative result):
 #    a READING client in the same groups must receive the frame
 node verify-precondition.mjs http://localhost:4724 "$TOKEN"</code></pre>
-<p>Harnesses live at <code>blueprint/bp6-harness/</code> — plain Node, no dependencies. The
+<p>Harnesses live at <a href="https://github.com/cmu-sei/crucible-tests/tree/worktree-blueprint-tests/blueprint/bp6-harness"><code>blueprint/bp6-harness/</code></a> — plain Node, no dependencies. The
 WebSocket framing is hand-rolled specifically so the client can stop reading on command, which is
 the one thing an off-the-shelf client will not do. Run
 <code>verify-precondition.mjs</code> <strong>first</strong>: without it, a "no stall" result may
 simply mean nothing was ever sent to the silent client.</p>
 
 <footer>
-  BP-6 · full entry in <code>blueprint/blueprint-app-bugs.md</code> ·
-  fix branch <code>fix/bp-6-signalr-broadcast-blocks-writes</code> in <code>blueprint.api</code> (unpushed) ·
-  session context in <code>blueprint/blueprint-third-pass-report.html</code>
+  BP-6 · full entry in <a href="https://github.com/cmu-sei/crucible-tests/blob/worktree-blueprint-tests/blueprint/blueprint-app-bugs.md"><code>blueprint/blueprint-app-bugs.md</code></a> ·
+  fix branch <a href="https://github.com/cmu-sei/Blueprint.Api/tree/fix/bp-6-signalr-broadcast-blocks-writes"><code>fix/bp-6-signalr-broadcast-blocks-writes</code></a> in <code>Blueprint.Api</code> (pushed, no PR) ·
+  session context in <a href="https://github.com/cmu-sei/crucible-tests/blob/worktree-blueprint-tests/blueprint/blueprint-third-pass-report.html"><code>blueprint-third-pass-report.html</code></a>
 </footer>
 
 </div>
