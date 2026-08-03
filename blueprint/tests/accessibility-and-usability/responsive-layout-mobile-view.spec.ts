@@ -6,7 +6,7 @@
 //
 // Test: Responsive Layout - Mobile View (plan item 16.x)
 //
-// Rewritten, and now `test.skip`-ed against BP-13 with its assertion intact.
+// Rewritten, and now `test.skip`-ed pending upstream support, with its assertion intact.
 //
 // The previous version was a bare `test.fixme()` whose comment claimed
 // "document.body.scrollWidth is ~466px at a 375px mobile viewport". Measured directly on the
@@ -15,7 +15,7 @@
 // detect the very defect the comment described. (466 is the right edge of one *overflowing
 // element* on the dashboard, not the document width.)
 //
-// The real defect, measured at 375x667 and filed as BP-13: elements render past the right
+// The real defect, measured at 375x667: elements render past the right
 // edge while the document does NOT scroll horizontally, so they are clipped and unreachable.
 //
 //   route        documentElement.scrollWidth   overflows?   widest element right edge
@@ -39,9 +39,7 @@ test.describe('Accessibility and Usability', () => {
   test('Responsive Layout - Mobile View', async ({ blueprintAuthenticatedPage: page }) => {
     test.skip(
       true,
-      'BP-13: at a 375px viewport, controls render up to 708px past the right edge while the ' +
-        'document does not scroll horizontally, so they are unreachable ' +
-        '(see blueprint/blueprint-app-bugs.md)'
+      'Pending upstream support: reachable controls at a 375px mobile viewport'
     );
 
     await page.setViewportSize(MOBILE);
@@ -79,7 +77,7 @@ test.describe('Accessibility and Usability', () => {
       ).toEqual([]);
 
       // expect: and where content does overflow, the page must at least be scrollable to it.
-      // Both conditions failing together is what makes BP-13 an accessibility defect rather
+      // Both conditions failing together is what makes this an accessibility defect rather
       // than a cosmetic one.
       const { docScrollWidth, clientWidth } = await page.evaluate(() => ({
         docScrollWidth: document.documentElement.scrollWidth,

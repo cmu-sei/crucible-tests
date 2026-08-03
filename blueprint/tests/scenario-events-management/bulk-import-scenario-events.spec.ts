@@ -35,13 +35,13 @@ import {
  * MSEL via the API (with data fields and two renderable scenario events), then exports it
  * through the app itself before re-uploading that export.
  *
- * BP-10 note: Blueprint's xlsx import discards each event's exported Delivery Time and
- * assigns `deltaSeconds = rowIndex * 60` (see blueprint/blueprint-app-bugs.md). This spec
- * does not assert imported times survive the round-trip — that is BP-10's known defect,
- * already covered by a skipped spec. It asserts what this plan item actually calls for: the
- * file is accepted, the events are imported (count and content), and no error is surfaced.
+ * Import-time note: Blueprint's xlsx import does not carry each event's exported Delivery
+ * Time through, assigning `deltaSeconds = rowIndex * 60` instead. This spec therefore does
+ * not assert imported times survive the round-trip — a skipped spec covers that separately.
+ * It asserts what this plan item actually calls for: the file is accepted, the events are
+ * imported (count and content), and no error is surfaced.
  *
- * BP-5 note: `GET /api/msels/{id}/scenarioEvents` omits `dataValues`, so the grid renders
+ * dataValues note: `GET /api/msels/{id}/scenarioEvents` omits `dataValues`, so the grid renders
  * blank cells. That endpoint is not used here — `POST /api/msels/xlsx`'s own response
  * includes each imported scenario event WITH its dataValues populated (verified directly
  * against the running API), so content is asserted from the upload response itself.
@@ -153,7 +153,7 @@ test.describe('Scenario Events Management', () => {
     expect(importedMselId).toBeTruthy();
 
     // expect: Events are imported — the response's own scenarioEvents collection (unlike
-    // GET /api/msels/{id}/scenarioEvents, which is affected by BP-5) already includes each
+    // GET /api/msels/{id}/scenarioEvents, which omits dataValues) already includes each
     // event's dataValues, so count and content are asserted directly from it.
     expect(importedMsel.scenarioEvents.length).toBe(2);
     const importedTexts = importedMsel.scenarioEvents.flatMap((se: any) =>
@@ -163,7 +163,7 @@ test.describe('Scenario Events Management', () => {
       expect.arrayContaining(['Bulk import first event', 'Bulk import second event'])
     );
 
-    // Cross-check independently via the single-event endpoint (also unaffected by BP-5),
+    // Cross-check independently via the single-event endpoint (which does return dataValues),
     // confirming the import response was not a fluke of what the client happened to send back.
     const persistedEvents = await listScenarioEvents(token, importedMselId!);
     expect(persistedEvents.length).toBe(2);

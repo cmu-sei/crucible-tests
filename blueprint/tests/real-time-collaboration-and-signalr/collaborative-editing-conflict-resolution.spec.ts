@@ -121,7 +121,7 @@ test.describe('Real-time Collaboration and SignalR', () => {
       await expect(page2.getByText(ORIGINAL).first()).toBeVisible({ timeout: 20000 });
 
       // Both clients must be in the MSEL's SignalR group before convergence can be asserted.
-      // The app's join is fire-and-forget and loses the race under suite load (BP-18), leaving a
+      // The app's join is fire-and-forget and loses the race under suite load, leaving a
       // client connected but not in the group -- which looks exactly like a lost push. These
       // probes make such a failure name its real cause instead of blaming delivery.
       await assertJoinedMselGroup(page, token, mselId);

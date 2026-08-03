@@ -45,14 +45,11 @@ test.describe('Error Handling and Validation', () => {
   });
 
   test('Date Range Validation', async ({ blueprintAuthenticatedPage: page }) => {
-    // Blocked by Blueprint app bug BP-8 — see blueprint/blueprint-app-bugs.md.
-    // `PUT /api/msels/{id}` accepts a negative `durationSeconds` (an end time before the
-    // start) and persists it verbatim; there is no validation at either layer. The
-    // assertions below are correct as written — un-skip once the invalid range is rejected.
-    test.skip(
-      true,
-      'BP-8: MSEL accepts a negative duration (end before start), no validation (see blueprint/blueprint-app-bugs.md)'
-    );
+    // Skipped pending upstream support: `PUT /api/msels/{id}` accepts a negative
+    // `durationSeconds` (an end time before the start) and persists it verbatim, as there is
+    // no range validation at either layer. The assertions below are correct as written —
+    // un-skip once the invalid range is rejected.
+    test.skip(true, 'Pending upstream support: date-range validation on MSEL duration');
 
     const startTime = '2026-06-01T12:00:00Z';
 

@@ -29,12 +29,11 @@ test.describe('Error Handling and Validation', () => {
   });
 
   test('Required Field Validation', async ({ blueprintAuthenticatedPage: page }) => {
-    // Blocked by Blueprint app bug BP-3 — see blueprint/blueprint-app-bugs.md.
-    // Clearing Name after dirtying another field leaves Save Changes ENABLED (it is
-    // bound to !isChanged only, never to validity) and shows no mat-error. The
-    // assertions below are correct as written — un-skip once a required validator is
-    // added to the Name field.
-    test.skip(true, 'BP-3: MSEL saves with an empty name, no client or server validation (see blueprint/blueprint-app-bugs.md)');
+    // Skipped pending upstream support: the MSEL Name field has no required validator, so
+    // clearing Name after dirtying another field leaves Save Changes enabled (it is bound to
+    // !isChanged only, never to validity) and shows no mat-error. The assertions below are
+    // correct as written — un-skip once a required validator is added to the Name field.
+    test.skip(true, 'Pending upstream support: required validator on the MSEL Name field');
 
     // Navigate to the seeded MSEL
     await navigateToMsel(page, mselId);

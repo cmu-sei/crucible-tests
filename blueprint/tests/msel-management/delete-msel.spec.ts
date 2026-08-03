@@ -119,18 +119,17 @@ test.describe('MSEL Management', () => {
 
     await expect(confirmDialog).not.toBeVisible({ timeout: 10000 });
 
-    // Gone server-side. This SHOULD be a clean 404, but Blueprint currently answers 500
-    // with a NullReferenceException stack trace for any nonexistent MSEL id — app bug
-    // BP-4, see blueprint/blueprint-app-bugs.md. Accepting 500 here keeps this spec
-    // focused on the delete behaviour it is actually testing instead of failing on a
-    // separate, already-reported API defect. Tighten this to exactly 404 once BP-4 is
-    // fixed; the assertion below proves the record is really gone either way.
+    // Gone server-side. Blueprint currently answers 500 rather than 404 for a nonexistent
+    // MSEL id, so both are accepted here — that keeps this spec focused on the delete
+    // behaviour it is actually testing. Tighten to exactly 404 once the API returns it; the
+    // assertion below proves the record is really gone either way.
     const afterDelete = await fetch(`${Services.Blueprint.API}/api/msels/${mselId}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     expect(
       [404, 500],
-      `GET on a deleted MSEL returned ${afterDelete.status}; expected 404 (or 500 while BP-4 is open)`
+      `GET on a deleted MSEL returned ${afterDelete.status}; expected 404 (or 500 while the ` +
+        `nonexistent-id defect is open)`
     ).toContain(afterDelete.status);
     // Independent of status code: the MSEL must no longer be in the list payload.
     const remaining = (await (

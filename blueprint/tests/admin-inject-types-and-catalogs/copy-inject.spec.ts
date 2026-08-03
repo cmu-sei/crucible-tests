@@ -12,7 +12,7 @@ import { getBlueprintToken, tempBlueprintName,
 
 test.describe('Admin - Inject Types and Catalogs Management', () => {
   // Serialize access to the shared admin Catalogs / Inject Types pages: they are not
-  // safely concurrent because of BP-16 (one unfiltered global inject store shared by an
+  // safely concurrent (one unfiltered global inject store shared by an
   // app-inject-list mounted per row). See acquireAdminCatalogLock in test-helpers.
   test.beforeEach(async () => {
     await acquireAdminCatalogLock();
@@ -93,7 +93,7 @@ test.describe('Admin - Inject Types and Catalogs Management', () => {
     // Helper: filter the Catalogs list down to this spec's own row via the section's
     // own Search box.
     //
-    // This closes a real app defect rather than merely retrying around it:
+    // This is required for a correct read rather than a retry around one:
     // AdminCatalogListComponent mounts one <app-inject-list> PER ROW unconditionally
     // (admin-catalog-list.component.html's expandedDetail column has no `@if` gating
     // it on expansion — only CSS visibility does), and every mounted instance's

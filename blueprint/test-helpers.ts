@@ -1115,7 +1115,6 @@ export async function deleteBlueprintUser(token: string, userId: string): Promis
  * never reaches the local store at all. The dropdown only looks correct because mat-select
  * holds its own selection. A UI-text assertion therefore proves almost nothing on its own —
  * always pair it with a `getBlueprintUser` check on `roleId`.
- * See BP-14 in `blueprint/blueprint-app-bugs.md`.
  */
 export async function getBlueprintUser(token: string, userId: string): Promise<any> {
   const r = await blueprintCall<any>(token, `/api/users/${userId}`);
@@ -1478,7 +1477,7 @@ export async function setAdminUserRole(
 /**
  * Serialize the specs that drive Blueprint's **admin Catalogs / Inject Types** pages.
  *
- * These pages are not safely concurrent, and the reason is an application defect (BP-16), not
+ * These pages are not safely concurrent, and the reason is on the application side, not
  * a test-side one: `admin-catalog-list.component.html` mounts one `<app-inject-list>` per
  * catalog row *unconditionally* — the `expandedDetail` column has no `@if` gate, only CSS
  * hides collapsed rows — and each instance's `ngOnInit` calls `loadByCatalog(itsOwnId)`, which
@@ -1685,7 +1684,7 @@ export async function purgeAllBlueprintTestData(): Promise<void> {
 }
 
 // ============================================================================
-// SignalR group-membership probe (BP-18)
+// SignalR group-membership probe
 // ============================================================================
 
 /**
@@ -1698,7 +1697,7 @@ export async function purgeAllBlueprintTestData(): Promise<void> {
  * not-connected case — with the connection up but `isJoined` false it falls through every branch
  * and silently does nothing. Under load (the full suite at `--workers 2`) a client therefore ends
  * up connected and receiving `ADMIN_DATA_GROUP` traffic, but never added to the MSEL group, so it
- * receives none of that MSEL's updates. See **BP-18** in `blueprint-app-bugs.md`.
+ * receives none of that MSEL's updates.
  *
  * Probing it directly is what keeps the propagation specs honest: without this, a lost join looks
  * identical to "the push never arrived", and the failure blames SignalR delivery — which has been
@@ -1721,7 +1720,7 @@ export async function assertJoinedMselGroup(
   mselId: string,
   timeoutMs = 30000
 ): Promise<void> {
-  const marker = `BP18Probe-${Date.now()}`;
+  const marker = `GroupJoinProbe-${Date.now()}`;
   const probe = await createRenderableScenarioEvent(token, mselId, marker, {
     deltaSeconds: 59 * 60,
   });
@@ -1737,11 +1736,11 @@ export async function assertJoinedMselGroup(
     if (!joined) {
       throw new Error(
         `SignalR: this page never received the pushed scenario event for MSEL ${mselId}, so its ` +
-          `client is not in that MSEL's SignalR group. This is BP-18 — the group join is ` +
+          `client is not in that MSEL's SignalR group. The group join is ` +
           `fire-and-forget: join() sets isJoined only when the connection is already Connected ` +
           `and never retries, and selectMsel() silently does nothing when connected && !isJoined. ` +
           `Broadcast delivery itself measures healthy (20/20, median 4ms), so this is a lost ` +
-          `join, not a lost message. See blueprint/blueprint-app-bugs.md.`
+          `join, not a lost message.`
       );
     }
   } finally {

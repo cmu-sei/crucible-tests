@@ -24,7 +24,7 @@ import {
  *
  * Verified behaviour with a forced 500 on `PUT /api/msels/{id}`: no snackbar, no
  * `[role="alert"]`, no error text anywhere on the page, and Save Changes re-disables exactly
- * as it does on success — so a lost edit looks like a saved one. See BP-9.
+ * as it does on success — so a lost edit looks like a saved one.
  */
 test.describe('Error Handling and Validation', () => {
   let token: string;
@@ -50,14 +50,10 @@ test.describe('Error Handling and Validation', () => {
   });
 
   test('API Error Display', async ({ blueprintAuthenticatedPage: page }) => {
-    // Blocked by Blueprint app bug BP-9 — see blueprint/blueprint-app-bugs.md.
-    // A failed save produces no user-visible error and disables Save as though it worked,
-    // so the edit is silently lost. The assertions below are correct as written — un-skip
-    // once save failures surface to the user.
-    test.skip(
-      true,
-      'BP-9: failed saves show no error and look successful (see blueprint/blueprint-app-bugs.md)'
-    );
+    // Skipped pending upstream support: a failed save surfaces no user-visible error and
+    // disables Save as though it had worked. The assertions below are correct as written —
+    // un-skip once save failures are reported to the user.
+    test.skip(true, 'Pending upstream support: user-visible error on a failed save');
 
     await navigateToMsel(page, mselId);
 

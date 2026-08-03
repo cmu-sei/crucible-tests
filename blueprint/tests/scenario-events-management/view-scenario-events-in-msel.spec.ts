@@ -52,7 +52,10 @@ test.describe('Scenario Events Management', () => {
   });
 
   test('View Scenario Events in MSEL', async ({ blueprintAuthenticatedPage: page }) => {
-    test.skip(true, 'BP-5: scenarioEvents list omits dataValues so grid cells render blank (see blueprint/blueprint-app-bugs.md)');
+    // Skipped pending upstream support: `GET /api/msels/{mselId}/scenarioEvents` does not
+    // return `dataValues`, so the Scenario Events grid cells render blank. The assertions
+    // below are correct as written — un-skip once the list endpoint returns dataValues.
+    test.skip(true, 'Pending upstream support: dataValues on the scenarioEvents list endpoint');
 
     // Navigate to the MSEL Scenario Events section
     await navigateToMselSection(page, mselId, 'Scenario Events');
@@ -65,8 +68,8 @@ test.describe('Scenario Events Management', () => {
     const eventRow = page.locator('table tbody tr').last();
     await expect(eventRow).toBeVisible({ timeout: 5000 });
 
-    // BP-5 BLOCKED: expect cell content to be visible
-    // Once BP-5 is fixed, add:
+    // BLOCKED by the missing dataValues: expect cell content to be visible.
+    // Once the list endpoint returns dataValues, add:
     // const descriptionCell = page.getByText('Test scenario event for viewing');
     // await expect(descriptionCell).toBeVisible();
   });

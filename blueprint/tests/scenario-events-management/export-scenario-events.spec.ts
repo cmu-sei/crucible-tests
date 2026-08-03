@@ -83,8 +83,8 @@ function extractRowXml(sheetXml: string, rowNumber: number): string {
  * one) and the data row carries the seeded event's real text in two different DataField
  * columns, proving the export is complete rather than merely present.
  *
- * Verified app facts this spec relies on (see blueprint/test-helpers.ts and
- * blueprint/blueprint-app-bugs.md BP-5 for more detail):
+ * Verified app facts this spec relies on (see blueprint/test-helpers.ts, and the "Skipped
+ * tests" table in README.md, for more detail):
  *   - A MSEL from `POST /api/msels` has zero DataFields, so `seedMselDataFields` (invoked via
  *     `createRenderableScenarioEvent`) must copy the 13-field "Standard MSEL" set first, or the
  *     export has no columns to check.
@@ -93,8 +93,8 @@ function extractRowXml(sheetXml: string, rowNumber: number): string {
  *     `setScenarioEventFieldValue`.
  *   - `GET /api/msels/{id}/xlsx` writes each cell as an inline string (`t="str"`) with no
  *     `xl/sharedStrings.xml` part in the workbook, so the seeded text is read directly out of
- *     `xl/worksheets/sheet1.xml`. BP-5 (the scenario-events LIST endpoint dropping
- *     `dataValues`) does not apply here — the export reads straight from the database via
+ *     `xl/worksheets/sheet1.xml`. The scenario-events LIST endpoint dropping
+ *     `dataValues` does not apply here — the export reads straight from the database via
  *     `GetMselDataAsync`, not the list projection the grid uses.
  *   - `showTimeOnScenarioEventList` / `...Move...` / `...Group...` all default to `false` on a
  *     freshly created MSEL, so the "Time"/"Move"/"Group" system columns are absent from this

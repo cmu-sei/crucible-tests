@@ -28,10 +28,10 @@ import {
  *   - Name input has maxlength=70, Description maxlength=600; both truncate on input.
  *   - The counters render as `mat-hint` elements ("70 / 70 characters").
  *
- * The empty-name case is a real application defect — see BP-3 in
- * `blueprint/blueprint-app-bugs.md`. There is no validation at either layer: with the form
- * dirtied, clearing Name leaves Save enabled, the PUT returns 200, and the name persists
- * as "". Those assertions are written correctly below and skipped pending the app fix.
+ * The empty-name case is skipped pending upstream support for name validation. There is no
+ * validator at either layer today: with the form dirtied, clearing Name leaves Save enabled,
+ * the PUT returns 200, and the name persists as "". Those assertions are written correctly
+ * below and skipped until the validator lands.
  */
 test.describe('MSEL Management', () => {
   let token: string;
@@ -93,7 +93,7 @@ test.describe('MSEL Management', () => {
   test('MSEL Form Validation - empty name is rejected', async ({
     blueprintAuthenticatedPage: page,
   }) => {
-    // Blocked by Blueprint app bug BP-3 — see blueprint/blueprint-app-bugs.md.
+    // Skipped pending upstream support for name validation.
     // A MSEL can currently be saved with an empty name: no mat-error appears, Save stays
     // enabled (it is bound to !isChanged only, never to validity), PUT returns 200, and
     // the name persists as "". The API accepts name:"" directly too, so neither layer
@@ -101,7 +101,7 @@ test.describe('MSEL Management', () => {
     // validator is added on the field AND in the API update path.
     test.skip(
       true,
-      'BP-3: MSEL saves with an empty name, no client or server validation (see blueprint/blueprint-app-bugs.md)'
+      'Pending upstream support: required validator on the MSEL Name field'
     );
 
     await navigateToMsel(page, mselId);

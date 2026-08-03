@@ -106,16 +106,16 @@ test.describe('Performance and Optimization', () => {
       return acc;
     }, {});
     const worst = Object.entries(callsByPath).sort((a, b) => b[1] - a[1])[0];
-    // Threshold is 12, not a rounder number, because of a real app inefficiency -- see BP-17.
+    // Threshold is 12, not a rounder number, because of how permissions are currently loaded:
     // `PermissionDataService` is a root singleton that stores permissions in `_permissions` but
-    // never consults it before fetching, and 15 components call `load()` in ngOnInit. Measured:
+    // does not consult it before fetching, and 15 components call `load()` in ngOnInit. Measured:
     // `/api/me/systempermissions` is requested 11 times across these 4 page loads, against 4 for
     // the next-busiest endpoint. 12 sits just above that, so this fails if the duplication grows;
-    // tighten it once BP-17 is fixed. It is deliberately NOT set to 11 to avoid a spec that
-    // encodes today's exact defect as the expectation.
+    // tighten it once the cache is reused. It is deliberately NOT set to 11 to avoid a spec that
+    // encodes today's exact count as the expectation.
     expect(
       worst[1],
-      `endpoint ${worst[0]} was requested ${worst[1]} times across 4 page loads (see BP-17)`
+      `endpoint ${worst[0]} was requested ${worst[1]} times across 4 page loads`
     ).toBeLessThan(12);
 
     // expect: loading state suppresses rapid-fire duplicates — the same URL requested twice
@@ -133,10 +133,10 @@ test.describe('Performance and Optimization', () => {
       return acc;
     }, {});
 
-    // BP-17 accounts for most of these: 7 of the 11 observed rapid duplicates are
-    // `/api/me/systempermissions`, fired near-simultaneously by components mounting together.
-    // Excluding the known defect, everything else must stay minimal -- so a NEW source of
-    // duplicate requests fails this, while the documented one does not mask it.
+    // The permissions refetch accounts for most of these: 7 of the 11 observed rapid duplicates
+    // are `/api/me/systempermissions`, fired near-simultaneously by components mounting together.
+    // Excluding that known endpoint, everything else must stay minimal -- so a NEW source of
+    // duplicate requests fails this, while the expected one does not mask it.
     const permissionsPath = `${Services.Blueprint.API}/me/systempermissions`;
     const otherDuplicates = Object.entries(dupsByPath).filter(
       ([path]) => !path.endsWith('/me/systempermissions')
@@ -144,14 +144,14 @@ test.describe('Performance and Optimization', () => {
     const otherDuplicateCount = otherDuplicates.reduce((n, [, count]) => n + count, 0);
     expect(
       otherDuplicateCount,
-      `unexpected rapid duplicate requests (excluding BP-17's ${permissionsPath}): ` +
+      `unexpected rapid duplicate requests (excluding the known ${permissionsPath}): ` +
         JSON.stringify(otherDuplicates)
     ).toBeLessThan(5);
 
-    // And the BP-17 duplication itself must not grow. Tighten/remove once BP-17 is fixed.
+    // And the known duplication itself must not grow. Tighten/remove once the cache is reused.
     expect(
       dupsByPath[permissionsPath] ?? 0,
-      'rapid duplicate /me/systempermissions requests (BP-17)'
+      'rapid duplicate /me/systempermissions requests'
     ).toBeLessThanOrEqual(8);
   });
 });

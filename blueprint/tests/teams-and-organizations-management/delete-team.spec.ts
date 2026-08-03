@@ -40,12 +40,11 @@ test.describe('Teams and Organizations Management', () => {
   });
 
   test('Delete Team', async ({ blueprintAuthenticatedPage: page }) => {
-    // Blocked by Blueprint app bug BP-1 — see blueprint/blueprint-app-bugs.md.
-    // The Teams grid does not refresh after a successful delete: DELETE returns 204 and
-    // GET /api/msels/{id}/teams confirms removal, but the row stays rendered (stable
-    // >15s, no follow-up GET). The assertion at the end of this test is correct as
-    // written — un-skip it once the grid refresh is fixed in the app.
-    test.skip(true, 'BP-1: Blueprint teams grid does not refresh after delete (see blueprint/blueprint-app-bugs.md)');
+    // Skipped pending upstream support: the Teams grid does not currently refresh after a
+    // successful delete, so the removed row stays rendered even though DELETE returns 204
+    // and GET /api/msels/{id}/teams confirms removal. The assertion at the end of this test
+    // is correct as written — un-skip it once the grid refreshes.
+    test.skip(true, 'Pending upstream support: Teams grid refresh after delete');
 
     // Navigate to the MSEL Teams section
     await navigateToMselSection(page, mselId, 'Teams');

@@ -64,15 +64,11 @@ test.describe('Export and Import', () => {
   });
 
   test('Import Scenario Events from Excel into existing MSEL', async () => {
-    // Blocked by Blueprint app bug BP-10 — see blueprint/blueprint-app-bugs.md.
-    // The xlsx import discards each event's exported Delivery Time and assigns
-    // `rowIndex * 60` instead (MselService.cs ~line 1141), so a round-trip silently rewrites
-    // 300s/900s to 60s/120s. The offset assertion below is correct as written — un-skip once
-    // the import parses the time column.
-    test.skip(
-      true,
-      'BP-10: xlsx import overwrites scenario event times with rowIndex * 60 (see blueprint/blueprint-app-bugs.md)'
-    );
+    // Skipped pending upstream support: the xlsx import does not parse each event's exported
+    // Delivery Time, assigning `rowIndex * 60` instead, so a round-trip rewrites 300s/900s to
+    // 60s/120s. The offset assertion below is correct as written — un-skip once the import
+    // reads the time column.
+    test.skip(true, 'Pending upstream support: xlsx import parsing the Delivery Time column');
 
     const authHeader = { Authorization: `Bearer ${token}` };
 
@@ -115,7 +111,7 @@ test.describe('Export and Import', () => {
       [300, 900]
     );
 
-    // Data values are only populated on the single-event endpoint (see BP-5), so read the
+    // Data values are only populated on the single-event endpoint, so read the
     // events individually to confirm the imported text round-tripped rather than being dropped.
     const allValues: string[] = [];
     for (const event of after) {

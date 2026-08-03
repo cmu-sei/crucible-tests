@@ -6,7 +6,7 @@
 //
 // Test: Screen Reader Compatibility (plan item 16.x)
 //
-// Now `test.skip`-ed against BP-12 with its assertions intact, rather than a bare
+// Now `test.skip`-ed pending upstream support, with its assertions intact, rather than a bare
 // `test.fixme()`.
 //
 // Measured on the running app after the shell renders:
@@ -23,7 +23,7 @@
 // PARTIAL CORRECTION to the previous comment, which said the app "does not use semantic HTML
 // heading elements (h1-h6)". Too strong: the templates contain 3 <h1>, 10 <h2>, 4 <h3> and
 // 5 <h4>. They are simply absent from the primary surfaces — the dashboard and /build have
-// none. The landmark half of the claim is fully correct. Filed as BP-12.
+// none. The landmark half of the claim is fully correct.
 //
 // The old body also asserted `expect(a || b || c).toBeTruthy()` over only the *first five*
 // inputs/buttons/links, which both hides which element failed and leaves the rest unchecked.
@@ -38,8 +38,7 @@ test.describe('Accessibility and Usability', () => {
   test('Screen Reader Compatibility', async ({ blueprintAuthenticatedPage: page }) => {
     test.skip(
       true,
-      'BP-12: no ARIA landmarks on any route, and the dashboard and /build render no headings ' +
-        'at all (see blueprint/blueprint-app-bugs.md)'
+      'Pending upstream support: ARIA landmarks and headings on the primary routes'
     );
 
     for (const route of ROUTES) {

@@ -47,18 +47,13 @@ import {
  * it reported +1005 and returned to baseline when the references were dropped. A leak
  * metric that has not been shown to fail on a real leak cannot be trusted to pass.
  *
- * ── Regression coverage: BP-11 ──
- * This spec previously failed against a real defect. `msel-info.component.ts` subscribed
- * `dataFieldQuery.selectAll()` without `takeUntil(this.unsubscribe$)` (its six sibling
- * subscriptions all had one). The Akita store observable never completes, so every render
- * of the Info section leaked a live subscription that pinned the destroyed component's
- * entire DOM subtree. Measured on the unfixed build: **963 detached nodes per render**,
- * exactly linear across 16 renders (+1926 every 2 renders, identical each block), with the
- * heap climbing 18.9MB → 29.6MB and no sign of levelling off.
- *
- * With `takeUntil` added, the same measurement yields a slope of **0.0** — detached nodes
- * stay constant and the heap is flat. The threshold below is set well under the observed
- * defect magnitude so this spec fails again if the `takeUntil` is ever dropped.
+ * ── What this guards ──
+ * A store subscription created without `takeUntil(this.unsubscribe$)` never completes, so
+ * every render of a section leaks a live subscription that pins the destroyed component's
+ * entire DOM subtree. That shape is measurable here as a straight-line slope of retained
+ * detached nodes per render, accompanied by steady heap growth with no plateau; a correctly
+ * torn-down subscription yields a slope of 0.0 and a flat heap. The threshold below sits far
+ * enough under a real leak's magnitude to catch a dropped `takeUntil` in any MSEL section.
  */
 test.describe('Performance and Optimization', () => {
   let token: string;
@@ -186,21 +181,22 @@ test.describe('Performance and Optimization', () => {
 
     // expect: destroyed section components release their DOM.
     //
-    // Threshold rationale: the BP-11 defect measured 963 nodes/render, and a clean build
-    // measures 0.0. 50 is an order of magnitude below the defect while leaving room for
-    // a one-time warm-up step that survived the warm-up cycle above (a single step across
-    // the series contributes a small positive slope without being unbounded growth).
+    // Threshold rationale: a correctly torn-down subscription measures 0.0, while a leaked
+    // one runs into the hundreds of nodes per render. 50 is an order of magnitude below a
+    // real leak while leaving room for a one-time warm-up step that survived the warm-up
+    // cycle above (a single step across the series contributes a small positive slope
+    // without being unbounded growth).
     expect(
       slope,
       `Info section retains ~${slope.toFixed(0)} detached DOM nodes per render ` +
         `(${series[0].detached} → ${series[n - 1].detached} over ${totalRenders} renders). ` +
-        `These survived a forced GC, so a live reference is pinning them. This is the ` +
-        `BP-11 signature: a store subscription in msel-info.component.ts created without ` +
-        `takeUntil(this.unsubscribe$), which keeps the destroyed component's DOM alive.`
+        `These survived a forced GC, so a live reference is pinning them. The usual cause ` +
+        `is a store subscription created without takeUntil(this.unsubscribe$), which keeps ` +
+        `the destroyed component's DOM alive.`
     ).toBeLessThan(50);
 
-    // expect: no unbounded heap growth from the same cause. The unfixed build grew
-    // ~0.67MB per render (18.9MB → 29.6MB over 16 renders) with no plateau.
+    // expect: no unbounded heap growth from the same cause — a leaked subscription drives
+    // steady per-render heap growth with no plateau.
     const heapGrowth = series[n - 1].heapMb - series[0].heapMb;
     expect(
       heapGrowth,

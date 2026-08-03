@@ -38,10 +38,9 @@ import {
  *   (`IntegrationService.cs` ~line 299: `msel.PlayerViewId = Guid.NewGuid()`), which then
  *   creates that view in Player. So the test seeds the association through the API — the
  *   same field the push path writes — and asserts how the UI renders it.
- * - **The view *name* next to the checkbox never renders.** See BP-15 in
- *   `blueprint/blueprint-app-bugs.md`: the browser-side fetch of
- *   `{PlayerApiUrl}/views/{id}` is blocked by CORS because Player's API does not allow
- *   the Blueprint UI origin. That assertion is kept intact in a `test.skip`-ed test below.
+ * - **The view *name* next to the checkbox does not render today.** The browser-side fetch of
+ *   `{PlayerApiUrl}/views/{id}` is blocked by CORS, as Player's API does not allow the
+ *   Blueprint UI origin. That assertion is kept intact in a `test.skip`-ed test below.
  */
 test.describe('Integration with Crucible Services', () => {
   let token: string;
@@ -164,7 +163,7 @@ test.describe('Integration with Crucible Services', () => {
     await expect(page.getByRole('button', { name: 'Push Integrations' })).toHaveCount(0);
   });
 
-  // BLOCKED by BP-15 (see blueprint/blueprint-app-bugs.md): the Player view *name* can
+  // Skipped pending upstream support: the Player view *name* can
   // never render, because the browser-side GET of `{PlayerApiUrl}/views/{id}` from the
   // Blueprint UI origin is rejected by Player's CORS policy. The assertion below is
   // correct as written and should pass once Player allows the Blueprint UI origin —
@@ -174,9 +173,8 @@ test.describe('Integration with Crucible Services', () => {
   }) => {
     test.skip(
       true,
-      'BP-15: Player API CORS policy excludes the Blueprint UI origin, so ' +
-        'msel-info.component.ts fetchIntegrationNames() always fails and playerViewName ' +
-        'stays empty. See blueprint/blueprint-app-bugs.md.'
+      'Pending upstream support: Player API CORS policy allowing the Blueprint UI origin, ' +
+        'which msel-info.component.ts fetchIntegrationNames() needs to resolve playerViewName'
     );
 
     // `fetchIntegrationNames()` returns early unless the MSEL is Deployed, so that is a

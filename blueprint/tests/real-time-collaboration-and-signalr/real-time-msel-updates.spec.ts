@@ -110,7 +110,7 @@ test.describe('Real-time Collaboration and SignalR', () => {
 
       // Both clients must actually be in the MSEL's SignalR group before propagation can be
       // asserted. Under suite load the app's fire-and-forget join loses the race and a client
-      // ends up connected but never added to the group (BP-18) -- which is indistinguishable
+      // ends up connected but never added to the group -- which is indistinguishable
       // from a dropped push unless it is checked explicitly. These probes make the failure name
       // its real cause.
       await assertJoinedMselGroup(page, token, mselId);

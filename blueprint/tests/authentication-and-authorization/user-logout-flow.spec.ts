@@ -8,12 +8,11 @@ import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Authentication and Authorization', () => {
   test('User Logout Flow', async ({ blueprintAuthenticatedPage: page }) => {
-    // Blocked by Blueprint app bug BP-7 — see blueprint/blueprint-app-bugs.md.
-    // Clicking Logout does nothing: the OIDC entry (access token included) stays in
-    // sessionStorage, no redirect to Keycloak's end-session endpoint occurs, and the user
-    // remains authenticated. Verified stable over a 15s poll. The assertions below are
-    // correct as written — un-skip once logout actually signs the user out.
-    test.skip(true, 'BP-7: Logout leaves the OIDC token in sessionStorage and does not sign out (see blueprint/blueprint-app-bugs.md)');
+    // Skipped pending upstream support: clicking Logout does not currently clear the OIDC
+    // entry from sessionStorage or redirect to Keycloak's end-session endpoint, so the user
+    // stays authenticated. The assertions below are correct as written — un-skip once logout
+    // signs the user out.
+    test.skip(true, 'Pending upstream support: logout does not clear the session');
 
 
     // expect: Successfully authenticated and viewing the home page

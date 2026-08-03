@@ -23,8 +23,8 @@ import {
  *     whatever the dashboard happened to render.
  *   - Test 1 collected loading indicators into `loadingFound` and never asserted on it,
  *     closing with the comment "If no loading indicator, that's okay".
- *   - Test 3 and Test 5 were gated on `main, [role="main"]`. Per BP-12 those elements do not
- *     exist anywhere in Blueprint, so both blocks were dead code.
+ *   - Test 3 and Test 5 were gated on `main, [role="main"]`. Those elements do not exist
+ *     anywhere in Blueprint, so both blocks were dead code.
  *   - Test 4's assertions were `expect(['pointer','default']).toContain(cursor)` and
  *     `expect(afterHover).toBeTruthy()` — the latter is an object literal, so unconditionally
  *     true.

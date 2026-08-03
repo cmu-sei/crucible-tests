@@ -290,50 +290,19 @@ Some tests are skipped pending fixes in upstream Crucible services. These use `t
 | App | Test | Reason |
 |-----|------|--------|
 | gameboard | `Large Data Set Handling - Leaderboard Pagination` (`gameboard/tests/error-handling/leaderboard-pagination.spec.ts`) | `/api/game/{id}/score` performs per-team queries in a loop and times out at 60s for 120 seeded teams. Blocked on batched-query rewrite of `ScoringService.GetGameScore`. |
-| blueprint | `Delete Team` (`teams-and-organizations-management/delete-team.spec.ts`) | **BP-1** — the Teams grid does not refresh after a delete: `DELETE /api/teams/{id}` returns 204 and the API confirms removal, but the row stays rendered (>15s, no follow-up GET). |
-| blueprint | `MSEL Form Validation - empty name is rejected` (`msel-management/msel-form-validation.spec.ts`) | **BP-3** — the MSEL Name field has no validator at either layer. With the form dirtied, clearing Name leaves Save enabled, shows no `mat-error`, PUTs 200, and persists `name: ""`. |
-| blueprint | `Required Field Validation` (`error-handling-and-validation/required-field-validation.spec.ts`) | **BP-3** — same defect, asserted from the missing-`mat-error` angle. |
-| blueprint | `View Scenario Events in MSEL` (`scenario-events-management/view-scenario-events-in-msel.spec.ts`) | **BP-5** — `GET /api/msels/{id}/scenarioEvents` omits `dataValues` (the list query lacks `.Include`), so every Scenario Events grid cell renders blank. |
-| blueprint | `User Logout Flow` (`authentication-and-authorization/user-logout-flow.spec.ts`) | **BP-7** — Logout does nothing: the OIDC token stays in `sessionStorage`, no Keycloak end-session redirect, user stays signed in. |
-| blueprint | `Date Range Validation` (`error-handling-and-validation/date-range-validation.spec.ts`) | **BP-8** — a MSEL accepts a negative `durationSeconds`, i.e. an end time before its start. |
-| blueprint | `API Error Display` (`error-handling-and-validation/api-error-display.spec.ts`) | **BP-9** — a failed save shows no error and disables Save as if it succeeded, so the edit is silently lost. |
-| blueprint | `Import Scenario Events from Excel` (`export-and-import/import-scenario-events-from-csv.spec.ts`) | **BP-10** — xlsx import discards each event's exported time and assigns `rowIndex * 60`, silently rewriting the timeline. |
-| blueprint | `Screen Reader Compatibility` (`accessibility-and-usability/screen-reader-compatibility.spec.ts`) | **BP-12** — no ARIA landmarks on any route, and `/` and `/build` render no headings at all (`/admin` has one `<h2>`). |
-| blueprint | `Responsive Layout - Mobile View` (`accessibility-and-usability/responsive-layout-mobile-view.spec.ts`) | **BP-13** — at a 375px viewport, controls render up to 708px past the right edge while the document does not scroll horizontally, so they are unreachable. |
-| blueprint | `Player Integration - View Name Displayed` (`integration-with-crucible-services/player-integration-view-association.spec.ts`) | **BP-15** — all four deployed-integration name lookups are browser-side calls to the other services' APIs and every one fails CORS preflight, so only a raw GUID renders. |
-| ~~blueprint~~ | ~~`Memory Leak Detection`~~ — **BP-11 is fixed; this test now passes** | **BP-11 (resolved)** — the MSEL Info section retained ~963 detached DOM nodes per render (`msel-info.component.ts:326` subscribed `dataFieldQuery.selectAll()` without `takeUntil`). Fixed in Blueprint.Ui branch `fix/msel-info-datafield-subscription-leak` (local, unpushed). The spec was verified to still fail against the unfixed build, so it guards the regression. |
 
-Every blueprint skip above keeps its **correct** assertion in the test body — nothing is
-deleted, weakened, or commented out — so each one starts passing as soon as the underlying
-defect is fixed. Each skipped assertion has also been **verified to fail when un-skipped**: a
-skip whose assertion is wrong hides the defect just as effectively as a deleted one. BP-11 is
-the worked example of the whole cycle: the assertion was left in its correct failing form, the
-app defect was fixed, and the spec went green without being touched.
+A number of Blueprint specs are skipped pending upstream support for the behavior they
+assert. Each one keeps its **correct** assertion in the test body — nothing is deleted,
+weakened, or commented out — so it starts passing as soon as the behavior lands. Each skipped
+assertion has also been verified to fail when un-skipped, since a skip whose assertion is
+wrong covers nothing. See the `test.skip(...)` reason in each spec for what it is waiting on.
 
-Full reproductions and evidence for BP-1 … BP-15 are in
-[`blueprint/blueprint-app-bugs.md`](blueprint/blueprint-app-bugs.md). That file also records
-defects which do **not** block a test, and so have no row above:
-
-- **BP-4** — `GET /api/msels/{id}` returns 500 with a stack trace for a nonexistent id.
-- **BP-6** — `POST` to an entity that has a SignalR handler can wedge the API. The write path
-  awaits `Task.WhenAll` over the hub fan-out
-  (`Infrastructure/EventHandlers/UserHandler.cs`), so one leaked or half-dead client connection
-  blocks it indefinitely. Reproduced outside Playwright: `GET /api/users` in 8ms while
-  `POST /api/users` hung past 25s with no browsers running, zero blocked DB locks, and
-  `aspire resource blueprint-api restart` unable to stop the process. Restarting the API
-  restores 8–22ms writes with no test change. **If a run suddenly shows API timeouts after a
-  long session, restart `blueprint-api` rather than suspecting the specs.**
-- **BP-14** — a user's role change never reaches the local store, so the admin Users table
-  shows a stale role until a full page load (`user-data.service.ts` uses insert-only akita
-  `add()` where all five sibling data services use `upsert()`).
-
-The whole Blueprint suite runs at `--workers 2`. An earlier note here claimed
-`admin-inject-types-and-catalogs` needed `--workers 1` because of "~77 positional locators";
-that was not the mechanism. Deleting an inject type **cascade-deletes every catalog that
-references it**, and five specs bound their catalog to the globally-first `mat-option` — often
-a sibling spec's inject type — so that sibling's cleanup destroyed this spec's catalog
-mid-test. Each spec now selects the inject type it created itself and seeds under
-`tempBlueprintName()`, and the directory is 2-worker-safe.
+The whole Blueprint suite runs at `--workers 2`. The `admin-inject-types-and-catalogs` specs
+serialize themselves behind a shared lock (`acquireAdminCatalogLock` in
+`blueprint/test-helpers.ts`) because those admin pages are not safe to exercise concurrently.
+Deleting an inject type also cascade-deletes every catalog that references it, so each spec
+selects the inject type it created itself and seeds under `tempBlueprintName()` rather than
+binding to whichever `mat-option` happens to be first.
 
 Note that **concurrent Blueprint suite runs against one stack will sabotage each other**: the
 `globalTeardown` purge deletes every row whose name matches the `tempBlueprintName()` shape,
