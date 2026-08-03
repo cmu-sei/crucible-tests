@@ -18,7 +18,11 @@ import {
 
 /**
  * Exhibit Management — an expanded exhibit's detail sub-panel survives an exhibit-store
- * emission (regression cover for gallery.ui `f585bdf`).
+ * emission.
+ *
+ * Pending upstream: the Admin Exhibits table needs a `trackBy` so a store emission patches
+ * rows instead of rebuilding them. This spec asserts the fixed behaviour, so it fails until
+ * that change reaches the Gallery UI build under test.
  *
  * `admin-exhibits.component.ts` subscribes to `exhibitQuery.selectAll()` and, on every
  * emission, runs `setExhibitList` → `applyFilter`, which rebuilds `exhibitList` from
@@ -132,9 +136,9 @@ test.describe('Exhibit Management', () => {
     await expect(siblingMoveCell).toHaveText('7');
     await expect(siblingInjectCell).toHaveText('3');
 
-    // expect: the sub-panel is still open with its content still visible. Pre-fix the
-    // row rebuild destroyed this DOM and the panel came back collapsed, hiding the team
-    // rows even though `expandedExhibitId` still named the watched exhibit.
+    // expect: the sub-panel is still open with its content still visible. Without a
+    // `trackBy` the row rebuild destroys this DOM and the panel comes back collapsed,
+    // hiding the team rows even though `expandedExhibitId` still names the watched exhibit.
     await expect(exhibitTeamsHeader).toHaveAttribute('aria-expanded', 'true');
     await expect(teamsRegion).toBeVisible();
     await expect(teamsRegion.getByText(teamShortName, { exact: true })).toBeVisible();

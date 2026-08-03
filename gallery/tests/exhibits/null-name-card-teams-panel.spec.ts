@@ -21,14 +21,18 @@ import { waitForFirstVisible } from '../../../shared-fixtures';
 
 /**
  * Exhibit Management — the "Card Teams" sub-panel of an expanded exhibit row tolerates a
- * team or a card whose `name` is null (regression cover for gallery.ui `db05d15`).
+ * team or a card whose `name` is null.
+ *
+ * Pending upstream: `admin-team-cards`' sort comparator and search predicate must guard a
+ * null team name and a null card name. This spec asserts the guarded behaviour, so it fails
+ * until that change reaches the Gallery UI build under test.
  *
  * `admin-team-cards.component.ts` renders one row per TeamCard, resolving the display
  * text through `getTeamName(teamId)` / `getCardName(cardId)`. Both helpers return the
  * found record's `name` verbatim, so both return `null` when that record's name is null —
  * and `Team.Name` and `Card.Name` are both nullable with no `[Required]`
- * (`Gallery.Api.Data/Models/Team.cs`, `.../Card.cs`). Pre-fix, four call sites lowercased
- * those results unguarded:
+ * (`Gallery.Api.Data/Models/Team.cs`, `.../Card.cs`). Four call sites lowercase those
+ * results unguarded:
  *
  *   - `applyFilter`'s predicate, on both the team and the card name — wired to this
  *     panel's Search box (`admin-team-cards.component.html:36`).
@@ -42,7 +46,7 @@ import { waitForFirstVisible } from '../../../shared-fixtures';
  * `@for (teamCard of filteredTeamCardList; ...)` loop renders **zero rows**. The rows do
  * not degrade; the list disappears.
  *
- * **The observed pre-fix symptom is worse than an empty list, which is why
+ * **The observed symptom is worse than an empty list, which is why
  * `openCardTeamsPanel` races an error sheet.** `ErrorService` is registered as Angular's
  * global `ErrorHandler` (`app.module.ts`) and turns any uncaught error into a *modal*
  * `MatBottomSheet` (`SystemMessageService.displayMessage`) titled with the error's name.
@@ -52,25 +56,25 @@ import { waitForFirstVisible } from '../../../shared-fixtures';
  * sub-panel is even opened, because `<app-admin-team-cards>` is inside the detail row's
  * markup and its `ngOnInit` runs regardless of the sub-panel's collapsed state.
  *
- * **Why the two paths cannot be separated pre-fix, and what that means for these tests.**
- * Unlike `admin-teams`'s `getFilteredTeams()`, `applyFilter` here has no early exit for an
- * empty filter string — it calls both helpers on every TeamCard on every invocation, and
- * `ngOnInit` plus the `teamCardQuery.selectAll()` subscription invoke it as soon as the
- * panel's data arrives. So pre-fix the crash happens before any header is clicked or
- * anything is typed, and the sort comparator is unreachable as an *independent* trigger:
- * it takes the same two helpers over the same records, so nothing crashes the comparator
- * that has not already crashed the predicate one statement earlier. Both tests below
- * therefore fail pre-fix at the same place — `openCardTeamsPanel`, on the error sheet.
+ * **Why the two paths cannot be separated while unguarded, and what that means for these
+ * tests.** Unlike `admin-teams`'s `getFilteredTeams()`, `applyFilter` here has no early exit
+ * for an empty filter string — it calls both helpers on every TeamCard on every invocation,
+ * and `ngOnInit` plus the `teamCardQuery.selectAll()` subscription invoke it as soon as the
+ * panel's data arrives. So the crash happens before any header is clicked or anything is
+ * typed, and the sort comparator is unreachable as an *independent* trigger: it takes the
+ * same two helpers over the same records, so nothing crashes the comparator that has not
+ * already crashed the predicate one statement earlier. Both tests below therefore fail at
+ * the same place — `openCardTeamsPanel`, on the error sheet.
  *
- * That is a real pre-fix failure, but on its own it would leave the two `sortTeamCards`
- * cases uncovered — a change that guarded only `applyFilter` would still pass a spec that
- * merely opened the panel. Hence the sort test asserts the **exact row order** after each
- * header click, in both directions, for both columns. That was verified by building a
- * bundle with *only* the two sort cases reverted, keeping the filter guard: the panel then
- * opens and loads all three rows, the filter test passes in full, and the sort test fails
- * on the first order assertion after the "Team" header click — the comparator throws inside
- * `.sort()`, `filteredTeamCardList` is never reassigned, and the row locator resolves to 0
- * elements with the error sheet up. So each half of `db05d15` is independently covered.
+ * That is a real failure, but on its own it would leave the two `sortTeamCards` cases
+ * uncovered — a change that guarded only `applyFilter` would still pass a spec that merely
+ * opened the panel. Hence the sort test asserts the **exact row order** after each header
+ * click, in both directions, for both columns. That was verified by building a bundle with
+ * *only* the two sort cases unguarded, keeping the filter guard: the panel then opens and
+ * loads all three rows, the filter test passes in full, and the sort test fails on the first
+ * order assertion after the "Team" header click — the comparator throws inside `.sort()`,
+ * `filteredTeamCardList` is never reassigned, and the row locator resolves to 0 elements
+ * with the error sheet up. So the sort path and the filter path are independently covered.
  *
  * **Blast radius.** `admin-teams` filters its list by `t.exhibitId === this.exhibitId`
  * before sorting; this component does no such filtering — it renders `teamCardQuery`,
@@ -117,9 +121,9 @@ async function appErrorSheetText(page: Page): Promise<string | null> {
  * merely leave the list unsorted or unfiltered: the `TypeError` escapes `.sort()` /
  * `.filter()` up to the global `ErrorHandler`, which opens the modal sheet — so the raw
  * assertion failure is a locator that suddenly resolves to 0 elements rather than a wrong
- * order. Without this wrapper that reads as a flaky selector instead of the defect under
- * test. Confirmed against a sort-cases-only-reverted bundle, where the wrapped failure
- * reports the TypeError alongside the underlying order mismatch.
+ * order. Without this wrapper that reads as a flaky selector instead of the behaviour under
+ * test. Confirmed against a bundle with only the sort cases unguarded, where the wrapped
+ * failure reports the TypeError alongside the underlying order mismatch.
  */
 async function withAppErrorDiagnostic<T>(page: Page, fn: () => Promise<T>): Promise<T> {
   try {
@@ -128,9 +132,9 @@ async function withAppErrorDiagnostic<T>(page: Page, fn: () => Promise<T>): Prom
     const sheetText = await appErrorSheetText(page);
     if (sheetText) {
       throw new Error(
-        `The Card Teams list raised an application error: "${sheetText}". This is the ` +
-          `db05d15 defect — a null team or card name reaching ` +
-          `admin-team-cards.component.ts's sortTeamCards/applyFilter. Underlying ` +
+        `The Card Teams list raised an application error: "${sheetText}". Expected cause: ` +
+          `a null team or card name reaching an unguarded ` +
+          `admin-team-cards.component.ts sortTeamCards/applyFilter. Underlying ` +
           `assertion failure: ${(err as Error).message}`
       );
     }
@@ -225,8 +229,8 @@ async function seedCardTeamsPanel(label: string): Promise<SeededPanel> {
   const alphaCard = await apiCreateCard(collection.id, alphaCardName);
   const zuluCard = await apiCreateCard(collection.id, zuluCardName);
   // The card under test. Verified live: POST /api/cards answers 201 for an explicit null
-  // name and GET /api/collections/{id}/cards reads it back as null, so both halves of
-  // db05d15 (team name and card name) are reachable through the API.
+  // name and GET /api/collections/{id}/cards reads it back as null, so both halves of the
+  // scenario (team name and card name) are reachable through the API.
   const nullCard = await apiCreateCard(collection.id, null);
 
   await apiCreateTeamCard(zuluTeam.id, alphaCard.id);
@@ -281,7 +285,7 @@ async function openCardTeamsPanel(
   const cardTeamsHeader = page.getByRole('button', { name: 'Card Teams', exact: true });
 
   // Race the panel header against the app's global error sheet. Expanding the exhibit row
-  // is already enough to trip the pre-fix bug: `<app-admin-team-cards>` sits inside the
+  // is already enough to trip the unguarded code: `<app-admin-team-cards>` sits inside the
   // detail row's markup, so its `ngOnInit` runs even while the sub-panel is collapsed, and
   // `applyFilter` throws as soon as `loadByExhibit`'s data lands. `ErrorService`
   // (registered as Angular's `ErrorHandler` in `app.module.ts`) catches that and opens a
@@ -300,8 +304,8 @@ async function openCardTeamsPanel(
   if (winner === 'error') {
     throw new Error(
       `Expanding the exhibit row raised an application error instead of rendering the ` +
-        `Card Teams panel: "${await appErrorSheetText(page)}". This is the db05d15 defect ` +
-        `— a null team or card name reaching admin-team-cards.component.ts's ` +
+        `Card Teams panel: "${await appErrorSheetText(page)}". Expected cause: a null team ` +
+        `or card name reaching an unguarded admin-team-cards.component.ts ` +
         `applyFilter/sortTeamCards.`
     );
   }
@@ -373,7 +377,7 @@ test.describe('Exhibit Management', () => {
     await gotoGalleryAdmin(page);
     const region = await openCardTeamsPanel(page, seeded.collectionName, seeded.exhibitName);
 
-    // Baseline. Pre-fix both tests fail before reaching here, inside
+    // Baseline. While the helpers are unguarded both tests fail before reaching here, inside
     // `openCardTeamsPanel`: `applyFilter` runs unconditionally when the panel's data lands
     // and throws on the first null name it meets, so the error sheet is already up.
     await expectAllThreeRowsLoaded(region, seeded);
@@ -491,7 +495,7 @@ test.describe('Exhibit Management', () => {
 
       // 4. A term matching nothing must yield an empty list rather than an error. Paired
       //    with step 3 this pins the difference between "correctly filtered to zero" and
-      //    the pre-fix "crashed to zero": the empty result tracks the search term instead
+      //    an unguarded "crashed to zero": the empty result tracks the search term instead
       //    of being the component's failure mode.
       await searchBox.fill(`ZZZ-NO-SUCH-TEAM-CARD-${seeded.suffix}`);
       await expect(teamCardRows(region)).toHaveCount(0);

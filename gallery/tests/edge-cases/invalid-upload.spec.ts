@@ -21,23 +21,21 @@ import * as os from 'os';
 /**
  * Edge Cases §15.4 — Invalid Upload Files.
  *
- * Both halves of this scenario were app bugs (see gallery/gallery-app-bugs.md §6) and are
- * now fixed:
+ * The contract this spec pins, on both the server and the client side:
  *
- *  - Server side, `CollectionService.UploadJsonAsync` / `ExhibitService.UploadJsonAsync` now
- *    wrap `JsonSerializer.Deserialize` in a try/catch and throw a `BadRequestException` on
- *    `JsonException`, so a non-JSON or truncated file gets a **400** response instead of an
+ *  - Server side, `CollectionService.UploadJsonAsync` / `ExhibitService.UploadJsonAsync` wrap
+ *    `JsonSerializer.Deserialize` in a try/catch and throw a `BadRequestException` on
+ *    `JsonException`, so a non-JSON or truncated file gets a **400** response rather than an
  *    unhandled 500. Verified live against both endpoints — the same message covers both a
  *    non-JSON file and structurally-broken JSON, since both raise `JsonException`:
  *      HTTP 400 {"title":"The uploaded file is not valid JSON.","status":400}
  *  - Client side, `uploadJson` in `collection-data.service.ts` / `exhibit-data.service.ts`
- *    now opens a `MatSnackBar` on the error callback reading
+ *    opens a `MatSnackBar` on the error callback reading
  *    `err?.error?.detail || err?.error?.title || 'The uploaded file could not be processed.'`.
  *    The 400 body above has no `detail`, so the snackbar falls through to `title`.
  *
- * This spec asserts that fixed behaviour: the payload is rejected with 400, the app surfaces
- * an error notification naming the problem, no record is created, and the UI recovers to an
- * interactive state.
+ * So: the payload is rejected with 400, the app surfaces an error notification naming the
+ * problem, no record is created, and the UI recovers to an interactive state.
  *
  * Fixture files are written under `os.tmpdir()` and removed in teardown so nothing is
  * scratched into the repo.

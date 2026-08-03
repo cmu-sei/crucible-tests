@@ -14,9 +14,10 @@ import { test, expect, gotoExhibitSection } from '../../fixtures';
  *
  * The Archive title's unread count is matched loosely: the Archive article store is not
  * scoped to the exhibit, so a UserArticle created for the same user in another exhibit
- * while this page is open inflates it (reported as an app bug against
- * `signalr.service.ts#addUserArticleHandlers`). This spec is about navigation, and the
- * article-level assertions below are what prove the right view rendered.
+ * while this page is open inflates it (pending upstream:
+ * `signalr.service.ts#addUserArticleHandlers` accepts UserArticle events for exhibits
+ * other than the one being viewed). This spec is about navigation, and the article-level
+ * assertions below are what prove the right view rendered.
  */
 test.describe('Archive Functionality', () => {
   test('Archive Navigation', async ({ galleryAuthenticatedPage: page, seededExhibit }) => {

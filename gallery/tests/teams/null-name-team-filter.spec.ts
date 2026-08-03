@@ -17,33 +17,36 @@ import {
 import { openExhibitTeamsPanel, teamRowShortNames, teamRowFullNames } from './null-team-helpers';
 
 /**
- * Team Management — searching the Exhibit Teams list with a null-valued team present
- * (regression cover for gallery.ui `5eaa8b2`).
+ * Team Management — searching the Exhibit Teams list with a null-valued team present.
+ *
+ * Pending upstream: `admin-teams`' filter predicate must guard a null `name` and a null
+ * `shortName`. This spec asserts the guarded behaviour, so it fails until that change reaches
+ * the Gallery UI build under test.
  *
  * `getFilteredTeams()`'s predicate in `admin-teams.component.ts` used to read
  * `a.shortName.toLowerCase().includes(...) || a.name.toLowerCase().includes(...)` with
  * neither field guarded. Both are nullable, so a team missing either one throws
  * `TypeError: Cannot read properties of null (reading 'toLowerCase')` — but only once
  * `this.filterString` is non-empty, since the predicate is skipped entirely for an empty
- * filter. That is why this spec must type a search term: the bug is unreachable without
- * one, and a spec that only loaded the panel would pass pre-fix.
+ * filter. That is why this spec must type a search term: the throw is unreachable without
+ * one, and a spec that only loaded the panel would pass either way.
  *
- * As with the sort bug, the blast radius is the whole list: the exception propagates out
+ * As with sorting, the blast radius is the whole list: the exception propagates out
  * of `Array.prototype.filter` before `sortedTeams` is reassigned, so the `@for` loop
  * renders nothing. Hence the assertions check that the expected row is *present*, not
  * merely that no exception surfaced.
  *
- * The interesting half of the fix is that guarding must not turn into dropping. The two
- * fields are tested as independent OR branches, so a team with a null `name` still
- * lowercases its `shortName` and can match on that branch — the null branch is
+ * The interesting half of the required behaviour is that guarding must not turn into
+ * dropping. The two fields are tested as independent OR branches, so a team with a null
+ * `name` still lowercases its `shortName` and can match on that branch — the null branch is
  * neutralised to non-matching, and critically does not short-circuit the other. The
  * central assertion below therefore searches for the null-name team's `shortName` and
- * requires it to match. A fix that merely stopped the throw by skipping null-valued
+ * requires it to match. A guard that merely stopped the throw by skipping null-valued
  * teams would satisfy "nothing crashed" but fail this.
  *
- * The mirror case matters too: `shortName` is nullable on its own, and pre-fix it was
- * the *first* term in the expression, so a team with a null `shortName` threw before the
- * name branch was ever evaluated. A second team covers that direction.
+ * The mirror case matters too: `shortName` is nullable on its own and is the *first* term
+ * in the expression, so a team with a null `shortName` throws before the name branch is
+ * ever evaluated. A second team covers that direction.
  *
  * This spec seeds its own collection and exhibit rather than using the worker-scoped
  * `seededExhibit`, because the team store is global and injecting malformed teams into
@@ -80,7 +83,7 @@ test.describe('Team Management', () => {
     await apiCreateTeam(exhibit.id, { name: bothSetFullName, shortName: bothSetShortName });
     // Null `name`, real `shortName` — must still be findable via the shortName branch.
     await apiCreateTeam(exhibit.id, { name: null, shortName: nullNameShortName });
-    // Null `shortName`, real `name` — pre-fix this threw on the *first* term.
+    // Null `shortName`, real `name` — unguarded, this throws on the *first* term.
     await apiCreateTeam(exhibit.id, { name: nullShortNameFullName, shortName: null });
 
     await gotoGalleryAdmin(page);
@@ -102,18 +105,18 @@ test.describe('Team Management', () => {
     // 1. Filter by the null-name team's short name.
     await searchBox.fill(nullNameShortName);
 
-    // expect: exactly that team is listed. Pre-fix, the predicate threw on its null
-    // `name` and the list rendered zero rows; a "guard by skipping nulls" fix would
-    // also render zero rows here. Only a fix that evaluates the shortName branch
-    // independently produces this row.
+    // expect: exactly that team is listed. Unguarded, the predicate throws on its null
+    // `name` and the list renders zero rows; a "guard by skipping nulls" approach would
+    // also render zero rows here. Only evaluating the shortName branch independently
+    // produces this row.
     await expect(teamRowShortNames(teamsRegion)).toHaveText([nullNameShortName]);
     // Its Full Name cell is present but empty — the row really is the null-name team,
     // not some other record that happens to share the search string.
     await expect(teamRowFullNames(teamsRegion)).toHaveText(['']);
 
-    // 2. Filter by the full name of the team whose `shortName` is null. Pre-fix this
-    //    threw on `a.shortName.toLowerCase()`, the leading term, before the name branch
-    //    was reached — so it fails for a different reason than step 1 and is worth
+    // 2. Filter by the full name of the team whose `shortName` is null. Unguarded this
+    //    throws on `a.shortName.toLowerCase()`, the leading term, before the name branch
+    //    is reached — so it fails for a different reason than step 1 and is worth
     //    asserting separately.
     await searchBox.fill(nullShortNameFullName);
     await expect(teamRowFullNames(teamsRegion)).toHaveText([nullShortNameFullName]);
@@ -131,7 +134,7 @@ test.describe('Team Management', () => {
     ]);
 
     // 4. A filter matching nothing must yield an empty list rather than an error — this
-    //    pins the difference between "correctly filtered to zero" and the pre-fix
+    //    pins the difference between "correctly filtered to zero" and the unguarded
     //    "crashed to zero" that step 1 detects. Paired with step 3 it shows the empty
     //    result tracks the search term rather than being the component's failure mode.
     await searchBox.fill(`ZZZ-NO-SUCH-TEAM-${suffix}`);

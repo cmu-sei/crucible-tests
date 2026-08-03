@@ -16,10 +16,11 @@ import { getUserToken } from '../../../keycloak-admin';
  *  - Advancing writes CurrentMove/CurrentInject on the exhibit row, which would outlive
  *    the test and change what every later test in the worker sees.
  *  - `seededExhibit`'s cards are named 'Test Card 1..3' in every worker, and the Wall's
- *    Card/TeamCard stores are not scoped to the exhibit (app bug against
- *    `signalr.service.ts#addCardHandlers`/`addTeamCardHandlers`), so a parallel worker
- *    seeding its own 'Test Card 2' gets it pushed onto this wall and a name-based
- *    locator resolves to two cards. Uniquely-named cards make every assertion exact.
+ *    Card/TeamCard stores are not scoped to the exhibit (pending upstream:
+ *    `signalr.service.ts#addCardHandlers`/`addTeamCardHandlers` accept Card and TeamCard
+ *    events for exhibits other than the one being viewed), so a parallel worker seeding
+ *    its own 'Test Card 2' gets it pushed onto this wall and a name-based locator
+ *    resolves to two cards. Uniquely-named cards make every assertion exact.
  * `afterEach` deletes exactly the ids created — never a name-prefix purge, which would
  * take out data other specs are using concurrently.
  *

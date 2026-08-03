@@ -21,9 +21,10 @@ import { test, expect, gotoExhibitSection, apiSetExhibitMoveAndInject } from '..
  * Assertions are scoped to the seeded article names via SEEDED_ARTICLE rather than
  * counting every card on the page: the Archive's article store is not scoped to the
  * exhibit, so a UserArticle created for the same user in another exhibit while this page
- * is open is pushed into the list by SignalR (reported as an app bug against
- * `signalr.service.ts#addUserArticleHandlers`). Scoping keeps the filter assertions
- * exact without being at the mercy of unrelated exhibits.
+ * is open is pushed into the list by SignalR (pending upstream:
+ * `signalr.service.ts#addUserArticleHandlers` accepts UserArticle events for exhibits
+ * other than the one being viewed). Scoping keeps the filter assertions exact without
+ * being at the mercy of unrelated exhibits.
  */
 const SEEDED_ARTICLE = /^(Intel|Reporting|Orders|News|Social|Email) Article 1$/;
 

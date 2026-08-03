@@ -9,11 +9,12 @@ import { test, expect, Services } from '../../fixtures';
 /**
  * My Exhibits Landing Page §2.4 — My Exhibits Navigation to Exhibit.
  *
- * Fixed (gallery.ui `0a37a10`): `home-app.component.html:61` now renders the exhibit-name
- * link with `[queryParams]="{ exhibit: exhibit.id, section: Section.wall }"` directly, and
- * `getQueryParams()` — which used to run during change detection and overwrite the
- * per-exhibit remembered section as a side effect — is gone. Clicking an exhibit's name now
- * lands on the Wall directly, satisfying test-plan §2.4.
+ * Pending upstream: `home-app.component.html:61` must render the exhibit-name link with
+ * `[queryParams]="{ exhibit: exhibit.id, section: Section.wall }"` directly, rather than
+ * through a `getQueryParams()` call that runs during change detection and overwrites the
+ * per-exhibit remembered section as a side effect. Only then does clicking an exhibit's name
+ * land on the Wall directly, as test-plan §2.4 requires. This spec asserts that behaviour, so
+ * it fails until the change reaches the Gallery UI build under test.
  *
  * Read-only with respect to shared Gallery data (no move/inject change, no read toggles), so
  * the worker-scoped `seededExhibit` needs no restoration.
@@ -51,8 +52,9 @@ test.describe('My Exhibits Landing Page', () => {
     // expect: The Wall view shows the exhibit's cards with unread article counts.
     // Scoped to the seeded card names: the Wall's card store is not exhibit-scoped, so a
     // Card/TeamCard created for the same user in another exhibit while this page is open
-    // is pushed onto the wall by SignalR (app bug against
-    // `signalr.service.ts#addCardHandlers`/`addTeamCardHandlers`).
+    // is pushed onto the wall by SignalR (pending upstream:
+    // `signalr.service.ts#addCardHandlers`/`addTeamCardHandlers` accept Card and TeamCard
+    // events for exhibits other than the one being viewed).
     const wallCards = page.locator('section.cards mat-card');
     await expect(wallCards.locator('mat-card-title').filter({ hasText: /^Test Card [123]$/ }))
       .toHaveText(['Test Card 1', 'Test Card 2', 'Test Card 3']);

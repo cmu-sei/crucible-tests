@@ -19,10 +19,10 @@ import { test, expect, gotoExhibitSection } from '../../fixtures';
  * The unread number itself is asserted loosely because the Archive's article store is
  * not scoped to the exhibit: a UserArticle created for the same user in another exhibit
  * while this page is open is pushed into the list by the SignalR handler and inflates
- * the count (reported as an app bug against
- * `signalr.service.ts#addUserArticleHandlers`). The per-article assertions below are
- * the substantive ones and are unaffected. Tighten the title to an exact "(2)" once the
- * store is exhibit-scoped.
+ * the count (pending upstream: `signalr.service.ts#addUserArticleHandlers` accepts
+ * UserArticle events for exhibits other than the one being viewed). The per-article
+ * assertions below are the substantive ones and are unaffected. Tighten the title to an
+ * exact "(2)" once the store is exhibit-scoped.
  */
 test.describe('Archive Functionality', () => {
   test('Archive Page Display', async ({ galleryAuthenticatedPage: page, seededExhibit }) => {

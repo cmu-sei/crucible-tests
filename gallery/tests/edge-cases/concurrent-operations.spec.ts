@@ -222,10 +222,12 @@ test.describe('Edge Cases and Negative Testing', () => {
       // numeric enum (verified live: `"sourceType":0` on GET
       // /api/exhibits/{id}/articles), so the filter throws
       // "TypeError: a.article.sourceType.toLowerCase is not a function" and Angular's
-      // ErrorHandler covers the page in error sheets. A third app bug, unrelated to the
-      // concurrency behaviour under test — so this spec routes around it rather than
-      // tripping over it. Scoping by name is sufficient: gotoExhibitSection pins the view
-      // to this exhibit, so only its own articles are present.
+      // ErrorHandler covers the page in error sheets (pending upstream: the Archive
+      // search predicate calls `.toLowerCase()` on a `sourceType` the API serializes as a
+      // number). That is unrelated to the concurrency behaviour under test, so this spec
+      // routes around it rather than tripping over it. Scoping by name is sufficient:
+      // gotoExhibitSection pins the view to this exhibit, so only its own articles are
+      // present.
       const card = target.locator('mat-card.card').filter({ hasText: articleName });
       await expect(card).toHaveCount(1);
 

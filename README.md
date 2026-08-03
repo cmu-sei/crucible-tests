@@ -293,18 +293,12 @@ Some tests are skipped pending fixes in upstream Crucible services. These use `t
 | gallery | `Edit Existing Article - changes reflected in the archive view` (`gallery/tests/articles/edit-article.spec.ts`) | The archive template never renders `article.status`; it exists only in the filter predicate and sort comparator, so an edit cannot be observed there. The wall half is asserted in full. |
 | gallery | `Article Status Workflow - status displayed in the archive view` (`gallery/tests/articles/article-status.spec.ts`) | Same cause as above — the archive has no status indicator at all. All five statuses are asserted on the wall, which does render them. |
 
-Gallery app defects found while building its suite are written up in
-[gallery/gallery-app-bugs.md](gallery/gallery-app-bugs.md). **All 20 recorded defects are now
-fixed** on the `bug-fixes` branch of `Gallery.Api` / `Gallery.Ui`, and each has a regression
-spec verified to fail against the pre-fix code — so no Gallery spec is currently pinned to
-buggy behaviour. That file now records what was fixed and why, and keeps a
-"Related non-bug findings" section worth reading before concluding you have found a new
-defect: several entries there are things that looked exactly like app bugs and were not,
-including two **retractions** of findings that were defects in this test suite rather than in
-Gallery.
+The two Gallery skips in the table above are test-plan limitations — the archive view renders
+no status indicator at all — rather than anything pending upstream.
 
-The two Gallery skips in the table above are test-plan limitations (the archive view renders no
-status indicator at all), not app bugs, and are not tracked in that file.
+Where a spec asserts behaviour that the deployed service does not yet provide, its header
+comment says so with a `pending upstream:` note naming what is required. Those specs fail
+until the change reaches the build under test; read the note before treating one as broken.
 
 ## Troubleshooting
 

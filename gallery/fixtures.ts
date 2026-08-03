@@ -1188,8 +1188,8 @@ export async function seedExhibitForAdmin(
     // but then `JsonStringEnumConverter` cannot map it back to a name and serialises the
     // raw number instead of a string. The Angular client types `sourceType` as a string
     // union and calls `.toLowerCase()` on it, so seeding invalid values made the Archive
-    // search box throw `sourceType.toLowerCase is not a function` — a fixture defect that
-    // looked like an app bug. Always use SOURCE_TYPE.
+    // search box throw `sourceType.toLowerCase is not a function` — a defect in this
+    // fixture, not in the application. Always use SOURCE_TYPE.
     const SOURCE_TYPE = {
       News: 10,
       Social: 20,

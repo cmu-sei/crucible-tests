@@ -234,7 +234,7 @@ test.describe('Card Management', () => {
       `Are you sure that you want to delete ${deleteCardName}?`
     );
 
-    // Cancel first: a confirm dialog that deletes on dismiss would be a bug.
+    // Cancel first: a confirm dialog must not delete when it is dismissed.
     await confirmDialog.getByRole('button', { name: 'Cancel' }).click();
     await expect(confirmDialog).toHaveCount(0);
     await expectCardRowCount(page, collectionName, deleteCardName, 1);

@@ -24,9 +24,10 @@ import { getUserToken } from '../../../keycloak-admin';
  * The tab-title unread count is asserted as a *delta* rather than an absolute number:
  * the Archive article store is not scoped to the exhibit, so a UserArticle created for
  * the same user in another exhibit while this page is open is pushed into the list by
- * SignalR and shifts the baseline (reported as an app bug against
- * `signalr.service.ts#addUserArticleHandlers`). The direction of the change is the
- * behaviour under test and is unaffected.
+ * SignalR and shifts the baseline (pending upstream:
+ * `signalr.service.ts#addUserArticleHandlers` accepts UserArticle events for exhibits
+ * other than the one being viewed). The direction of the change is the behaviour under
+ * test and is unaffected.
  */
 
 /** Unread count from the tab title, e.g. 'Gallery Archive (2)' -> 2. */

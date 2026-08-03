@@ -20,9 +20,10 @@ import { test, expect, gotoExhibitSection, apiSetExhibitMoveAndInject } from '..
  *
  * Assertions are scoped to the seeded article names: the Archive's article store is not
  * scoped to the exhibit, so a UserArticle created for the same user in another exhibit
- * while this page is open is pushed into the list by SignalR (reported as an app bug
- * against `signalr.service.ts#addUserArticleHandlers`). Scoping keeps these exact
- * without depending on what other exhibits are doing.
+ * while this page is open is pushed into the list by SignalR (pending upstream:
+ * `signalr.service.ts#addUserArticleHandlers` accepts UserArticle events for exhibits
+ * other than the one being viewed). Scoping keeps these exact without depending on what
+ * other exhibits are doing.
  */
 const SEEDED_ARTICLE = /^(Intel|Reporting|Orders|News|Social|Email) Article 1$/;
 

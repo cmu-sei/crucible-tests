@@ -21,8 +21,9 @@ import { test, expect, gotoExhibitSection } from '../../fixtures';
  * Card assertions are scoped to the seeded card names rather than counting every card
  * on the wall: the Wall's card store is not scoped to the exhibit, so a Card/TeamCard
  * created for the same user in another exhibit while this page is open is pushed onto
- * the wall by SignalR (reported as an app bug against
- * `signalr.service.ts#addCardHandlers`/`addTeamCardHandlers`).
+ * the wall by SignalR (pending upstream:
+ * `signalr.service.ts#addCardHandlers`/`addTeamCardHandlers` accept Card and TeamCard
+ * events for exhibits other than the one being viewed).
  */
 const SEEDED_CARD = /^Test Card [123]$/;
 test.describe('Wall View Functionality', () => {

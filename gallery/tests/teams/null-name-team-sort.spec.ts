@@ -18,11 +18,15 @@ import { openExhibitTeamsPanel, teamRowShortNames, teamRowFullNames } from './nu
 
 /**
  * Team Management — sorting the Exhibit Teams list by Full Name with a null-name team
- * present (regression cover for gallery.ui `b3bce54`).
+ * present.
+ *
+ * Pending upstream: `admin-teams`' sort comparator must guard a null `name`. This spec
+ * asserts the guarded behaviour, so it fails until that change reaches the Gallery UI build
+ * under test.
  *
  * `Team.Name` is nullable in the API (`Gallery.Api.Data/Models/Team.cs`) and the
  * generated Angular client types it `string | null | undefined`, so a team really can
- * carry a null name. `admin-teams.component.ts`'s `sortTeams()` used to compare
+ * carry a null name. `admin-teams.component.ts`'s `sortTeams()` compares
  * `a.name.toLowerCase() < b.name.toLowerCase()` unguarded in its `case 'name'`, which
  * throws `TypeError: Cannot read properties of null (reading 'toLowerCase')` the moment
  * such a team reaches the comparator.
@@ -33,13 +37,10 @@ import { openExhibitTeamsPanel, teamRowShortNames, teamRowFullNames } from './nu
  * entire list disappears, not just the offending row. It is confined to the exhibit that
  * holds the null-name team, though: `getFilteredTeams()` filters on
  * `t.exhibitId === this.exhibitId` *before* the array reaches the comparator, so a sibling
- * exhibit's panel never sees the bad row. (`b3bce54`'s commit message says "for every
- * exhibit"; that clause overstates the blast radius — the mechanism it describes is
- * otherwise accurate.) That is why the assertions below check both that rows are present
- * *and* that
- * the null-name team is among them: "list is non-empty" is what regresses, and
- * "the null-name row is still listed" is what proves the guard neutralises the null
- * rather than dropping the record.
+ * exhibit's panel never sees the bad row. That is why the assertions below check both that
+ * rows are present *and* that the null-name team is among them: "list is non-empty" is what
+ * regresses, and "the null-name row is still listed" is what proves the guard neutralises
+ * the null rather than dropping the record.
  *
  * `mat-sort-header="name"` sits on the "Full Name" header (`admin-teams.component.html`),
  * so one click on it reaches the comparator. Three teams are seeded — two named, one
@@ -102,8 +103,8 @@ test.describe('Team Management', () => {
     // 1. Click the "Full Name" column header to sort by `name`.
     await teamsRegion.getByRole('button', { name: 'Full Name' }).click();
 
-    // expect: the list still renders every team — pre-fix, the comparator threw and
-    // `sortedTeams` was never reassigned, leaving the @for loop with nothing to render.
+    // expect: the list still renders every team. Unguarded, the comparator throws and
+    // `sortedTeams` is never reassigned, leaving the @for loop with nothing to render.
     // Asserting the exact expected order (null name first, then Alpha, then Zulu) is
     // strictly stronger than a count: it fails on an empty list, on a dropped row, and
     // on a sort that silently did not happen.

@@ -191,9 +191,8 @@ Gallery is a content management application for the Crucible cybersecurity train
 
 **File:** `tests/wall/foreign-exhibit-teamcard-ignored.spec.ts`
 
-Regression cover for `gallery.ui` `4fc3104`. TeamCard SignalR events fan out beyond the
-exhibit being viewed, so the client filters them by exhibit; a foreign TeamCard must not
-flip a card onto this Wall.
+Pending upstream: TeamCard SignalR events fan out beyond the exhibit being viewed, so the
+client must filter them by exhibit — a foreign TeamCard must not flip a card onto this Wall.
 
 **Steps:**
   1. Seed one collection with two exhibits, view the Wall on exhibit B as a member of B's
@@ -569,9 +568,9 @@ flip a card onto this Wall.
 
 **File:** `tests/exhibits/exhibit-detail-panel-survives-update.spec.ts`
 
-Regression cover for `gallery.ui` `f585bdf`. The exhibits table needs a `trackBy` so a store
-emission patches rows instead of rebuilding them; without it, an expanded row's detail panel
-is destroyed mid-interaction.
+Pending upstream: the exhibits table needs a `trackBy` so a store emission patches rows
+instead of rebuilding them; without it, an expanded row's detail panel is destroyed
+mid-interaction.
 
 **Steps:**
   1. Expand an exhibit row, then expand its 'Exhibit Teams' sub-panel
@@ -585,16 +584,16 @@ is destroyed mid-interaction.
 
 **File:** `tests/exhibits/null-name-card-teams-panel.spec.ts`
 
-Regression cover for `gallery.ui` `db05d15`, on the "Card Teams" sub-panel of an expanded
-exhibit row — the sibling of "Exhibit Teams". `Team.name` and `Card.name` are both nullable
-and `POST /api/teams` and `POST /api/cards` each accept a null one, so neither the sort
-comparator nor the search predicate may assume a name is present. Companion to 13.4/13.5,
-which cover the same class of defect in the Exhibit Teams panel.
+Pending upstream: on the "Card Teams" sub-panel of an expanded exhibit row — the sibling of
+"Exhibit Teams" — neither the sort comparator nor the search predicate may assume a name is
+present. `Team.name` and `Card.name` are both nullable and `POST /api/teams` and
+`POST /api/cards` each accept a null one. Companion to 13.4/13.5, which cover the same class
+of behaviour in the Exhibit Teams panel.
 
-Pre-fix the failure is not a degraded row: the `TypeError` reaches Angular's global
-`ErrorHandler`, which opens a modal error sheet over the whole Administration screen, and it
-does so on row expansion alone. Both tests seed their own collection so the malformed
-records never touch the shared exhibit.
+The failure is not a degraded row: the `TypeError` reaches Angular's global `ErrorHandler`,
+which opens a modal error sheet over the whole Administration screen, and it does so on row
+expansion alone. Both tests seed their own collection so the malformed records never touch
+the shared exhibit.
 
 **Steps:**
   1. Seed an exhibit with three TeamCards — one fully named, one whose team `name` is null,
@@ -1020,8 +1019,8 @@ records never touch the shared exhibit.
 
 **File:** `tests/teams/null-name-team-sort.spec.ts`
 
-Regression cover for `gallery.ui` `b3bce54`. `Team.name` is nullable and `POST /api/teams`
-accepts a null one, so the sort comparator must not assume it is present.
+Pending upstream: `Team.name` is nullable and `POST /api/teams` accepts a null one, so the
+sort comparator must not assume it is present.
 
 **Steps:**
   1. Seed an exhibit with two named teams and one whose `name` is null, then open its
@@ -1035,8 +1034,8 @@ accepts a null one, so the sort comparator must not assume it is present.
 
 **File:** `tests/teams/null-name-team-filter.spec.ts`
 
-Regression cover for `gallery.ui` `5eaa8b2`. Companion to 13.4 for the filter predicate,
-which needs a non-empty search string as well as a null-valued team.
+Pending upstream: companion to 13.4 for the filter predicate, which needs a non-empty search
+string as well as a null-valued team.
 
 **Steps:**
   1. Seed teams with a null `name` and with a null `shortName`, then open the Exhibit Teams

@@ -17,10 +17,11 @@ import { getUserToken } from '../../../keycloak-admin';
  *    Owning the exhibit means the mutation dies with the fixture.
  *  - `seededExhibit` names its cards/articles identically in every worker, and the
  *    Wall/Archive Card, TeamCard and UserArticle stores are not scoped to the exhibit
- *    (app bug against `signalr.service.ts#addCardHandlers`, `addTeamCardHandlers` and
- *    `addUserArticleHandlers`), so a parallel worker's 'Intel Article 1' gets pushed into
- *    this page's list and a name-based locator resolves to two cards. Uniquely-named
- *    cards and articles make every assertion exact, including the tab-title count.
+ *    (pending upstream: `signalr.service.ts#addCardHandlers`, `addTeamCardHandlers` and
+ *    `addUserArticleHandlers` accept events for exhibits other than the one being
+ *    viewed), so a parallel worker's 'Intel Article 1' gets pushed into this page's list
+ *    and a name-based locator resolves to two cards. Uniquely-named cards and articles
+ *    make every assertion exact, including the tab-title count.
  * `afterEach` deletes exactly the ids created — never a name-prefix purge, which would
  * take out data other specs are using concurrently.
  *

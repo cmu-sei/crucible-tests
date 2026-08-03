@@ -23,9 +23,12 @@ import {
 
 /**
  * Wall View Functionality — a TeamCard belonging to another exhibit's team must not
- * flip a card onto the Wall of the exhibit being viewed (regression cover for
- * gallery.ui `4fc3104`, the last of the `023e011` → `8b85554` → `4fc3104` series on
- * `isTeamCardInActiveExhibit`).
+ * flip a card onto the Wall of the exhibit being viewed.
+ *
+ * Pending upstream: `isTeamCardInActiveExhibit` must reject a TeamCard whose team belongs to
+ * another exhibit, including when the team store holds an authoritative empty load for the
+ * active exhibit. This spec asserts the corrected behaviour, so it fails until that change
+ * reaches the Gallery UI build under test.
  *
  * ## Why a foreign TeamCard reaches this browser at all
  *
@@ -58,21 +61,20 @@ import {
  *      active exhibit.
  *
  * **This spec pins branch 3's reject arm, not branch 2.** That is a deliberate choice
- * forced by what is reachable, and it is the arm `4fc3104` actually changed: branch 2
- * is byte-for-byte identical between `8b85554` and `4fc3104`, so a spec covering
- * branch 2 could not distinguish the two commits. Branch 2 is also unreachable for a
- * *foreign* team here, because `8b85554` added the matching `isTeamInActiveExhibit`
- * filter to the `TeamCreated`/`TeamUpdated` handlers — a foreign team can no longer
- * enter the team store while an exhibit is active, so a foreign TeamCard's team is
- * never resolvable and always falls through to branch 3.
+ * forced by what is reachable: branch 3 is the arm the pending change corrects, and
+ * branch 2 already behaves correctly, so a spec covering branch 2 would pass either way.
+ * Branch 2 is also unreachable for a *foreign* team here, because the
+ * `TeamCreated`/`TeamUpdated` handlers carry the matching `isTeamInActiveExhibit` filter —
+ * a foreign team cannot enter the team store while an exhibit is active, so a foreign
+ * TeamCard's team is never resolvable and always falls through to branch 3.
  *
  * The state branch 3 must reject is an **authoritative empty** team load:
  * `TeamService.GetMineByExhibitAsync` returns `[]` for a user who is not on any team
  * of the requested exhibit, so `loadMine(B)` succeeds, sets the store empty, and
- * records `loadedExhibitId = B`. That is a steady state, not a transient one. Pre-fix
- * the fallback asked `teamQuery.hasEntity(t => t.exhibitId === B)`, which is false for
- * an empty store, so the negation **accepted every foreign TeamCard** for as long as
- * the user stayed on B. Post-fix the marker reads B and the event is rejected.
+ * records `loadedExhibitId = B`. That is a steady state, not a transient one. The current
+ * fallback asks `teamQuery.hasEntity(t => t.exhibitId === B)`, which is false for an empty
+ * store, so the negation **accepts every foreign TeamCard** for as long as the user stays
+ * on B. Consulting the `loadedExhibitId` marker instead reads B and rejects the event.
  *
  * ## How the state is reached through the UI
  *
@@ -107,8 +109,8 @@ import {
  *     spec is meaningless if the frame never arrives, so it is asserted rather than
  *     assumed.
  *   - **Foreign-card precondition** asserts the foreign `CardUpdated` also arrived, so the
- *     leaked TeamCard has a card to flip. Without this the spec passes against the
- *     *pre-fix* predicate — verified by experiment. See the assertion at step 5.
+ *     leaked TeamCard has a card to flip. Without this the spec passes even against the
+ *     unguarded predicate — verified by experiment. See the assertion at step 5.
  *   - **Ordering guard** renames the local card *after* the foreign event and waits for
  *     the new title. SignalR preserves frame order on one connection, so once the
  *     rename has rendered, the foreign frame's handler has already run. The final
@@ -120,9 +122,9 @@ import {
  *
  * The closing assertion is `toHaveText([...])` on the exact title list, which fails on
  * a leaked extra card *and* on a wrongly-dropped legitimate one. Verified both ways by
- * rebuilding `dist/browser` (which `:4723` serves via `npx serve`): with the pre-fix
+ * rebuilding `dist/browser` (which `:4723` serves via `npx serve`): with the
  * `!teamQuery.hasEntity(...)` fallback the foreign card leaks onto B's Wall and this
- * fails with two cards; with `4fc3104` it stays at one.
+ * fails with two cards; with the `loadedExhibitId` check it stays at one.
  *
  * Seeds its own collection, since it needs two exhibits sharing one collection and
  * mutates team membership. Deleting the collection cascades to both exhibits, both
@@ -238,8 +240,8 @@ test.describe('Wall View Functionality', () => {
 
     // 5. Put the foreign card into B's card store. `CardUpdated` is filtered only by
     //    collection (`isCardInActiveExhibit`), and the collection is shared, so this is
-    //    accepted by design — the card being *present* is not the bug. What must not
-    //    happen is a foreign TeamCard flipping it onto the wall.
+    //    accepted by design — the card being *present* is correct. What must not happen
+    //    is a foreign TeamCard flipping it onto the wall.
     cardFrames.length = 0;
     await apiRenameCard(foreignCard.id, collectionId, foreignCardName, {
       description: 'foreign card, now in the shared collection store',
@@ -250,8 +252,8 @@ test.describe('Wall View Functionality', () => {
     // asserted rather than assumed: `setShownCardList` iterates the card store and looks
     // TeamCards up by `cardId`, so a leaked foreign TeamCard is invisible unless its Card
     // is present too. Verified by experiment — with this step's effect absent, the spec
-    // goes GREEN against the pre-fix predicate, because there is no card for the leaked
-    // TeamCard to flip. If `CardHandler`'s fan-out is ever narrowed, or
+    // goes GREEN even against the unguarded predicate, because there is no card for the
+    // leaked TeamCard to flip. If `CardHandler`'s fan-out is ever narrowed, or
     // `isCardInActiveExhibit` starts rejecting cross-exhibit cards, this assertion fails
     // loudly instead of the spec silently testing nothing.
     await expect
@@ -262,8 +264,8 @@ test.describe('Wall View Functionality', () => {
       .toBeGreaterThan(0);
 
     // 6. THE EVENT UNDER TEST — flip the FOREIGN TeamCard (exhibit A's team) to shown.
-    //    Pre-fix this was accepted into the teamCard store and, because
-    //    `setShownCardList` matches on `cardId` alone, put the foreign card on B's Wall.
+    //    Unguarded this is accepted into the teamCard store and, because
+    //    `setShownCardList` matches on `cardId` alone, puts the foreign card on B's Wall.
     teamCardFrames.length = 0;
     await apiSetTeamCardShownOnWall(foreignTeamCard.id, teamA.id, foreignCard.id, true);
 
@@ -276,7 +278,7 @@ test.describe('Wall View Functionality', () => {
     const localCardRenamed = `Foreign TC Local Renamed ${suffix}`;
     await apiRenameCard(localCard.id, collectionId, localCardRenamed);
     // `toContainText` rather than the exact list: this wait exists only to establish
-    // ordering, and pre-fix the leaked foreign card is also on the wall by now. Asserting
+    // ordering, and unguarded the leaked foreign card is also on the wall by now. Asserting
     // the exact list here would fail at this line, which reads as "the rename never
     // arrived" rather than "a foreign card leaked" — the property assertion below is
     // where that failure belongs.
@@ -292,8 +294,8 @@ test.describe('Wall View Functionality', () => {
     ).not.toHaveLength(0);
 
     // expect: the Wall shows ONLY B's own card. The exact-list form fails both on a
-    // leaked foreign card (the pre-fix behaviour, which rendered two cards here) and on
-    // a fix that over-corrected and dropped B's legitimate TeamCard.
+    // leaked foreign card (the unguarded behaviour, which rendered two cards here) and on
+    // an over-corrected predicate that dropped B's legitimate TeamCard.
     await expect(wallCardTitles).toHaveText([localCardRenamed]);
   });
 });
