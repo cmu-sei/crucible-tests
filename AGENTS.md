@@ -133,26 +133,45 @@ These live at the root (not inside any app dir) because multiple apps use them. 
 - Tests must be independent; the config runs serially but depends on no ordering.
 - **Every test must clean up the data it seeds** — see "Test data hygiene" below.
 - Long-running waits should use the fixture-level timeouts already configured — don't override `actionTimeout`/`navigationTimeout` per call without a reason.
-- When re-enabling a `test.skip(...)`, check the "Skipped tests" table in `README.md` for the upstream tracking issue — some skips are waiting on service-side fixes.
+- When re-enabling a `test.skip(...)`, read the comment above it first — some skips are waiting on a service-side fix and should stay skipped until it lands.
 - **Never adjust a test to work around an app bug just to make it pass.** If you believe
   you've found a legitimate defect in an app's API or UI, document it — see "App bug
   reporting" below — and either assert the actual (buggy) behavior with a comment
-  explaining why, or `test.skip(...)` with a pointer to the writeup. Do not silently
+  explaining why, or `test.skip(...)` with a `Pending upstream:` comment. Do not silently
   loosen an assertion, add a retry, or change a selector to mask a real product bug.
 
 ### App bug reporting (REQUIRED)
 
 When you find a legitimate bug in an app's API or UI (not a test bug), write it up in
-`{app}/{app}-app-bugs.md`.
+`{app}/{app}-app-bugs.md`. **These writeups are gitignored (`*-app-bugs.md`) and exist
+for internal review only** — they are scratch notes for whoever is triaging the suite, not
+a tracked artifact. Never commit one, never link to one from committed files, and never
+assume a reader has it: anything a future maintainer needs in order to understand a test
+must be written in the test itself.
+
 Verify the bug from source and/or the running stack before recording it; don't record a
 bug inferred from a test failure alone. Each entry should include what's wrong, where
 (source file/line if known), and what test(s) are affected or pinned to it.
 
+- **Test comments must not reference bug numbers or the writeup file.** The numbering is
+  local to an untracked file, so `// GAL-3` or `// see gallery-app-bugs.md` is dead
+  weight to everyone but you. Instead, describe the pending app-side change inline:
+
+  ```ts
+  // Pending upstream: the API's error payload casing doesn't match what the UI reads, so
+  // the dialog shows its generic fallback message. Asserting the generic text until the
+  // payload is fixed, at which point this should assert the specific message.
+  ```
+
+  Use the `Pending upstream: <what is pending>` prefix whenever a test is skipped, or
+  asserts something other than the correct behavior, because the app has to change first.
+  A reader should be able to tell from the comment alone what would need to happen for the
+  test to be rewritten — no external lookup.
 - If the bug blocks a documented test-plan scenario, `test.skip(...)` the spec with a
-  comment pointing at the relevant entry, and add a row to the "Skipped tests" table in
-  `README.md`.
+  `Pending upstream:` comment. The comment above the skip is the only record a future
+  maintainer gets, so it must name the defect and the condition for re-enabling.
 - If the app is merely wrong but still testable, assert the actual behavior and say so in
-  a comment so the assertion reads as deliberate, not an oversight.
+  a `Pending upstream:` comment so the assertion reads as deliberate, not an oversight.
 - This documentation is the deliverable for a suspected app bug — do not modify
   application source to "fix" it from this repo (see "Source repositories" above), and do
   not rewrite the test to avoid exercising the buggy path.
