@@ -39,7 +39,24 @@ export async function authenticateSteamfitterWithKeycloak(
 // ========================================================================
 
 /**
- * Get a Keycloak access token for the Steamfitter API.
+ * Module-level cache for the Steamfitter API token, keyed by nothing (this suite
+ * only ever authenticates as admin/admin). Every seed/cleanup helper below opens
+ * its own short-lived `APIRequestContext`, so without this cache a test calling
+ * several helpers in sequence would pay for a Keycloak password-grant round trip
+ * per call. `expiresAt` is read from the token's own `exp` claim, minus a 5s
+ * safety margin so a token doesn't expire mid-request.
+ */
+let cachedToken: { token: string; expiresAt: number } | null = null;
+
+function decodeJwtExpiryMs(token: string): number {
+  const payload = token.split('.')[1];
+  const { exp } = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+  return exp * 1000;
+}
+
+/**
+ * Get a Keycloak access token for the Steamfitter API, reusing a cached token
+ * until shortly before it expires.
  *
  * The API validates against the `steamfitter` scope/audience (see the API's
  * appsettings `AuthorizationScope: "steamfitter player player-vm"`), so request
@@ -47,6 +64,10 @@ export async function authenticateSteamfitterWithKeycloak(
  * supports the resource-owner password grant in this dev environment.
  */
 export async function getSteamfitterApiToken(apiContext: APIRequestContext): Promise<string> {
+  if (cachedToken && cachedToken.expiresAt > Date.now()) {
+    return cachedToken.token;
+  }
+
   const tokenResponse = await apiContext.post(
     `${Services.Keycloak}/realms/crucible/protocol/openid-connect/token`,
     {
@@ -68,7 +89,8 @@ export async function getSteamfitterApiToken(apiContext: APIRequestContext): Pro
   }
 
   const data = await tokenResponse.json();
-  return data.access_token;
+  cachedToken = { token: data.access_token, expiresAt: decodeJwtExpiryMs(data.access_token) - 5000 };
+  return cachedToken.token;
 }
 
 /**
@@ -146,7 +168,7 @@ export async function apiDeleteScenarioTemplate(scenarioTemplateId: string): Pro
  * real/operator templates are untouched. Returns the number removed.
  */
 export async function deleteScenarioTemplatesByPrefix(
-  prefixes: string[] = ['E2E ', 'Test Scenario Template', 'Updated Test Scenario Template', 'Copy of ']
+  prefixes: string[] = ['E2E ', 'Test Scenario Template', 'Updated Test Scenario Template']
 ): Promise<number> {
   const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
   try {
@@ -750,7 +772,9 @@ export const test = base.extend<SteamfitterFixtures>({
     // should render the authenticated shell without redirecting to Keycloak.
     await page.goto(Services.Steamfitter.UI, { waitUntil: 'domcontentloaded' });
 
-    const appShell = page.locator('app-root mat-toolbar').first();
+    // Match global-setup.ts's PROVISION entry: only app-topbar's mat-toolbar renders
+    // once the OIDC client has resolved a user, so it's the reliable auth signal.
+    const appShell = page.locator('app-root app-topbar mat-toolbar').first();
     const keycloakField = page.locator('input[name="username"]');
 
     // Race the authenticated shell against a Keycloak login form. The form appears

@@ -43,7 +43,6 @@ test.describe('Group Management in Admin', () => {
     // Isolate and expand the seeded group's row.
     const groupSearch = page.getByRole('textbox', { name: 'Search Groups' });
     await groupSearch.fill(GROUP_NAME);
-    await page.waitForTimeout(500);
     const groupRow = page.locator('tbody tr').filter({ hasText: GROUP_NAME }).first();
     await expect(groupRow).toBeVisible({ timeout: 10000 });
     await groupRow.click();
@@ -55,7 +54,6 @@ test.describe('Group Management in Admin', () => {
 
     // Isolate the seeded member and remove it (DELETEs the membership).
     await membersList.getByRole('textbox', { name: 'Search' }).fill(USER_NAME);
-    await page.waitForTimeout(500);
     await expect(
       membersList.locator('tbody tr').filter({ hasText: USER_NAME }).first()
     ).toBeVisible({ timeout: 10000 });

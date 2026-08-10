@@ -6,7 +6,7 @@
 
 import { test, expect } from '../../fixtures';
 import { seedGroup, deleteGroupsByPrefix } from '../../fixtures';
-import { navigateToAdminSection } from '../../test-helpers';
+import { navigateToAdminSection, respondToConfirmDialog } from '../../test-helpers';
 
 /**
  * A group is deleted from its row via the "Delete <name>" button, which raises a
@@ -30,7 +30,6 @@ test.describe('Group Management in Admin', () => {
     // Isolate the seeded group's row.
     const groupSearch = page.getByRole('textbox', { name: 'Search Groups' });
     await groupSearch.fill(GROUP_NAME);
-    await page.waitForTimeout(500);
     const groupRow = page.locator('tbody tr').filter({ hasText: GROUP_NAME }).first();
     await expect(groupRow).toBeVisible({ timeout: 10000 });
 
@@ -43,15 +42,11 @@ test.describe('Group Management in Admin', () => {
       { timeout: 15000 }
     );
     await groupRow.locator('button:has(mat-icon[fonticon*="trash"])').click();
-
-    const confirmDialog = page.getByRole('dialog').first();
-    await expect(confirmDialog).toBeVisible({ timeout: 5000 });
-    await confirmDialog.getByRole('button', { name: /Yes|Delete|Confirm/i }).click();
+    await respondToConfirmDialog(page, true);
     await deleteResponse;
 
     // The group row should no longer be present.
     await groupSearch.fill(GROUP_NAME);
-    await page.waitForTimeout(500);
     await expect(
       page.locator('tbody tr').filter({ hasText: GROUP_NAME })
     ).toHaveCount(0, { timeout: 10000 });

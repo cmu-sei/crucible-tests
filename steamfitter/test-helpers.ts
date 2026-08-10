@@ -18,6 +18,26 @@ import { Services, waitForFirstVisible } from '../shared-fixtures';
 export type HomeSection = 'Scenarios' | 'Scenario Templates' | 'Tasks' | 'History';
 
 /**
+ * Log in through the Keycloak form currently displayed on `page` and wait for the
+ * redirect back to the Steamfitter host. Shared by {@link navigateToHomeSection}
+ * and {@link navigateToAdminSection}, which each retain this as a safety-net path
+ * for the rare case where the saved storageState is missing/expired.
+ */
+async function handleKeycloakLogin(page: Page): Promise<void> {
+  console.log('Keycloak login page detected during navigation, logging in...');
+  await page.fill('input[name="username"]', 'admin');
+  await page.fill('input[name="password"]', 'admin');
+  try {
+    await page.click('button:has-text("Sign In")', { timeout: 2000 });
+  } catch {
+    await page.click('input[type="submit"]');
+  }
+  const appHost = new URL(Services.Steamfitter.UI).host;
+  await page.waitForURL((navUrl) => navUrl.host === appHost, { timeout: 30000 });
+  await page.waitForLoadState('domcontentloaded');
+}
+
+/**
  * Navigate to a Steamfitter home section (Scenarios, Scenario Templates, Tasks,
  * History) by setting the `tab` query param, and wait for the section's content
  * to render.
@@ -34,20 +54,6 @@ export async function navigateToHomeSection(
   section: HomeSection = 'Scenario Templates'
 ): Promise<void> {
   const url = `${Services.Steamfitter.UI}/?tab=${encodeURIComponent(section)}`;
-
-  const handleKeycloakLogin = async () => {
-    console.log('Keycloak login page detected during navigation, logging in...');
-    await page.fill('input[name="username"]', 'admin');
-    await page.fill('input[name="password"]', 'admin');
-    try {
-      await page.click('button:has-text("Sign In")', { timeout: 2000 });
-    } catch {
-      await page.click('input[type="submit"]');
-    }
-    const appHost = new URL(Services.Steamfitter.UI).host;
-    await page.waitForURL((navUrl) => navUrl.host === appHost, { timeout: 30000 });
-    await page.waitForLoadState('domcontentloaded');
-  };
 
   await page.goto(url, { waitUntil: 'domcontentloaded' });
 
@@ -67,7 +73,7 @@ export async function navigateToHomeSection(
   );
 
   if (winner === 'keycloak') {
-    await handleKeycloakLogin();
+    await handleKeycloakLogin(page);
     await expect(sectionTrigger).toBeVisible({ timeout: 20000 });
   } else if (winner === null) {
     throw new Error(
@@ -102,20 +108,6 @@ export async function navigateToAdminSection(
 ): Promise<void> {
   const url = `${Services.Steamfitter.UI}/admin?section=${encodeURIComponent(section)}`;
 
-  const handleKeycloakLogin = async () => {
-    console.log('Keycloak login page detected during navigation, logging in...');
-    await page.fill('input[name="username"]', 'admin');
-    await page.fill('input[name="password"]', 'admin');
-    try {
-      await page.click('button:has-text("Sign In")', { timeout: 2000 });
-    } catch {
-      await page.click('input[type="submit"]');
-    }
-    const appHost = new URL(Services.Steamfitter.UI).host;
-    await page.waitForURL((navUrl) => navUrl.host === appHost, { timeout: 30000 });
-    await page.waitForLoadState('domcontentloaded');
-  };
-
   await page.goto(url, { waitUntil: 'domcontentloaded' });
 
   // The admin sidebar renders an "Administration" heading once permissions load; race
@@ -133,7 +125,7 @@ export async function navigateToAdminSection(
   );
 
   if (winner === 'keycloak') {
-    await handleKeycloakLogin();
+    await handleKeycloakLogin(page);
     await expect(adminHeading).toBeVisible({ timeout: 20000 });
   } else if (winner === null) {
     throw new Error(
@@ -161,8 +153,6 @@ export async function findHomeRowByText(page: Page, text: string) {
       .catch(() => false)
   ) {
     await searchField.fill(text);
-    // The filter applies on input with no debounce; give the slice a tick to render.
-    await page.waitForTimeout(300);
   }
   return page.locator('tbody tr.element-row').filter({ hasText: text }).first();
 }
