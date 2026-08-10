@@ -52,6 +52,13 @@ const PROVISION: ProvisionTarget[] = [
     // reliable "authenticated shell is up" marker for CITE.
     appShellSelector: 'app-root mat-toolbar',
   },
+  {
+    app: 'steamfitter',
+    homeUrl: Services.Steamfitter.UI,
+    // app-topbar's mat-toolbar renders only after the OIDC client resolves a user,
+    // so it is a reliable "authenticated shell is up" marker for Steamfitter.
+    appShellSelector: 'app-root app-topbar mat-toolbar',
+  },
 ];
 
 /**

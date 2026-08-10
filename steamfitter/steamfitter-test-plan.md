@@ -2,7 +2,7 @@
 
 ## Application Overview
 
-Steamfitter is a scenario execution service within the Crucible cybersecurity training platform. It enables content developers to create and manage scenarios consisting of scheduled tasks, manual tasks, and injects that run against virtual machines during training events. The application integrates with StackStorm for task execution and uses Keycloak for authentication. The UI is built with Angular and provides four major functional sections: Scenario Templates (reusable task groups), Scenarios (live instances of templates), Tasks (ad hoc task execution), and History (task execution results). The application supports role-based access control with system roles (Administrator, Content Developer, Observer) and granular permissions for managing scenario templates, scenarios, users, groups, and roles.
+Steamfitter is a scenario execution service within the Crucible cybersecurity training platform. It enables content developers to create and manage scenarios consisting of scheduled tasks, manual tasks, and injects that run against virtual machines during training events. Tasks that target virtual machines execute through the Player VM API (supporting both Proxmox and vSphere providers); the application uses Keycloak for authentication. The UI is built with Angular and provides four major functional sections: Scenario Templates (reusable task groups), Scenarios (live instances of templates), Tasks (ad hoc task execution), and History (task execution results). The application supports role-based access control with system roles (Administrator, Content Developer, Observer) and granular permissions for managing scenario templates, scenarios, users, groups, and roles.
 
 ## Test Scenarios
 
@@ -269,7 +269,7 @@ Steamfitter is a scenario execution service within the Crucible cybersecurity tr
   4. Enter task description
     - expect: The description field accepts the input
   5. Select an Action from the dropdown (e.g., 'Power On VM')
-    - expect: The action dropdown lists available StackStorm actions
+    - expect: The action dropdown lists the available actions from the API (e.g., 'Power on a VM')
     - expect: The selected action is applied to the task
   6. Select 'Manual' as the Trigger Condition
     - expect: The trigger condition is set to Manual
@@ -527,7 +527,7 @@ Steamfitter is a scenario execution service within the Crucible cybersecurity tr
     - expect: The task begins execution
     - expect: A loading or progress indicator appears (if implemented)
     - expect: After execution, the task result is displayed
-    - expect: The result shows the output from StackStorm and indicates success or failure
+    - expect: The result shows the output returned from the task execution and indicates success or failure
   3. Expand the task to view detailed results
     - expect: The task details show each execution result
     - expect: Each result includes timestamp, status, and output text
@@ -547,7 +547,7 @@ Steamfitter is a scenario execution service within the Crucible cybersecurity tr
   3. Review the task result details
     - expect: The actual output is compared against the expected output (if configured)
     - expect: Success/failure status is clearly indicated
-    - expect: The full output text from StackStorm is visible
+    - expect: The full output text from the task execution is visible
 
 #### 5.10. Scenario Cannot Start Without View
 
@@ -1318,46 +1318,188 @@ Steamfitter is a scenario execution service within the Crucible cybersecurity tr
     - expect: The focus indicator is clearly visible and not removed by CSS
     - expect: The indicator helps keyboard users identify their current position
 
-### 14. Integration with Player and StackStorm
+### 14. Player VM API Integration (Proxmox and vSphere)
 
 **Seed:** `tests/seed.spec.ts`
 
-#### 14.1. Task Execution Uses StackStorm Actions
+Steamfitter no longer integrates with StackStorm. All VM-targeted tasks execute
+through the **Player VM API** (`Services.PlayerVM.API`). For each target VM,
+Steamfitter resolves the VM's provider from the Player VM API (`vSphere` or
+`Proxmox`) and dispatches the action to the provider-specific endpoint. The two
+providers differ in ways these tests must account for:
 
-**File:** `tests/steamfitter/integration-with-player-and-stackstorm/task-execution-uses-stackstorm-actions.spec.ts`
+- **Guest credentials.** vSphere guest actions (run command, read file, upload
+  file) require a guest `Username`/`Password`. The equivalent Proxmox actions run
+  through the QEMU guest agent and do **not** take a guest username/password.
+- **Snapshots.** The "Include RAM" option maps to vSphere `includeMemory` and to
+  Proxmox `vmstate`; snapshot identifiers are a vSphere moRef value vs. a Proxmox
+  snapshot name.
+- **Actions available in the UI** come from the API's `availableCommands`
+  endpoint (VM actions: "Power on a VM", "Power off a VM", "Run a command on the
+  guest VM", "Read a file from a guest VM", "Upload a … file to a guest VM",
+  "Create/Revert/Delete a VM snapshot"). There is no StackStorm action list.
+
+**Provider availability.** These tests require at least one real, powered-on VM of
+the relevant provider in the associated Player view. A provider-specific test
+(`*-proxmox-*` / `*-vsphere-*`) must resolve a matching VM from the view via the
+Player VM API and **`test.skip()` with a clear reason when no VM of that provider
+is present** in the current environment, rather than failing. Prefer selecting a
+VM by its id (`Moid` guid) resolved from the view over a name mask, so the test
+targets exactly the intended provider VM.
+
+**Test data hygiene.** Scenarios, scenario templates, tasks, and any snapshots
+these tests create must be torn down in `afterEach`/`afterAll` (or `try/finally`
+for API-only setup) even on failure — see "Test data hygiene (REQUIRED)" in the
+repo `CLAUDE.md`. Snapshot-create tests must delete the snapshot they created;
+power-state tests should restore the VM to its original power state.
+
+#### 14.1. Available VM Actions Come from Player VM API
+
+**File:** `tests/steamfitter/player-vm-api-integration/available-vm-actions-list.spec.ts`
 
 **Steps:**
-  1. Create a task with a StackStorm action (e.g., Power On VM)
-    - expect: The action dropdown lists available StackStorm actions
+  1. Open the task creation/edit form on a scenario template
+    - expect: The Action dropdown is populated from the API's available commands
+    - expect: The VM actions are present: 'Power on a VM', 'Power off a VM', 'Run a command on the guest VM (and capture output)', 'Read a file from a guest VM', 'Upload a text file to a guest VM', 'Create a VM snapshot', 'Revert a VM to a snapshot', 'Delete a VM snapshot'
+    - expect: No StackStorm-specific action list or StackStorm configuration is present anywhere in the form
+  2. Select a VM action (e.g., 'Power on a VM')
+    - expect: The form reveals a VM selection control (the action is flagged as requiring a VM)
     - expect: The selected action is saved with the task
-  2. Start a scenario and execute the task
-    - expect: The task is sent to StackStorm for execution
-    - expect: StackStorm processes the action against the target VM(s)
-    - expect: The result returned from StackStorm is displayed in Steamfitter
-    - expect: The integration with StackStorm is seamless and transparent to the user
 
 #### 14.2. Player View Association Enables VM Access
 
-**File:** `tests/steamfitter/integration-with-player-and-stackstorm/player-view-association-enables-vm-access.spec.ts`
+**File:** `tests/steamfitter/player-vm-api-integration/player-view-association-enables-vm-access.spec.ts`
 
 **Steps:**
-  1. Create a scenario and associate it with a Player view
+  1. Create a scenario and associate it with a Player view that contains VMs
     - expect: The view dropdown shows Player views
     - expect: The selected view is associated with the scenario
   2. View the VMs available for the scenario
-    - expect: The scenario has access to the VMs in the associated Player view
-    - expect: VM names from the Player view are displayed
-    - expect: Tasks can target these VMs using VM masks
+    - expect: The VM list is populated from the Player VM API for the associated view
+    - expect: VM names (and provider, where the UI exposes it) from the view are displayed
+    - expect: Tasks can target these VMs by id (Moid) or by VM mask
 
-#### 14.3. Task Results Reflect VM Command Output
+#### 14.3. Power On/Off a Proxmox VM via Player VM API
 
-**File:** `tests/steamfitter/integration-with-player-and-stackstorm/task-results-reflect-vm-command-output.spec.ts`
+**File:** `tests/steamfitter/player-vm-api-integration/power-proxmox-vm.spec.ts`
+
+**Precondition:** A Proxmox VM exists in the associated Player view. Skip with a
+reason if none is available.
 
 **Steps:**
-  1. Execute a task that runs a command on a VM
-    - expect: The task executes via StackStorm
+  1. Resolve a Proxmox-provider VM from the associated view via the Player VM API
+    - expect: A VM whose provider is Proxmox is identified; otherwise the test is skipped
+  2. Create and start a scenario with a manual 'Power off a VM' task targeting that VM (by Moid)
+    - expect: The task is created against the Proxmox VM
+  3. Execute the power-off task
+    - expect: Steamfitter dispatches the request to the Player VM API Proxmox power-off endpoint
+    - expect: The task result reports success
+    - expect: The VM's power state in the Player VM API reflects powered off
+  4. Execute a 'Power on a VM' task against the same VM to restore state
+    - expect: The task result reports success
+    - expect: The VM is returned to its original power state (cleanup)
+
+#### 14.4. Power On/Off a vSphere VM via Player VM API
+
+**File:** `tests/steamfitter/player-vm-api-integration/power-vsphere-vm.spec.ts`
+
+**Precondition:** A vSphere VM exists in the associated Player view. Skip with a
+reason if none is available.
+
+**Steps:**
+  1. Resolve a vSphere-provider VM from the associated view via the Player VM API
+    - expect: A VM whose provider is vSphere is identified; otherwise the test is skipped
+  2. Create and start a scenario with a manual 'Power off a VM' task targeting that VM (by Moid)
+    - expect: The task is created against the vSphere VM
+  3. Execute the power-off task
+    - expect: Steamfitter dispatches the request to the Player VM API vSphere power-off endpoint
+    - expect: The task result reports success
+    - expect: The VM's power state in the Player VM API reflects powered off
+  4. Execute a 'Power on a VM' task against the same VM to restore state
+    - expect: The task result reports success
+    - expect: The VM is returned to its original power state (cleanup)
+
+#### 14.5. Run Guest Command on a vSphere VM (Guest Credentials Required)
+
+**File:** `tests/steamfitter/player-vm-api-integration/guest-command-vsphere-vm.spec.ts`
+
+**Precondition:** A powered-on vSphere VM with a reachable guest OS and known guest
+credentials exists in the associated view. Skip if unavailable.
+
+**Steps:**
+  1. Create a task with the 'Run a command on the guest VM (and capture output)' action targeting the vSphere VM
+    - expect: The form shows guest Username and Password fields (required for vSphere guest actions)
+    - expect: Command, Arguments, Working Directory, and Timeout fields are available
+  2. Enter valid guest Username and Password and a command that produces deterministic output (e.g., echo a known string)
+    - expect: The fields accept the input
+  3. Start the scenario and execute the task
+    - expect: Steamfitter dispatches the request to the Player VM API vSphere run-guest-process endpoint with the supplied credentials
+  4. View the task result
+    - expect: The result includes the actual stdout captured from the guest command
+    - expect: A non-zero guest exit code is surfaced as a failed task with the guest output/error
+    - expect: If an Expected Output was configured, the result indicates whether it matched
+
+#### 14.6. Run Guest Command on a Proxmox VM (No Guest Credentials)
+
+**File:** `tests/steamfitter/player-vm-api-integration/guest-command-proxmox-vm.spec.ts`
+
+**Precondition:** A powered-on Proxmox VM with the QEMU guest agent running exists
+in the associated view. Skip if unavailable.
+
+**Steps:**
+  1. Create a task with the 'Run a command on the guest VM (and capture output)' action targeting the Proxmox VM
+    - expect: Command, Arguments, and Working Directory fields are available
+    - expect: Guest Username/Password are not required for the Proxmox guest command to execute (the guest agent handles it); if the shared form shows them, they may be left blank
+  2. Enter a command that produces deterministic output
+    - expect: The fields accept the input
+  3. Start the scenario and execute the task
+    - expect: Steamfitter dispatches the request to the Player VM API Proxmox run-guest-process endpoint (no guest username/password sent)
+  4. View the task result
+    - expect: The result includes the actual output captured from the guest command
+    - expect: A non-zero guest exit code is surfaced as a failed task with the guest output/error
+
+#### 14.7. VM Snapshot Lifecycle Across Providers
+
+**File:** `tests/steamfitter/player-vm-api-integration/vm-snapshot-lifecycle.spec.ts`
+
+**Precondition:** At least one VM (Proxmox or vSphere) exists in the associated
+view. Run the create → revert → delete flow for whichever provider VMs are
+available; skip a provider's variant when no VM of that provider is present.
+
+**Steps:**
+  1. Create a 'Create a VM snapshot' task targeting the VM with a unique snapshot name and 'Include RAM' set
+    - expect: The Snapshot Name, Description, and Include RAM fields are available
+    - expect: On execute, Steamfitter dispatches to the provider-specific create-snapshot endpoint (vSphere includeMemory / Proxmox vmstate)
+    - expect: The task succeeds and the snapshot identifier is returned in the result
+  2. Create and execute a 'Revert a VM to a snapshot' task using the snapshot identifier from step 1
+    - expect: For vSphere the identifier is the snapshot moRef value; for Proxmox it is the snapshot name
+    - expect: The task succeeds and the VM is reverted
+  3. Create and execute a 'Delete a VM snapshot' task for the same snapshot (cleanup)
+    - expect: The task succeeds
+    - expect: The snapshot no longer exists on the VM (no snapshot is left behind)
+
+#### 14.8. Task Results Reflect Player VM API Output
+
+**File:** `tests/steamfitter/player-vm-api-integration/task-results-reflect-vm-api-output.spec.ts`
+
+**Steps:**
+  1. Execute any VM-targeted task (e.g., a guest command) against an available VM
+    - expect: The task executes via the Player VM API
   2. View the task result details
-    - expect: The result includes the actual output from the VM command
-    - expect: The output text shows what the command returned
-    - expect: If the expected output was configured, the result indicates whether it matched
-    - expect: The integration correctly captures and displays VM command results
+    - expect: The result includes the actual output returned by the Player VM API for the target VM
+    - expect: Each result row shows the target VM, status (success/failure), timestamp, and output text
+    - expect: If an Expected Output was configured, the result indicates whether the actual output matched
+    - expect: The integration correctly captures and displays the VM API output
+
+#### 14.9. Unsupported Provider and VM-Not-Found Handling
+
+**File:** `tests/steamfitter/player-vm-api-integration/vm-dispatch-error-handling.spec.ts`
+
+**Steps:**
+  1. Create and execute a VM-targeted task whose target VM id does not exist in the Player VM API (e.g., a random Moid guid)
+    - expect: The task fails gracefully with an error result
+    - expect: The error indicates the VM could not be resolved / found, not a StackStorm error
+    - expect: The application remains functional after the error
+  2. (If an environment has a VM of a provider that does not support the chosen action) Execute that action against such a VM
+    - expect: The task fails with a clear 'provider does not support operation' style error
+    - expect: The failure is recorded in the task results with the provider and operation named
