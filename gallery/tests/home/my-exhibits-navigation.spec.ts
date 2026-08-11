@@ -9,12 +9,17 @@ import { test, expect, Services } from '../../fixtures';
 /**
  * My Exhibits Landing Page §2.4 — My Exhibits Navigation to Exhibit.
  *
- * Pending upstream: `home-app.component.html:61` must render the exhibit-name link with
- * `[queryParams]="{ exhibit: exhibit.id, section: Section.wall }"` directly, rather than
- * through a `getQueryParams()` call that runs during change detection and overwrites the
- * per-exhibit remembered section as a side effect. Only then does clicking an exhibit's name
- * land on the Wall directly, as test-plan §2.4 requires. This spec asserts that behaviour, so
- * it fails until the change reaches the Gallery UI build under test.
+ * Clicking an exhibit's name opens its **Archive**, not its Wall: the link carries
+ * `section=archive` explicitly (`home-app.component.html:61`,
+ * `[queryParams]="{ exhibit: exhibit.id, section: Section.archive }"`). The plan text
+ * originally said "Wall view" — per the repository owner the Archive is the intended
+ * landing view, and §2.4 of the plan now records that.
+ *
+ * The section used to be applied as a side effect instead: `getQueryParams()` called
+ * `uiDataService.setSection(exhibit.id, Section.archive)` from inside the template binding,
+ * so merely rendering the list overwrote the remembered section of every exhibit in it. The
+ * landing view was the same, but a Wall visit was silently forgotten. That is why this spec
+ * also asserts the section travels on the URL rather than through `localStorage['uiState']`.
  *
  * Read-only with respect to shared Gallery data (no move/inject change, no read toggles), so
  * the worker-scoped `seededExhibit` needs no restoration.
@@ -40,31 +45,46 @@ test.describe('My Exhibits Landing Page', () => {
     await expect(nameLink).toHaveText(seededExhibit.exhibitName);
     await nameLink.click();
 
-    // expect: URL updates to include '?exhibit={exhibitId}' and 'section=wall'.
+    // expect: URL updates to include '?exhibit={exhibitId}' and 'section=archive'.
     await expect(page).toHaveURL(new RegExp(`exhibit=${seededExhibit.exhibitId}`));
+    await expect(page).toHaveURL(/section=archive/);
+
+    // expect: the user lands on the exhibit's Archive view.
+    await expect(page).toHaveTitle(/^Gallery Archive \(\d+\)$/);
+    await expect(page.locator('app-archive')).toBeVisible();
+    await expect(page.locator('app-wall')).toHaveCount(0);
+
+    // expect: The Archive view shows the exhibit's released articles. At the seeded
+    // (move 0, inject 0) position exactly Test Card 1's two articles are released, and
+    // nothing from a later move/inject has been.
+    const articleCards = page.locator('section.cards mat-card');
+    await expect(articleCards.locator('.article-title')).toHaveText([
+      'News Article 1',
+      'Intel Article 1',
+    ]);
+    for (const unreleased of ['Reporting Article 1', 'Social Article 1', 'Orders Article 1']) {
+      await expect(articleCards.filter({ hasText: unreleased })).toHaveCount(0);
+    }
+
+    // 2. The section is carried by the link, not by remembered state: visiting the Wall
+    // and returning to My Exhibits must not change where the link points, and must not
+    // erase the exhibit's remembered section (which is what the old side-effecting
+    // `getQueryParams()` did on every render).
+    await page.getByRole('button', { name: 'Wall' }).click();
+    await expect(page).toHaveTitle('Gallery Wall');
     await expect(page).toHaveURL(/section=wall/);
 
-    // expect: the user lands on the Wall directly (test-plan §2.4).
-    await expect(page).toHaveTitle('Gallery Wall');
-    await expect(page.locator('app-wall')).toBeVisible();
-    await expect(page.locator('app-archive')).toHaveCount(0);
+    await page
+      .locator('app-topbar a[href="/"]')
+      .filter({ has: page.locator('mat-icon[svgicon="crucible-icon-gallery"]') })
+      .click();
+    await expect(page).toHaveTitle('Gallery');
+    await expect(page.getByRole('table')).toBeVisible();
 
-    // expect: The Wall view shows the exhibit's cards with unread article counts.
-    // Scoped to the seeded card names: the Wall's card store is not exhibit-scoped, so a
-    // Card/TeamCard created for the same user in another exhibit while this page is open
-    // is pushed onto the wall by SignalR (pending upstream:
-    // `signalr.service.ts#addCardHandlers`/`addTeamCardHandlers` accept Card and TeamCard
-    // events for exhibits other than the one being viewed).
-    const wallCards = page.locator('section.cards mat-card');
-    await expect(wallCards.locator('mat-card-title').filter({ hasText: /^Test Card [123]$/ }))
-      .toHaveText(['Test Card 1', 'Test Card 2', 'Test Card 3']);
-    // Card 1's two articles are released at the seeded (move 0, inject 0) position, so it
-    // carries the unread count; the later cards report nothing posted yet.
-    await expect(
-      wallCards.filter({ hasText: 'Test Card 1' }).getByRole('heading', { level: 3 })
-    ).toHaveText('2 unread articles');
-    await expect(
-      wallCards.filter({ hasText: 'Test Card 2' }).getByRole('heading', { level: 3 })
-    ).toHaveText('No articles posted');
+    const remembered = await page.evaluate(
+      (id: string) => JSON.parse(localStorage.getItem('uiState') ?? '{}')?.exhibitSection?.[id],
+      seededExhibit.exhibitId
+    );
+    expect(remembered).toBe('wall');
   });
 });

@@ -57,16 +57,17 @@ test.describe('My Exhibits Landing Page', () => {
     const rows = page.locator('mat-row');
     await expect(rows).toHaveCount(1);
     const row = rows.first();
-    // The name cell is an anchor to `/?exhibit={id}&section=wall` — that is what makes it
-    // clickable. The explicit `section=wall` is load-bearing: the link used to carry no
-    // section at all, and `home-app.component.ts#getQueryParams` wrote the remembered
-    // section to `archive` as a side effect of rendering each row, so a click could never
-    // land on the Wall. See `my-exhibits-navigation.spec.ts` for the navigation assertion.
+    // The name cell is an anchor to `/?exhibit={id}&section=archive` — that is what makes
+    // it clickable. The explicit `section=archive` is load-bearing: the link used to carry
+    // no section at all, and `home-app.component.ts#getQueryParams` wrote the section into
+    // `localStorage['uiState']` as a side effect of rendering each row, clobbering every
+    // exhibit's remembered section. See `my-exhibits-navigation.spec.ts` for the
+    // navigation assertion.
     const nameLink = row.locator('.mat-column-name a');
     await expect(nameLink).toHaveText(seededExhibit.exhibitName);
     await expect(nameLink).toHaveAttribute(
       'href',
-      `/?exhibit=${seededExhibit.exhibitId}&section=wall`
+      `/?exhibit=${seededExhibit.exhibitId}&section=archive`
     );
     await expect(row.locator('.mat-column-description')).toHaveText(
       'Auto-seeded exhibit for Playwright tests'

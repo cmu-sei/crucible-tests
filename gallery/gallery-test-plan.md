@@ -117,9 +117,13 @@ Gallery is a content management application for the Crucible cybersecurity train
 
 **Steps:**
   1. Click on an exhibit name link in the table
-    - expect: User is navigated to the exhibit's Wall view
-    - expect: URL updates to include '?exhibit={exhibitId}'
-    - expect: The Wall view shows the exhibit's cards with unread article counts
+    - expect: User is navigated to the exhibit's Archive view
+    - expect: URL updates to include '?exhibit={exhibitId}&section=archive'
+    - expect: The Archive view shows the exhibit's released articles
+  2. Navigate to the Wall, then return to My Exhibits via the Gallery logo
+    - expect: The exhibit name link still points at '?exhibit={exhibitId}&section=archive'
+    - expect: The exhibit's remembered section is still 'wall' — rendering My Exhibits does
+      not overwrite it
 
 ### 3. Wall View Functionality
 
