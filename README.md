@@ -283,19 +283,7 @@ export { expect } from '@playwright/test';
 
 **Note:** Authentication is handled by `authenticateWithKeycloak()` in `shared-fixtures.ts`, which works for all apps. No need to create per-app auth setup files.
 
-## Skipped tests
-
-Some tests are skipped pending fixes in upstream Crucible services. These use `test.skip(...)` with a comment linking to the tracked issue. Check the note in the spec file before re-enabling.
-
-| App | Test | Reason |
-|-----|------|--------|
-| gameboard | `Large Data Set Handling - Leaderboard Pagination` (`gameboard/tests/error-handling/leaderboard-pagination.spec.ts`) | `/api/game/{id}/score` performs per-team queries in a loop and times out at 60s for 120 seeded teams. Blocked on batched-query rewrite of `ScoringService.GetGameScore`. |
-
-A number of Blueprint specs are skipped pending upstream support for the behavior they
-assert. Each one keeps its **correct** assertion in the test body — nothing is deleted,
-weakened, or commented out — so it starts passing as soon as the behavior lands. Each skipped
-assertion has also been verified to fail when un-skipped, since a skip whose assertion is
-wrong covers nothing. See the `test.skip(...)` reason in each spec for what it is waiting on.
+## Running the Blueprint suite
 
 The whole Blueprint suite runs at `--workers 2`. The `admin-inject-types-and-catalogs` specs
 serialize themselves behind a shared lock (`acquireAdminCatalogLock` in

@@ -15,5 +15,8 @@ playwright/.cache/
 # Authentication state
 .auth/
 
+# App bug writeups — internal review only, never committed
+*-app-bugs.md
+
 # Per-user env overrides (loaded last, overrides .env.<target>)
 .env.local
