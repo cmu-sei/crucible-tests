@@ -16,5 +16,8 @@ playwright/.cache/
 .claude/worktrees/
 .playwright-mcp/
 
+# App bug writeups — internal review only, never committed
+*-app-bugs.md
+
 # Per-user env overrides (loaded last, overrides .env.<target>)
 .env.local

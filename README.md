@@ -283,23 +283,6 @@ export { expect } from '@playwright/test';
 
 **Note:** Authentication is handled by `authenticateWithKeycloak()` in `shared-fixtures.ts`, which works for all apps. No need to create per-app auth setup files.
 
-## Skipped tests
-
-Some tests are skipped pending fixes in upstream Crucible services. These use `test.skip(...)` with a comment linking to the tracked issue. Check the note in the spec file before re-enabling.
-
-| App | Test | Reason |
-|-----|------|--------|
-| gameboard | `Large Data Set Handling - Leaderboard Pagination` (`gameboard/tests/error-handling/leaderboard-pagination.spec.ts`) | `/api/game/{id}/score` performs per-team queries in a loop and times out at 60s for 120 seeded teams. Blocked on batched-query rewrite of `ScoringService.GetGameScore`. |
-| gallery | `Edit Existing Article - changes reflected in the archive view` (`gallery/tests/articles/edit-article.spec.ts`) | The archive template never renders `article.status`; it exists only in the filter predicate and sort comparator, so an edit cannot be observed there. The wall half is asserted in full. |
-| gallery | `Article Status Workflow - status displayed in the archive view` (`gallery/tests/articles/article-status.spec.ts`) | Same cause as above — the archive has no status indicator at all. All five statuses are asserted on the wall, which does render them. |
-
-The two Gallery skips in the table above are test-plan limitations — the archive view renders
-no status indicator at all — rather than anything pending upstream.
-
-Where a spec asserts behaviour that the deployed service does not yet provide, its header
-comment says so with a `pending upstream:` note naming what is required. Those specs fail
-until the change reaches the build under test; read the note before treating one as broken.
-
 ## Troubleshooting
 
 - **Services not running** — Start Aspire first via a VS Code launch profile or `aspire run`

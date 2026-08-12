@@ -60,6 +60,13 @@ const PROVISION: ProvisionTarget[] = [
     // mat-toolbar renders before that and would snapshot state without a token.
     appShellSelector: 'app-topbar .options-text button',
   },
+  {
+    app: 'steamfitter',
+    homeUrl: Services.Steamfitter.UI,
+    // app-topbar's mat-toolbar renders only after the OIDC client resolves a user,
+    // so it is a reliable "authenticated shell is up" marker for Steamfitter.
+    appShellSelector: 'app-root app-topbar mat-toolbar',
+  },
 ];
 
 /**
