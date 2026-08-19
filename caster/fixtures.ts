@@ -1,7 +1,7 @@
 // Copyright 2026 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
-import { test as base, Page } from '@playwright/test';
+import { test as base, Locator, Page } from '@playwright/test';
 import fs from 'fs';
 import {
   Services,
@@ -206,6 +206,38 @@ async function deleteCasterProjectByName(page: Page, projectName: string): Promi
 }
 
 /**
+ * Delete all Caster users matching a given name via the API.
+ * Lists all users, finds every one matching the given name, and deletes each.
+ * Matching on `name` (rather than the caller-chosen id) also sweeps up rows left
+ * by a previous run that used a different id for the same test user.
+ */
+async function deleteCasterUserByName(page: Page, userName: string): Promise<number[]> {
+  const { apiUrl, token } = await getCasterApiContext(page);
+  return page.evaluate(
+    async ({ apiUrl, token, userName }) => {
+      const listResp = await fetch(`${apiUrl}/api/users`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!listResp.ok) return [listResp.status];
+      const users = await listResp.json();
+      const matches = users.filter((u: any) => u.name === userName);
+      if (matches.length === 0) return [404];
+
+      const results: number[] = [];
+      for (const user of matches) {
+        const delResp = await fetch(`${apiUrl}/api/users/${user.id}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        results.push(delResp.status);
+      }
+      return results;
+    },
+    { apiUrl, token, userName },
+  );
+}
+
+/**
  * Delete a Caster role by name via the API.
  * Lists all roles, finds the one matching the given name, and deletes it.
  */
@@ -246,6 +278,8 @@ export type CasterFixtures = {
   cleanupCasterPoolByName: (poolName: string) => Promise<void>;
   /** Register a Caster role name to be deleted (pre-cleans leftovers and post-cleans after test) */
   cleanupCasterRole: (roleName: string) => Promise<void>;
+  /** Register a Caster user name to be deleted (pre-cleans leftovers and post-cleans after test) */
+  cleanupCasterUser: (userName: string) => Promise<void>;
 };
 
 const casterStatePath = authStatePath('caster');
@@ -357,6 +391,29 @@ export const test = base.extend<CasterFixtures>({
       }
     }
   },
+  cleanupCasterUser: async ({ page }, use) => {
+    const userNames: string[] = [];
+    await use(async (name: string) => {
+      userNames.push(name);
+      // Pre-clean: try to delete a leftover user from a previous failed run. A
+      // stale row would make the "user appears in the list" assertion pass for
+      // the wrong reason, and its id would collide on create.
+      try {
+        await deleteCasterUserByName(page, name);
+      } catch {
+        // ignore – user may not exist yet
+      }
+    });
+    // Post-clean: delete all registered users by name
+    for (const name of userNames) {
+      try {
+        const statuses = await deleteCasterUserByName(page, name);
+        console.log(`Cleanup: Deleted user(s) "${name}", statuses: ${statuses}`);
+      } catch (e) {
+        console.warn(`Cleanup: Failed to delete user "${name}": ${e}`);
+      }
+    }
+  },
   casterAuthenticatedPage: async ({ page, storageState }, use) => {
     if (storageState === casterStatePath && casterSessionState.length > 0) {
       await page.addInitScript((entries: Array<[string, string]>) => {
@@ -408,6 +465,87 @@ export async function clickAddRoleButton(page: Page): Promise<void> {
   // Final attempt — let it throw with a clear timeout
   await addButton.click();
   await dialog.waitFor({ state: 'visible', timeout: 5000 });
+}
+
+/**
+ * Navigate to the admin Users section and wait for the users table to render.
+ */
+export async function gotoCasterUsersAdmin(page: Page): Promise<void> {
+  await page.goto(Services.Caster.UI + '/admin?section=Users');
+  await page.getByRole('columnheader', { name: 'ID' }).waitFor({ state: 'visible', timeout: 20000 });
+}
+
+/**
+ * Click the Add User button in the ID column header and wait for the modal.
+ * Mirrors clickAddRoleButton: the MatTooltip overlay can swallow the first click.
+ */
+export async function openAddUserDialog(page: Page): Promise<Locator> {
+  const addButton = page.getByRole('button', { name: 'Add User' });
+  const dialog = page.getByRole('dialog', { name: 'Add User' });
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await addButton.click();
+    try {
+      await dialog.waitFor({ state: 'visible', timeout: 3000 });
+      return dialog;
+    } catch {
+      // dialog didn't open — tooltip may have intercepted the click
+    }
+  }
+  // Final attempt — let it throw with a clear timeout
+  await addButton.click();
+  await dialog.waitFor({ state: 'visible', timeout: 5000 });
+  return dialog;
+}
+
+/** Whether Caster is currently rendering the dark theme. */
+export async function casterIsDarkTheme(page: Page): Promise<boolean> {
+  return page.evaluate(() => document.body.classList.contains('darkMode'));
+}
+
+/**
+ * Switch Caster between light and dark theme through the user menu, and wait for
+ * the change to actually land on `document.body`.
+ *
+ * Use the toggle rather than the `?theme=dark` query param: the param is read in
+ * `AppComponent`'s constructor, so it only applies on a fresh app bootstrap and is
+ * a no-op for a client-side navigation within an already-running app (verified
+ * against the running stack — the param left `body.darkMode` unset).
+ *
+ * No-ops when the requested theme is already active, so callers can use it to
+ * restore state unconditionally.
+ */
+export async function setCasterTheme(page: Page, theme: 'light' | 'dark'): Promise<void> {
+  const want = theme === 'dark';
+  if ((await casterIsDarkTheme(page)) === want) return;
+
+  await page.getByRole('button', { name: 'Admin User' }).click();
+  const toggle = page.getByRole('switch', { name: 'Dark Theme' });
+  await toggle.waitFor({ state: 'visible', timeout: 10000 });
+  await toggle.click();
+  // Close the menu so its overlay can't intercept later clicks.
+  await page.keyboard.press('Escape');
+
+  await page
+    .locator('body')
+    .evaluate(
+      (body, expected) =>
+        new Promise<void>((resolve, reject) => {
+          if (body.classList.contains('darkMode') === expected) return resolve();
+          const observer = new MutationObserver(() => {
+            if (body.classList.contains('darkMode') === expected) {
+              observer.disconnect();
+              resolve();
+            }
+          });
+          observer.observe(body, { attributes: true, attributeFilter: ['class'] });
+          setTimeout(() => {
+            observer.disconnect();
+            reject(new Error(`Theme did not become ${expected ? 'dark' : 'light'}`));
+          }, 10000);
+        }),
+      want,
+    );
 }
 
 export { expect } from '@playwright/test';

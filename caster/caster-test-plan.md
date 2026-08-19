@@ -1114,6 +1114,38 @@ Caster is an infrastructure orchestration application within the Crucible cybers
     - expect: User is added to project with specified permissions
     - expect: User can now access this project based on permissions
 
+#### 11.8. Add New User
+
+**File:** `tests/users-and-permissions/add-new-user.spec.ts`
+
+The Add User flow opens a modal built on the shared `crucible-dialog` component from
+`@cmusei/crucible-common`, replacing an inline editable table row. Its structural and
+accessibility contract is covered separately by 17.7.
+
+**Steps:**
+  1. Navigate to the admin Users section and click the Add User button in the ID column header
+    - expect: The Add User modal opens with User ID, Name, and Role fields
+    - expect: Create is disabled while the form is invalid or untouched
+  2. Enter an ID that is not a GUID
+    - expect: An error states the User ID must be a valid GUID
+    - expect: Create remains disabled
+  3. Enter a name shorter than 4 characters
+    - expect: An error states the minimum length
+    - expect: Create remains disabled
+  4. Enter a valid GUID and name
+    - expect: No validation errors remain and Create is enabled
+  5. Select a Role
+    - expect: The seeded system roles (Observer, Content Developer, Administrator) are offered alongside 'None Locally'
+  6. Click Create
+    - expect: The user is created with the id, name, and selected role
+    - expect: The modal closes and the new user appears in the list showing that role
+  7. Reopen the modal, fill it in, and click Cancel
+    - expect: The modal closes, no user is created, and no POST is issued
+    - expect: Reopening presents an empty form
+  8. Fill in valid values and press Enter from a text field
+    - expect: The form submits and the user is created
+    - expect: Role defaults to 'None Locally' when the select is untouched
+
 ### 12. Pools Management
 
 **Seed:** `tests/seed.spec.ts`
@@ -1541,6 +1573,82 @@ Caster is an infrastructure orchestration application within the Crucible cybers
     - expect: Loading indicator disappears
     - expect: Success or error message is displayed
     - expect: UI updates to reflect the completed action
+
+#### 17.7. Add User Modal - Crucible Modal Spec Compliance
+
+**File:** `tests/accessibility/add-user-dialog-modal-spec-compliance.spec.ts`
+
+Asserts that Caster's Add User modal keeps the contract of the shared
+`crucible-dialog` component and the platform modal design specification
+(`design-specs/angular/modals.md` in the crucible-development repository). The
+functional create/cancel behavior is covered by 11.8; this scenario covers structure,
+button conventions, and accessibility so a regression names the rule it broke.
+
+Runs **once per theme (light and dark)**. Everything below is theme-agnostic by
+design, so a rule that holds in light must hold in dark too; the theme-specific
+expectations are 17.8.
+
+**Steps:**
+  1. Open the Add User modal from the admin Users section
+    - expect: The dialog's template root is the shared `crucible-dialog` component (§6b)
+    - expect: Structure is title → content → actions, with an `<h2>` title, all fields inside the content wrapper, and actions aligned end (§2)
+    - expect: A single `<form>` wraps both content and actions (§2b)
+    - expect: No ad-hoc flex action rows (§8)
+  2. Inspect the action buttons
+    - expect: DOM order is Cancel then Create, and Create renders right-most (§3)
+    - expect: Exactly one filled button and one outlined button; no elevated/raised and no `color` attribute (§3)
+    - expect: Labels are Title Case verbs, not ALL-CAPS (§3)
+    - expect: No positive `tabindex` anywhere in the dialog (§3, §7)
+    - expect: The primary is `type="submit"` (§2b)
+  3. Inspect the dialog's accessible name and roles
+    - expect: `role="dialog"` with `aria-labelledby` pointing at the title element (§7)
+    - expect: No hand-added `role="dialog"`/`aria-modal` inside the shared component (§7)
+  4. Check initial focus
+    - expect: Focus lands on the first field, never the disabled primary (§7)
+  5. Tab and Shift+Tab through the dialog
+    - expect: Focus follows DOM order (User ID → Name → Role → Cancel) and reverses correctly (§7)
+    - expect: The focus indicator is not suppressed (§7, WCAG 2.4.7)
+  6. Enter an invalid User ID and blur the field
+    - expect: The `<mat-error>` is wired to the input via `aria-describedby` and `aria-invalid="true"` (§7)
+    - expect: The message names the field and describes the fix (§7)
+    - expect: Error color comes from the `--mat-sys-error` token, not a literal hex (§5)
+  7. Inspect computed styling
+    - expect: The dialog font resolves to the theme's body-font token (§4)
+    - expect: Content padding is inherited from the Material wrapper and the body scrolls (§5)
+    - expect: No inline `style` attributes in the dialog (§8)
+    - expect: Width respects the viewport (§5)
+  8. Press Escape, then click the backdrop
+    - expect: The dialog stays open both times — `guardUnsavedWork` protects in-progress input, leaving Cancel as the deliberate way out (§7)
+  9. Run axe against the open dialog
+    - expect: No violations of dialog-name, label, button-name, ARIA-value, or ARIA-input-name rules (§7, §9)
+    - note: `color-contrast` is excluded — Caster fails it theme-wide (the branding colour overwrites `--mat-sys-primary`, and `--mat-sys-error` is hardcoded in `.darkMode`), so including it would make this spec permanently red for defects the modal does not own; the modal's own colour requirements are asserted in 17.8
+  10. Close via Cancel
+    - expect: Focus returns to the Add User button that opened the dialog (§7)
+
+#### 17.8. Add User Modal - Light and Dark Theming
+
+**File:** `tests/accessibility/add-user-dialog-theming.spec.ts`
+
+The modal spec requires dialogs to take their colours from M3 system tokens so both
+themes are correct automatically, and to be spot-checked in light and dark (§5, §7,
+§10). 17.7 runs the theme-agnostic rules in both themes; this scenario asserts what is
+specific to theming. Contrast is computed directly rather than delegated to axe, whose
+`color-contrast` rule is permanently red on Caster for theme defects the modal does not
+own.
+
+**Steps:**
+  1. Open the modal in light theme, sample its colours, then repeat in dark theme
+    - expect: The CDK overlay inherits the theme in both cases (it is appended outside the app root, so a dialog could otherwise render light-on-light in a dark app)
+  2. Compare the two samples
+    - expect: Text colour and painted surface both differ between themes — identical samples would mean the colours are hardcoded
+    - expect: The inversion runs the right way: dark text on a light surface in light theme, light text on a dark surface in dark theme
+  3. Check each theme's text against its surface
+    - expect: The dialog's text colour tracks `--mat-sys-on-surface` rather than being set per dialog (§5)
+    - expect: Body text meets 4.5:1 and the title meets 3:1 (WCAG 1.4.3)
+  4. Trigger a validation error and measure its contrast in both themes
+    - expect: The error colour differs between themes (M3 ships a light/dark pair)
+    - expect: The error text meets 4.5:1 in both themes
+    - **pending upstream (dark):** measures 2.01:1 against a build where Caster's `styles.scss` hardcodes `--mat-sys-error` inside `.darkMode`, overriding the generated `light-dark()` pair; the generated dark tone gives 7.66:1. Asserts the requirement, not the bug — deleting that line in Caster is the whole fix.
 
 ### 18. Performance and Optimization
 
