@@ -498,6 +498,91 @@ export async function openAddUserDialog(page: Page): Promise<Locator> {
   return dialog;
 }
 
+/**
+ * The groups-table cell for exactly this group name.
+ *
+ * Exact matching is deliberate: `getByRole` name matching is substring-based by
+ * default, and these suites use names like "Bulk Delete 1" / "Bulk Delete 2"
+ * where a substring match would silently resolve the wrong row.
+ */
+export function casterGroupCell(page: Page, name: string): Locator {
+  return page.getByRole('cell', { name, exact: true });
+}
+
+/**
+ * Navigate to the admin Groups section and wait for the groups table to render.
+ */
+export async function gotoCasterGroupsAdmin(page: Page): Promise<void> {
+  await page.goto(Services.Caster.UI + '/admin?section=Groups');
+  await page
+    .getByRole('columnheader', { name: 'Group Name' })
+    .waitFor({ state: 'visible', timeout: 20000 });
+}
+
+/**
+ * Click the "+" button in the groups table header and wait for the create modal.
+ * Mirrors clickAddRoleButton: the MatTooltip overlay can swallow the first click.
+ */
+export async function openCreateGroupDialog(page: Page): Promise<Locator> {
+  const addButton = page.getByRole('table').getByRole('button').first();
+  const dialog = page.getByRole('dialog', { name: 'Create New Group?' });
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await addButton.click();
+    try {
+      await dialog.waitFor({ state: 'visible', timeout: 3000 });
+      return dialog;
+    } catch {
+      // dialog didn't open — tooltip may have intercepted the click
+    }
+  }
+  // Final attempt — let it throw with a clear timeout
+  await addButton.click();
+  await dialog.waitFor({ state: 'visible', timeout: 5000 });
+  return dialog;
+}
+
+/**
+ * Create a group from the admin Groups table and wait until it is listed.
+ *
+ * Waits for the create dialog to leave the DOM, not just for the new row to show
+ * up. Angular Material keeps a closing mat-dialog-container mounted for the
+ * length of its exit animation, and the row often appears first — so a caller
+ * that opened its next dialog immediately would briefly have two role="dialog"
+ * elements on the page, and any unscoped `getByRole('dialog')` would blow up
+ * with a strict mode violation. That race is what made the groups suite flaky.
+ */
+export async function createCasterGroup(page: Page, name: string): Promise<void> {
+  const dialog = await openCreateGroupDialog(page);
+  await dialog.getByRole('textbox', { name: 'Name' }).fill(name);
+  await dialog.getByRole('button', { name: 'Save' }).click();
+
+  await casterGroupCell(page, name).waitFor({ state: 'visible', timeout: 20000 });
+  await dialog.waitFor({ state: 'detached', timeout: 10000 });
+}
+
+/**
+ * Delete a group from the admin Groups table, confirming the prompt, and wait
+ * until both the row and the confirmation dialog are gone (see createCasterGroup
+ * for why the dialog has to be waited on as well).
+ */
+export async function deleteCasterGroup(page: Page, name: string): Promise<void> {
+  // The row's first button is the trash icon; the second one renames.
+  await page
+    .getByRole('row')
+    .filter({ has: casterGroupCell(page, name) })
+    .getByRole('button')
+    .first()
+    .click();
+
+  const dialog = page.getByRole('dialog', { name: 'Delete Group?' });
+  await dialog.waitFor({ state: 'visible', timeout: 10000 });
+  await dialog.getByRole('button', { name: 'Delete' }).click();
+
+  await casterGroupCell(page, name).waitFor({ state: 'detached', timeout: 20000 });
+  await dialog.waitFor({ state: 'detached', timeout: 10000 });
+}
+
 /** Whether Caster is currently rendering the dark theme. */
 export async function casterIsDarkTheme(page: Page): Promise<boolean> {
   return page.evaluate(() => document.body.classList.contains('darkMode'));
