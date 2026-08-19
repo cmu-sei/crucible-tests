@@ -12,6 +12,7 @@ import {
   gotoExhibitSection,
   apiCreateCollection,
   apiDeleteCollectionById,
+  openMatSelect,
 } from '../../fixtures';
 
 /**
@@ -192,24 +193,30 @@ test.describe('Article Management', () => {
     await expect(descriptionEditor).toHaveText(updatedDescription);
 
     // 3. Change the source type
-    await dialog.getByRole('combobox', { name: 'Source Type' }).click();
-    await page.getByRole('option', { name: 'Reporting', exact: true }).click();
+    // openMatSelect, and options addressed through the panel it returns: the two
+    // dropdowns share the cdk overlay container, so opening Status below would
+    // otherwise race the Source Type panel's exit animation, and a page-scoped
+    // getByRole('option') could pick up its dying options. See the helper.
+    const sourceTypePanel = await openMatSelect(
+      dialog.getByRole('combobox', { name: 'Source Type' })
+    );
+    await sourceTypePanel.getByRole('option', { name: 'Reporting', exact: true }).click();
     // expect: Source type dropdown allows selection change
     await expect(dialog.getByRole('combobox', { name: 'Source Type' })).toContainText('Reporting');
 
     // 4. Change the status
-    await dialog.getByRole('combobox', { name: 'Status' }).click();
+    const statusPanel = await openMatSelect(dialog.getByRole('combobox', { name: 'Status' }));
     // The plan lists the five statuses; admin-article-edit-dialog.component.ts
     // renders them in this order. They are string values ('Unused', 'Open', ...)
     // in the generated API model, not the numeric codes the plan mentions.
-    await expect(page.getByRole('option')).toHaveText([
+    await expect(statusPanel.getByRole('option')).toHaveText([
       'Unused',
       'Affected',
       'Closed',
       'Critical',
       'Open',
     ]);
-    await page.getByRole('option', { name: 'Critical', exact: true }).click();
+    await statusPanel.getByRole('option', { name: 'Critical', exact: true }).click();
     // expect: Status dropdown allows selection
     await expect(dialog.getByRole('combobox', { name: 'Status' })).toContainText('Critical');
 

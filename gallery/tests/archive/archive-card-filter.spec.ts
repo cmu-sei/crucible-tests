@@ -4,7 +4,13 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoExhibitSection, apiSetExhibitMoveAndInject } from '../../fixtures';
+import {
+  test,
+  expect,
+  gotoExhibitSection,
+  apiSetExhibitMoveAndInject,
+  openMatSelect,
+} from '../../fixtures';
 
 /**
  * Archive Functionality §4.4 — Archive Card Filtering.
@@ -46,14 +52,35 @@ test.describe('Archive Functionality', () => {
     await expect(titles).toHaveText(ALL_SEEDED_IN_ORDER);
 
     // 1. Click the 'All Cards' dropdown.
+    // openMatSelect rather than a bare click on the trigger: each reopen below would
+    // otherwise race the previous panel's exit animation, which fails consistently on
+    // Firefox. See the helper for the mechanism.
     const cardFilter = page.getByRole('combobox');
     await expect(cardFilter).toHaveText('All Cards');
-    await cardFilter.click();
+    let options = (await openMatSelect(cardFilter)).getByRole('option');
 
     // expect: A list of available cards is displayed — 'All Cards' plus one option per
-    // seeded card, in card order.
-    const options = page.getByRole('option');
-    await expect(options).toHaveText(['All Cards', 'Test Card 1', 'Test Card 2', 'Test Card 3']);
+    // seeded card.
+    //
+    // Asserted as a set, not a sequence: the application does not specify the card
+    // order here. `setCardLists()` (archive.component.ts) builds `showCardList` by
+    // iterating `teamCardList`, which carries the response order of
+    // `TeamCardService.GetByExhibitAsync` — a query with no OrderBy at all, so
+    // Postgres may return those rows in any order, and does once another test UPDATEs
+    // one of them (apiSetTeamCardShownOnWall rewrites the tuple, moving it in the
+    // heap). An earlier version asserted the literal sequence ['All Cards',
+    // 'Test Card 1', 'Test Card 2', 'Test Card 3'] and failed intermittently with the
+    // cards in 2, 1, 3 order.
+    // 'All Cards' is a static first <mat-option> in the template, so unlike the card
+    // options its position *is* deterministic.
+    await expect(options.first()).toHaveText('All Cards');
+    // toHaveCount(1) per card, so this still fails on a missing *or* duplicated
+    // option. Matching by name rather than by total count for the same reason the
+    // article assertions are scoped: the card and team-card stores are not
+    // exhibit-scoped, so a parallel worker's cards can arrive over SignalR.
+    for (const cardName of ['Test Card 1', 'Test Card 2', 'Test Card 3']) {
+      await expect(options.filter({ hasText: cardName })).toHaveCount(1);
+    }
 
     // 2. Select a specific card from the dropdown.
     await options.filter({ hasText: 'Test Card 2' }).click();
@@ -64,13 +91,13 @@ test.describe('Archive Functionality', () => {
     await expect(titles).toHaveText(['Social Article 1', 'Reporting Article 1']);
 
     // Selecting a different card swaps the list rather than adding to it.
-    await cardFilter.click();
-    await page.getByRole('option').filter({ hasText: 'Test Card 1' }).click();
+    options = (await openMatSelect(cardFilter)).getByRole('option');
+    await options.filter({ hasText: 'Test Card 1' }).click();
     await expect(titles).toHaveText(['News Article 1', 'Intel Article 1']);
 
     // 3. Select 'All Cards' to clear the filter.
-    await cardFilter.click();
-    await page.getByRole('option', { name: 'All Cards' }).click();
+    options = (await openMatSelect(cardFilter)).getByRole('option');
+    await options.filter({ hasText: 'All Cards' }).click();
 
     // expect: All articles are displayed again.
     await expect(cardFilter).toHaveText('All Cards');

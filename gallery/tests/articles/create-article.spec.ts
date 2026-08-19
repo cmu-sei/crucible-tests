@@ -13,6 +13,7 @@ import {
   gotoAdminSection,
   apiCreateCollection,
   apiDeleteCollectionById,
+  openMatSelect,
 } from '../../fixtures';
 
 /**
@@ -200,9 +201,15 @@ test.describe('Article Management', () => {
     await expect(descriptionEditor).toHaveText(articleDescription);
 
     // 4. Select a source type from available options
-    await dialog.getByRole('combobox', { name: 'Source Type' }).click();
+    // openMatSelect, and options addressed through the panel it returns: the two
+    // dropdowns share the cdk overlay container, so opening Card below would otherwise
+    // race the Source Type panel's exit animation, and a page-scoped
+    // getByRole('option') could pick up its dying options. See the helper.
+    const sourceTypePanel = await openMatSelect(
+      dialog.getByRole('combobox', { name: 'Source Type' })
+    );
     // expect: the full list from admin-article-edit-dialog.component.ts is offered
-    await expect(page.getByRole('option')).toHaveText([
+    await expect(sourceTypePanel.getByRole('option')).toHaveText([
       'Intel',
       'News',
       'Reporting',
@@ -211,15 +218,16 @@ test.describe('Article Management', () => {
       'Email',
       'Orders',
     ]);
-    await page.getByRole('option', { name: 'News', exact: true }).click();
+    await sourceTypePanel.getByRole('option', { name: 'News', exact: true }).click();
     // expect: Source type is selected
     await expect(dialog.getByRole('combobox', { name: 'Source Type' })).toContainText('News');
 
     // 5. Select a card to associate with the article
-    await dialog.getByRole('combobox', { name: 'Card' }).click();
+    const cardPanel = await openMatSelect(dialog.getByRole('combobox', { name: 'Card' }));
     // expect: Card dropdown shows available cards
-    await expect(page.getByRole('option', { name: cardName })).toBeVisible();
-    await page.getByRole('option', { name: cardName }).click();
+    const cardOption = cardPanel.getByRole('option', { name: cardName });
+    await expect(cardOption).toBeVisible();
+    await cardOption.click();
     // expect: Card is selected
     await expect(dialog.getByRole('combobox', { name: 'Card' })).toContainText(cardName);
 

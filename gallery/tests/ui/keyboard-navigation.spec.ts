@@ -4,7 +4,7 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoGalleryAdmin } from '../../fixtures';
+import { test, expect, gotoGalleryAdmin, openGalleryUserMenu } from '../../fixtures';
 
 test.describe('Responsive Design and Accessibility', () => {
   test('Keyboard Navigation', async ({ galleryAuthenticatedPage: page }) => {
@@ -18,11 +18,20 @@ test.describe('Responsive Design and Accessibility', () => {
       page.evaluate(() => {
         const el = document.activeElement as HTMLElement | null;
         if (!el) return null;
+        // Identify the element by its position in the tree, so "did focus move?"
+        // can be answered across evaluate() calls (element handles cannot be
+        // compared between them, and tag names alone are not distinguishing).
+        const path: string[] = [];
+        for (let node: Element | null = el; node && node !== document.body; node = node.parentElement) {
+          const siblings = Array.from(node.parentElement?.children ?? []);
+          path.unshift(`${node.tagName.toLowerCase()}[${siblings.indexOf(node)}]`);
+        }
         return {
           tag: el.tagName.toLowerCase(),
           role: el.getAttribute('role'),
           tabIndex: el.tabIndex,
           isBody: el === document.body,
+          path: path.join('/'),
         };
       });
 
@@ -37,9 +46,11 @@ test.describe('Responsive Design and Accessibility', () => {
         nativelyFocusable.includes(focused!.tag) || focused!.role !== null || focused!.tabIndex >= 0,
         `Tab #${i} focused a non-interactive <${focused!.tag}>`
       ).toBe(true);
-      reached.push(`${focused!.tag}#${i}`);
+      reached.push(focused!.path);
     }
-    // Tabbing must actually traverse the page rather than park on one element.
+    // Tabbing must actually traverse the page rather than park on one element. Record
+    // the element identity only — an earlier version pushed `${tag}#${i}`, which made
+    // every entry unique by construction and the assertion below unfailable.
     expect(new Set(reached).size, 'Tab did not move focus between elements').toBeGreaterThan(1);
 
     // expect: Focus indicators are visible — the focused control must carry an
@@ -64,10 +75,16 @@ test.describe('Responsive Design and Accessibility', () => {
     ).toBe(true);
 
     // Enter activates the focused button.
-    await page.keyboard.press('Enter');
-
     // expect: Menu opens
-    await expect(page.getByRole('menuitem', { name: 'Administration' })).toBeVisible();
+    // The menu's `Administration` entry is permission-gated and TopbarComponent is
+    // OnPush, so it can be missing from a panel opened before the permissions request
+    // lands — and it never appears while that panel stays open. openGalleryUserMenu
+    // reopens until it is there; every attempt still activates the trigger with Enter,
+    // so keyboard activation remains the thing under test.
+    await openGalleryUserMenu(page, userMenuButton, async () => {
+      await userMenuButton.focus();
+      await page.keyboard.press('Enter');
+    });
 
     // The opened menu is itself keyboard-navigable: focus lands inside the menu
     // panel and the arrow keys move it between menu items. (Which item Material

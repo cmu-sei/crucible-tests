@@ -28,9 +28,17 @@ test.describe('Wall View Functionality', () => {
     // seeded card names because the Wall's card store is not exhibit-scoped (see the
     // SignalR leak reported against
     // `signalr.service.ts#addCardHandlers`/`addTeamCardHandlers`).
+    // Asserted as a set, not a sequence: the wall's card order is not specified.
+    // `wall.component.ts` renders `cardList` in the order the API returned it, and
+    // `CardService.GetByExhibitAsync` sorts only by Inject — the two seeded cards at
+    // inject 0 (Test Card 1 and Test Card 2) are a tie, which Postgres may break
+    // either way. This is the same defect that made archive-card-filter.spec.ts
+    // flaky on a literal option order; see the note there.
     const cards = page.locator('section.cards mat-card');
-    await expect(cards.locator('mat-card-title').filter({ hasText: /^Test Card [123]$/ }))
-      .toHaveText(['Test Card 1', 'Test Card 2', 'Test Card 3']);
+    const seededTitles = cards.locator('mat-card-title').filter({ hasText: /^Test Card [123]$/ });
+    for (const cardName of ['Test Card 1', 'Test Card 2', 'Test Card 3']) {
+      await expect(seededTitles.filter({ hasText: cardName })).toHaveCount(1);
+    }
     const card1 = cards.filter({ hasText: 'Test Card 1' });
 
     // 1. Click the 'Details' button on a card.

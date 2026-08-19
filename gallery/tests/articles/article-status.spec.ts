@@ -12,6 +12,7 @@ import {
   gotoExhibitSection,
   apiCreateCollection,
   apiDeleteCollectionById,
+  openMatSelect,
 } from '../../fixtures';
 
 /**
@@ -171,18 +172,22 @@ test.describe('Article Management', () => {
 
       const dialog = page.getByRole('dialog', { name: 'Edit Article' });
       const statusSelect = dialog.getByRole('combobox', { name: 'Status' });
-      await statusSelect.click();
+      // openMatSelect, and options addressed through the panel it returns: this runs once
+      // per status, and the previous iteration's panel is still in the DOM through its
+      // exit animation, where it would both race this open and make a page-scoped
+      // getByRole('option') ambiguous. See the helper.
+      const statusPanel = await openMatSelect(statusSelect);
 
       // The dropdown offers exactly the five statuses, in the order
       // admin-article-edit-dialog.component.ts declares itemStatusList.
-      await expect(page.getByRole('option')).toHaveText([
+      await expect(statusPanel.getByRole('option')).toHaveText([
         'Unused',
         'Affected',
         'Closed',
         'Critical',
         'Open',
       ]);
-      await page.getByRole('option', { name: status, exact: true }).click();
+      await statusPanel.getByRole('option', { name: status, exact: true }).click();
 
       // expect: the dropdown shows the new selection before saving
       await expect(statusSelect).toContainText(status);

@@ -250,20 +250,48 @@ test.describe('Edge Cases and Negative Testing', () => {
       const secondPage = await secondContext.newPage();
       const secondReadButton = await openArticle(secondPage);
 
-      // Arm both response waits before either click, so neither can be missed.
-      const firstResponse = page.waitForResponse(
-        (r) => r.url().includes('/isread') && r.request().method() === 'PUT'
-      );
-      const secondResponse = secondPage.waitForResponse(
-        (r) => r.url().includes('/isread') && r.request().method() === 'PUT'
-      );
+      /**
+       * Click Read and return the PUT it issued, re-clicking one the app swallowed.
+       *
+       * A click here can produce no request at all. The other context's write lands first
+       * and flips this context's `userArticle.isRead`, and the two Read buttons live in
+       * `@if (!userArticle.isRead)` / `@if (userArticle.isRead)` blocks — so that flip makes
+       * Angular destroy the button being clicked and build the other branch's copy in its
+       * place. A click already committed to the old node then reaches a listener that is no
+       * longer wired up, and `toggleReadStatus` never runs. That is what made this test
+       * flaky on Firefox: `page.waitForResponse` timed out having seen no PUT.
+       *
+       * The wait is armed before the click, per context, so no response can be missed. Only
+       * a swallowed click costs a retry, so the common path is still both clicks dispatched
+       * together against the same record.
+       */
+      const markRead = async (
+        target: import('@playwright/test').Page,
+        button: import('@playwright/test').Locator
+      ) => {
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const pending = target
+            .waitForResponse(
+              (r) => r.url().includes('/isread') && r.request().method() === 'PUT',
+              { timeout: 5000 }
+            )
+            .catch(() => null);
+          await button.click();
+          const response = await pending;
+          if (response) {
+            return response;
+          }
+        }
+        throw new Error(`Read was clicked 3 times without issuing a PUT: ${target.url()}`);
+      };
 
       // Mark Read in both contexts concurrently.
-      await Promise.all([firstReadButton.click(), secondReadButton.click()]);
-
       // expect: both operations complete without errors. Neither request is rejected as a
       // conflict — `SetIsReadAsync` is a last-writer-wins update, so both are accepted.
-      const [firstResult, secondResult] = await Promise.all([firstResponse, secondResponse]);
+      const [firstResult, secondResult] = await Promise.all([
+        markRead(page, firstReadButton),
+        markRead(secondPage, secondReadButton),
+      ]);
       expect(firstResult.status()).toBe(200);
       expect(secondResult.status()).toBe(200);
 
@@ -275,10 +303,39 @@ test.describe('Edge Cases and Negative Testing', () => {
       await expect(page.locator('app-system-message')).toHaveCount(0);
       await expect(secondPage.locator('app-system-message')).toHaveCount(0);
 
-      // The article ends up read — the two writes converge rather than cancelling out.
+      // The record survives both writes holding one of the two submitted values — the
+      // last writer wins and nothing is left corrupted or half-applied.
+      //
+      // Deliberately NOT asserted as `isRead === true`. `toggleReadStatus` sends
+      // `!userArticle.isRead` computed from *that* context's copy of the record, and the
+      // first write's response/broadcast can reach the second context before its own click
+      // is dispatched — in which case the second context submits `false` and the record
+      // legitimately converges to unread. An earlier version asserted `true` here and was
+      // flaky on Firefox for exactly that reason. The plan's expectation for this step is
+      // "both operations complete without errors", which the status and system-message
+      // assertions above cover; what is additionally deterministic is the convergence
+      // below, so that is what is claimed.
+      const submitted = [firstResult, secondResult].map(
+        (result) => JSON.parse(result.request().postData() ?? 'null') as boolean | null
+      );
+      expect(submitted, 'both contexts submitted a boolean isRead').toEqual([
+        expect.any(Boolean),
+        expect.any(Boolean),
+      ]);
+
       const targetId = new URL(firstResult.url()).pathname.split('/').at(-2)!;
       const after = await apiGetTeamUserArticles(seededExhibit.exhibitId, seededExhibit.teamId);
-      expect(after.find((ua) => ua.id === targetId)?.isRead).toBe(true);
+      const storedIsRead = after.find((ua) => ua.id === targetId)?.isRead;
+      expect(submitted, `stored isRead=${storedIsRead} is one of the submitted values`).toContain(
+        storedIsRead
+      );
+
+      // When both contexts did submit the same value — the case where "the two writes
+      // converge rather than cancelling out" is a meaningful claim — that value must be
+      // the stored one. This is the assertion that would catch a write being dropped.
+      if (submitted[0] === submitted[1]) {
+        expect(storedIsRead, 'both contexts submitted the same value').toBe(submitted[0]);
+      }
     } finally {
       await secondContext.close();
     }

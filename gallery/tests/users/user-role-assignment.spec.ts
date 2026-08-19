@@ -4,7 +4,14 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoGalleryAdmin, gotoAdminSection, Services } from '../../fixtures';
+import {
+  test,
+  expect,
+  gotoGalleryAdmin,
+  gotoAdminSection,
+  openMatSelect,
+  Services,
+} from '../../fixtures';
 import { request as pwRequest, APIRequestContext } from '@playwright/test';
 import { randomUUID } from 'crypto';
 
@@ -111,28 +118,26 @@ test.describe('User Management', () => {
     expect(await getGalleryUserRoleId(userId)).toBeNull();
 
     // 2. Click the Role dropdown for the user
-    await roleDropdown.click();
+    // openMatSelect rather than a bare click: the reopen in step 4 would otherwise race
+    // this panel's exit animation, and its options — still in the DOM through that
+    // animation — would make the page-scoped `listbox` lookup ambiguous. See the helper.
+    const listbox = await openMatSelect(roleDropdown);
 
     // expect: Available roles are listed, including the built-in system roles
-    const listbox = page.getByRole('listbox');
-    await expect(listbox).toBeVisible();
     await expect(listbox.getByRole('option', { name: 'None Locally' })).toBeVisible();
     await expect(listbox.getByRole('option', { name: 'Administrator' })).toBeVisible();
 
     // 3. Select a different role ('Content Developer')
     await listbox.getByRole('option', { name: 'Content Developer' }).click();
-    await expect(listbox).toBeHidden();
 
     // expect: The user's role is updated, both in the UI and server-side
     await expect(roleDropdown).toHaveText('Content Developer');
     expect(await getGalleryUserRoleId(userId)).not.toBeNull();
 
     // 4. Change the role back to 'None Locally'
-    await roleDropdown.click();
-    const listbox2 = page.getByRole('listbox');
-    await expect(listbox2).toBeVisible();
+    const listbox2 = await openMatSelect(roleDropdown);
     await listbox2.getByRole('option', { name: 'None Locally' }).click();
-    await expect(listbox2).toBeHidden();
+    await expect(listbox2).toHaveCount(0);
 
     // expect: The user's role is reverted
     await expect(roleDropdown).toHaveText('None Locally');

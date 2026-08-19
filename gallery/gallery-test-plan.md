@@ -823,6 +823,41 @@ the shared exhibit.
   3. Remove a membership from the group
     - expect: Membership is removed successfully
 
+#### 9.5. Delete Group
+
+**File:** `tests/groups/delete-group.spec.ts`
+
+**Steps:**
+  1. Click the delete (trash) icon on a group's row
+    - expect: A 'Delete Group?' confirmation dialog appears naming the group
+  2. Click 'Cancel'
+    - expect: The dialog closes and the group is still listed
+  3. Click the delete icon again and click 'Delete'
+    - expect: The group is deleted successfully
+    - expect: The group is removed from the groups list
+
+#### 9.6. Rename Group
+
+**File:** `tests/groups/rename-group.spec.ts`
+
+**Steps:**
+  1. Click the rename (pencil) icon on a group's row
+    - expect: A 'Rename <group>' dialog opens with the Name field prefilled
+    - expect: The Save button is disabled until the name is changed
+  2. Enter a new name and click Save
+    - expect: The group is renamed successfully
+    - expect: The new name appears in the groups list and the old name is gone
+
+#### 9.7. Sort Groups
+
+**File:** `tests/groups/sort-groups.spec.ts`
+
+**Steps:**
+  1. Click the 'Group Name' column header
+    - expect: Groups are sorted by name in ascending order
+  2. Click the 'Group Name' column header again
+    - expect: Groups are sorted by name in descending order
+
 ### 10. Admin Navigation and UI
 
 **Seed:** `tests/seed.spec.ts`
