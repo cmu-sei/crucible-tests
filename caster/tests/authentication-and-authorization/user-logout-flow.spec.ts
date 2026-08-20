@@ -6,6 +6,10 @@
 
 import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
+// Logout must begin with a fresh interactive session, not the shared state used
+// by ordinary authenticated specs.
+test.use({ storageState: { cookies: [], origins: [] } });
+
 test.describe('Authentication and Authorization', () => {
   test('User Logout Flow', async ({ casterAuthenticatedPage: page }) => {
 

@@ -4,17 +4,14 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
-import { authenticateGalleryWithKeycloak } from '../../fixtures';
+import { test, expect, gotoGalleryAdmin, gotoAdminSection } from '../../fixtures';
 
 test.describe('User Management', () => {
-  test('View Users List', async ({ page }) => {
-    await authenticateGalleryWithKeycloak(page);
-    await page.getByRole('button', { name: 'Administration' }).click();
-    await expect(page).toHaveTitle('Gallery Admin');
+  test('View Users List', async ({ galleryAuthenticatedPage: page }) => {
+    await gotoGalleryAdmin(page);
 
     // 1. Navigate to admin section and click 'Users' in the sidebar
-    await page.locator('mat-list-item').filter({ hasText: 'Users' }).getByRole('button').click();
+    await gotoAdminSection(page, 'Users');
 
     // expect: Users list page loads with a table showing ID, Name, Role columns
     await expect(page.getByRole('columnheader', { name: 'ID' })).toBeVisible();

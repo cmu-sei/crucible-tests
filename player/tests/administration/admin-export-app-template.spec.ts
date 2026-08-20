@@ -14,14 +14,20 @@ test.describe('Administration - Application Templates', () => {
     await page.getByRole('button', { name: 'Application Templates' }).click();
 
     // expect: Templates list displays
-    await expect(page.getByRole('columnheader', { name: 'Template Name' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
 
     // Select a template
-    const firstCheckbox = page.getByRole('row').nth(1).getByRole('checkbox');
-    await firstCheckbox.click();
+    const firstCheckbox = page
+      .locator('app-admin-app-template-search mat-row')
+      .first()
+      .locator('mat-cell')
+      .first()
+      .locator('mat-checkbox');
+    await firstCheckbox.getByRole('checkbox').focus();
+    await page.keyboard.press('Space');
 
     // 2. Click export button for a template
-    const exportButton = page.locator('button:has(mat-icon.mdi-file-export)');
+    const exportButton = page.locator('button:has(mat-icon[fonticon="mdi-file-export"])');
     await expect(exportButton).toBeVisible();
     await exportButton.click();
 

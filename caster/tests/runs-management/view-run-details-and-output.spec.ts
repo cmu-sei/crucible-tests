@@ -4,7 +4,7 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen } from '../../fixtures';
 
 test.describe('Runs Management (Plan, Apply, Destroy)', () => {
   test('View Run Details and Output', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
@@ -16,10 +16,7 @@ test.describe('Runs Management (Plan, Apply, Destroy)', () => {
     await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
     await page.getByRole('textbox', { name: 'Name' }).fill(projectName);
     await page.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByRole('link', { name: projectName })).toBeVisible({ timeout: 10000 });
-
-    await page.getByRole('link', { name: projectName }).click();
-    await expect(page).toHaveURL(/\/projects\//, { timeout: 10000 });
+    await expectCasterProjectOpen(page, projectName);
 
     // Extract project ID from URL for cleanup
     const projectId = page.url().match(/\/projects\/([^/]+)/)?.[1];

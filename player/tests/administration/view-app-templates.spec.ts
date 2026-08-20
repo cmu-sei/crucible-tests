@@ -21,8 +21,8 @@ test.describe('Administration - Application Templates', () => {
     // expect: The Application Templates section is displayed
     await expect(page).toHaveURL(/section=application-templates/);
 
-    // expect: A table shows templates with columns: checkbox, Template Name, Url
-    await expect(page.getByRole('columnheader', { name: 'Template Name' })).toBeVisible();
+    // expect: A table shows templates with columns: checkbox, Name, Url
+    await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Url' })).toBeVisible();
 
     // expect: Templates include Dashboard, Map, and Virtual Machines with their respective URLs

@@ -4,7 +4,7 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen } from '../../fixtures';
 
 test.describe('Workspaces Management', () => {
   test('Edit Workspace', async ({ casterAuthenticatedPage: page, cleanupCasterProjectByName }) => {
@@ -20,10 +20,7 @@ test.describe('Workspaces Management', () => {
     await expect(projectDialog).toBeVisible();
     await projectDialog.getByRole('textbox', { name: 'Name' }).fill(projectName);
     await projectDialog.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByRole('link', { name: projectName })).toBeVisible({ timeout: 10000 });
-
-    await page.getByRole('link', { name: projectName }).click();
-    await expect(page).toHaveURL(/\/projects\//, { timeout: 10000 });
+    await expectCasterProjectOpen(page, projectName);
 
     await page.getByTitle('Add New Directory').click();
     const dirDialog = page.getByRole('dialog', { name: 'Create New Directory?' });

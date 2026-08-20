@@ -4,7 +4,7 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen } from '../../fixtures';
 
 test.describe('Directories Management', () => {
   test('Create New Directory', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
@@ -18,15 +18,9 @@ test.describe('Directories Management', () => {
     await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
     await page.getByRole('textbox', { name: 'Name' }).fill(`Directory Test Project ${uniqueSuffix}`);
     await page.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByRole('link', { name: `Directory Test Project ${uniqueSuffix}` })).toBeVisible({ timeout: 10000 });
-
-    // Navigate to the project
-    await page.getByRole('link', { name: `Directory Test Project ${uniqueSuffix}` }).click();
-    await expect(page).toHaveURL(/\/projects\//, { timeout: 10000 });
 
     // Register project for cleanup after test completes
-    const projectId = page.url().match(/\/projects\/([a-f0-9-]+)/)?.[1];
-    if (projectId) cleanupCasterProject(projectId);
+    cleanupCasterProject(await expectCasterProjectOpen(page, `Directory Test Project ${uniqueSuffix}`));
 
     // 2. Click 'Add Directory' button
     await page.getByText('Add Directory').first().click();

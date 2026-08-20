@@ -4,7 +4,7 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, typeIntoSearch } from '../../fixtures';
 
 test.describe('Administration - Views', () => {
   test('Create View', async ({ playerAuthenticatedPage: page }) => {
@@ -19,7 +19,9 @@ test.describe('Administration - Views', () => {
     await expect(page.getByRole('heading', { name: 'Views' })).toBeVisible();
 
     // 2. Click 'Create' or 'Add View' button (the + icon button, mdi-plus)
-    const createButton = page.locator('button:has(mat-icon.mdi-plus)');
+    const createButton = page
+      .locator('app-admin-view-search')
+      .locator('button:has(mat-icon[fonticon="mdi-plus-circle"])');
     await createButton.click();
 
     // expect: Create view dialog/form opens
@@ -46,12 +48,15 @@ test.describe('Administration - Views', () => {
     // expect: View is created successfully
     // expect: New view appears in views list
     await expect(page.getByRole('heading', { name: 'Views' })).toBeVisible();
+    const searchField = page.getByRole('textbox', { name: 'Search' });
+    await typeIntoSearch(searchField, viewName);
+    await expect(searchField).toHaveValue(viewName);
     await expect(page.getByRole('button', { name: viewName, exact: true })).toBeVisible();
 
     // Cleanup: Delete the test view
     await page.getByRole('button', { name: viewName, exact: true }).click();
     await page.getByRole('button', { name: 'Delete View' }).click();
     const confirmDialog = page.getByRole('dialog');
-    await confirmDialog.getByRole('button', { name: /yes|confirm|ok|delete/i }).click();
+    await confirmDialog.getByRole('button', { name: 'Delete' }).click();
   });
 });

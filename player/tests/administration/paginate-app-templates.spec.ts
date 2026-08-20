@@ -14,7 +14,7 @@ test.describe('Administration - Application Templates', () => {
     await page.getByRole('button', { name: 'Application Templates' }).click();
 
     // expect: The Application Templates section is displayed with pagination controls
-    await expect(page.getByRole('columnheader', { name: 'Template Name' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
 
     // 2. Observe the pagination section
     // expect: Shows pagination status indicating the current page range (e.g., '1 – N of N')
