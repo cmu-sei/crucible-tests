@@ -4,7 +4,13 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoExhibitSection, apiSetExhibitMoveAndInject } from '../../fixtures';
+import {
+  test,
+  expect,
+  gotoExhibitSection,
+  apiSetExhibitMoveAndInject,
+  openMatSelect,
+} from '../../fixtures';
 
 /**
  * Archive Functionality §4.5 — Combined Filters.
@@ -72,15 +78,18 @@ test.describe('Archive Functionality', () => {
     await expect(titles).toHaveText(['Social Article 1']);
 
     // 2. Additionally select a specific card from the dropdown.
-    await cardFilter.click();
-    await page.getByRole('option').filter({ hasText: 'Test Card 1' }).click();
+    // openMatSelect rather than a bare click on the trigger: each of the reopens below
+    // would otherwise race the previous panel's exit animation, which fails
+    // consistently on Firefox. See the helper for the mechanism.
+    let cardOptions = (await openMatSelect(cardFilter)).getByRole('option');
+    await cardOptions.filter({ hasText: 'Test Card 1' }).click();
 
     // expect: Articles are further filtered to match all three criteria — the Social
     // article belongs to Test Card 2, so restricting to Test Card 1 empties the list.
     await expect(titles).toHaveCount(0);
 
-    await cardFilter.click();
-    await page.getByRole('option').filter({ hasText: 'Test Card 2' }).click();
+    cardOptions = (await openMatSelect(cardFilter)).getByRole('option');
+    await cardOptions.filter({ hasText: 'Test Card 2' }).click();
     await expect(titles).toHaveText(['Social Article 1']);
 
     // 3. Clear all filters one by one.
@@ -92,8 +101,8 @@ test.describe('Archive Functionality', () => {
     await expect(titles).toHaveText(['Social Article 1']);
 
     // expect: Article list expands as each filter is removed.
-    await cardFilter.click();
-    await page.getByRole('option', { name: 'All Cards' }).click();
+    cardOptions = (await openMatSelect(cardFilter)).getByRole('option');
+    await cardOptions.filter({ hasText: 'All Cards' }).click();
     await expect(titles).toHaveText(['Social Article 1', 'News Article 1']);
 
     // expect: All articles show when all filters are cleared.

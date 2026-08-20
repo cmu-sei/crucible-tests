@@ -4,7 +4,7 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoGalleryAdmin } from '../../fixtures';
+import { test, expect, gotoGalleryAdmin, openGalleryUserMenu } from '../../fixtures';
 
 test.describe('Admin Navigation and UI', () => {
   test('Top Navigation Bar', async ({ galleryAuthenticatedPage: page }) => {
@@ -31,7 +31,10 @@ test.describe('Admin Navigation and UI', () => {
     await expect(page.getByText('My Exhibits')).toBeVisible();
 
     // 3. Click 'Admin User' button
-    await page.getByRole('button', { name: 'Admin User' }).click();
+    // Routing back home rebuilds TopbarComponent, so its permissions request is in
+    // flight again here and `Administration` may be absent from a panel opened too
+    // early — see openGalleryUserMenu for why reopening is the only fix.
+    await openGalleryUserMenu(page, page.getByRole('button', { name: 'Admin User' }));
 
     // expect: Dropdown menu appears with 'Administration', 'Logout', and 'Dark Theme' toggle
     await expect(page.getByRole('menuitem', { name: 'Administration' })).toBeVisible();

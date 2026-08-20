@@ -1,7 +1,7 @@
 // Copyright 2026 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
-import { test as base, Page, expect, request as pwRequest, APIRequestContext } from '@playwright/test';
+import { test as base, Page, Locator, expect, request as pwRequest, APIRequestContext } from '@playwright/test';
 import fs from 'fs';
 import {
   Services,
@@ -83,10 +83,56 @@ export async function gotoExhibitSection(
 }
 
 /**
+ * Open a `mat-select` and return the panel it opened, waiting out any previous panel.
+ *
+ * Angular Material keeps a closing `mat-select` panel — its options included — in the
+ * DOM for the length of its `_mat-select-exit` animation. Clicking a trigger while that
+ * is still playing races it: the panel just requested never materialises, and a
+ * `getByRole('option')` resolves to the *dying* options, which report as unstable and
+ * then detach, so the click retries until it times out. Firefox loses this race
+ * consistently; chromium usually wins it.
+ *
+ * Selecting an option is what starts that exit animation, and the assertion a test
+ * naturally makes next — a filtered list, a trigger's own text — is satisfied long
+ * before the animation ends. So it is the *next* open that is at risk, and waiting for
+ * the old panel to be detached (not merely hidden) is the fix.
+ *
+ * Always prefer this to clicking a `mat-select` trigger directly, and address options
+ * through the returned panel rather than at page scope, so that neither the open nor a
+ * later option lookup can be satisfied by a stale overlay.
+ *
+ * @param trigger - The `mat-select` trigger to click (its `role="combobox"` element)
+ * @returns The panel that is now open, to scope option lookups to
+ */
+export async function openMatSelect(trigger: Locator): Promise<Locator> {
+  const page = trigger.page();
+
+  // No panel may be attached before the trigger is clicked. Passes immediately when
+  // none has ever been created. Deliberately page-scoped rather than looking only for
+  // this trigger's own panel: every mat-select renders into the same
+  // cdk-overlay-container, so a panel left over from a *different* trigger — the other
+  // dropdown in the same dialog, say — loses the race just as thoroughly.
+  await expect(page.getByRole('listbox')).toHaveCount(0);
+  await trigger.click();
+
+  const panel = page.getByRole('listbox');
+  await expect(panel).toBeVisible();
+  return panel;
+}
+
+/**
  * All known group name prefixes used by gallery group tests.
  * This is the single source of truth so that any test can clean up ALL prefixes.
  */
-export const GROUP_TEST_PREFIXES = ['Search Group', 'Membership Group', 'Test Group', 'Debug Group'];
+export const GROUP_TEST_PREFIXES = [
+  'Search Group',
+  'Membership Group',
+  'Test Group',
+  'Debug Group',
+  'Delete Group',
+  'Rename Group',
+  'Sort Group',
+];
 
 // ========================================================================
 // API-based group cleanup (reliable, no UI race conditions)
@@ -835,93 +881,48 @@ export async function apiDeleteExhibitById(exhibitId: string, label: string = ex
 }
 
 // ========================================================================
-// UI-based group cleanup helpers (used for stale cleanup at test start)
+// Groups admin UI helpers
 // ========================================================================
 
 /**
- * Dismiss any error/notification dialogs that may be blocking the UI.
- * Gallery shows "Not Found" or other error dialogs via CDK overlays
- * when operations fail (e.g. trying to delete an already-deleted group).
+ * The Groups admin table row for a group, addressed by its name cell.
+ *
+ * `element-row` excludes the sibling `detail-row` that `multiTemplateDataRows`
+ * emits for every group, and the exact cell match keeps `Sort Group A <suffix>`
+ * from also selecting `Sort Group AB <suffix>`.
+ *
+ * @param page - Playwright Page object, on the Groups admin section
+ * @param name - Exact group name
  */
-export async function dismissErrorDialogs(page: Page): Promise<void> {
-  const closeButtons = page.locator('dialog button img[alt="󰅚"], dialog button:has(img)').or(
-    page.getByRole('dialog').filter({ hasNotText: /Create|Delete|Confirm/ }).locator('button')
-  );
-
-  const count = await closeButtons.count().catch(() => 0);
-  for (let i = 0; i < count; i++) {
-    try {
-      const btn = closeButtons.nth(i);
-      if (await btn.isVisible().catch(() => false)) {
-        await btn.click({ timeout: 2000 });
-        console.log(`Dismissed error/notification dialog`);
-      }
-    } catch {
-      // Ignore - dialog may have closed on its own
-    }
-  }
+export function galleryGroupRow(page: Page, name: string): Locator {
+  return page
+    .locator('app-admin-groups tr.element-row')
+    .filter({ has: page.getByRole('cell', { name, exact: true }) });
 }
 
 /**
- * Delete all groups from the Gallery admin Groups list whose name starts with the given prefix.
- * Uses the UI - best for pre-test cleanup on a single worker's page.
+ * Create a group through the Groups admin UI and wait for its row to appear.
+ *
+ * @param page - Playwright Page object, on the Groups admin section
+ * @param name - Name for the new group
  */
-export async function cleanupStaleGroups(page: Page, prefix: string): Promise<void> {
-  await dismissErrorDialogs(page);
+export async function createGalleryGroup(page: Page, name: string): Promise<void> {
+  // The Groups toolbar buttons carry `matTooltip` ("Add New Group"), which Angular
+  // Material renders as aria-describedby rather than an accessible name, so
+  // getByRole({ name }) cannot reach them — hence the structural locator.
+  await page.locator('app-admin-groups th.mat-column-actions button').first().click();
 
-  const searchField = page.getByRole('textbox', { name: 'Search Groups' });
-  await searchField.clear();
-  const clearButton = page.getByRole('button', { name: 'Clear Search' });
-  if (await clearButton.isEnabled().catch(() => false)) {
-    await clearButton.click();
-  }
+  const dialog = page.getByRole('dialog', { name: 'Create New Group?' });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('textbox', { name: 'Name' }).fill(name);
+  await dialog.getByRole('button', { name: 'Save' }).click();
 
-  const maxIterations = 20;
-  for (let i = 0; i < maxIterations; i++) {
-    await dismissErrorDialogs(page);
-
-    const matchingCells = page.getByRole('cell').filter({ hasText: new RegExp(`^${prefix}`) });
-    const count = await matchingCells.count();
-    if (count === 0) {
-      break;
-    }
-
-    const groupName = await matchingCells.first().textContent();
-    if (!groupName) break;
-    const trimmedName = groupName.trim();
-    console.log(`Stale cleanup: Found ${count} leftover group(s) matching "${prefix}", deleting "${trimmedName}"...`);
-
-    try {
-      const row = page.getByRole('row').filter({ hasText: trimmedName });
-      await row.first().waitFor({ state: 'visible', timeout: 5000 });
-      await row.first().locator('button').first().click();
-
-      const confirmDialog = page.getByRole('dialog').filter({ hasText: /delete/i });
-      await confirmDialog.waitFor({ state: 'visible', timeout: 5000 });
-      await confirmDialog.getByRole('button', { name: /yes|confirm|ok|delete/i }).click();
-
-      await expect(page.getByRole('cell', { name: trimmedName })).not.toBeVisible({ timeout: 10000 });
-      console.log(`Stale cleanup: Group "${trimmedName}" deleted successfully`);
-    } catch (error) {
-      console.log(`Stale cleanup: Failed to delete "${trimmedName}" via UI, trying API fallback...`);
-      await dismissErrorDialogs(page);
-      // Use API as fallback
-      try {
-        await apiDeleteGroupByName(trimmedName);
-      } catch (apiError) {
-        console.warn(`Stale cleanup: API fallback also failed for "${trimmedName}":`, apiError);
-      }
-    }
-  }
-}
-
-/**
- * Ensure the page is on the Gallery admin Groups page.
- */
-export async function ensureOnGroupsPage(page: Page): Promise<void> {
-  await dismissErrorDialogs(page);
-  await page.locator('mat-list-item').filter({ hasText: 'Groups' }).getByRole('button').click();
-  await page.getByRole('columnheader', { name: 'Group Name' }).waitFor({ state: 'visible', timeout: 10000 });
+  // Wait for the dialog to leave the DOM, not merely to become hidden: Angular
+  // Material keeps a closing mat-dialog-container mounted for the length of its
+  // exit animation, so a getByRole('dialog') in the caller would otherwise match
+  // this one too and fail strict mode with "resolved to 2 elements".
+  await dialog.waitFor({ state: 'detached' });
+  await expect(galleryGroupRow(page, name)).toBeVisible();
 }
 
 /**
@@ -992,6 +993,45 @@ export async function ensureGalleryAuthenticated(page: Page): Promise<void> {
     await authenticateGalleryWithKeycloak(page);
     await appShell.waitFor({ state: 'visible', timeout: 30000 });
   }
+}
+
+/**
+ * Open the topbar user menu and wait for its permission-gated contents to be present.
+ *
+ * The `Administration` entry is rendered only when `TopbarComponent.canViewAdmin` is
+ * true (`topbar.component.html`), and that field is assigned from the subscription to
+ * `permissionDataService.load()` in `ngOnInit`. TopbarComponent is `OnPush` and
+ * `canViewAdmin` is a plain property, so nothing marks the view dirty when it flips:
+ * the entry does *not* appear in a panel that is already open when the permissions
+ * request lands. It materialises only when the lazy `mat-menu` content is rebuilt —
+ * i.e. on the next open. TopbarComponent is recreated on every route change, so the
+ * race is live again after each navigation, not just on first load.
+ *
+ * Waiting inside a single open panel therefore cannot work; reopening is the only
+ * reliable way to pick up late-arriving permissions, so retry the open itself.
+ *
+ * @param page - Playwright Page object, on an authenticated Gallery route
+ * @param trigger - The topbar user-menu button (e.g. the 'Admin User' button)
+ * @param open - How to open the menu; defaults to clicking the trigger. Pass a
+ *               keyboard action to exercise keyboard activation instead.
+ */
+export async function openGalleryUserMenu(
+  page: Page,
+  trigger: Locator,
+  open: () => Promise<void> = () => trigger.click()
+): Promise<void> {
+  const panel = page.locator('.mat-mdc-menu-panel');
+  const adminItem = page.getByRole('menuitem', { name: 'Administration' });
+
+  await expect(async () => {
+    // Always (re)open from a closed panel so the menu content is built fresh.
+    if (await panel.isVisible()) {
+      await page.keyboard.press('Escape');
+      await expect(panel).toBeHidden();
+    }
+    await open();
+    await expect(adminItem).toBeVisible({ timeout: 3000 });
+  }).toPass({ timeout: 30000, intervals: [250, 500, 1000, 2000] });
 }
 
 /**

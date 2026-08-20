@@ -147,9 +147,16 @@ test.describe('My Exhibits Landing Page', () => {
 
     // Baseline: the unfiltered list holds at least this spec's two exhibits plus the
     // worker's `seededExhibit`.
+    //
+    // Polled rather than read once. MatPaginator's getRangeLabel renders '0 of 0' while
+    // `length` is still 0, i.e. before GET /api/me/exhibits resolves — which satisfies
+    // /of \d+/, so waiting for the label to exist does not mean the data arrived. Reading
+    // the total at that instant yields 0 and fails this assertion; Firefox lost that race.
+    // The same poll was already used for the post-clear check in step 3.
     await expect(paginator).toContainText(/of \d+/);
-    const unfilteredTotal = await paginatorTotal(await paginator.innerText());
-    expect(unfilteredTotal).toBeGreaterThanOrEqual(3);
+    await expect
+      .poll(async () => paginatorTotal(await paginator.innerText()))
+      .toBeGreaterThanOrEqual(3);
 
     // 2. Enter a search term that matches an exhibit name.
     await search.fill(prefix);
