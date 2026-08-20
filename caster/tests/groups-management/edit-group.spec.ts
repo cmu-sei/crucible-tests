@@ -4,30 +4,35 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import {
+  test,
+  expect,
+  casterGroupCell,
+  createCasterGroup,
+  deleteCasterGroup,
+  gotoCasterGroupsAdmin,
+} from '../../fixtures';
 
 test.describe('Groups Management', () => {
   test('Edit Group', async ({ casterAuthenticatedPage: page }) => {
 
-    await page.goto(Services.Caster.UI + '/admin?section=Groups');
-    await expect(page.getByRole('columnheader', { name: 'Group Name' })).toBeVisible({ timeout: 10000 });
+    await gotoCasterGroupsAdmin(page);
 
     // 1. Create a group first
-    const createButton = page.getByRole('table').getByRole('button').first();
-    await createButton.click();
-    const groupNameInput = page.getByRole('textbox').last();
-    await expect(groupNameInput).toBeVisible({ timeout: 5000 });
-    await groupNameInput.fill('Group To Edit');
-    await page.keyboard.press('Enter');
-    await expect(page.getByRole('cell', { name: 'Group To Edit' })).toBeVisible({ timeout: 10000 });
+    await createCasterGroup(page, 'Group To Edit');
+    const originalCell = casterGroupCell(page, 'Group To Edit');
+    await expect(originalCell).toBeVisible();
 
     // 2. Click the rename button (second button, edit icon) on the group row
-    const groupRow = page.getByRole('row').filter({ hasText: 'Group To Edit' });
+    const groupRow = page.getByRole('row').filter({ has: originalCell });
     await groupRow.getByRole('button').last().click();
 
     // 3. Verify rename dialog appears
-    const dialog = page.getByRole('dialog');
-    await expect(dialog).toBeVisible({ timeout: 5000 });
+    // The rename dialog's accessible name embeds the group name. Scoping by it
+    // keeps this from also matching a dialog still playing its exit animation,
+    // which would fail strict mode.
+    const dialog = page.getByRole('dialog', { name: 'Rename Group To Edit' });
+    await expect(dialog).toBeVisible({ timeout: 10000 });
 
     // 4. Clear and enter new name
     const nameInput = dialog.getByRole('textbox', { name: 'Name' });
@@ -38,13 +43,12 @@ test.describe('Groups Management', () => {
     await dialog.getByRole('button', { name: 'Save' }).click();
 
     // expect: Updated group name appears in the table
-    await expect(page.getByRole('cell', { name: 'Updated Group Name' })).toBeVisible({ timeout: 10000 });
+    const updatedCell = casterGroupCell(page, 'Updated Group Name');
+    await expect(updatedCell).toBeVisible({ timeout: 20000 });
+    await expect(originalCell).toHaveCount(0);
 
     // Cleanup: delete the renamed group
-    const updatedRow = page.getByRole('row').filter({ hasText: 'Updated Group Name' });
-    await updatedRow.getByRole('button').first().click();
-    await expect(page.getByRole('dialog')).toBeVisible({ timeout: 5000 });
-    await page.getByRole('button', { name: 'Delete' }).click();
-    await expect(page.getByRole('cell', { name: 'Updated Group Name' })).not.toBeVisible({ timeout: 10000 });
+    await deleteCasterGroup(page, 'Updated Group Name');
+    await expect(updatedCell).toHaveCount(0);
   });
 });

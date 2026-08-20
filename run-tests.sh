@@ -84,6 +84,35 @@ get_app_url() {
     esac
 }
 
+# Map app name to its API URL, or empty when the app has no separate API.
+#
+# Checking the API as well as the UI matters because the two fail independently:
+# the Angular UI is served by its own dev server and boots fine with a dead API,
+# so a UI-only check reports a green stack while every test fails on missing data.
+# (Seen for real: caster-api FailedToStart left the UI healthy on :4310 while
+# :4309 accepted connections and never answered, which surfaced as a pile of
+# baffling assertion failures instead of "the API is down".)
+#
+# Deliberately unset (no default) so an env file that omits an API URL — e.g. the
+# minikube target, which fronts everything through one ingress host — simply skips
+# the extra probe rather than checking a bogus localhost port.
+get_app_api_url() {
+    local app="$1"
+    case "$app" in
+        blueprint)   echo "${BLUEPRINT_API_URL}";;
+        player)      echo "${PLAYER_API_URL}";;
+        playerVm)    echo "${PLAYERVM_API_URL}";;
+        cite)        echo "${CITE_API_URL}";;
+        gameboard)   echo "${GAMEBOARD_API_URL}";;
+        topomojo)    echo "${TOPOMOJO_API_URL}";;
+        steamfitter) echo "${STEAMFITTER_API_URL}";;
+        alloy)       echo "${ALLOY_API_URL}";;
+        caster)      echo "${CASTER_API_URL}";;
+        gallery)     echo "${GALLERY_API_URL}";;
+        *) echo "";;
+    esac
+}
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -110,17 +139,30 @@ print_error() {
     echo -e "${RED}✗ $1${NC}"
 }
 
+# Probe one URL for liveness. Any HTTP response counts as up — a 401 or 404 still
+# proves something is listening and answering, which is all this check is for.
+#
+# --max-time is essential, not cosmetic: an Aspire proxy whose backing process died
+# still accepts the TCP connection and then never replies, so an untimed curl hangs
+# forever instead of reporting the service as down.
+probe_url() {
+    local url="$1"
+    local curl_flags=(-s -o /dev/null --max-time 10)
+    [[ "$url" == https://* ]] && curl_flags+=(-k)
+    curl "${curl_flags[@]}" "$url" > /dev/null 2>&1
+}
+
 # Check if services are running
 # Usage: check_services [app ...]
 # With no args, checks Keycloak + Aspire only.
-# With app names, also checks each app's UI URL.
+# With app names, also checks each app's UI URL and (when defined) its API URL.
 check_services() {
     echo -e "${BLUE}Checking required services...${NC}"
 
     local all_ok=true
 
     # Keycloak is always required (handles auth for all apps)
-    if curl -k -s "$KEYCLOAK_URL" > /dev/null 2>&1; then
+    if probe_url "$KEYCLOAK_URL"; then
         print_success "Keycloak ($KEYCLOAK_URL)"
     else
         print_error "Keycloak not accessible at $KEYCLOAK_URL"
@@ -129,29 +171,37 @@ check_services() {
 
     # Aspire dashboard is optional and only relevant under the aspire target
     if [ -n "$ASPIRE_DASHBOARD_URL" ]; then
-        if curl -k -s "$ASPIRE_DASHBOARD_URL" > /dev/null 2>&1; then
+        if probe_url "$ASPIRE_DASHBOARD_URL"; then
             print_success "Aspire Dashboard ($ASPIRE_DASHBOARD_URL)"
         else
             print_warning "Aspire Dashboard not accessible (optional)"
         fi
     fi
 
-    # Check each requested app
+    # Check each requested app: UI first, then its API if this target defines one.
     for app in "$@"; do
         [ "$app" = "keycloak" ] && continue  # already checked above
-        local url
+        local url api_url
         url=$(get_app_url "$app")
         if [ -z "$url" ]; then
             print_warning "Unknown app: $app (skipping health check)"
             continue
         fi
-        local curl_flags="-s"
-        [[ "$url" == https://* ]] && curl_flags="-k -s"
-        if curl $curl_flags "$url" > /dev/null 2>&1; then
-            print_success "$app ($url)"
+        if probe_url "$url"; then
+            print_success "$app UI ($url)"
         else
-            print_error "$app not accessible at $url"
+            print_error "$app UI not accessible at $url"
             all_ok=false
+        fi
+
+        api_url=$(get_app_api_url "$app")
+        if [ -n "$api_url" ]; then
+            if probe_url "$api_url"; then
+                print_success "$app API ($api_url)"
+            else
+                print_error "$app API not accessible at $api_url"
+                all_ok=false
+            fi
         fi
     done
 
