@@ -14,6 +14,24 @@ function readCrucibleFile(relativePath: string): string {
 }
 
 test.describe('Moodle plugin regression guards', () => {
+  test('Crucible bulk deployment provisions a target Alloy user before launch', () => {
+    const launcher = readCrucibleFile('classes/local/bulkdeploy/launcher.php');
+    const locallib = readCrucibleFile('locallib.php');
+
+    const provisionIndex = launcher.indexOf('ensure_alloy_user($auth, $useralloyguid, $userdisplayname)');
+    const launchIndex = launcher.indexOf(
+      'start_event($auth, $crucible->eventtemplateid, $useralloyguid, $userdisplayname)'
+    );
+
+    expect(provisionIndex, 'bulk deployment should provision the target Alloy user').toBeGreaterThan(-1);
+    expect(launchIndex, 'bulk deployment should launch the event for the target user').toBeGreaterThan(-1);
+    expect(provisionIndex, 'user provisioning must happen before target-owned event launch').toBeLessThan(launchIndex);
+
+    expect(locallib).toContain('function ensure_alloy_user($client, $useralloyguid, $userdisplayname)');
+    expect(locallib).toContain("'/users/' . rawurlencode($useralloyguid)");
+    expect(locallib).toContain("$client->post($alloyapiurl . '/users', $payload);");
+  });
+
   test('Crucible view blocks immediate relaunch while Alloy still has an active event', () => {
     const viewPhp = readCrucibleFile('view.php');
 
