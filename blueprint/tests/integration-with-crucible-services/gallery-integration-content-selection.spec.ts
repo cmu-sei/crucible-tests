@@ -2,81 +2,127 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 // spec: specs/blueprint-test-plan.md
-// seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect } from '../../fixtures';
+import {
+  getBlueprintToken,
+  createMsel,
+  deleteMsel,
+  updateMsel,
+  seedMselDataFields,
+  listMselDataFields,
+  navigateToMselSection,
+  tempBlueprintName,
+} from '../../test-helpers';
 
+/**
+ * Selecting which Gallery content a MSEL's data maps to.
+ *
+ * Rewritten. The previous version asserted nothing that could fail. Its whole body was nested
+ * `if (await x.isVisible().catch(() => false))` blocks hunting speculative controls — "Add Event"
+ * / "Create Event" / "New Event", then "Select from Gallery" / "Browse Gallery" / "Gallery
+ * Content" — none of which exist in Blueprint. On a miss it navigated to `${UI}/events/create`,
+ * not a Blueprint route, waited for `networkidle`, and ended in a `console.log` with no
+ * assertion. The run log shows both fallbacks firing verbatim: "Create event button not found -
+ * attempting direct navigation" then "Gallery integration not yet available in Blueprint" — and
+ * the spec still reported green.
+ *
+ * Blueprint does implement Gallery content selection, just not as an event-creation dialog. A
+ * MSEL's DataFields each carry a `galleryArticleParameter`, chosen from a dropdown in the
+ * **Integration** column of the Data Fields section (`data-field-list.component.html:257-272`).
+ * That mapping is what tells Gallery which field supplies each article property, and it is what
+ * `galleryToDo()` checks before a push is allowed. This spec drives that real surface.
+ *
+ * Note the dropdown lists only *unused* options — `getUnusedGalleryOptions(...)` — so once a
+ * parameter is assigned to one field it disappears from the other fields' menus. That is the
+ * behaviour asserted at the end, and it is why the spec re-reads the options rather than assuming
+ * a fixed list.
+ */
 test.describe('Integration with Crucible Services', () => {
-  test('Gallery Integration - Content Selection', async ({ blueprintAuthenticatedPage: page }) => {
-    // Navigate to Blueprint (auth state pre-loaded from setup)
-    await page.goto(Services.Blueprint.UI);
-    await page.waitForLoadState('domcontentloaded');
+  let token: string;
+  let mselId: string;
 
-    // 1. Create a scenario event with Gallery delivery method
-    // Navigate to create event - this assumes there's a way to access event creation
-    // We'll look for common patterns like "Add Event", "Create Event", "New Event"
-    const createEventButton = page.locator('button:has-text("Add Event"), button:has-text("Create Event"), button:has-text("New Event")').first();
-    
-    if (await createEventButton.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await createEventButton.click();
-      
-      // expect: Event creation form shows Gallery integration options
-      const deliveryMethodField = page.locator('select:has-text("Gallery"), input:has-text("Gallery"), [label*="Delivery"], [placeholder*="delivery"]').first();
-      await expect(deliveryMethodField).toBeVisible({ timeout: 10000 });
-      
-      // Try to select Gallery as delivery method
-      const galleryOption = page.locator('option:has-text("Gallery"), text="Gallery"').first();
-      if (await galleryOption.isVisible({ timeout: 5000 }).catch(() => false)) {
-        await galleryOption.click();
-      }
-      
-      // 2. Click 'Select from Gallery' or browse Gallery content
-      const selectGalleryButton = page.locator('button:has-text("Select from Gallery"), button:has-text("Browse Gallery"), button:has-text("Gallery Content")').first();
-      
-      if (await selectGalleryButton.isVisible({ timeout: 5000 }).catch(() => false)) {
-        await selectGalleryButton.click();
-        
-        // expect: Gallery content browser opens
-        // expect: Shows available content items from Gallery service (http://localhost:4723)
-        const galleryContent = page.locator('[class*="gallery"], [id*="gallery"], text=/Gallery.*Content/i').first();
-        await expect(galleryContent).toBeVisible({ timeout: 10000 });
-        
-        // expect: Content can be filtered and searched
-        const searchField = page.locator('input[type="search"], input[placeholder*="search" i], input[placeholder*="filter" i]').first();
-        await expect(searchField).toBeVisible({ timeout: 5000 });
-        
-        // 3. Select content item(s) to associate with the event
-        const contentItems = page.locator('[class*="content-item"], [class*="gallery-item"], [role="option"]');
-        const firstItem = contentItems.first();
-        
-        if (await firstItem.isVisible({ timeout: 5000 }).catch(() => false)) {
-          await firstItem.click();
-          
-          // expect: Content is linked to the scenario event
-          // expect: Selected content appears in event details
-          const selectedContent = page.locator('[class*="selected"], [aria-selected="true"]').first();
-          await expect(selectedContent).toBeVisible({ timeout: 5000 });
-        }
-      } else {
-        // If Gallery integration UI is not yet implemented, log this
-        console.log('Gallery integration UI not found - feature may not be fully implemented yet');
-      }
-    } else {
-      // If we can't find the create event button, try navigating directly to an event creation URL
-      console.log('Create event button not found - attempting direct navigation');
-      await page.goto(`${Services.Blueprint.UI}/events/create`);
-      await page.waitForLoadState('networkidle');
-      
-      // Look for Gallery integration options on this page
-      const galleryIntegration = page.locator('text=/Gallery/i').first();
-      const hasGalleryOption = await galleryIntegration.isVisible({ timeout: 5000 }).catch(() => false);
-      
-      if (hasGalleryOption) {
-        await expect(galleryIntegration).toBeVisible();
-        console.log('Gallery integration option found on event creation page');
-      } else {
-        console.log('Gallery integration not yet available in Blueprint');
-      }
+  test.beforeEach(async () => {
+    token = await getBlueprintToken();
+    const msel = await createMsel(token, { name: tempBlueprintName('TestBP-GalleryContent') });
+    mselId = msel.id;
+
+    // Gallery must be on for the Integration column to offer article parameters.
+    await updateMsel(token, mselId, { useGallery: true });
+    await seedMselDataFields(token, mselId);
+  });
+
+  test.afterEach(async () => {
+    try {
+      if (mselId) await deleteMsel(token, mselId);
+    } catch (err) {
+      console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
     }
+  });
+
+  test('Gallery Integration - Content Selection', async ({ blueprintAuthenticatedPage: page }) => {
+    // expect: the fixture has DataFields to map, so what follows is not vacuous.
+    const fields = await listMselDataFields(token, mselId);
+    expect(fields.length, 'seeded DataField count').toBeGreaterThan(0);
+
+    await navigateToMselSection(page, mselId, 'Data Fields');
+
+    // expect: the Integration column exists — this is the Gallery content-selection surface.
+    await expect(page.getByText('Integration', { exact: true }).first()).toBeVisible({
+      timeout: 30000,
+    });
+
+    const integrationSelects = page.locator('mat-select.integration');
+    await expect(integrationSelects.first()).toBeVisible({ timeout: 30000 });
+
+    // 1. Open the first field's Integration dropdown.
+    await integrationSelects.first().click();
+
+    const options = page.getByRole('option');
+    await expect(options.first()).toBeVisible({ timeout: 15000 });
+
+    // expect: Gallery article parameters are offered, labelled "Gallery <Parameter>"
+    // (data-field-list.component.html:267).
+    const galleryOptions = options.filter({ hasText: /^Gallery / });
+    const galleryOptionCount = await galleryOptions.count();
+    expect(
+      galleryOptionCount,
+      'the Integration dropdown should offer Gallery article parameters'
+    ).toBeGreaterThan(0);
+
+    // 2. Select one and confirm it sticks.
+    const chosenLabel = (await galleryOptions.first().textContent())?.trim() ?? '';
+    expect(chosenLabel).toMatch(/^Gallery /);
+    const chosenParameter = chosenLabel.replace(/^Gallery\s+/, '');
+
+    await galleryOptions.first().click();
+    await expect(options.first()).toBeHidden({ timeout: 15000 });
+
+    // expect: the selection is reflected in the field's control.
+    await expect(integrationSelects.first()).toContainText(chosenParameter, { timeout: 15000 });
+
+    // expect: it persisted server-side — `(selectionChange)="saveChange(element)"` saves
+    // immediately, so this is asserted through the API rather than from the UI label alone.
+    await expect
+      .poll(
+        async () => {
+          const after = await listMselDataFields(token, mselId);
+          return after.some((f: any) => f.galleryArticleParameter === chosenParameter);
+        },
+        {
+          timeout: 30000,
+          intervals: [250, 500, 1000],
+          message: `a DataField should now carry galleryArticleParameter "${chosenParameter}"`,
+        }
+      )
+      .toBe(true);
+
+    // 3. expect: the parameter is no longer offered elsewhere — the dropdown lists only unused
+    //    options, so a Gallery property cannot be double-assigned.
+    await integrationSelects.nth(1).click();
+    await expect(page.getByRole('option').first()).toBeVisible({ timeout: 15000 });
+    await expect(
+      page.getByRole('option').filter({ hasText: new RegExp(`^Gallery ${chosenParameter}$`) })
+    ).toHaveCount(0);
   });
 });

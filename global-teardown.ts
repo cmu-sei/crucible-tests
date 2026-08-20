@@ -6,6 +6,7 @@ import { loadCrucibleEnv } from './load-env';
 import { pathFiltersIncludeApp } from './playwright-run-filters';
 import { purgeAllCiteTestData } from './cite/fixtures';
 import { purgeAllSteamfitterTestData } from './steamfitter/fixtures';
+import { purgeAllBlueprintTestData } from './blueprint/test-helpers';
 
 // Load environment based on CRUCIBLE_TARGET (aspire | minikube) before reading Services.
 loadCrucibleEnv();
@@ -45,6 +46,14 @@ async function globalTeardown(_config: FullConfig): Promise<void> {
       await purgeAllSteamfitterTestData();
     } catch (error) {
       console.warn(`[global-teardown] Steamfitter test-data purge skipped: ${error}`);
+    }
+  }
+
+  if (pathFiltersIncludeApp('blueprint')) {
+    try {
+      await purgeAllBlueprintTestData();
+    } catch (error) {
+      console.warn(`[global-teardown] Blueprint test-data purge skipped: ${error}`);
     }
   }
 }
