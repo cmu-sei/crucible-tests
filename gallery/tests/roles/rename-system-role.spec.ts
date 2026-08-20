@@ -4,54 +4,63 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
-import { authenticateGalleryWithKeycloak } from '../../fixtures';
+import { test, expect, gotoGalleryAdmin, gotoAdminSection, apiCleanupSystemRoles } from '../../fixtures';
 
 test.describe('Role and Permission Management', () => {
-  const testRoleName = `RenameRole${Date.now()}`;
-  const renamedRoleName = `Renamed${Date.now()}`;
+  // Unique per test so the `afterEach` purge can never touch another spec's (or
+  // another worker's) role. `RenameRoleTest`/`RenamedRoleTest` are this spec
+  // file's private prefixes.
+  let testRoleName: string;
+  let renamedRoleName: string;
 
-  test('Rename System Role', async ({ page }) => {
-    await authenticateGalleryWithKeycloak(page);
-    await page.getByRole('button', { name: 'Administration' }).click();
-    await expect(page).toHaveTitle('Gallery Admin');
+  test.beforeEach(() => {
+    const stamp = `${Date.now()}${Math.floor(Math.random() * 1e6)}`;
+    testRoleName = `RenameRoleTest${stamp}`;
+    renamedRoleName = `RenamedRoleTest${stamp}`;
+  });
+
+  // Purge BOTH names: depending on where the test failed the role may still be
+  // under its original name or already renamed. A leftover custom role pollutes
+  // the shared permission matrix for every later run of system-roles-matrix.
+  test.afterEach(async () => {
+    await apiCleanupSystemRoles([testRoleName, renamedRoleName]);
+  });
+
+  test('Rename System Role', async ({ galleryAuthenticatedPage: page }) => {
+    await gotoGalleryAdmin(page);
 
     // Navigate to Roles section
-    await page.locator('mat-list-item').filter({ hasText: 'Roles' }).getByRole('button').click();
+    await gotoAdminSection(page, 'Roles');
     await expect(page.getByRole('tab', { name: 'Roles', selected: true })).toBeVisible();
 
     // Setup: Create a custom role to rename
     const addRoleButton = page.getByRole('columnheader', { name: 'Permissions' }).getByRole('button').first();
     await addRoleButton.click();
     const createDialog = page.getByRole('dialog');
-    if (await createDialog.isVisible().catch(() => false)) {
-      await createDialog.getByRole('textbox').fill(testRoleName);
-      await createDialog.getByRole('button', { name: /save|ok|confirm|add/i }).click();
-    }
+    await expect(createDialog).toBeVisible();
+    await createDialog.getByLabel('Name').fill(testRoleName);
+    await createDialog.getByRole('button', { name: 'Save' }).click();
+    await expect(createDialog).not.toBeVisible();
     await expect(page.getByRole('columnheader', { name: testRoleName })).toBeVisible();
 
     // 1. Click the 'Rename Role' button (pencil icon) on the custom role column header
     const roleHeader = page.getByRole('columnheader', { name: testRoleName });
     await roleHeader.getByRole('button', { name: 'Rename Role' }).click();
 
-    // expect: A rename dialog or inline edit appears
+    // expect: A rename dialog appears pre-filled with the current role name
     const renameDialog = page.getByRole('dialog');
-    if (await renameDialog.isVisible().catch(() => false)) {
-      // 2. Enter a new name and confirm
-      await renameDialog.getByRole('textbox').clear();
-      await renameDialog.getByRole('textbox').fill(renamedRoleName);
-      await renameDialog.getByRole('button', { name: /save|ok|confirm/i }).click();
-    }
+    await expect(renameDialog).toBeVisible();
+    await expect(renameDialog.getByLabel('Name')).toHaveValue(testRoleName);
+
+    // 2. Enter a new name and confirm
+    await renameDialog.getByLabel('Name').fill(renamedRoleName);
+    await renameDialog.getByRole('button', { name: 'Save' }).click();
+    await expect(renameDialog).not.toBeVisible();
 
     // expect: The role column header updates to show the new name
     await expect(page.getByRole('columnheader', { name: renamedRoleName })).toBeVisible();
 
-    // Cleanup: Delete the renamed role
-    const renamedHeader = page.getByRole('columnheader', { name: renamedRoleName });
-    await renamedHeader.getByRole('button', { name: 'Delete Role' }).click();
-    const confirmDialog = page.getByRole('dialog');
-    if (await confirmDialog.isVisible().catch(() => false)) {
-      await confirmDialog.getByRole('button', { name: /yes|confirm|ok|delete/i }).click();
-    }
+    // expect: The old name no longer appears as a column
+    await expect(page.getByRole('columnheader', { name: testRoleName })).toHaveCount(0);
   });
 });

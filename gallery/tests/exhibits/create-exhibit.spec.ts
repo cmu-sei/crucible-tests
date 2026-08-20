@@ -4,35 +4,49 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
-import { authenticateGalleryWithKeycloak } from '../../fixtures';
+import {
+  test,
+  expect,
+  gotoGalleryAdmin,
+  gotoAdminSection,
+  apiCreateCollection,
+  apiDeleteCollectionById,
+} from '../../fixtures';
+import type { Page } from '@playwright/test';
+
+async function selectCollection(page: Page, collectionName: string): Promise<void> {
+  await page.getByRole('combobox', { name: 'Select a Collection' }).click();
+  const option = page.getByRole('option', { name: collectionName });
+  await expect(option).toBeVisible({ timeout: 20000 });
+  await option.click();
+}
 
 test.describe('Exhibit Management', () => {
-  const testCollectionName = `Exhibit Create Test ${Date.now()}`;
-  const testExhibitName = `Test Exhibit ${Date.now()}`;
+  // Registered the instant the collection exists so `afterEach` can remove it even if
+  // the test body throws before finishing — never clean up inline at the end of a test.
+  let collectionId: string | undefined;
 
-  test('Create New Exhibit', async ({ page }) => {
-    await authenticateGalleryWithKeycloak(page);
-    await page.getByRole('button', { name: 'Administration' }).click();
-    await expect(page).toHaveTitle('Gallery Admin');
+  test.afterEach(async () => {
+    // Exhibit.CollectionId is configured with DeleteBehavior.Cascade (verified in
+    // Gallery's EF model snapshot and by observing a 404 on GET /api/exhibits/{id}
+    // after the parent collection is deleted), so this removes the exhibit too.
+    if (collectionId) {
+      await apiDeleteCollectionById(collectionId, 'Exhibit Create Test collection');
+    }
+    collectionId = undefined;
+  });
 
-    // Setup: Create a collection for the exhibit
-    await page.getByRole('button', { name: 'Add Collection' }).click();
-    const createCollDialog = page.getByRole('dialog');
-    await expect(createCollDialog).toBeVisible();
-    await createCollDialog.getByLabel('Name').fill(testCollectionName);
-    await createCollDialog.getByLabel('Description').fill('Collection for exhibit test');
-    await createCollDialog.getByRole('button', { name: 'Save' }).click();
-    // Wait for dialog to close (collection is created successfully)
-    await expect(createCollDialog).not.toBeVisible();
+  test('Create New Exhibit', async ({ galleryAuthenticatedPage: page }) => {
+    // The parent collection is a precondition, not the subject under test — seed it
+    // through the API instead of clicking through the create-collection dialog.
+    const suffix = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    const collection = await apiCreateCollection(`Exhibit Create Test ${suffix}`);
+    collectionId = collection.id;
+    const testExhibitName = `Create Exhibit ${suffix}`;
 
-    // Navigate to Exhibits section and select the newly created collection
-    await page.locator('mat-list-item').filter({ hasText: 'Exhibits' }).getByRole('button').click();
-    const collectionDropdown = page.getByRole('combobox', { name: 'Select a Collection' });
-    await collectionDropdown.click();
-    // Wait for the collection to appear in the dropdown
-    await expect(page.getByRole('option', { name: testCollectionName })).toBeVisible();
-    await page.getByRole('option', { name: testCollectionName }).click();
+    await gotoGalleryAdmin(page);
+    await gotoAdminSection(page, 'Exhibits');
+    await selectCollection(page, collection.name);
 
     // 1. Click 'Add Exhibit' button
     await page.getByRole('button', { name: 'Add Exhibit' }).click();
@@ -40,32 +54,19 @@ test.describe('Exhibit Management', () => {
     // expect: An exhibit creation dialog opens with form fields
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
+    await expect(dialog.getByText('Add Exhibit')).toBeVisible();
 
-    // 2. Enter an exhibit name and description
+    // 2. Enter an exhibit name
     await dialog.getByLabel('Name').fill(testExhibitName);
 
-    // 6. Click 'Save' button
+    // 3. Click 'Save' button
     await dialog.getByRole('button', { name: 'Save' }).click();
 
-    // expect: Exhibit is created successfully
-    // expect: New exhibit appears in the list
-    await expect(page.getByText(testExhibitName)).toBeVisible();
+    // expect: Exhibit is created successfully and the dialog closes
+    await expect(dialog).not.toBeVisible();
 
-    // Cleanup: Delete the collection (which will also remove the exhibit)
-    // Note: We cannot delete the exhibit directly while the collection filter is active
-    // as the delete button remains disabled. Deleting the collection will clean up everything.
-    await page.locator('mat-list-item').filter({ hasText: 'Collections' }).getByRole('button').click();
-    // Use search to find the collection since it may not be on the first page due to pagination
-    const searchBox = page.getByRole('textbox', { name: 'Search' });
-    await searchBox.fill(testCollectionName);
-    // Wait for search to filter results
-    const collRow = page.getByRole('row').filter({ hasText: testCollectionName });
-    await expect(collRow).toBeVisible();
-    await collRow.getByRole('button', { name: `Delete ${testCollectionName}` }).click();
-    const confirmDialog = page.getByRole('dialog');
-    await confirmDialog.getByRole('button', { name: /yes|confirm|ok|delete/i }).click();
-    // Wait for the dialog to close and the collection to be removed from the list
-    await expect(confirmDialog).not.toBeVisible();
-    await expect(collRow).not.toBeVisible();
+    // expect: New exhibit appears in the list
+    const newRow = page.locator('tr.element-row').filter({ hasText: testExhibitName });
+    await expect(newRow).toBeVisible();
   });
 });
