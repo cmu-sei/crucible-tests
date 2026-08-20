@@ -12,6 +12,10 @@ playwright/.cache/
 # Authentication state
 .auth/
 
+# Agent scratch space (subagent worktrees, Playwright MCP session output)
+.claude/worktrees/
+.playwright-mcp/
+
 # App bug writeups — internal review only, never committed
 *-app-bugs.md
 

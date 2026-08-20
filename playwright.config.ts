@@ -16,6 +16,12 @@ export default defineConfig({
   testDir: './',
   testMatch: '**/tests/**/*.spec.ts',
 
+  // Never discover specs inside nested git worktrees (`.claude/worktrees/<name>/`).
+  // Those checkouts carry their own `node_modules`, so a spec found there imports a
+  // second copy of @playwright/test — which throws at config load and drops
+  // discovery to 0 tests for the entire suite, not just the worktree.
+  testIgnore: ['**/.claude/**', '**/node_modules/**'],
+
   // Authenticate provisioned apps (currently cite, caster, player) once before the suite and
   // save their browser storageState to .auth/<app>.json. Consuming apps load that state
   // via their fixtures so per-test runs skip the full Keycloak redirect. See

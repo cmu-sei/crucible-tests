@@ -4,78 +4,115 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
-import { authenticateGalleryWithKeycloak } from '../../fixtures';
+import { test, expect, gotoGalleryAdmin, apiDeleteCollectionById } from '../../fixtures';
+import type { Locator, Page } from '@playwright/test';
+
+/**
+ * Create a collection through the admin UI and return its API id.
+ *
+ * The id comes from the POST response rather than from the table, so the caller can
+ * register it for teardown before any assertion has a chance to throw.
+ */
+async function createCollectionViaUi(
+  page: Page,
+  name: string,
+  description: string
+): Promise<string> {
+  const created = page.waitForResponse(
+    (response) => response.url().endsWith('/api/collections') && response.request().method() === 'POST'
+  );
+
+  await page.getByRole('button', { name: 'Add Collection' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel('Name').fill(name);
+  await dialog.getByLabel('Description').fill(description);
+  await dialog.getByRole('button', { name: 'Save' }).click();
+
+  const response = await created;
+  expect(response.status()).toBe(201);
+  const collection = await response.json();
+
+  // The dialog closing is the app's own signal that the save round-trip finished.
+  await expect(dialog).not.toBeVisible();
+
+  // The value must survive the round trip byte-for-byte — no stripping, escaping or
+  // mangling of the special characters on the way in.
+  expect(collection.name).toBe(name);
+  expect(collection.description).toBe(description);
+
+  return collection.id;
+}
+
+/**
+ * Filter the admin Collections list down to one name and return its row.
+ *
+ * The list paginates at 10 and concurrent specs seed their own collections, so a
+ * freshly-created row routinely lands on page 2+; searching first is what brings it
+ * onto page 1.
+ */
+async function findCollectionRow(page: Page, name: string): Promise<Locator> {
+  const searchField = page.getByRole('textbox', { name: 'Search' });
+  await searchField.clear();
+  await searchField.fill(name);
+
+  const row = page.locator('app-admin-collections tr.element-row').filter({ hasText: name });
+  await expect(row).toBeVisible();
+  return row;
+}
 
 test.describe('Edge Cases and Negative Testing', () => {
-  test('Special Characters and Input Sanitization', async ({ page }) => {
-    await authenticateGalleryWithKeycloak(page);
-    await page.getByRole('button', { name: 'Administration' }).click();
-    await expect(page).toHaveTitle('Gallery Admin');
+  // Ids are captured from the create responses and deleted here, so a failure in the
+  // middle of the test cannot leave collections behind.
+  const createdCollectionIds: string[] = [];
 
-    // 1. Create a collection with special characters in the name
-    const xssName = `<script>alert('xss')</script> ${Date.now()}`;
-    await page.getByRole('button', { name: 'Add Collection' }).click();
-    let dialog = page.getByRole('dialog');
-    await expect(dialog).toBeVisible();
-    await dialog.getByLabel('Name').fill(xssName);
-    await dialog.getByLabel('Description').fill('<b>HTML tags</b>');
-    await dialog.getByRole('button', { name: 'Save' }).click();
+  test.afterEach(async () => {
+    while (createdCollectionIds.length > 0) {
+      const id = createdCollectionIds.pop() as string;
+      await apiDeleteCollectionById(id, 'Special Characters test collection');
+    }
+  });
 
-    // Wait for dialog to close after save
-    await expect(dialog).not.toBeVisible();
+  test('Special Characters and Input Sanitization', async ({ galleryAuthenticatedPage: page }) => {
+    await gotoGalleryAdmin(page);
 
-    // expect: Special characters are handled correctly
-    // expect: No XSS vulnerabilities - name is stored and displayed properly escaped
-    // Search for the newly created collection to verify it's visible
-    await page.getByRole('textbox', { name: 'Search' }).fill(xssName);
-    await expect(page.getByText(xssName)).toBeVisible();
+    const suffix = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+
+    // 1. Create a collection with special characters in the name, and 3. HTML tags in
+    // the description (same record — the description field is where the HTML goes).
+    const xssName = `<script>alert('xss')</script> ${suffix}`;
+    const htmlDescription = '<b>HTML tags</b>';
+    createdCollectionIds.push(await createCollectionViaUi(page, xssName, htmlDescription));
+
+    // expect: Special characters are handled correctly — the row is found and its name
+    // reads back exactly as typed.
+    const xssRow = await findCollectionRow(page, xssName);
+    const nameCell = xssRow.getByRole('cell').nth(1);
+    const descriptionCell = xssRow.getByRole('cell').nth(2);
+    await expect(nameCell).toHaveText(xssName);
+
+    // expect: No XSS vulnerabilities — the payload is rendered as text, not parsed as
+    // markup. Angular interpolation escapes it, so the literal '<script>' shows up in
+    // innerText while no script element is created. Asserting both directions matters:
+    // visible text alone would also pass if the browser had silently executed the tag.
+    await expect(nameCell.locator('script')).toHaveCount(0);
+    await expect(page.locator('app-admin-collections tbody script')).toHaveCount(0);
+    expect(await nameCell.innerHTML()).toBe(
+      "&lt;script&gt;alert('xss')&lt;/script&gt; " + suffix
+    );
+
+    // 3. expect: HTML in the description is escaped or rendered harmless — the <b> is
+    // shown as text, not as a bold element.
+    await expect(descriptionCell).toHaveText(htmlDescription);
+    await expect(descriptionCell.locator('b')).toHaveCount(0);
 
     // 2. Create a collection with Unicode characters
-    const unicodeName = `Unicode 测试 🎯 ${Date.now()}`;
-    await page.getByRole('button', { name: 'Add Collection' }).click();
-    dialog = page.getByRole('dialog');
-    await expect(dialog).toBeVisible();
-    await dialog.getByLabel('Name').fill(unicodeName);
-    await dialog.getByLabel('Description').fill('Unicode test');
-    await dialog.getByRole('button', { name: 'Save' }).click();
+    const unicodeName = `Unicode 测试 🎯 ${suffix}`;
+    createdCollectionIds.push(await createCollectionViaUi(page, unicodeName, 'Unicode test'));
 
-    // Wait for dialog to close after save
-    await expect(dialog).not.toBeVisible();
-
-    // expect: Unicode characters are stored and displayed correctly
-    // Note: Due to table pagination, the collection might be on a different page
-    // Search for it to bring it into view
-    await page.getByRole('textbox', { name: 'Search' }).fill(unicodeName);
-    await expect(page.getByText(unicodeName)).toBeVisible({ timeout: 15000 });
-
-    // Cleanup: Delete both collections
-    for (const name of [unicodeName, xssName]) {
-      // Search for the collection using full name to ensure uniqueness
-      await page.getByRole('textbox', { name: 'Search' }).clear();
-      await page.getByRole('textbox', { name: 'Search' }).fill(name);
-
-      // Wait for the specific row to appear (using full name for uniqueness)
-      const row = page.getByRole('row').filter({ hasText: name });
-      await expect(row).toBeVisible({ timeout: 5000 });
-
-      const deleteBtn = row.getByRole('button', { name: /Delete/ });
-      await deleteBtn.click();
-
-      // Wait for confirmation dialog to be fully visible and stable
-      const confirmDialog = page.getByRole('dialog');
-      await expect(confirmDialog).toBeVisible();
-
-      // Wait for the confirm button to be actionable (not blocked by backdrop)
-      const confirmButton = confirmDialog.getByRole('button', { name: /yes|confirm|ok|delete/i });
-      await expect(confirmButton).toBeVisible();
-      await confirmButton.click();
-
-      // Wait for dialog to close
-      await expect(confirmDialog).not.toBeVisible();
-    }
-
-    // Clear search to verify deletions
-    await page.getByRole('textbox', { name: 'Search' }).clear();
+    // expect: Unicode characters are stored and displayed correctly — CJK and the
+    // astral-plane emoji both survive intact.
+    const unicodeRow = await findCollectionRow(page, unicodeName);
+    await expect(unicodeRow.getByRole('cell').nth(1)).toHaveText(unicodeName);
   });
 });

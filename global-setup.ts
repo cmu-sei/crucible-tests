@@ -53,6 +53,14 @@ const PROVISION: ProvisionTarget[] = [
     appShellSelector: 'app-root mat-toolbar',
   },
   {
+    app: 'gallery',
+    homeUrl: Services.Gallery.UI,
+    // The topbar's `.options-text` block is guarded by `@if (currentUser$ | async)`,
+    // so it renders only once the OIDC client has resolved a user. The surrounding
+    // mat-toolbar renders before that and would snapshot state without a token.
+    appShellSelector: 'app-topbar .options-text button',
+  },
+  {
     app: 'steamfitter',
     homeUrl: Services.Steamfitter.UI,
     // app-topbar's mat-toolbar renders only after the OIDC client resolves a user,
