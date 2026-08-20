@@ -4,7 +4,7 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, typeIntoSearch } from '../../fixtures';
 
 test.describe('Administration - Subscriptions', () => {
   test('Search Subscriptions', async ({ playerAuthenticatedPage: page }) => {
@@ -14,11 +14,11 @@ test.describe('Administration - Subscriptions', () => {
     await page.getByRole('button', { name: 'Subscriptions Subscriptions' }).click();
 
     // expect: The Subscriptions section is displayed
-    await expect(page.getByRole('columnheader', { name: 'Subscription Name' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
 
     // 2. Enter a subscription name in the Search field
-    const searchField = page.getByRole('textbox', { name: 'Search' });
-    await searchField.fill('test');
+    const searchField = page.getByPlaceholder('Search');
+    await typeIntoSearch(searchField, 'test');
 
     // expect: The subscriptions list filters to show only matching subscriptions
     // (Results depend on available subscriptions)

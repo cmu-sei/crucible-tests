@@ -1,0 +1,4 @@
+interface:
+  display_name: "Heal Crucible Tests"
+  short_description: "Diagnose and repair failing Crucible tests."
+  default_prompt: "Use $heal-crucible-tests to repair the specified failing Crucible Playwright test."

@@ -1,8 +1,16 @@
 // Copyright 2026 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
-import { test as base, Page } from '@playwright/test';
-import { Services, serviceUrlPattern, oidcStorageKey, authenticateWithKeycloak } from '../shared-fixtures';
+import { test as base, Locator, Page } from '@playwright/test';
+import fs from 'fs';
+import {
+  Services,
+  serviceUrlPattern,
+  oidcStorageKey,
+  authenticateWithKeycloak,
+  waitForFirstVisible,
+} from '../shared-fixtures';
+import { authSessionStatePath, authStatePath } from '../auth-paths';
 
 /**
  * Caster-specific fixtures
@@ -21,6 +29,21 @@ export async function authenticateCasterWithKeycloak(
   password: string = 'admin'
 ): Promise<void> {
   await authenticateWithKeycloak(page, Services.Caster.UI, username, password);
+}
+
+/**
+ * A newly-created project opens immediately in the project view. Verify that
+ * navigation and return the project ID for API cleanup.
+ */
+export async function expectCasterProjectOpen(page: Page, projectName: string): Promise<string> {
+  await page.waitForURL(/\/projects\/[a-f0-9-]+(?:[/?#]|$)/, { timeout: 10000 });
+  await page.getByText(projectName, { exact: true }).waitFor({ state: 'visible', timeout: 10000 });
+
+  const projectId = new URL(page.url()).pathname.match(/\/projects\/([a-f0-9-]+)/)?.[1];
+  if (!projectId) {
+    throw new Error(`Expected project URL after creating "${projectName}", received ${page.url()}`);
+  }
+  return projectId;
 }
 
 /**
@@ -183,6 +206,38 @@ async function deleteCasterProjectByName(page: Page, projectName: string): Promi
 }
 
 /**
+ * Delete all Caster users matching a given name via the API.
+ * Lists all users, finds every one matching the given name, and deletes each.
+ * Matching on `name` (rather than the caller-chosen id) also sweeps up rows left
+ * by a previous run that used a different id for the same test user.
+ */
+async function deleteCasterUserByName(page: Page, userName: string): Promise<number[]> {
+  const { apiUrl, token } = await getCasterApiContext(page);
+  return page.evaluate(
+    async ({ apiUrl, token, userName }) => {
+      const listResp = await fetch(`${apiUrl}/api/users`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!listResp.ok) return [listResp.status];
+      const users = await listResp.json();
+      const matches = users.filter((u: any) => u.name === userName);
+      if (matches.length === 0) return [404];
+
+      const results: number[] = [];
+      for (const user of matches) {
+        const delResp = await fetch(`${apiUrl}/api/users/${user.id}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        results.push(delResp.status);
+      }
+      return results;
+    },
+    { apiUrl, token, userName },
+  );
+}
+
+/**
  * Delete a Caster role by name via the API.
  * Lists all roles, finds the one matching the given name, and deletes it.
  */
@@ -223,12 +278,26 @@ export type CasterFixtures = {
   cleanupCasterPoolByName: (poolName: string) => Promise<void>;
   /** Register a Caster role name to be deleted (pre-cleans leftovers and post-cleans after test) */
   cleanupCasterRole: (roleName: string) => Promise<void>;
+  /** Register a Caster user name to be deleted (pre-cleans leftovers and post-cleans after test) */
+  cleanupCasterUser: (userName: string) => Promise<void>;
 };
+
+const casterStatePath = authStatePath('caster');
+const casterStateExists = fs.existsSync(casterStatePath);
+const casterSessionStatePath = authSessionStatePath('caster');
+const casterSessionState: Array<[string, string]> = fs.existsSync(casterSessionStatePath)
+  ? JSON.parse(fs.readFileSync(casterSessionStatePath, 'utf8'))
+  : [];
 
 /**
  * Extended test with Caster-specific fixtures
  */
 export const test = base.extend<CasterFixtures>({
+  // Reuse the authenticated state global-setup captured for Caster. Auth-flow
+  // specs override this with an empty state; fallback login keeps normal specs
+  // working if setup could not provision a token.
+  storageState: casterStateExists ? casterStatePath : undefined,
+
   cleanupCasterProject: async ({ page }, use) => {
     const projectIds: string[] = [];
     await use((id: string) => {
@@ -322,8 +391,55 @@ export const test = base.extend<CasterFixtures>({
       }
     }
   },
-  casterAuthenticatedPage: async ({ page }, use) => {
-    await authenticateCasterWithKeycloak(page);
+  cleanupCasterUser: async ({ page }, use) => {
+    const userNames: string[] = [];
+    await use(async (name: string) => {
+      userNames.push(name);
+      // Pre-clean: try to delete a leftover user from a previous failed run. A
+      // stale row would make the "user appears in the list" assertion pass for
+      // the wrong reason, and its id would collide on create.
+      try {
+        await deleteCasterUserByName(page, name);
+      } catch {
+        // ignore – user may not exist yet
+      }
+    });
+    // Post-clean: delete all registered users by name
+    for (const name of userNames) {
+      try {
+        const statuses = await deleteCasterUserByName(page, name);
+        console.log(`Cleanup: Deleted user(s) "${name}", statuses: ${statuses}`);
+      } catch (e) {
+        console.warn(`Cleanup: Failed to delete user "${name}": ${e}`);
+      }
+    }
+  },
+  casterAuthenticatedPage: async ({ page, storageState }, use) => {
+    if (storageState === casterStatePath && casterSessionState.length > 0) {
+      await page.addInitScript((entries: Array<[string, string]>) => {
+        for (const [key, value] of entries) {
+          sessionStorage.setItem(key, value);
+        }
+      }, casterSessionState);
+    }
+    await page.goto(Services.Caster.UI, { waitUntil: 'domcontentloaded' });
+
+    const appShell = page.getByRole('button', { name: 'Admin User' });
+    const keycloakField = page.locator('input[name="username"]');
+    const winner = await waitForFirstVisible(
+      page,
+      [
+        { key: 'shell', locator: appShell },
+        { key: 'keycloak', locator: keycloakField },
+      ],
+      { timeout: 20000 }
+    );
+
+    if (winner !== 'shell') {
+      await authenticateCasterWithKeycloak(page);
+      await appShell.waitFor({ state: 'visible', timeout: 30000 });
+    }
+
     await use(page);
   },
 });
@@ -351,5 +467,171 @@ export async function clickAddRoleButton(page: Page): Promise<void> {
   await dialog.waitFor({ state: 'visible', timeout: 5000 });
 }
 
+/**
+ * Navigate to the admin Users section and wait for the users table to render.
+ */
+export async function gotoCasterUsersAdmin(page: Page): Promise<void> {
+  await page.goto(Services.Caster.UI + '/admin?section=Users');
+  await page.getByRole('columnheader', { name: 'ID' }).waitFor({ state: 'visible', timeout: 20000 });
+}
+
+/**
+ * Click the Add User button in the ID column header and wait for the modal.
+ * Mirrors clickAddRoleButton: the MatTooltip overlay can swallow the first click.
+ */
+export async function openAddUserDialog(page: Page): Promise<Locator> {
+  const addButton = page.getByRole('button', { name: 'Add User' });
+  const dialog = page.getByRole('dialog', { name: 'Add User' });
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await addButton.click();
+    try {
+      await dialog.waitFor({ state: 'visible', timeout: 3000 });
+      return dialog;
+    } catch {
+      // dialog didn't open — tooltip may have intercepted the click
+    }
+  }
+  // Final attempt — let it throw with a clear timeout
+  await addButton.click();
+  await dialog.waitFor({ state: 'visible', timeout: 5000 });
+  return dialog;
+}
+
+/**
+ * The groups-table cell for exactly this group name.
+ *
+ * Exact matching is deliberate: `getByRole` name matching is substring-based by
+ * default, and these suites use names like "Bulk Delete 1" / "Bulk Delete 2"
+ * where a substring match would silently resolve the wrong row.
+ */
+export function casterGroupCell(page: Page, name: string): Locator {
+  return page.getByRole('cell', { name, exact: true });
+}
+
+/**
+ * Navigate to the admin Groups section and wait for the groups table to render.
+ */
+export async function gotoCasterGroupsAdmin(page: Page): Promise<void> {
+  await page.goto(Services.Caster.UI + '/admin?section=Groups');
+  await page
+    .getByRole('columnheader', { name: 'Group Name' })
+    .waitFor({ state: 'visible', timeout: 20000 });
+}
+
+/**
+ * Click the "+" button in the groups table header and wait for the create modal.
+ * Mirrors clickAddRoleButton: the MatTooltip overlay can swallow the first click.
+ */
+export async function openCreateGroupDialog(page: Page): Promise<Locator> {
+  const addButton = page.getByRole('table').getByRole('button').first();
+  const dialog = page.getByRole('dialog', { name: 'Create New Group?' });
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await addButton.click();
+    try {
+      await dialog.waitFor({ state: 'visible', timeout: 3000 });
+      return dialog;
+    } catch {
+      // dialog didn't open — tooltip may have intercepted the click
+    }
+  }
+  // Final attempt — let it throw with a clear timeout
+  await addButton.click();
+  await dialog.waitFor({ state: 'visible', timeout: 5000 });
+  return dialog;
+}
+
+/**
+ * Create a group from the admin Groups table and wait until it is listed.
+ *
+ * Waits for the create dialog to leave the DOM, not just for the new row to show
+ * up. Angular Material keeps a closing mat-dialog-container mounted for the
+ * length of its exit animation, and the row often appears first — so a caller
+ * that opened its next dialog immediately would briefly have two role="dialog"
+ * elements on the page, and any unscoped `getByRole('dialog')` would blow up
+ * with a strict mode violation. That race is what made the groups suite flaky.
+ */
+export async function createCasterGroup(page: Page, name: string): Promise<void> {
+  const dialog = await openCreateGroupDialog(page);
+  await dialog.getByRole('textbox', { name: 'Name' }).fill(name);
+  await dialog.getByRole('button', { name: 'Save' }).click();
+
+  await casterGroupCell(page, name).waitFor({ state: 'visible', timeout: 20000 });
+  await dialog.waitFor({ state: 'detached', timeout: 10000 });
+}
+
+/**
+ * Delete a group from the admin Groups table, confirming the prompt, and wait
+ * until both the row and the confirmation dialog are gone (see createCasterGroup
+ * for why the dialog has to be waited on as well).
+ */
+export async function deleteCasterGroup(page: Page, name: string): Promise<void> {
+  // The row's first button is the trash icon; the second one renames.
+  await page
+    .getByRole('row')
+    .filter({ has: casterGroupCell(page, name) })
+    .getByRole('button')
+    .first()
+    .click();
+
+  const dialog = page.getByRole('dialog', { name: 'Delete Group?' });
+  await dialog.waitFor({ state: 'visible', timeout: 10000 });
+  await dialog.getByRole('button', { name: 'Delete' }).click();
+
+  await casterGroupCell(page, name).waitFor({ state: 'detached', timeout: 20000 });
+  await dialog.waitFor({ state: 'detached', timeout: 10000 });
+}
+
+/** Whether Caster is currently rendering the dark theme. */
+export async function casterIsDarkTheme(page: Page): Promise<boolean> {
+  return page.evaluate(() => document.body.classList.contains('darkMode'));
+}
+
+/**
+ * Switch Caster between light and dark theme through the user menu, and wait for
+ * the change to actually land on `document.body`.
+ *
+ * Use the toggle rather than the `?theme=dark` query param: the param is read in
+ * `AppComponent`'s constructor, so it only applies on a fresh app bootstrap and is
+ * a no-op for a client-side navigation within an already-running app (verified
+ * against the running stack — the param left `body.darkMode` unset).
+ *
+ * No-ops when the requested theme is already active, so callers can use it to
+ * restore state unconditionally.
+ */
+export async function setCasterTheme(page: Page, theme: 'light' | 'dark'): Promise<void> {
+  const want = theme === 'dark';
+  if ((await casterIsDarkTheme(page)) === want) return;
+
+  await page.getByRole('button', { name: 'Admin User' }).click();
+  const toggle = page.getByRole('switch', { name: 'Dark Theme' });
+  await toggle.waitFor({ state: 'visible', timeout: 10000 });
+  await toggle.click();
+  // Close the menu so its overlay can't intercept later clicks.
+  await page.keyboard.press('Escape');
+
+  await page
+    .locator('body')
+    .evaluate(
+      (body, expected) =>
+        new Promise<void>((resolve, reject) => {
+          if (body.classList.contains('darkMode') === expected) return resolve();
+          const observer = new MutationObserver(() => {
+            if (body.classList.contains('darkMode') === expected) {
+              observer.disconnect();
+              resolve();
+            }
+          });
+          observer.observe(body, { attributes: true, attributeFilter: ['class'] });
+          setTimeout(() => {
+            observer.disconnect();
+            reject(new Error(`Theme did not become ${expected ? 'dark' : 'light'}`));
+          }, 10000);
+        }),
+      want,
+    );
+}
+
 export { expect } from '@playwright/test';
-export { Services, serviceUrlPattern, oidcStorageKey };
+export { Services, serviceUrlPattern, oidcStorageKey, waitForFirstVisible };

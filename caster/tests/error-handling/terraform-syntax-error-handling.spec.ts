@@ -4,7 +4,7 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen } from '../../fixtures';
 
 test.describe('Error Handling and Validation', () => {
   test('Terraform Syntax Error Handling', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
@@ -24,10 +24,7 @@ test.describe('Error Handling and Validation', () => {
     const response = await responsePromise;
     const body = await response.json();
     cleanupCasterProject(body.id);
-    await expect(page.getByRole('link', { name: projectName })).toBeVisible({ timeout: 10000 });
-
-    await page.getByRole('link', { name: projectName }).click();
-    await expect(page).toHaveURL(/\/projects\//, { timeout: 10000 });
+    await expectCasterProjectOpen(page, projectName);
 
     await page.getByTitle('Add New Directory').click();
     await expect(page.getByRole('dialog', { name: 'Create New Directory?' })).toBeVisible();

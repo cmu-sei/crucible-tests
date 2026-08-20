@@ -4,10 +4,11 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen } from '../../fixtures';
 
 test.describe('Projects Management', () => {
   test('View Project Details', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+    const projectName = `Project For Details ${Date.now()}`;
 
     // 1. Navigate to Projects section
     await expect(page.getByText('My Projects')).toBeVisible();
@@ -15,7 +16,7 @@ test.describe('Projects Management', () => {
     // Create a project if needed
     await page.locator('button[mattooltip="Add New Project"]').click();
     await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
-    await page.getByRole('textbox', { name: 'Name' }).fill('Project For Details');
+    await page.getByRole('textbox', { name: 'Name' }).fill(projectName);
 
     const createResponsePromise = page.waitForResponse(resp =>
       resp.url().includes('/api/projects') && resp.request().method() === 'POST' && resp.ok()
@@ -27,16 +28,11 @@ test.describe('Projects Management', () => {
     const projectData = await createResponse.json();
     cleanupCasterProject(projectData.id);
 
-    await expect(page.getByRole('link', { name: 'Project For Details' })).toBeVisible({ timeout: 10000 });
-
-    // 2. Click on a project name or view button
-    await page.getByRole('link', { name: 'Project For Details' }).click();
-
-    // expect: The project detail view is displayed
-    await expect(page).toHaveURL(/\/projects\//, { timeout: 10000 });
+    // expect: The project detail view is displayed after creation.
+    await expectCasterProjectOpen(page, projectName);
 
     // expect: Project name is shown in the topbar
-    await expect(page.getByText('Project For Details', { exact: true })).toBeVisible();
+    await expect(page.getByText(projectName, { exact: true })).toBeVisible();
 
     // expect: Sidebar options are available for: Add Directory, Export Project, Import Project
     await expect(page.getByText('Add Directory', { exact: true })).toBeVisible();

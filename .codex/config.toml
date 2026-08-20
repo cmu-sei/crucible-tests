@@ -1,0 +1,10 @@
+[mcp_servers.playwright-test]
+command = "./node_modules/.bin/playwright"
+args = [
+  "run-test-mcp-server",
+  "--config",
+  "./playwright.config.ts",
+]
+cwd = "."
+startup_timeout_sec = 20
+tool_timeout_sec = 300

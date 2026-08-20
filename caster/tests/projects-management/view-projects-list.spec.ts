@@ -17,11 +17,9 @@ test.describe('Projects Management', () => {
     await expect(page.getByText('My Projects')).toBeVisible();
     await expect(page.getByRole('table')).toBeVisible();
 
-    // expect: Each project shows: name with column header 'Project Name'
-    await expect(page.getByRole('button', { name: 'Project Name' })).toBeVisible();
-
-    // expect: Actions column is visible
-    await expect(page.getByRole('columnheader', { name: 'Actions' })).toBeVisible();
+    // expect: Each project shows its name and description.
+    await expect(page.getByRole('button', { name: 'Name' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Description' })).toBeVisible();
 
     // expect: A search box is available
     await expect(page.getByRole('textbox', { name: 'Search' })).toBeVisible();

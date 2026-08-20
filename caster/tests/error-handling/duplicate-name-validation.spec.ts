@@ -4,7 +4,7 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen } from '../../fixtures';
 
 test.describe('Error Handling and Validation', () => {
   test('Duplicate Name Validation', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
@@ -25,6 +25,12 @@ test.describe('Error Handling and Validation', () => {
       const response = await responsePromise;
       const body = await response.json();
       cleanupCasterProject(body.id);
+      await expectCasterProjectOpen(page, name);
+      await page.getByRole('link', { name: 'Caster' }).click();
+      await expect(page.getByText('My Projects')).toBeVisible();
+      const searchBox = page.getByRole('textbox', { name: 'Search' });
+      await searchBox.fill(name);
+      await searchBox.press('End');
     }
 
     // 1. Create a project
@@ -32,6 +38,7 @@ test.describe('Error Handling and Validation', () => {
     await expect(page.getByRole('link', { name: projectName })).toBeVisible({ timeout: 10000 });
 
     // 2. Attempt to create another with the same name
+    await page.getByRole('textbox', { name: 'Search' }).clear();
     await createProjectAndRegisterCleanup(projectName);
 
     // The app allows duplicate project names - the dialog closes and a second project appears.

@@ -4,17 +4,14 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
-import { authenticateGalleryWithKeycloak } from '../../fixtures';
+import { test, expect, gotoGalleryAdmin, gotoAdminSection } from '../../fixtures';
 
 test.describe('User Management', () => {
-  test('User ID Copy Button', async ({ page }) => {
-    await authenticateGalleryWithKeycloak(page);
-    await page.getByRole('button', { name: 'Administration' }).click();
-    await expect(page).toHaveTitle('Gallery Admin');
+  test('User ID Copy Button', async ({ galleryAuthenticatedPage: page }) => {
+    await gotoGalleryAdmin(page);
 
     // Navigate to Users section
-    await page.locator('mat-list-item').filter({ hasText: 'Users' }).getByRole('button').click();
+    await gotoAdminSection(page, 'Users');
 
     // 1. Click the Copy button (clipboard icon) next to a user's ID
     // The button's accessible name includes the UUID (e.g. "Copy: 9b3b331c-...")

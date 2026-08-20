@@ -10,6 +10,7 @@ import type {
   Reporter,
   Suite,
   TestCase,
+  TestError,
   TestResult,
 } from '@playwright/test/reporter';
 
@@ -54,6 +55,10 @@ class ProgressReporter implements Reporter {
   private passed = 0;
   private failed = 0;
   private skipped = 0;
+  // Run-level errors reported outside any test (config load failure, globalSetup
+  // throwing, "no tests found", worker crashes). Counted separately from `failed`
+  // because they are not attributable to a test case.
+  private runErrors = 0;
 
   // Terminal stream for the controlling tty, or null when none is available
   // (the "plain" fallback mode).
@@ -114,17 +119,27 @@ class ProgressReporter implements Reporter {
   }
 
   onTestEnd(test: TestCase, result: TestResult): void {
-    this.completed++;
-    switch (result.status) {
-      case 'passed':
-        this.passed++;
-        break;
-      case 'skipped':
-        this.skipped++;
-        break;
-      default:
-        this.failed++;
-        break;
+    // onTestEnd fires once per attempt, including retries. Only count a test
+    // toward progress on its final attempt — otherwise `completed` overshoots
+    // `total` (which counts unique tests), driving the bar width negative.
+    const willRetry =
+      result.status !== 'passed' &&
+      result.status !== 'skipped' &&
+      result.retry < test.retries;
+
+    if (!willRetry) {
+      this.completed++;
+      switch (result.status) {
+        case 'passed':
+          this.passed++;
+          break;
+        case 'skipped':
+          this.skipped++;
+          break;
+        default:
+          this.failed++;
+          break;
+      }
     }
     this.emitLine(test, result);
   }
@@ -138,6 +153,30 @@ class ProgressReporter implements Reporter {
 
   onStdErr(chunk: string | Buffer): void {
     this.emitRaw(chunk, true);
+  }
+
+  /**
+   * Errors that belong to the run rather than to a test: a config or import that
+   * fails to load, `globalSetup` throwing, "no tests found", a crashed worker.
+   *
+   * Without this hook these are silently dropped — Playwright hands them to the
+   * reporter instead of printing them itself, so a run that dies in globalSetup
+   * (e.g. `npx playwright install` never ran, so chromium.launch() has no binary)
+   * shows up as nothing more than a puzzling "Ran 0 tests: 0 passed". Always print
+   * these, regardless of --verbose: a run-level error is never noise.
+   */
+  onError(error: TestError): void {
+    this.runErrors++;
+    const text = this.formatError(error);
+
+    if (!this.stream) {
+      process.stderr.write(`${text}\n`);
+      return;
+    }
+
+    this.tw(`${CSI}${this.rows - 1};1H${CSI}2K${COLORS.red}${text}${COLORS.reset}\n`);
+    this.logWrite(`${this.stripAnsi(text)}\n`);
+    this.drawBar();
   }
 
   onEnd(result: FullResult): void {
@@ -251,14 +290,31 @@ class ProgressReporter implements Reporter {
     return { colored, plain };
   }
 
+  /**
+   * Render a run-level error as a labeled block. Prefers `stack` (it already
+   * contains the message plus the frames that say *where* it broke) and falls back
+   * to `message`, then `value` for thrown non-Errors. `location` is appended when
+   * Playwright knows the file but gave us no stack.
+   */
+  private formatError(error: TestError): string {
+    const body = error.stack || error.message || error.value || 'unknown error';
+    const where =
+      !error.stack && error.location
+        ? `\n    at ${path.relative(process.cwd(), error.location.file)}:${error.location.line}:${error.location.column}`
+        : '';
+    // `stack` already begins with "Error: ..."; don't stutter the label.
+    const labeled = /^\s*Error\b/.test(body) ? body.trim() : `Error: ${body.trim()}`;
+    return `  ${this.stripAnsi(labeled)}${where}`;
+  }
+
   /** Render (or re-render) the pinned bar on the reserved bottom row. */
   private drawBar(): void {
     if (!this.stream || this.total === 0) return;
 
-    const ratio = this.completed / this.total;
+    const ratio = Math.max(0, Math.min(1, this.completed / this.total));
     const pct = Math.floor(ratio * 100);
     const width = 30;
-    const filled = Math.round(ratio * width);
+    const filled = Math.max(0, Math.min(width, Math.round(ratio * width)));
     const bar = '█'.repeat(filled) + '░'.repeat(width - filled);
 
     const counts =
@@ -278,9 +334,22 @@ class ProgressReporter implements Reporter {
     const parts = [`${this.passed} passed`];
     if (this.failed > 0) parts.push(`${this.failed} failed`);
     if (this.skipped > 0) parts.push(`${this.skipped} skipped`);
+    if (this.runErrors > 0) {
+      parts.push(`${this.runErrors} run error${this.runErrors === 1 ? '' : 's'}`);
+    }
     const color =
-      status === 'passed' ? COLORS.green : this.failed > 0 ? COLORS.red : COLORS.yellow;
-    return `${color}Ran ${this.total} tests: ${parts.join(', ')}${COLORS.reset}`;
+      status === 'passed'
+        ? COLORS.green
+        : this.failed > 0 || this.runErrors > 0
+          ? COLORS.red
+          : COLORS.yellow;
+    // A run that never got as far as collecting tests (bad config, failed
+    // globalSetup, no path match) would otherwise read as a benign "Ran 0 tests".
+    const suffix =
+      this.total === 0 && status !== 'passed'
+        ? ' — the run failed before any test executed'
+        : '';
+    return `${color}Ran ${this.total} tests: ${parts.join(', ')}${suffix}${COLORS.reset}`;
   }
 
   private setScrollRegion(): void {

@@ -4,8 +4,7 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
-import { Services } from '../../fixtures';
+import { test, expect, Services } from '../../fixtures';
 
 test.describe('Integration and API', () => {
   test('API Health Check', async ({ request }) => {
@@ -28,5 +27,16 @@ test.describe('Integration and API', () => {
     // expect: Response body contains status: 'Healthy'
     const readyBody = await readyResponse.text();
     expect(readyBody).toContain('Healthy');
+
+    // 3. Make a request to the version endpoint
+    const versionResponse = await request.get(`${Services.Gallery.API}/api/version`);
+
+    // expect: Version endpoint responds with the current API version string
+    expect(versionResponse.status()).toBe(200);
+    const versionBody = (await versionResponse.text()).trim();
+    expect(versionBody).not.toBe('');
+    // Gallery reports a semver-ish version, optionally suffixed with a commit sha
+    // (e.g. "0.0.0+c2ec85b3864eda68be3b6ed1a4c29514b8f2c702").
+    expect(versionBody).toMatch(/^"?\d+\.\d+\.\d+/);
   });
 });

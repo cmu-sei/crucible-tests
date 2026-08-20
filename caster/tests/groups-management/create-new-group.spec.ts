@@ -4,36 +4,40 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import {
+  test,
+  expect,
+  casterGroupCell,
+  deleteCasterGroup,
+  gotoCasterGroupsAdmin,
+  openCreateGroupDialog,
+} from '../../fixtures';
 
 test.describe('Groups Management', () => {
   test('Create New Group', async ({ casterAuthenticatedPage: page }) => {
 
     // 1. Navigate to Groups admin section
-    await page.goto(Services.Caster.UI + '/admin?section=Groups');
-    await expect(page.getByRole('columnheader', { name: 'Group Name' })).toBeVisible({ timeout: 10000 });
+    // expect: Groups list is visible with create button
+    await gotoCasterGroupsAdmin(page);
+    await expect(page.getByRole('table').getByRole('button').first()).toBeVisible();
 
-    // 2. Click the Create Group button (+ icon)
-    const createButton = page.getByRole('table').getByRole('button').first();
-    await createButton.click();
+    // 2. Click the Create Group or add button
+    // expect: Group creation dialog is displayed with form fields
+    const dialog = await openCreateGroupDialog(page);
 
-    // 3. Enter 'Test Infrastructure Group' in the group name field
-    const groupNameInput = page.getByRole('textbox').last();
-    await expect(groupNameInput).toBeVisible({ timeout: 5000 });
+    // 3. Enter Test Infrastructure Group in the group name field
+    // expect: Name field accepts input
+    const groupNameInput = dialog.getByRole('textbox', { name: 'Name' });
     await groupNameInput.fill('Test Infrastructure Group');
     await expect(groupNameInput).toHaveValue('Test Infrastructure Group');
 
-    // 4. Press Enter to save
-    await page.keyboard.press('Enter');
-
+    // 4. Click Save or Create button
     // expect: New group appears in the groups table
-    await expect(page.getByRole('cell', { name: 'Test Infrastructure Group' })).toBeVisible({ timeout: 10000 });
+    await dialog.getByRole('button', { name: 'Save' }).click();
+    await expect(casterGroupCell(page, 'Test Infrastructure Group')).toBeVisible({ timeout: 20000 });
 
     // Cleanup: delete the created group
-    const groupRow = page.getByRole('row').filter({ hasText: 'Test Infrastructure Group' });
-    await groupRow.getByRole('button').first().click();
-    await expect(page.getByRole('dialog')).toBeVisible({ timeout: 5000 });
-    await page.getByRole('button', { name: 'Delete' }).click();
-    await expect(page.getByRole('cell', { name: 'Test Infrastructure Group' })).not.toBeVisible({ timeout: 10000 });
+    await deleteCasterGroup(page, 'Test Infrastructure Group');
+    await expect(casterGroupCell(page, 'Test Infrastructure Group')).toHaveCount(0);
   });
 });

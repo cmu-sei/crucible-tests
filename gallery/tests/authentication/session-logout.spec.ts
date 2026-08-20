@@ -4,10 +4,19 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
-import { authenticateGalleryWithKeycloak, Services, serviceUrlPattern } from '../../fixtures';
+import {
+  test,
+  expect,
+  authenticateGalleryWithKeycloak,
+  Services,
+  serviceUrlPattern,
+} from '../../fixtures';
 
 test.describe('Authentication and Authorization', () => {
+  // Logout must be verified against a session this test established itself, so
+  // start from an empty context rather than the shared pre-authenticated state.
+  test.use({ storageState: { cookies: [], origins: [] } });
+
   test('Session Logout', async ({ page }) => {
     // 1. Log in successfully and verify the user's session
     await authenticateGalleryWithKeycloak(page);
@@ -31,7 +40,7 @@ test.describe('Authentication and Authorization', () => {
     await page.waitForURL(serviceUrlPattern(Services.Keycloak), { timeout: 30000 });
     await page.getByRole('button', { name: 'Sign In' }).waitFor({ state: 'visible' });
 
-    // 4. Attempt to access http://localhost:4723 after logout
+    // 4. Attempt to access the Gallery UI after logout
     await page.goto(Services.Gallery.UI);
 
     // expect: User is redirected to Keycloak login page

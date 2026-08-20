@@ -14,7 +14,7 @@ test.describe('Administration - Subscriptions', () => {
     await page.getByRole('button', { name: 'Subscriptions Subscriptions' }).click();
 
     // expect: The Subscriptions section is displayed
-    await expect(page.getByRole('columnheader', { name: 'Subscription Name' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
 
     // 2. Observe the 'Last Error' column
     // expect: The error message column is visible

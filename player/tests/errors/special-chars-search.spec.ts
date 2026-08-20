@@ -4,7 +4,7 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, typeIntoSearch } from '../../fixtures';
 
 test.describe('Error Handling and Edge Cases', () => {
   test('Special Characters in Search', async ({ playerAuthenticatedPage: page }) => {
@@ -14,7 +14,7 @@ test.describe('Error Handling and Edge Cases', () => {
 
     // 2. Enter special characters like <, >, &, quotes in the search field
     const searchField = page.getByRole('textbox', { name: 'Search' });
-    await searchField.fill('<script>alert("xss")</script>');
+    await typeIntoSearch(searchField, '<script>alert("xss")</script>');
 
     // expect: The search handles special characters gracefully without errors
     // expect: Results are filtered correctly or no results are shown
@@ -22,7 +22,7 @@ test.describe('Error Handling and Edge Cases', () => {
 
     // Verify no JavaScript errors caused by XSS
     await searchField.clear();
-    await searchField.fill('&<>"\'');
+    await typeIntoSearch(searchField, '&<>"\'');
     await expect(searchField).toHaveValue('&<>"\'');
 
     // Verify the page is still functional
