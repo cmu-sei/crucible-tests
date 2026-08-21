@@ -12,6 +12,7 @@ import {
   createRenderableScenarioEvent,
   tempBlueprintName,
   findMselRowByName,
+  downloadMselFile,
 } from '../../test-helpers';
 
 /**
@@ -59,37 +60,11 @@ test.describe('Export and Import', () => {
     const mselRow = await findMselRowByName(page, mselName);
     await expect(mselRow).toBeVisible();
 
-    /**
-     * Open the row's Download menu and save the given format, returning the download.
-     *
-     * The menu must be fully closed before it is re-opened. This helper is called twice, and
-     * an `mat-menu` that is still running its close animation leaves the *previous* overlay in
-     * the DOM: the new menu item then resolves but the click lands on the outgoing panel and
-     * times out ("locator resolved to <button role=menuitem ...> - attempting click action"
-     * repeatedly). Waiting for zero menu panels first makes the second open deterministic —
-     * this was an intermittent failure of exactly that shape.
-     */
-    const menuPanel = page.locator('.mat-mdc-menu-panel');
-
-    const downloadFormat = async (menuItem: RegExp) => {
-      await expect(menuPanel).toHaveCount(0);
-
-      await mselRow.locator('button[title^="Download "]').click();
-
-      const option = page.getByRole('menuitem', { name: menuItem });
-      await expect(option).toBeVisible({ timeout: 10000 });
-
-      const downloadPromise = page.waitForEvent('download', { timeout: 30000 });
-      await option.click();
-      const download = await downloadPromise;
-
-      // Menu closes on selection; settle it so the next call starts from a known state.
-      await expect(menuPanel).toHaveCount(0);
-      return download;
-    };
+    // Both formats go through `downloadMselFile`, which settles the mat-menu overlay before and
+    // after each open — necessary here in particular, since this spec opens the same menu twice.
 
     // --- xlsx ---
-    const xlsx = await downloadFormat(/Download xlsx file/i);
+    const xlsx = await downloadMselFile(page, mselRow, /Download xlsx file/i);
     expect(xlsx.suggestedFilename()).toMatch(/\.xlsx$/i);
 
     const xlsxPath = await xlsx.path();
@@ -97,7 +72,7 @@ test.describe('Export and Import', () => {
     expect(fs.statSync(xlsxPath!).size).toBeGreaterThan(0);
 
     // --- json ---
-    const json = await downloadFormat(/Download json file/i);
+    const json = await downloadMselFile(page, mselRow, /Download json file/i);
     expect(json.suggestedFilename()).toMatch(/\.json$/i);
 
     const jsonPath = await json.path();

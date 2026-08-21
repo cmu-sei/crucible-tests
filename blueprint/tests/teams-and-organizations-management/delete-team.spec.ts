@@ -40,11 +40,11 @@ test.describe('Teams and Organizations Management', () => {
   });
 
   test('Delete Team', async ({ blueprintAuthenticatedPage: page }) => {
-    // Skipped pending upstream support: the Teams grid does not currently refresh after a
-    // successful delete, so the removed row stays rendered even though DELETE returns 204
-    // and GET /api/msels/{id}/teams confirms removal. The assertion at the end of this test
-    // is correct as written — un-skip it once the grid refreshes.
-    test.skip(true, 'Pending upstream support: Teams grid refresh after delete');
+    // Pending upstream: the Teams grid does not currently refresh after a successful delete,
+    // so the removed row stays rendered even though DELETE returns 204 and
+    // GET /api/msels/{id}/teams confirms removal. Deliberately left un-skipped so the gap is
+    // reported on every run; the assertion at the end of this test is correct as written and
+    // will pass once the grid refreshes.
 
     // Navigate to the MSEL Teams section
     await navigateToMselSection(page, mselId, 'Teams');
@@ -103,7 +103,7 @@ test.describe('Teams and Organizations Management', () => {
     // The deleted row must disappear from the grid. Blueprint currently fails this:
     // the DELETE returns 204 and the API confirms removal, but the row stays rendered
     // indefinitely (verified stable for >15s) because the teams grid neither updates
-    // local state nor refreshes via SignalR. See the test.skip() above.
+    // local state nor refreshes via SignalR. See the Pending upstream note above.
     await expect(teamRow).not.toBeVisible({ timeout: 10000 });
   });
 });

@@ -6,7 +6,8 @@
 //
 // Test: Responsive Layout - Mobile View (plan item 16.x)
 //
-// Rewritten, and now `test.skip`-ed pending upstream support, with its assertion intact.
+// Rewritten, with its assertion intact. It used to fail against a real app defect, which has
+// since been fixed in `blueprint.ui` (see below).
 //
 // The previous version was a bare `test.fixme()` whose comment claimed
 // "document.body.scrollWidth is ~466px at a 375px mobile viewport". Measured directly on the
@@ -15,8 +16,8 @@
 // detect the very defect the comment described. (466 is the right edge of one *overflowing
 // element* on the dashboard, not the document width.)
 //
-// The real defect, measured at 375x667: elements render past the right
-// edge while the document does NOT scroll horizontally, so they are clipped and unreachable.
+// The real defect, measured at 375x667: elements rendered past the right
+// edge while the document did NOT scroll horizontally, so they were clipped and unreachable.
 //
 //   route        documentElement.scrollWidth   overflows?   widest element right edge
 //   /            375                           no           466px  (div.options-text)
@@ -25,8 +26,28 @@
 //
 // A control 333px beyond a 375px screen with no way to scroll to it is inaccessible, not
 // merely ugly. The assertion below uses the metric that actually catches this — every visible
-// interactive element's right edge must fall within the viewport — so it fails today and will
-// pass once a breakpoint is added.
+// interactive element's right edge must fall within the viewport.
+//
+// Three separate causes, all now fixed in `blueprint.ui` behind a `max-width: 599px` breakpoint
+// (Material's own mobile toolbar breakpoint; the tablet and desktop specs run at 768 and 1920,
+// so they are unaffected):
+//
+//   * `topbar.component.scss` — `.view-text` had `margin-left: 50px; margin-right: 40px` and no
+//     `min-width: 0` inside a `white-space: nowrap` toolbar row, so the title's full width was
+//     its *minimum* width and it shoved the account menu (Administration / Logout / Dark Theme)
+//     off the right edge. The title now ellipsizes, the gutters shrink to 12px, and the user's
+//     name is hidden below the breakpoint, leaving the chevron. That was the 466px offender on
+//     `/` and part of the 708px one on `/build`.
+//   * `msel-list.component.*` — the search box was an inline `width: 320px` inside a container
+//     that is `width: 80%`, on a `flex-wrap: nowrap` 90px row. It is now `max-width: 100%`, the
+//     row wraps, and the container takes the full width below the breakpoint.
+//   * `admin-container.component.ts` — `/admin`'s 250px navigation panel left a phone ~125px of
+//     content, pushing the section's toolbar buttons and paginator off-screen. It now collapses
+//     to its 50px icon rail below the breakpoint via `BreakpointObserver` — the rail already
+//     existed but was reachable only from a button inside itself.
+//
+// Re-measured after the fix: 0 overflowing interactive elements on all three routes at 375px,
+// with `scrollWidth == clientWidth == 375`.
 //
 // The old body also wrapped nearly every check in `if (count > 0)` / `if (box)`, so on a page
 // where the elements were missing it asserted nothing at all. Those guards are gone.
@@ -37,11 +58,6 @@ const MOBILE = { width: 375, height: 667 };
 
 test.describe('Accessibility and Usability', () => {
   test('Responsive Layout - Mobile View', async ({ blueprintAuthenticatedPage: page }) => {
-    test.skip(
-      true,
-      'Pending upstream support: reachable controls at a 375px mobile viewport'
-    );
-
     await page.setViewportSize(MOBILE);
 
     for (const route of ['', '/build', '/admin']) {

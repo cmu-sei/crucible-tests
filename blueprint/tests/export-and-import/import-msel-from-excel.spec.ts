@@ -14,6 +14,7 @@ import {
   createRenderableScenarioEvent,
   tempBlueprintName,
   findMselRowByName,
+  downloadMselFile,
 } from '../../test-helpers';
 
 /**
@@ -78,28 +79,16 @@ test.describe('Export and Import', () => {
     await page.goto(`${Services.Blueprint.UI}/build`, { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('table').first()).toBeVisible({ timeout: 15000 });
 
-    // This spec opens two different mat-menus in sequence (Download, then Upload). A menu
-    // still running its close animation leaves the outgoing overlay in the DOM, so the next
-    // menu item resolves but the click lands on the stale panel and times out — the observed
-    // failure was exactly that ("waiting for getByRole('menuitem', {name: /Download xlsx
-    // file/i}) - locator resolved to <button role=menuitem ...>", 10s). Settling on zero menu
-    // panels between opens makes the sequence deterministic.
+    // This spec opens two different mat-menus in sequence (Download, then Upload), so each open
+    // has to start from a settled overlay — see `downloadMselFile`, which does that for the
+    // Download menu and retries the pick.
     const menuPanel = page.locator('.mat-mdc-menu-panel');
 
     // 1. Export the seeded MSEL to use as the import fixture.
     const sourceRow = await findMselRowByName(page, sourceMselName);
     await expect(sourceRow).toBeVisible();
 
-    await expect(menuPanel).toHaveCount(0);
-    await sourceRow.locator('button[title^="Download "]').click();
-
-    const xlsxOption = page.getByRole('menuitem', { name: /Download xlsx file/i });
-    await expect(xlsxOption).toBeVisible({ timeout: 10000 });
-
-    const downloadPromise = page.waitForEvent('download', { timeout: 30000 });
-    await xlsxOption.click();
-    const download = await downloadPromise;
-    await expect(menuPanel).toHaveCount(0);
+    const download = await downloadMselFile(page, sourceRow, /Download xlsx file/i);
 
     // saveAs works when the browser runs remotely, unlike relying on path().
     downloadPath = path.join(os.tmpdir(), `msel-import-${sourceMselName}.xlsx`);
@@ -107,6 +96,7 @@ test.describe('Export and Import', () => {
     expect(fs.statSync(downloadPath).size).toBeGreaterThan(0);
 
     // 2. Import it back, pairing the upload with the POST it triggers.
+    await expect(menuPanel).toHaveCount(0);
     const uploadButton = page.getByRole('button', { name: /Upload a new MSEL from a file/i });
     await expect(uploadButton).toBeVisible({ timeout: 10000 });
     await uploadButton.click();

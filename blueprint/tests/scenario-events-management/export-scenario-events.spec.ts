@@ -17,6 +17,7 @@ import {
   setScenarioEventFieldValue,
   tempBlueprintName,
   findMselRowByName,
+  downloadMselFile,
 } from '../../test-helpers';
 
 /**
@@ -150,14 +151,7 @@ test.describe('Scenario Events Management', () => {
     // 1. Click 'Export' or download button and select a format.
     const mselRow = await findMselRowByName(page, mselName);
     await expect(mselRow).toBeVisible();
-    await mselRow.locator('button[title^="Download "]').click();
-
-    const xlsxOption = page.getByRole('menuitem', { name: /Download xlsx file/i });
-    await expect(xlsxOption).toBeVisible({ timeout: 10000 });
-
-    const downloadPromise = page.waitForEvent('download', { timeout: 30000 });
-    await xlsxOption.click();
-    const download = await downloadPromise;
+    const download = await downloadMselFile(page, mselRow, /Download xlsx file/i);
 
     // expect: File is generated and downloaded with all events and data fields.
     expect(download.suggestedFilename()).toMatch(/\.xlsx$/i);

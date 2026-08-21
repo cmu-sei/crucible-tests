@@ -45,7 +45,17 @@ import {
  *     `MselUpdated` to the MSEL's group on any change.
  * Frames are ``-delimited records, and several can arrive in one payload, so the
  * assertions match on substrings of the concatenated stream rather than parsing per frame.
+ *
+ * `page.on('websocket')` is filtered to `/hubs/main`, because the hub is not the only socket
+ * the page may open. When the UI resource runs in dev mode (`Launch__Blueprint=true` ->
+ * `ng serve`), `@angular-devkit/build-angular:dev-server` also opens a Vite HMR socket at
+ * `ws://localhost:<uiPort>/?token=…`. Counting every socket made this spec pass only in prod
+ * mode (`npx serve dist/browser`, no HMR); scoping to the hub path makes it mode-independent
+ * and keeps HMR traffic out of the frame buffers and the close/error assertions below — the
+ * HMR socket legitimately closes when the page goes away.
  */
+const HUB_PATH = '/hubs/main';
+
 test.describe('Real-time Collaboration and SignalR', () => {
   let token: string;
   let mselId: string;
@@ -81,6 +91,8 @@ test.describe('Real-time Collaboration and SignalR', () => {
       typeof payload === 'string' ? payload : payload.toString('utf8');
 
     page.on('websocket', (ws) => {
+      // Ignore anything that is not the SignalR hub (see the note on HUB_PATH above).
+      if (!new URL(ws.url()).pathname.endsWith(HUB_PATH)) return;
       sockets.push(ws);
       ws.on('framesent', (frame) => sentFrames.push(payloadText(frame.payload)));
       ws.on('framereceived', (frame) => receivedFrames.push(payloadText(frame.payload)));
@@ -101,7 +113,7 @@ test.describe('Real-time Collaboration and SignalR', () => {
       .poll(() => sockets.length, {
         timeout: 30000,
         intervals: [200, 500, 1000],
-        message: 'the Blueprint UI never opened a WebSocket after loading a MSEL',
+        message: 'the Blueprint UI never opened a hub WebSocket after loading a MSEL',
       })
       .toBe(1);
 
@@ -111,7 +123,7 @@ test.describe('Real-time Collaboration and SignalR', () => {
     const hubUrl = new URL(hubSocket.url());
     const apiUrl = new URL(Services.Blueprint.API);
     expect(hubUrl.host).toBe(apiUrl.host);
-    expect(hubUrl.pathname).toBe(`${apiUrl.pathname.replace(/\/$/, '')}/hubs/main`);
+    expect(hubUrl.pathname).toBe(`${apiUrl.pathname.replace(/\/$/, '')}${HUB_PATH}`);
     expect(hubUrl.protocol).toMatch(/^wss?:$/);
 
     // expect: the hub connection is authenticated. `getHubUrlWithAuth()` appends the OIDC

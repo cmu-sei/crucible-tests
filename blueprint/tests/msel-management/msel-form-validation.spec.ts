@@ -11,6 +11,8 @@ import {
   getMsel,
   tempBlueprintName,
   navigateToMsel,
+  retypeMselField,
+  tryUpdateMsel,
 } from '../../test-helpers';
 
 /**
@@ -28,10 +30,9 @@ import {
  *   - Name input has maxlength=70, Description maxlength=600; both truncate on input.
  *   - The counters render as `mat-hint` elements ("70 / 70 characters").
  *
- * The empty-name case is skipped pending upstream support for name validation. There is no
- * validator at either layer today: with the form dirtied, clearing Name leaves Save enabled,
- * the PUT returns 200, and the name persists as "". Those assertions are written correctly
- * below and skipped until the validator lands.
+ * The empty-name case is covered at both layers: the UI guard (clearing Name disables Save and
+ * renders a mat-error, so nothing reaches the server) and the API guard behind it, since a UI-only
+ * check is bypassed by any other client.
  */
 test.describe('MSEL Management', () => {
   let token: string;
@@ -93,17 +94,6 @@ test.describe('MSEL Management', () => {
   test('MSEL Form Validation - empty name is rejected', async ({
     blueprintAuthenticatedPage: page,
   }) => {
-    // Skipped pending upstream support for name validation.
-    // A MSEL can currently be saved with an empty name: no mat-error appears, Save stays
-    // enabled (it is bound to !isChanged only, never to validity), PUT returns 200, and
-    // the name persists as "". The API accepts name:"" directly too, so neither layer
-    // validates. The assertions below are correct as written — un-skip once a required
-    // validator is added on the field AND in the API update path.
-    test.skip(
-      true,
-      'Pending upstream support: required validator on the MSEL Name field'
-    );
-
     await navigateToMsel(page, mselId);
 
     const nameField = page.getByRole('textbox', { name: 'Name' });
@@ -115,12 +105,13 @@ test.describe('MSEL Management', () => {
     // Dirty the form via another field first. Clearing Name alone does not set `isChanged`,
     // so Save would stay disabled for an unrelated reason and the test would pass without
     // exercising validation at all — that is exactly how this defect stayed hidden.
-    await descriptionField.fill('Dirtying the form so Save becomes available');
+    // Typed via retypeMselField, not fill(): the Config tab marks itself dirty from keypress
+    // handlers, so a fill()ed edit leaves Save disabled and the test never reaches validation.
+    await retypeMselField(descriptionField, 'Dirtying the form so Save becomes available');
     await expect(saveButton).toBeEnabled();
 
     // Now clear the required field.
-    await nameField.fill('');
-    await expect(nameField).toHaveValue('');
+    await retypeMselField(nameField, '');
 
     // A required-field violation must surface, and must block the save.
     await expect(page.locator('mat-error')).toHaveCount(1);
@@ -128,5 +119,19 @@ test.describe('MSEL Management', () => {
 
     // Nothing may reach the server.
     expect((await getMsel(token, mselId)).name).toBe(originalName);
+  });
+
+  test('MSEL Form Validation - empty name is rejected by the API', async () => {
+    // The UI guard above is only half the contract: any other client — the generated API client,
+    // a script, an import job — goes straight to `PUT /api/msels/{id}`. Each of these bodies is a
+    // complete, otherwise-valid MSEL differing only in Name, so a 200 here would mean the name
+    // requirement lives in the browser alone.
+    for (const name of ['', '   ', null]) {
+      const res = await tryUpdateMsel(token, mselId, { name });
+      expect(res.status, `PUT with name ${JSON.stringify(name)} must be refused`).toBe(400);
+
+      // And refused before it reached the database.
+      expect((await getMsel(token, mselId)).name).toBe(originalName);
+    }
   });
 });

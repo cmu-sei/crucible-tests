@@ -5,7 +5,13 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
-import { getBlueprintToken, createMsel, deleteMsel, tempBlueprintName } from '../../test-helpers';
+import {
+  getBlueprintToken,
+  createMsel,
+  deleteMsel,
+  tempBlueprintName,
+  downloadMselFile,
+} from '../../test-helpers';
 import * as path from 'path';
 
 test.describe('MSEL Management', () => {
@@ -31,19 +37,9 @@ test.describe('MSEL Management', () => {
       const mselRow = page.getByRole('row').filter({ hasText: mselName });
       await expect(mselRow).toBeVisible({ timeout: 10000 });
 
-      // 4. Click the Download button for this MSEL
-      const downloadButton = mselRow.getByRole('button', { name: /Download/i }).first();
-      await expect(downloadButton).toBeVisible();
-      await downloadButton.click();
-
-      // Download menu appears with xlsx/json options
-      const downloadJsonItem = page.getByRole('menuitem', { name: /json/i });
-      await expect(downloadJsonItem).toBeVisible({ timeout: 10000 });
-
+      // 4. Open the row's Download menu and pick JSON.
       // expect: Clicking JSON option triggers a download
-      const downloadPromise = page.waitForEvent('download');
-      await downloadJsonItem.click();
-      const download = await downloadPromise;
+      const download = await downloadMselFile(page, mselRow, /Download json file/i);
 
       // expect: Download has a filename and content
       expect(download.suggestedFilename()).toContain('.json');
