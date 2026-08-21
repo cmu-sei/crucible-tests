@@ -12,12 +12,23 @@ import {
   createRenderableScenarioEvent,
   listScenarioEvents,
   navigateToMselSection,
+  findScenarioEventRow,
+  tempBlueprintName,
 } from '../../test-helpers';
 
+/**
+ * Deleting a scenario event from the row's Action List menu, including the cancel path.
+ *
+ * The row is located by its seeded Description, not by position. `table tbody tr').last()`
+ * used to pick a different row, and the DELETE then never came for `eventId` so the paired
+ * `waitForResponse` timed out. See `findScenarioEventRow` for why position is unsafe here,
+ * including the pending upstream cross-MSEL leak that makes it worse.
+ */
 test.describe('Scenario Events Management', () => {
   let token: string;
   let mselId: string;
   let eventId: string;
+  let description: string;
 
   test.beforeEach(async () => {
     // Seed: create a MSEL with a renderable scenario event to delete
@@ -25,10 +36,12 @@ test.describe('Scenario Events Management', () => {
     const msel = await createMsel(token);
     mselId = msel.id;
 
+    // Unique per run, so the row locator below can never resolve to another spec's event.
+    description = tempBlueprintName('TestBP-DeleteEvent');
     const event = await createRenderableScenarioEvent(
       token,
       mselId,
-      'Test event to delete',
+      description,
       {
         deltaSeconds: 300,
         rowMetadata: 'DELETE-001',
@@ -50,8 +63,8 @@ test.describe('Scenario Events Management', () => {
     // Navigate to the MSEL Scenario Events section
     await navigateToMselSection(page, mselId, 'Scenario Events');
 
-    // expect: The seeded event is visible (row exists)
-    const eventRow = page.locator('table tbody tr').last();
+    // expect: The seeded event is visible (row exists), identified by its unique Description
+    const eventRow = await findScenarioEventRow(page, description);
     await expect(eventRow).toBeVisible({ timeout: 5000 });
 
     // 2. Click the Action List button for the first event to open the menu

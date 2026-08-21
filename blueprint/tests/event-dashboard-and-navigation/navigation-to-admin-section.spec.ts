@@ -3,7 +3,7 @@
 
 // spec: specs/blueprint-test-plan.md
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, openBlueprintUserMenu } from '../../fixtures';
 
 /**
  * Reaching the admin section from the dashboard, and what it must render on arrival.
@@ -29,13 +29,15 @@ test.describe('Event Dashboard and Navigation', () => {
     await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 30000 });
 
     // 1. Open the topbar user menu, then click Administration — the real control path.
+    // The Administration item is permission-gated on `canViewAdmin`, which TopbarComponent
+    // (OnPush, plain property) assigns from an async `permissionDataService.load()`
+    // subscription. A panel opened before that resolves never gains the item, however long
+    // it is waited on, so openBlueprintUserMenu reopens the menu until the item is there.
     const userMenuTrigger = page.locator('button.menu-trigger').first();
     await expect(userMenuTrigger).toBeVisible({ timeout: 30000 });
-    await userMenuTrigger.click();
+    await openBlueprintUserMenu(page, userMenuTrigger);
 
-    const adminMenuItem = page.getByRole('menuitem', { name: 'Administration' });
-    await expect(adminMenuItem).toBeVisible({ timeout: 15000 });
-    await adminMenuItem.click();
+    await page.getByRole('menuitem', { name: 'Administration' }).click();
 
     // expect: navigation to /admin occurs.
     await expect(page).toHaveURL(/\/admin/, { timeout: 30000 });

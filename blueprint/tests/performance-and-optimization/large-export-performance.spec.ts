@@ -14,6 +14,7 @@ import {
   seedMselDataFields,
   findMselRowByName,
   tempBlueprintName,
+  downloadMselFile,
 } from '../../test-helpers';
 
 /**
@@ -89,15 +90,17 @@ test.describe('Performance and Optimization', () => {
     const mselRow = await findMselRowByName(page, mselName);
     await expect(mselRow).toBeVisible();
 
-    await mselRow.locator('button[title^="Download "]').click();
-    const xlsxOption = page.getByRole('menuitem', { name: /Download xlsx file/i });
-    await expect(xlsxOption).toBeVisible({ timeout: 15000 });
+    // Time the export from the moment the request actually leaves the browser rather than from
+    // the menu click, so that opening the mat-menu — which `downloadMselFile` may have to retry
+    // past an overlay animation — is not charged against the export budget below.
+    let requestedAt = 0;
+    page.on('request', (req) => {
+      if (/\/api\/msels\/[^/]+\/xlsx/i.test(req.url())) requestedAt = Date.now();
+    });
 
-    const downloadPromise = page.waitForEvent('download', { timeout: 60000 });
-    const startedAt = Date.now();
-    await xlsxOption.click();
-    const download = await downloadPromise;
-    const exportSeconds = (Date.now() - startedAt) / 1000;
+    const download = await downloadMselFile(page, mselRow, /Download xlsx file/i);
+    expect(requestedAt, 'never observed the xlsx export request').toBeGreaterThan(0);
+    const exportSeconds = (Date.now() - requestedAt) / 1000;
 
     // expect: the export completes in reasonable time.
     expect(exportSeconds, `export of ${EVENT_COUNT} events took ${exportSeconds}s`).toBeLessThan(60);

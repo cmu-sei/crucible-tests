@@ -17,6 +17,7 @@ import {
   tempBlueprintName,
   listScenarioEvents,
   getScenarioEvent,
+  downloadMselFile,
 } from '../../test-helpers';
 
 /**
@@ -35,10 +36,9 @@ import {
  * MSEL via the API (with data fields and two renderable scenario events), then exports it
  * through the app itself before re-uploading that export.
  *
- * Import-time note: Blueprint's xlsx import does not carry each event's exported Delivery
- * Time through, assigning `deltaSeconds = rowIndex * 60` instead. This spec therefore does
- * not assert imported times survive the round-trip — a skipped spec covers that separately.
- * It asserts what this plan item actually calls for: the file is accepted, the events are
+ * Import-time note: the export writes each event's delivery offset into the sheet's Time column
+ * and the import reads it back, so a round-trip preserves the schedule. That is asserted below
+ * alongside what this plan item actually calls for — the file is accepted, the events are
  * imported (count and content), and no error is surfaced.
  *
  * dataValues note: `GET /api/msels/{id}/scenarioEvents` omits `dataValues`, so the grid renders
@@ -112,13 +112,7 @@ test.describe('Scenario Events Management', () => {
     const sourceRow = page.getByRole('row').filter({ hasText: sourceMselName });
     await expect(sourceRow).toBeVisible({ timeout: 10000 });
 
-    await sourceRow.getByRole('button', { name: /Download/i }).first().click();
-    const downloadXlsxItem = page.getByRole('menuitem', { name: /Download xlsx file/i });
-    await expect(downloadXlsxItem).toBeVisible({ timeout: 10000 });
-
-    const downloadPromise = page.waitForEvent('download', { timeout: 30000 });
-    await downloadXlsxItem.click();
-    const download = await downloadPromise;
+    const download = await downloadMselFile(page, sourceRow, /Download xlsx file/i);
 
     downloadPath = path.join(os.tmpdir(), `bulk-import-${sourceMselName}.xlsx`);
     await download.saveAs(downloadPath);
@@ -162,6 +156,14 @@ test.describe('Scenario Events Management', () => {
     expect(importedTexts).toEqual(
       expect.arrayContaining(['Bulk import first event', 'Bulk import second event'])
     );
+
+    // The delivery offsets came through the file too, so the imported MSEL is actually runnable
+    // and not just a list of texts. Coerced because `JsonIntegerConverter` writes ints as strings.
+    expect(
+      importedMsel.scenarioEvents
+        .map((se: any) => Number(se.deltaSeconds))
+        .sort((a: number, b: number) => a - b)
+    ).toEqual([300, 900]);
 
     // Cross-check independently via the single-event endpoint (which does return dataValues),
     // confirming the import response was not a fluke of what the client happened to send back.

@@ -64,12 +64,6 @@ test.describe('Export and Import', () => {
   });
 
   test('Import Scenario Events from Excel into existing MSEL', async () => {
-    // Skipped pending upstream support: the xlsx import does not parse each event's exported
-    // Delivery Time, assigning `rowIndex * 60` instead, so a round-trip rewrites 300s/900s to
-    // 60s/120s. The offset assertion below is correct as written — un-skip once the import
-    // reads the time column.
-    test.skip(true, 'Pending upstream support: xlsx import parsing the Delivery Time column');
-
     const authHeader = { Authorization: `Bearer ${token}` };
 
     const before = await listScenarioEvents(token, mselId);
@@ -105,11 +99,13 @@ test.describe('Export and Import', () => {
     ).toBe(true);
 
     // 3. The events survived: same count, same offsets, and the text is still present.
+    // `deltaSeconds` needs coercing — the API's `JsonIntegerConverter` writes every int as a
+    // JSON string, so these arrive as "300"/"900".
     const after = await listScenarioEvents(token, mselId);
     expect(after.length).toBe(before.length);
-    expect(after.map((e: any) => e.deltaSeconds).sort((a: number, b: number) => a - b)).toEqual(
-      [300, 900]
-    );
+    expect(
+      after.map((e: any) => Number(e.deltaSeconds)).sort((a: number, b: number) => a - b)
+    ).toEqual([300, 900]);
 
     // Data values are only populated on the single-event endpoint, so read the
     // events individually to confirm the imported text round-tripped rather than being dropped.

@@ -11,6 +11,8 @@ import {
   createRenderableScenarioEvent,
   navigateToMselSection,
   getScenarioEvent,
+  findScenarioEventRow,
+  tempBlueprintName,
 } from '../../test-helpers';
 
 /**
@@ -35,18 +37,26 @@ import {
  *
  * Scenario events also need the MSEL to have data fields before the grid renders any rows
  * at all — `createRenderableScenarioEvent` handles that.
+ *
+ * The row is located by its seeded Description, not by position. `table tbody tr').last()`
+ * used to pick the wrong row and the PUT then came back **404 ScenarioEvent not found** for
+ * an id from another worker's MSEL. See `findScenarioEventRow` for why position is unsafe
+ * here, including the pending upstream cross-MSEL leak that makes it worse.
  */
 test.describe('Scenario Events Management', () => {
   let token: string;
   let mselId: string;
   let eventId: string;
+  let description: string;
 
   test.beforeEach(async () => {
     token = await getBlueprintToken();
     const msel = await createMsel(token);
     mselId = msel.id;
 
-    const event = await createRenderableScenarioEvent(token, mselId, 'Original event description', {
+    // Unique per run, so the row locator below can never resolve to another spec's event.
+    description = tempBlueprintName('TestBP-EditEvent');
+    const event = await createRenderableScenarioEvent(token, mselId, description, {
       deltaSeconds: 600,
       rowMetadata: 'EDIT-001',
     });
@@ -65,9 +75,9 @@ test.describe('Scenario Events Management', () => {
   test('Edit Scenario Event', async ({ blueprintAuthenticatedPage: page }) => {
     await navigateToMselSection(page, mselId, 'Scenario Events');
 
-    // The seeded event's row. Rows render only once the MSEL has data fields; the last
-    // tbody row is the event (earlier rows are Move-start header rows).
-    const eventRow = page.locator('table tbody tr').last();
+    // The seeded event's row, identified by its unique Description data value. Rows render
+    // only once the MSEL has data fields (createRenderableScenarioEvent seeds them).
+    const eventRow = await findScenarioEventRow(page, description);
     await expect(eventRow).toBeVisible({ timeout: 15000 });
 
     // Open the ROW's action menu, not the header's.
@@ -100,7 +110,7 @@ test.describe('Scenario Events Management', () => {
     const values = (persisted.dataValues ?? []).map((dv: any) => dv.value);
     expect(values).toContain(newControlNumber);
 
-    // The row is still listed.
-    await expect(page.locator('table tbody tr').last()).toBeVisible();
+    // The row is still listed — the same row, matched by its Description.
+    await expect(eventRow).toBeVisible();
   });
 });

@@ -4,7 +4,13 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import {
+  test,
+  expect,
+  Services,
+  serviceUrlPattern,
+  selectMatSelectOption,
+} from '../../fixtures';
 import {
   getBlueprintToken,
   createMsel,
@@ -59,13 +65,17 @@ test.describe('Search and Filtering', () => {
     // then "Pending", then "Approved", ...), so it must not be located by that name — the
     // locator would go stale the moment a filter is applied. The MSEL list renders exactly
     // two comboboxes: type first, then status.
+    // Each selection goes through selectMatSelectOption: clicking a mat-select trigger does
+    // not reliably leave the panel open (Material's overlay teardown can swallow the click),
+    // so the helper reopens and reissues rather than waiting longer on a panel that is gone.
     const statusFilter = page.getByRole('combobox').nth(1);
     await expect(statusFilter).toBeVisible({ timeout: 10000 });
-    await statusFilter.click();
 
-    const pendingOption = page.getByRole('option', { name: 'Pending', exact: true });
-    await expect(pendingOption).toBeVisible({ timeout: 10000 });
-    await pendingOption.click();
+    await selectMatSelectOption(
+      page,
+      statusFilter,
+      page.getByRole('option', { name: 'Pending', exact: true })
+    );
 
     // expect: Only the Pending MSEL is visible
     const pendingRow = await findMselRowByName(page, pendingName);
@@ -82,10 +92,11 @@ test.describe('Search and Filtering', () => {
     await searchBox.clear();
     await searchBox.fill('');
 
-    await statusFilter.click();
-    const approvedOption = page.getByRole('option', { name: 'Approved', exact: true });
-    await expect(approvedOption).toBeVisible({ timeout: 10000 });
-    await approvedOption.click();
+    await selectMatSelectOption(
+      page,
+      statusFilter,
+      page.getByRole('option', { name: 'Approved', exact: true })
+    );
 
     // expect: Only the Approved MSEL is visible
     const approvedRowVisible = await findMselRowByName(page, approvedName);
@@ -98,10 +109,11 @@ test.describe('Search and Filtering', () => {
 
     // 4. Reset filter to "All Statuses"
     await searchBox.clear();
-    await statusFilter.click();
-    const allOption = page.getByRole('option', { name: /All Statuses/i });
-    await expect(allOption).toBeVisible({ timeout: 10000 });
-    await allOption.click();
+    await selectMatSelectOption(
+      page,
+      statusFilter,
+      page.getByRole('option', { name: /All Statuses/i })
+    );
 
     // expect: Both MSELs are visible now
     await searchBox.fill(pendingName);

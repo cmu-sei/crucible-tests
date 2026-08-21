@@ -3,7 +3,7 @@
 
 // spec: specs/blueprint-test-plan.md
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, openBlueprintUserMenu } from '../../fixtures';
 
 /**
  * Reaching the admin section from the home page, and the integration-conditional sections.
@@ -32,14 +32,15 @@ test.describe('Home Page and Navigation', () => {
     await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 30000 });
     await expect(page.getByText('Event Dashboard').first()).toBeVisible({ timeout: 30000 });
 
-    // 1. Open the topbar user menu and click Administration.
+    // 1. Open the topbar user menu and click Administration. The item is gated on
+    // `canViewAdmin`, set from an async permissions load on an OnPush component, so it can
+    // be missing from an already-open panel forever — openBlueprintUserMenu reopens until
+    // the lazy menu content is rebuilt with the item present.
     const userMenuTrigger = page.locator('button.menu-trigger').first();
     await expect(userMenuTrigger).toBeVisible({ timeout: 30000 });
-    await userMenuTrigger.click();
+    await openBlueprintUserMenu(page, userMenuTrigger);
 
-    const adminMenuItem = page.getByRole('menuitem', { name: 'Administration' });
-    await expect(adminMenuItem).toBeVisible({ timeout: 15000 });
-    await adminMenuItem.click();
+    await page.getByRole('menuitem', { name: 'Administration' }).click();
 
     // expect: the admin interface loads.
     await expect(page).toHaveURL(/\/admin/, { timeout: 30000 });

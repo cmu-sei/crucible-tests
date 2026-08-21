@@ -52,10 +52,10 @@ test.describe('Scenario Events Management', () => {
   });
 
   test('View Scenario Events in MSEL', async ({ blueprintAuthenticatedPage: page }) => {
-    // Skipped pending upstream support: `GET /api/msels/{mselId}/scenarioEvents` does not
-    // return `dataValues`, so the Scenario Events grid cells render blank. The assertions
-    // below are correct as written — un-skip once the list endpoint returns dataValues.
-    test.skip(true, 'Pending upstream support: dataValues on the scenarioEvents list endpoint');
+    // Pending upstream: `GET /api/msels/{mselId}/scenarioEvents` does not return `dataValues`,
+    // so the Scenario Events grid cells render blank. Deliberately left un-skipped so the gap
+    // is reported on every run; the assertions below are correct as written and will pass once
+    // the list endpoint returns dataValues.
 
     // Navigate to the MSEL Scenario Events section
     await navigateToMselSection(page, mselId, 'Scenario Events');

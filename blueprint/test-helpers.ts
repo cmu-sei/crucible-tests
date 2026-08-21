@@ -18,7 +18,13 @@
  * rejects the password grant (public/PKCE client).
  */
 
-import { APIRequestContext, Page, request as playwrightRequest, expect } from '@playwright/test';
+import {
+  APIRequestContext,
+  Locator,
+  Page,
+  request as playwrightRequest,
+  expect,
+} from '@playwright/test';
 import { Services, waitForFirstVisible } from '../shared-fixtures';
 import fs from 'fs';
 import os from 'os';
@@ -257,6 +263,23 @@ export async function updateMsel(
     throw new Error(`updateMsel(${mselId}) failed (${r.status}): ${r.text}`);
   }
   return r.data;
+}
+
+/**
+ * Same GET-then-PUT merge as `updateMsel`, but returns the response instead of throwing on a
+ * non-2xx. Use this when the rejection *is* the thing under test — `updateMsel` cannot express
+ * "expect this to be refused" because its own error path hides the status and body.
+ */
+export async function tryUpdateMsel(
+  token: string,
+  mselId: string,
+  changes: Record<string, unknown>
+): Promise<{ ok: boolean; status: number; data: any; text: string }> {
+  const current = await getMsel(token, mselId);
+  return blueprintCall<any>(token, `/api/msels/${mselId}`, {
+    method: 'PUT',
+    body: { ...current, ...changes },
+  });
 }
 
 /**
@@ -1280,6 +1303,50 @@ export async function findMselRowByName(page: Page, name: string) {
 }
 
 /**
+ * Open a /build row's Download menu, pick a format, and return the resulting download.
+ *
+ * Every spec that exports a MSEL through the UI needs this, and the naive version
+ * (click trigger → `expect(item).toBeVisible()` → click item) flakes. Material animates each
+ * overlay in and out and attaches a *fresh* panel per open, so a click issued while an
+ * animation is in flight lands on the outgoing panel or fails outright — the observed call logs
+ * are "element is not stable" followed by "element was detached from the DOM, retrying" until
+ * the click times out, with the menu item resolving successfully the whole time. The /build row
+ * the overlay is anchored to also re-renders on the SignalR pushes of whatever the other worker
+ * is creating, which is why this shows up under the suite and not in isolation.
+ *
+ * So opening the menu and picking the item is retried as a unit, the same shape as
+ * `selectMatSelectOption` in `fixtures.ts`. Unlike a mat-select, the panel closing does not
+ * prove the *download* started, so the download event is awaited by the caller: it is
+ * registered before the first click so no attempt can miss it, and a retry that manages to
+ * trigger a second download of the same file is harmless.
+ *
+ * @param page - Playwright Page object, already on /build
+ * @param mselRow - The row locator, e.g. from `findMselRowByName`
+ * @param menuItem - Matcher for the menu item, e.g. `/Download xlsx file/i`
+ */
+export async function downloadMselFile(page: Page, mselRow: Locator, menuItem: RegExp) {
+  const menuPanel = page.locator('.mat-mdc-menu-panel');
+
+  // A panel left over from a previous open would swallow the trigger click.
+  await expect(menuPanel).toHaveCount(0, { timeout: 10000 });
+
+  const downloadPromise = page.waitForEvent('download', { timeout: 30000 });
+
+  await expect(async () => {
+    if ((await menuPanel.count()) === 0) {
+      await mselRow.locator('button[title^="Download "]').first().click({ timeout: 5000 });
+    }
+    const option = page.getByRole('menuitem', { name: menuItem });
+    await expect(option).toBeVisible({ timeout: 3000 });
+    await option.click({ timeout: 3000 });
+    // The menu closing is what confirms the click landed on the live panel.
+    await expect(menuPanel).toHaveCount(0, { timeout: 5000 });
+  }).toPass({ timeout: 30000, intervals: [250, 500, 1000, 2000] });
+
+  return downloadPromise;
+}
+
+/**
  * Locator for a MSEL's section list item (Info, Teams, Organizations, ...).
  *
  * The MSEL detail page renders its sections as bare `mat-list-item`s — there is no
@@ -1308,6 +1375,31 @@ export async function navigateToMsel(page: Page, mselId: string): Promise<void> 
     waitUntil: 'domcontentloaded',
   });
   await expect(mselSectionItem(page, 'Info')).toBeVisible({ timeout: 30000 });
+}
+
+/**
+ * Replace the contents of a MSEL Config-tab text field the way a user would, with real key
+ * events.
+ *
+ * `locator.fill()` sets the value and dispatches a single `input` event. That is not enough
+ * for the Config tab: it marks the form dirty from its own keypress handlers, so a `fill()`ed
+ * edit leaves `isChanged` false and Save Changes disabled — the edit looks like it never
+ * happened. Selecting-all + Delete + `pressSequentially` fires the events the component
+ * listens for. `locator.clear()` has the same problem as `fill()`, being fill-based.
+ *
+ * Pass an empty string to clear the field, which is what the required-field specs need.
+ *
+ * @param field - The target textbox locator (e.g. the Name or Description field)
+ * @param value - The text to type; '' clears the field without typing anything
+ */
+export async function retypeMselField(field: Locator, value: string): Promise<void> {
+  await field.click();
+  await field.press('ControlOrMeta+a');
+  await field.press('Delete');
+  if (value) {
+    await field.pressSequentially(value);
+  }
+  await expect(field).toHaveValue(value);
 }
 
 /**
@@ -1351,6 +1443,38 @@ export async function gotoBlueprintAdminSection(page: Page, section: string): Pr
   await sidebarItem.click();
 
   await expect(page.locator('table').first()).toBeVisible({ timeout: 15000 });
+}
+
+/**
+ * Locate a single row in the Scenario Events grid by the text of one of its data values.
+ *
+ * Prefer this over `page.locator('table tbody tr').last()`. The last tbody row is only *this*
+ * spec's event when nothing else is in the grid, and two things break that:
+ *
+ * 1. The grid renders Move-start header rows interleaved with event rows, and the sort is
+ *    user/state driven — position is not a stable identity for a row.
+ * 2. Pending upstream: the grid shows scenario events belonging to *other* MSELs. The API
+ *    broadcasts every ScenarioEventCreated/Updated/Deleted to `MainHub.ADMIN_DATA_GROUP` in
+ *    addition to the event's own MSEL group (`ScenarioEventHandler.GetGroups`), every user
+ *    with `SystemPermission.EditMsels` joins that group, and the UI's handler calls
+ *    `scenarioEventDataService.updateStore()` -> `scenarioEventStore.upsert()` with no
+ *    `mselId` check. `refreshScenarioEventViewEvents()` then copies the *whole* store into
+ *    the view (`scenario-event-data.service.ts`), so a concurrent worker seeding an event on
+ *    a different MSEL adds a row to this MSEL's grid. Once the API scopes the broadcast (or
+ *    the UI filters by `mselId`), positional locators would still be fragile, so this helper
+ *    stays either way.
+ *
+ * The caller must pass text that is unique across the stack — seed the event with a
+ * `tempBlueprintName()`-derived value rather than a literal like 'Test event'.
+ *
+ * @param page - Playwright Page object, already on the MSEL's Scenario Events section
+ * @param text - A unique data value rendered in the row (e.g. the seeded Description)
+ * @returns A locator for the single `tr` holding that scenario event
+ */
+export async function findScenarioEventRow(page: Page, text: string) {
+  const row = page.locator('table tbody tr').filter({ hasText: text });
+  await expect(row).toHaveCount(1, { timeout: 15000 });
+  return row;
 }
 
 /**
