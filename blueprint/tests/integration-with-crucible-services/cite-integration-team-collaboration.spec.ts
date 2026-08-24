@@ -27,18 +27,17 @@ import {
  *
  * This version seeds its own MSEL and team, so it has no dependency on database shape.
  *
- * The behaviour under test is `citeWarningMessage()` in `msel-info.component.ts:526`. With
- * CITE enabled and no evaluation pushed yet, it reports on teams that lack a CITE Team Type:
+ * The behaviour under test is `citeWarningMessage()` in `msel-info.component.ts`. With CITE
+ * enabled and no evaluation pushed yet, it emits a single message whenever any team on the
+ * MSEL still lacks a CITE Team Type (`citeToDo()`):
  *
- *   - some teams typed, some not  -> "** ERROR: N team(s) are missing a CITE Team Type... **"
- *   - no teams typed at all       -> "** WARNING: No teams have a CITE Team Type selected... **"
+ *   "** There are unassigned CITE Team Types in Teams **"
  *
- * This spec covers the second branch, which is the one reachable through public API seeding:
- * `POST /api/teams` does not accept a `citeTeamTypeId` (verified: the created team comes back
- * with `citeTeamTypeId: null`), and this stack has no `/api/citeteamtypes` endpoint to read
- * valid ids from — it answers **404**. So a "some teams typed" fixture cannot be built here;
- * covering the ERROR branch needs a CITE team type id and is left out deliberately rather
- * than faked.
+ * That state is the one reachable through public API seeding: `POST /api/teams` does not
+ * accept a `citeTeamTypeId` (verified: the created team comes back with
+ * `citeTeamTypeId: null`), and this stack has no `/api/citeteamtypes` endpoint to read valid
+ * ids from — it answers **404**. So the fully-typed (no-warning) fixture cannot be built
+ * here; that half of the branch is left uncovered deliberately rather than faked.
  *
  * The Push Integrations button is bound to
  * `[disabled]="... || (msel.useCite && !msel.citeScoringModelId) || (msel.useCite &&
@@ -91,9 +90,10 @@ test.describe('Integration with Crucible Services', () => {
     await expect(page.getByText('Scoring Model:', { exact: true })).toBeVisible({ timeout: 10000 });
 
     // 3. expect: the CITE team-type warning is rendered, naming the actual condition.
-    //    This is citeWarningMessage()'s "no teams typed" branch.
+    //    citeWarningMessage() emits one message for the whole citeToDo() condition; it no
+    //    longer distinguishes "some teams typed" from "none typed".
     await expect(
-      page.getByText(/WARNING:\s*No teams have a CITE Team Type selected/i)
+      page.getByText(/There are unassigned CITE Team Types in Teams/i)
     ).toBeVisible({ timeout: 10000 });
 
     // 4. expect: Push Integrations is blocked while a team lacks a CITE Team Type.

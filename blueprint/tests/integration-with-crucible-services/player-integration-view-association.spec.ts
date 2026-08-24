@@ -38,9 +38,10 @@ import {
  *   (`IntegrationService.cs` ~line 299: `msel.PlayerViewId = Guid.NewGuid()`), which then
  *   creates that view in Player. So the test seeds the association through the API — the
  *   same field the push path writes — and asserts how the UI renders it.
- * - **The view *name* next to the checkbox does not render today.** The browser-side fetch of
- *   `{PlayerApiUrl}/views/{id}` is blocked by CORS, as Player's API does not allow the
- *   Blueprint UI origin. That assertion is kept intact in a `test.skip`-ed test below.
+ * - **The view *name* next to the checkbox used not to render.** The UI fetched
+ *   `{PlayerApiUrl}/views/{id}` from the browser, which CORS blocks: Player's API allows only
+ *   its own UI's origin. Blueprint now reads the name server-side instead, via
+ *   `GET /api/msels/{id}/integrations/names`, so the assertion below holds.
  */
 test.describe('Integration with Crucible Services', () => {
   let token: string;
@@ -163,20 +164,15 @@ test.describe('Integration with Crucible Services', () => {
     await expect(page.getByRole('button', { name: 'Push Integrations' })).toHaveCount(0);
   });
 
-  // Skipped pending upstream support: the Player view *name* can
-  // never render, because the browser-side GET of `{PlayerApiUrl}/views/{id}` from the
-  // Blueprint UI origin is rejected by Player's CORS policy. The assertion below is
-  // correct as written and should pass once Player allows the Blueprint UI origin —
-  // un-skip it then. It is deliberately NOT weakened into a passing branch.
+  // This name used to be unrenderable: `msel-info.component.ts fetchIntegrationNames()` fetched
+  // `{PlayerApiUrl}/views/{id}` from the browser, and Player's CORS policy allows only its own
+  // UI's origin, so the response was discarded before Angular ever saw it. The component now
+  // makes a single call to Blueprint's own API (`GET /api/msels/{id}/integrations/names`), which
+  // resolves each name server-side with the caller's own token. This test is what proves that
+  // path end to end, so a CORS regression would surface here rather than silently blanking a name.
   test('Player Integration - View Name Displayed', async ({
     blueprintAuthenticatedPage: page,
   }) => {
-    test.skip(
-      true,
-      'Pending upstream support: Player API CORS policy allowing the Blueprint UI origin, ' +
-        'which msel-info.component.ts fetchIntegrationNames() needs to resolve playerViewName'
-    );
-
     // `fetchIntegrationNames()` returns early unless the MSEL is Deployed, so that is a
     // real precondition for the name lookup and is seeded here.
     await updateMsel(token, mselId, { status: 'Deployed' });

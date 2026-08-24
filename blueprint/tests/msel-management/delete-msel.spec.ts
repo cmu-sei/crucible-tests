@@ -19,9 +19,11 @@ import {
  * The delete control's markup is easy to get wrong, and the previous version of this spec
  * did: it looked for `button[title*="Delete"]` inside the row, which matches nothing. In
  * `msel-list.component.html` the trash button carries **no** `title` of its own — the
- * tooltip lives on a wrapping `<span [title]="getDeleteTooltip(element)">`, and the button
- * is identified only by its `mdi-trash-can-outline` icon. The row's titled buttons are
- * "Download <name>" and "Copy <name>".
+ * tooltip lives on a wrapping `<span [title]="getDeleteTooltip(element)">`, because a disabled
+ * button fires no hover events. The button does now carry that same text as an `aria-label`
+ * (added for the screen-reader spec), but it is still located here by its
+ * `mdi-trash-can-outline` icon, which is stable regardless of why delete is disabled. The
+ * row's titled buttons are "Download <name>" and "Copy <name>".
  *
  * Delete is disabled when: the app isn't ready, the user lacks manage permission, the MSEL
  * status is `Deployed`, or the MSEL `isTemplate`. The template case is asserted here.

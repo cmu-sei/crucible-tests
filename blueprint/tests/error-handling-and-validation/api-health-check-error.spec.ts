@@ -23,9 +23,11 @@ import { test, expect, Services } from '../../fixtures';
  * The behaviour is fully deterministic, so it can be asserted outright. `home-app.component.ts`
  * subscribes to the health check and sets `apiIsSick = true` in its error callback (line 199),
  * with `apiMessage = 'The API web service is not responding.'` (line 200).
- * `home-app.component.html:13-19` then renders, under `@if (apiIsSick)`, an `<h1>` of
- * `apiMessage` plus `<h2>Please refresh this page.</h2>` and a "contact the site administrator"
- * line — and, because the same flag gates lines 23 and 36, the normal content is suppressed.
+ * `home-app.component.html:13-19` then renders, under `@if (apiIsSick)`, an `<h2>` of
+ * `apiMessage` (an `<h1>` until the top bar's title took that role) plus
+ * `<h2>Please refresh this page.</h2>` and a "contact the site administrator" line — and,
+ * because the same flag gates lines 23 and 36, the normal content is suppressed. All three are
+ * located below by role rather than tag, so the heading level is not what is being asserted.
  *
  * Both halves are asserted here: the error is shown, and the dashboard content is not. The 5s
  * sleep is gone — each assertion waits on the state it is about.

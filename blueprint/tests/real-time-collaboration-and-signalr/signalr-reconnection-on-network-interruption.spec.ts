@@ -43,7 +43,16 @@ import {
  * No fixed sleeps: every stage waits on a console line, a websocket lifecycle event, a
  * frame, or rendered DOM. There is deliberately NO `page.reload()` — the whole point is
  * that recovery happens on its own.
+ *
+ * `page.on('websocket')` is filtered to `/hubs/main`, because the hub is not the only socket
+ * the page may open. When the UI resource runs in dev mode (`Launch__Blueprint=true` ->
+ * `ng serve`), `@angular-devkit/build-angular:dev-server` also opens a Vite HMR socket at
+ * `ws://localhost:<uiPort>/?token=…`, and that socket both inflates the count and reopens on
+ * its own when the network comes back — so an unfiltered `sockets.length` could satisfy the
+ * "a new hub socket opened" assertion without SignalR having reconnected at all.
  */
+const HUB_PATH = '/hubs/main';
+
 test.describe('Real-time Collaboration and SignalR', () => {
   let token: string;
   let mselId: string;
@@ -84,6 +93,8 @@ test.describe('Real-time Collaboration and SignalR', () => {
       typeof payload === 'string' ? payload : payload.toString('utf8');
 
     page.on('websocket', (ws) => {
+      // Ignore anything that is not the SignalR hub (see the note on HUB_PATH above).
+      if (!new URL(ws.url()).pathname.endsWith(HUB_PATH)) return;
       sockets.push(ws);
       ws.on('framesent', (frame) => sentFrames.push(payloadText(frame.payload)));
       ws.on('framereceived', (frame) => receivedFrames.push(payloadText(frame.payload)));
@@ -101,7 +112,7 @@ test.describe('Real-time Collaboration and SignalR', () => {
       })
       .toBe(1);
     expect(new URL(sockets[0].url()).pathname).toBe(
-      `${new URL(Services.Blueprint.API).pathname.replace(/\/$/, '')}/hubs/main`
+      `${new URL(Services.Blueprint.API).pathname.replace(/\/$/, '')}${HUB_PATH}`
     );
 
     // Prove real-time delivery works BEFORE the interruption, so the post-reconnect

@@ -4,7 +4,7 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, selectMatSelectOption } from '../../fixtures';
 import { getBlueprintToken, createMsel, deleteMsel, tempBlueprintName } from '../../test-helpers';
 
 test.describe('MSEL Management', () => {
@@ -31,13 +31,24 @@ test.describe('MSEL Management', () => {
       await page.goto(`${Services.Blueprint.UI}/build`);
       await expect(page.getByRole('table')).toBeVisible({ timeout: 10000 });
 
-      const allTypesDropdown = page.getByRole('combobox', { name: 'All Types' });
-      await expect(allTypesDropdown).toBeVisible();
-      await allTypesDropdown.click();
+      // Every selection below goes through selectMatSelectOption. Clicking a mat-select trigger
+      // does not reliably leave the panel open, and an option resolved just before Material
+      // tears the overlay down detaches mid-click ("element was detached from the DOM,
+      // retrying") — which is exactly how this spec flaked, on the "Not Templates" step. The
+      // helper reopens and reissues rather than waiting longer on a panel that is already gone.
+      //
+      // The trigger is located positionally and reused, never by accessible name: a
+      // mat-select's name is its CURRENT selection ("All Types", then "Templates", ...), so a
+      // name-based locator goes stale the moment a filter is applied. The MSEL list renders
+      // exactly two comboboxes — type first, then status.
+      const typeDropdown = page.getByRole('combobox').first();
+      await expect(typeDropdown).toBeVisible({ timeout: 10000 });
 
-      const templateOption = page.getByRole('option', { name: 'Templates', exact: true });
-      await expect(templateOption).toBeVisible();
-      await templateOption.click();
+      await selectMatSelectOption(
+        page,
+        typeDropdown,
+        page.getByRole('option', { name: 'Templates', exact: true })
+      );
 
       // expect: Only template MSELs appear
       // Search for our template - it should be visible
@@ -54,11 +65,11 @@ test.describe('MSEL Management', () => {
 
       // 3. Reset filter to 'All Types'
       await searchBox.clear();
-      const typeDropdown = page.getByRole('combobox').first();
-      await typeDropdown.click();
-      const allTypesOption = page.getByRole('option', { name: 'All Types' });
-      await expect(allTypesOption).toBeVisible();
-      await allTypesOption.click();
+      await selectMatSelectOption(
+        page,
+        typeDropdown,
+        page.getByRole('option', { name: 'All Types', exact: true })
+      );
 
       // expect: Both MSELs are now visible
       await searchBox.fill(templateName);
@@ -70,10 +81,11 @@ test.describe('MSEL Management', () => {
 
       // 4. Test "Not Templates" filter
       await searchBox.clear();
-      await typeDropdown.click();
-      const notTemplatesOption = page.getByRole('option', { name: 'Not Templates' });
-      await expect(notTemplatesOption).toBeVisible();
-      await notTemplatesOption.click();
+      await selectMatSelectOption(
+        page,
+        typeDropdown,
+        page.getByRole('option', { name: 'Not Templates', exact: true })
+      );
 
       // expect: Only non-template MSELs appear
       await searchBox.fill(nonTemplateName);

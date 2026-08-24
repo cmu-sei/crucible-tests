@@ -16,15 +16,14 @@ import {
 /**
  * When a save fails, the user must be told.
  *
- * Rewritten from a bare `test.fixme()` (which is invisible non-coverage) into a documented
- * skip backed by evidence, and re-pointed at a MSEL the test seeds itself — the previous
+ * Rewritten from a bare `test.fixme()` (which is invisible non-coverage) into an asserting
+ * test backed by evidence, and re-pointed at a MSEL the test seeds itself — the previous
  * version opened whichever pre-existing MSEL happened to be named "New MSEL" or
  * "Project Lagoon" and edited it, which both violates test-data hygiene and stops testing
  * anything if those rows are absent.
  *
- * Verified behaviour with a forced 500 on `PUT /api/msels/{id}`: no snackbar, no
- * `[role="alert"]`, no error text anywhere on the page, and Save Changes re-disables exactly
- * as it does on success — so a lost edit looks like a saved one.
+ * Blueprint reports errors in a MatBottomSheet (`SystemMessageService` → `SystemMessageComponent`),
+ * not a snackbar, so this asserts on `role="alert"` rather than on any snackbar container.
  */
 test.describe('Error Handling and Validation', () => {
   let token: string;
@@ -50,11 +49,6 @@ test.describe('Error Handling and Validation', () => {
   });
 
   test('API Error Display', async ({ blueprintAuthenticatedPage: page }) => {
-    // Skipped pending upstream support: a failed save surfaces no user-visible error and
-    // disables Save as though it had worked. The assertions below are correct as written —
-    // un-skip once save failures are reported to the user.
-    test.skip(true, 'Pending upstream support: user-visible error on a failed save');
-
     await navigateToMsel(page, mselId);
 
     const descriptionField = page.getByRole('textbox', { name: 'Description' });
@@ -81,12 +75,16 @@ test.describe('Error Handling and Validation', () => {
     await saveButton.click();
 
     // expect: the user is told the save failed.
-    await expect(
-      page
-        .locator('simple-snack-bar, mat-snack-bar-container, .mat-mdc-snack-bar-container')
-        .or(page.getByRole('alert'))
-        .first()
-    ).toBeVisible({ timeout: 10000 });
+    const errorAlert = page.getByRole('alert');
+    await expect(errorAlert).toBeVisible({ timeout: 10000 });
+    await expect(errorAlert).toContainText(/Internal Server Error/i);
+
+    // Dismiss the alert before looking at the form again. Material sets aria-hidden="true" on
+    // app-root for as long as an overlay is open, so every role-based locator behind the sheet
+    // resolves to zero elements — Save Changes is still rendered and enabled, just not in the
+    // accessibility tree. Asserting on it through the open sheet would fail as "not found".
+    await page.getByRole('button', { name: 'Close' }).click();
+    await expect(errorAlert).toBeHidden({ timeout: 5000 });
 
     // expect: the form stays dirty so the edit can be retried rather than retyped.
     await expect(saveButton).toBeEnabled();

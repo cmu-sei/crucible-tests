@@ -45,12 +45,6 @@ test.describe('Error Handling and Validation', () => {
   });
 
   test('Date Range Validation', async ({ blueprintAuthenticatedPage: page }) => {
-    // Skipped pending upstream support: `PUT /api/msels/{id}` accepts a negative
-    // `durationSeconds` (an end time before the start) and persists it verbatim, as there is
-    // no range validation at either layer. The assertions below are correct as written —
-    // un-skip once the invalid range is rejected.
-    test.skip(true, 'Pending upstream support: date-range validation on MSEL duration');
-
     const startTime = '2026-06-01T12:00:00Z';
 
     // An end time before the start must be rejected by the API.
@@ -58,14 +52,15 @@ test.describe('Error Handling and Validation', () => {
       updateMsel(token, mselId, { startTime, durationSeconds: -86_400 })
     ).rejects.toThrow();
 
-    // ...and must not have been persisted.
+    // ...and must not have been persisted. Coerce first: the API's `JsonIntegerConverter`
+    // serializes every int as a JSON *string*, so `durationSeconds` arrives as e.g. "3600".
     const afterInvalid = await getMsel(token, mselId);
-    expect(afterInvalid.durationSeconds ?? 0).toBeGreaterThanOrEqual(0);
+    expect(Number(afterInvalid.durationSeconds ?? 0)).toBeGreaterThanOrEqual(0);
 
     // A valid window still works, proving the guard rejects only the invalid case.
     await updateMsel(token, mselId, { startTime, durationSeconds: 86_400 });
     const afterValid = await getMsel(token, mselId);
-    expect(afterValid.durationSeconds).toBe(86_400);
+    expect(Number(afterValid.durationSeconds)).toBe(86_400);
 
     // The Config tab shows the date/time fields for that window.
     await navigateToMsel(page, mselId);
