@@ -3,40 +3,68 @@
 
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
+//
+// Test: Navigate to Launch Events (plan item 2.3)
+//
+// Rewritten. The previous version located the card with `text=Start an Event, mat-card:...`
+// — a comma-combined `text=` selector, which matches ZERO elements (Playwright's text engine
+// cannot be comma-joined) — and then self-skipped with a bare `test.skip()` when it wasn't
+// found. So it never navigated and never asserted anything, silently, on every run.
+//
+// The card genuinely cannot appear. Two gates, both traced to source:
+//
+//   dashboard.component.html:23    @if (launchMselList.length > 0) { ...Start an Event... }
+//   dashboard.component.ts          launchMselList <- mselDataService.getMyLaunchMsels()
+//   MselService.cs:2203             GetMyLaunchInvitationMselsAsync returns
+//                                     new List<ViewModels.Msel>()  // unconditionally
+//                                     // "DISABLED: Auto-discovery based on email domain
+//                                     //  matching / Users must now use invitation links"
+//
+// Verified live: `GET /api/my-launch-msels` -> `[]` (200). So `launchMselList` is always
+// empty, the "Start an Event" card never renders, and /launch is reachable only by direct URL
+// or an invitation link. Deliberate product behaviour, so no BP-n entry.
+//
+// This spec now asserts that contract strictly. If auto-discovery is re-enabled the first
+// assertion fails, prompting a rewrite that covers the real card-click navigation.
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services } from '../../fixtures';
+import { getBlueprintToken } from '../../test-helpers';
 
 test.describe('Event Dashboard and Navigation', () => {
   test('Navigate to Launch Events', async ({ blueprintAuthenticatedPage: page }) => {
-    // 1. From Event Dashboard, click on 'Start an Event' card
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 30000 });
-    await page.waitForLoadState('networkidle');
+    const token = await getBlueprintToken();
 
-    const launchCard = page.locator(
-      'text=Start an Event, mat-card:has-text("Start"), [class*="launch-card"]'
-    ).first();
+    // 1. The list that gates the "Start an Event" card is empty by design.
+    const launchList = await page.request.get(`${Services.Blueprint.API}/api/my-launch-msels`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(launchList.status(), 'my-launch-msels must be reachable').toBe(200);
+    expect(
+      await launchList.json(),
+      'launch auto-discovery is disabled in MselService.GetMyLaunchInvitationMselsAsync — if ' +
+        'this is no longer empty, restore card-click coverage in this spec'
+    ).toEqual([]);
 
-    const launchCardVisible = await launchCard.isVisible({ timeout: 5000 }).catch(() => false);
+    // 2. The dashboard renders, and therefore omits the launch card.
+    await page.goto(Services.Blueprint.UI, { waitUntil: 'domcontentloaded' });
+    const cardContainer = page.locator('.card-container');
+    await expect(cardContainer).toBeVisible({ timeout: 20000 });
 
-    if (!launchCardVisible) {
-      test.skip();
-      return;
-    }
+    // The dashboard is genuinely populated first — this is not an empty page that trivially
+    // lacks the card. "Manage an Event" renders for a user who can create MSELs, so its
+    // presence proves the container rendered its cards at all.
+    await expect(
+      cardContainer.locator('mat-card').filter({ hasText: 'Manage an Event' })
+    ).toBeVisible({ timeout: 20000 });
 
-    await launchCard.click();
+    await expect(
+      cardContainer.locator('mat-card').filter({ hasText: 'Start an Event' }),
+      'the Start an Event card cannot render while launchMselList is empty'
+    ).toHaveCount(0);
 
-    // expect: Navigation to /launch occurs
-    await expect(page).toHaveURL(/.*\/launch.*/, { timeout: 10000 });
-    await page.waitForLoadState('networkidle');
-
-    // expect: Page displays list of available MSELs to launch
-    const mselList = page.locator(
-      'mat-card, [class*="msel-list"], [class*="msel-card"], table tbody tr'
-    ).first();
-    await expect(mselList).toBeVisible({ timeout: 5000 });
-
-    // expect: Topbar still displays with navigation back to dashboard
-    const topbar = page.locator('[class*="topbar"], mat-toolbar').first();
-    await expect(topbar).toBeVisible({ timeout: 5000 });
+    // 3. The /launch route itself still resolves when reached directly.
+    await page.goto(`${Services.Blueprint.UI}/launch`, { waitUntil: 'domcontentloaded' });
+    await expect(page).toHaveURL(/\/launch/, { timeout: 15000 });
+    await expect(page.locator('app-topbar').first()).toBeVisible({ timeout: 15000 });
   });
 });

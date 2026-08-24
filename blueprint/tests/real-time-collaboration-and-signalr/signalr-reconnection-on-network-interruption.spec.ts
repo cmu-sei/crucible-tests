@@ -2,173 +2,218 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 // spec: specs/blueprint-test-plan.md
-// seed: tests/seed.spec.ts
 
-import { test, expect } from '@playwright/test';
-import { Services, authenticateBlueprintWithKeycloak } from '../../fixtures';
+import { test, expect, Services } from '../../fixtures';
+import type { WebSocket } from '@playwright/test';
+import {
+  getBlueprintToken,
+  createMsel,
+  deleteMsel,
+  updateMsel,
+  tempBlueprintName,
+  navigateToMsel,
+} from '../../test-helpers';
 
+/**
+ * Verifies SignalR recovers from a network interruption: the client detects the drop,
+ * retries, reopens the hub connection, re-joins the MSEL's group, and resumes delivering
+ * real-time updates — all without a page reload.
+ *
+ * Rewritten. The previous version had two defects:
+ *
+ * 1. **It leaked a MSEL on every run.** It created one named the literal
+ *    `'Reconnection Test MSEL'` through the UI with no afterEach, so the teardown purge
+ *    (which matches the shape `tempBlueprintName()` emits) never swept it.
+ * 2. **It could not fail.** Its real assertions were `pageIsResponsive` (`body` visible)
+ *    and `document.readyState === 'complete'` — both true on any page that loads at all,
+ *    and neither about SignalR. The reconnection check itself was
+ *    `if (hasReconnectionBehavior) { expect(...).toBeTruthy() } else { console.warn(...) }`,
+ *    which passes either way. It also called `page.reload()` before checking, which
+ *    *creates* a fresh connection and so destroys the evidence of a reconnect. And its
+ *    "disconnect notification" locator was a comma-joined `text=/.../i` string, which
+ *    Playwright treats as one selector rather than a list, so it never matched anything.
+ *
+ * Reconnection is real and observable. Measured on this stack: with the context offline,
+ * the client's `serverTimeout` fires at ~30s ("Connection reconnecting because of error
+ * ... Server timeout elapsed"), `withAutomaticReconnect(new RetryPolicy(120, 0, 5))`
+ * schedules retries, and once the network is restored the socket reopens and
+ * "HubConnection reconnected successfully" is logged (~37s total). `onreconnected` then
+ * calls `join()`, which re-invokes `Join` + `selectMsel`, and pushes resume.
+ *
+ * No fixed sleeps: every stage waits on a console line, a websocket lifecycle event, a
+ * frame, or rendered DOM. There is deliberately NO `page.reload()` — the whole point is
+ * that recovery happens on its own.
+ */
 test.describe('Real-time Collaboration and SignalR', () => {
-  test('SignalR Reconnection on Network Interruption', async ({ page, context }) => {
-    const consoleLogs: string[] = [];
-    const reconnectionLogs: string[] = [];
-    
-    // Listen to console messages
-    page.on('console', (msg) => {
-      const text = msg.text();
-      consoleLogs.push(text);
-      
-      const lowerText = text.toLowerCase();
-      if (
-        lowerText.includes('reconnect') ||
-        lowerText.includes('disconnect') ||
-        lowerText.includes('connection') ||
-        lowerText.includes('signalr') ||
-        lowerText.includes('hub')
-      ) {
-        reconnectionLogs.push(text);
-      }
+  let token: string;
+  let mselId: string;
+
+  test.beforeEach(async () => {
+    token = await getBlueprintToken();
+    const msel = await createMsel(token, {
+      name: tempBlueprintName('TestBP-SignalRReconnect'),
+      description: 'Seeded to verify SignalR reconnection after a network interruption.',
     });
-    
-    // 1. Establish SignalR connection by viewing a MSEL
-    await authenticateBlueprintWithKeycloak(page, 'admin', 'admin');
-    await page.waitForLoadState('networkidle');
-    
-    // Navigate to a MSEL
-    const mselLink = page.locator('a[href*="/msel"], div[class*="msel"]').first();
-    let mselUrl = '';
-    
-    if (await mselLink.isVisible({ timeout: 5000 })) {
-      await mselLink.click();
-      await page.waitForLoadState('networkidle');
-      mselUrl = page.url();
-    } else {
-      // Create a MSEL if none exist
-      const createButton = page.locator('button:has-text("Create MSEL"), button:has-text("Add MSEL")').first();
-      if (await createButton.isVisible({ timeout: 5000 })) {
-        await createButton.click();
-        await page.waitForTimeout(1000);
-        
-        const nameField = page.locator('input[name="name"], input[formControlName="name"]').first();
-        await nameField.fill('Reconnection Test MSEL');
-        
-        const saveButton = page.locator('button:has-text("Save"), button:has-text("Create")').last();
-        await saveButton.click();
-        await page.waitForTimeout(2000);
-        await page.waitForLoadState('networkidle');
-        mselUrl = page.url();
+    mselId = msel.id;
+  });
+
+  test.afterEach(async () => {
+    if (mselId) {
+      try {
+        await deleteMsel(token, mselId);
+      } catch (err) {
+        console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
       }
     }
-    
-    // expect: SignalR connection is active
-    await page.waitForTimeout(2000);
-    
-    const initialConnectionStatus = reconnectionLogs.some(log =>
-      log.toLowerCase().includes('connected') ||
-      log.toLowerCase().includes('established')
+  });
+
+  test('SignalR Reconnection on Network Interruption', async ({
+    blueprintAuthenticatedPage: page,
+    context,
+  }) => {
+    // The client only notices the drop when its 30s serverTimeout elapses, and the retry
+    // policy can add another backoff step, so this needs more than the default budget.
+    test.setTimeout(240000);
+
+    const sockets: WebSocket[] = [];
+    const sentFrames: string[] = [];
+    const receivedFrames: string[] = [];
+    const consoleLines: string[] = [];
+
+    const payloadText = (payload: string | Buffer): string =>
+      typeof payload === 'string' ? payload : payload.toString('utf8');
+
+    page.on('websocket', (ws) => {
+      sockets.push(ws);
+      ws.on('framesent', (frame) => sentFrames.push(payloadText(frame.payload)));
+      ws.on('framereceived', (frame) => receivedFrames.push(payloadText(frame.payload)));
+    });
+    page.on('console', (msg) => consoleLines.push(msg.text()));
+
+    // ── 1. Establish the connection by viewing a MSEL ────────────────────────────────
+    await navigateToMsel(page, mselId);
+
+    await expect
+      .poll(() => sockets.length, {
+        timeout: 30000,
+        intervals: [200, 500, 1000],
+        message: 'the Blueprint UI never opened a hub WebSocket',
+      })
+      .toBe(1);
+    expect(new URL(sockets[0].url()).pathname).toBe(
+      `${new URL(Services.Blueprint.API).pathname.replace(/\/$/, '')}/hubs/main`
     );
-    
-    // 2. Simulate network disconnection
-    // expect: Network connection is lost
+
+    // Prove real-time delivery works BEFORE the interruption, so the post-reconnect
+    // assertion is a genuine recovery signal and not a first-ever success.
+    const nameField = page.getByRole('textbox', { name: 'Name', exact: true });
+    const baselineName = tempBlueprintName('TestBP-Reconnect-Before');
+    await updateMsel(token, mselId, { name: baselineName });
+    await expect
+      .poll(() => receivedFrames.join('').includes('"target":"MselUpdated"'), {
+        timeout: 30000,
+        intervals: [250, 500, 1000],
+        message: 'no MselUpdated push arrived before the interruption — SignalR was never healthy',
+      })
+      .toBe(true);
+    await expect(nameField).toHaveValue(baselineName, { timeout: 20000 });
+
+    const framesBeforeOffline = receivedFrames.length;
+
+    // ── 2. Interrupt the network ─────────────────────────────────────────────────────
     await context.setOffline(true);
-    await page.waitForTimeout(2000);
-    
-    // Check for disconnection notification in UI or console
-    const disconnectNotification = page.locator(
-      'text=/disconnected/i, ' +
-      'text=/connection lost/i, ' +
-      'text=/offline/i, ' +
-      '[class*="offline"], ' +
-      '[class*="disconnected"], ' +
-      '[role="alert"]:has-text("connection")'
-    );
-    
-    const hasDisconnectUI = await disconnectNotification.first().isVisible({ timeout: 5000 }).catch(() => false);
-    
-    const hasDisconnectLog = reconnectionLogs.some(log =>
-      log.toLowerCase().includes('disconnect') ||
-      log.toLowerCase().includes('closed') ||
-      log.toLowerCase().includes('lost')
-    );
-    
-    // 3. Restore network connection
+
+    // expect: the client detects the loss. `signalR.HubConnection` logs this exact line
+    // when its serverTimeout elapses (~30s with the default 30s serverTimeout against a
+    // 15s server keepalive), so it is a deterministic marker, not a text guess.
+    await expect
+      .poll(() => consoleLines.filter((l) => /Connection reconnecting because of error/i.test(l)).length, {
+        timeout: 90000,
+        intervals: [500, 1000],
+        message: 'SignalR never reported losing the connection while the context was offline',
+      })
+      .toBeGreaterThan(0);
+
+    // expect: automatic reconnection is attempted. `withAutomaticReconnect(RetryPolicy)`
+    // logs a numbered attempt with its backoff delay for each retry.
+    await expect
+      .poll(() => consoleLines.filter((l) => /Reconnect attempt number \d+ will start in/i.test(l)).length, {
+        timeout: 60000,
+        intervals: [500, 1000],
+        message: 'SignalR scheduled no reconnect attempts',
+      })
+      .toBeGreaterThan(0);
+
+    // ── 3. Restore the network ───────────────────────────────────────────────────────
     await context.setOffline(false);
-    
-    // expect: SignalR automatically attempts to reconnect
-    // expect: Console logs show reconnection attempts
-    // expect: Real-time updates resume once reconnected
-    // expect: User may see a notification about connection status
-    
-    // Wait for reconnection attempts
-    await page.waitForTimeout(5000);
-    
-    // Reload the page to ensure connection is re-established
-    await page.reload();
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(2000);
-    
-    const hasReconnectLog = reconnectionLogs.some(log =>
-      log.toLowerCase().includes('reconnect') ||
-      log.toLowerCase().includes('restored') ||
-      log.toLowerCase().includes('connected')
-    );
-    
-    const reconnectNotification = page.locator(
-      'text=/reconnected/i, ' +
-      'text=/connected/i, ' +
-      'text=/online/i, ' +
-      'text=/connection restored/i, ' +
-      '[class*="online"], ' +
-      '[class*="connected"]'
-    );
-    
-    const hasReconnectUI = await reconnectNotification.first().isVisible({ timeout: 5000 }).catch(() => false);
-    
-    // Verify the page is functional after reconnection
-    const pageIsResponsive = await page.locator('body').isVisible();
-    
-    // Check if we can interact with the page (connection is restored)
-    const canInteract = await page.evaluate(() => {
-      // Try to verify page is interactive
-      return document.readyState === 'complete';
-    });
-    
-    // Log results for debugging
-    console.log('SignalR Reconnection Check:', {
-      initialConnectionStatus,
-      hasDisconnectUI,
-      hasDisconnectLog,
-      hasReconnectLog,
-      hasReconnectUI,
-      pageIsResponsive,
-      canInteract,
-      totalReconnectionLogs: reconnectionLogs.length,
-      reconnectionLogs: reconnectionLogs.slice(0, 10) // Show first 10 logs
-    });
-    
-    // Verify page recovered from network interruption
-    expect(pageIsResponsive).toBe(true);
-    expect(canInteract).toBe(true);
-    
-    // If SignalR is implemented, expect reconnection behavior
-    const hasReconnectionBehavior = 
-      hasDisconnectUI || 
-      hasDisconnectLog || 
-      hasReconnectLog || 
-      hasReconnectUI;
-    
-    if (hasReconnectionBehavior) {
-      // If we detected any reconnection behavior, verify it works correctly
-      expect(hasReconnectionBehavior).toBeTruthy();
-    } else {
-      console.warn('SignalR reconnection behavior not detected. This may indicate SignalR is not yet implemented or uses a different reconnection strategy.');
-    }
-    
-    // Verify no critical errors after reconnection
-    const hasCriticalError = consoleLogs.some(log =>
-      log.toLowerCase().includes('error') && 
-      (log.toLowerCase().includes('signalr') || log.toLowerCase().includes('hub'))
-    );
-    
-    expect(hasCriticalError).toBe(false);
+
+    // expect: a NEW hub socket is opened. This is the transport-level proof of recovery;
+    // no reload is performed, so the second socket can only come from the retry policy.
+    await expect
+      .poll(() => sockets.length, {
+        timeout: 150000,
+        intervals: [500, 1000, 2000],
+        message: 'SignalR never reopened a hub WebSocket after the network was restored',
+      })
+      .toBeGreaterThan(1);
+
+    // expect: the client considers itself reconnected.
+    await expect
+      .poll(() => consoleLines.filter((l) => /HubConnection reconnected successfully/i.test(l)).length, {
+        timeout: 90000,
+        intervals: [500, 1000],
+        message: 'SignalR never logged a successful reconnection',
+      })
+      .toBeGreaterThan(0);
+
+    // expect: the reconnect handler re-joins the hub and re-selects this MSEL. Without
+    // this the socket would be open but the client would receive nothing for the MSEL,
+    // since group membership lives per-connection in MainHub. `onreconnected -> join()`
+    // is what makes it hold (signalr.service.ts), and `join()` re-invokes selectMsel via
+    // the retained `this.mselId`.
+    const sentAfterReconnect = () => {
+      const joinCount = sentFrames.join('').split('"target":"Join"').length - 1;
+      const selectCount = sentFrames.join('').split('"target":"selectMsel"').length - 1;
+      return { joinCount, selectCount };
+    };
+    await expect
+      .poll(() => sentAfterReconnect().joinCount, {
+        timeout: 60000,
+        intervals: [250, 500, 1000],
+        message: 'the client did not re-invoke Join after reconnecting',
+      })
+      .toBeGreaterThan(1);
+    await expect
+      .poll(() => sentAfterReconnect().selectCount, {
+        timeout: 60000,
+        intervals: [250, 500, 1000],
+        message: `the client did not re-invoke selectMsel for ${mselId} after reconnecting`,
+      })
+      .toBeGreaterThan(1);
+
+    // expect: real-time updates resume. Change the MSEL out-of-band again and require a
+    // *new* push (counted from the pre-interruption baseline) plus the rendered value.
+    const recoveredName = tempBlueprintName('TestBP-Reconnect-After');
+    await updateMsel(token, mselId, { name: recoveredName });
+
+    await expect
+      .poll(
+        () =>
+          receivedFrames
+            .slice(framesBeforeOffline)
+            .join('')
+            .includes('"target":"MselUpdated"'),
+        {
+          timeout: 90000,
+          intervals: [250, 500, 1000],
+          message:
+            'no MselUpdated push arrived after reconnection — real-time updates did not resume',
+        }
+      )
+      .toBe(true);
+
+    // The UI applied the pushed change with no reload — the URL is unchanged throughout.
+    await expect(nameField).toHaveValue(recoveredName, { timeout: 30000 });
+    expect(page.url()).toBe(`${Services.Blueprint.UI}/build?msel=${mselId}`);
   });
 });

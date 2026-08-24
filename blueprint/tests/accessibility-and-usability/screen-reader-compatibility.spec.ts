@@ -3,85 +3,112 @@
 
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
+//
+// Test: Screen Reader Compatibility (plan item 16.x)
+//
+// Now `test.skip`-ed pending upstream support, with its assertions intact, rather than a bare
+// `test.fixme()`.
+//
+// Measured on the running app after the shell renders:
+//
+//   route        headings                 landmarks   document.title
+//   /            none                     none        Event Dashboard
+//   /build       none                     none        Blueprint
+//   /admin       H2:Administration        none        Blueprint Admin
+//
+// A repo-wide grep confirms landmarks are absent everywhere: no `role="main"`/`navigation`/
+// `banner`/`contentinfo` and no <main>/<nav>/<header>/<footer> in any template. Structure is
+// carried entirely by mat-toolbar / mat-card-title, which convey nothing to assistive tech.
+//
+// PARTIAL CORRECTION to the previous comment, which said the app "does not use semantic HTML
+// heading elements (h1-h6)". Too strong: the templates contain 3 <h1>, 10 <h2>, 4 <h3> and
+// 5 <h4>. They are simply absent from the primary surfaces — the dashboard and /build have
+// none. The landmark half of the claim is fully correct.
+//
+// The old body also asserted `expect(a || b || c).toBeTruthy()` over only the *first five*
+// inputs/buttons/links, which both hides which element failed and leaves the rest unchecked.
+// Rewritten to collect every offender and assert the collection is empty, so a failure names
+// the actual elements.
 
 import { test, expect, Services } from '../../fixtures';
 
-test.describe('Accessibility and Usability', () => {
-  test.beforeEach(async ({ blueprintAuthenticatedPage: page }) => {
-    // Navigate to Blueprint application (auth state pre-loaded from setup)
-    await page.goto(Services.Blueprint.UI);
-    await page.waitForLoadState('domcontentloaded');
-  });
+const ROUTES = ['', '/build', '/admin'] as const;
 
-  // Blueprint is a desktop-first Angular Material application that does not use semantic
-  // HTML heading elements (h1-h6) or ARIA landmark elements (role="main", role="navigation",
-  // role="banner", etc., main, nav, header, footer). Instead, it uses Angular Material
-  // components such as mat-toolbar and mat-card-title without semantic HTML equivalents.
-  // After Angular finishes rendering, document.querySelectorAll('h1, h2, h3, h4, h5, h6')
-  // returns 0 results, and no landmark elements are found. This is a genuine accessibility
-  // gap in the application rather than a test timing or selector issue.
-  test.fixme('Screen Reader Compatibility', async ({ blueprintAuthenticatedPage: page }) => {
-    // 1. Enable a screen reader (NVDA, JAWS, or VoiceOver)
-    // Note: Actual screen reader testing requires manual testing or specialized tools
-    // This test verifies that the page has proper ARIA attributes and semantic HTML
-    
-    // 2. Navigate through the application
-    // Check for page titles and headings
-    const pageTitle = await page.title();
-    expect(pageTitle).toBeTruthy();
-    expect(pageTitle.length).toBeGreaterThan(0);
-    
-    // Verify headings exist and are properly structured
-    const headings = await page.locator('h1, h2, h3, h4, h5, h6').all();
-    expect(headings.length).toBeGreaterThan(0);
-    
-    // Verify h1 exists (main page heading)
-    const h1 = await page.locator('h1').first();
-    await expect(h1).toBeVisible();
-    
-    // Check for proper form labels
-    const inputs = await page.locator('input[type="text"], input[type="email"], input[type="password"], textarea, select').all();
-    for (const input of inputs.slice(0, 5)) { // Check first 5 inputs
-      const inputId = await input.getAttribute('id');
-      const ariaLabel = await input.getAttribute('aria-label');
-      const ariaLabelledBy = await input.getAttribute('aria-labelledby');
-      const associatedLabel = inputId ? await page.locator(`label[for="${inputId}"]`).count() : 0;
-      
-      // Input should have either a label, aria-label, or aria-labelledby
-      expect(associatedLabel > 0 || ariaLabel || ariaLabelledBy).toBeTruthy();
+test.describe('Accessibility and Usability', () => {
+  test('Screen Reader Compatibility', async ({ blueprintAuthenticatedPage: page }) => {
+    test.skip(
+      true,
+      'Pending upstream support: ARIA landmarks and headings on the primary routes'
+    );
+
+    for (const route of ROUTES) {
+      await page.goto(`${Services.Blueprint.UI}${route}`, { waitUntil: 'domcontentloaded' });
+      await expect(page.locator('app-topbar, mat-toolbar').first()).toBeVisible({
+        timeout: 20000,
+      });
+      const where = `route "${route || '/'}"`;
+
+      // expect: the document is titled.
+      expect(await page.title(), `${where}: document.title`).toBeTruthy();
+
+      // expect: at least one heading, and exactly one h1 as the page's main heading.
+      await expect(
+        page.locator('h1, h2, h3, h4, h5, h6'),
+        `${where}: page must expose at least one heading`
+      ).not.toHaveCount(0);
+      await expect(page.locator('h1'), `${where}: page must have exactly one h1`).toHaveCount(1);
+
+      // expect: at least one ARIA landmark so a screen-reader user can skip to content.
+      await expect(
+        page.locator(
+          '[role="main"], [role="navigation"], [role="banner"], [role="complementary"], ' +
+            '[role="contentinfo"], main, nav, header, aside, footer'
+        ),
+        `${where}: page must expose at least one ARIA landmark`
+      ).not.toHaveCount(0);
+
+      // expect: every visible interactive element has an accessible name. Collected rather
+      // than sampled, so a failure reports exactly which elements are unnamed.
+      const unnamed = await page.evaluate(() => {
+        const offenders: Array<{ tag: string; cls: string; why: string }> = [];
+        const visible = (el: Element) => {
+          const r = el.getBoundingClientRect();
+          return r.width > 0 && r.height > 0;
+        };
+        const describe = (el: Element, why: string) => ({
+          tag: el.tagName,
+          cls: (el as HTMLElement).className?.toString().slice(0, 40) ?? '',
+          why,
+        });
+
+        for (const el of Array.from(document.querySelectorAll('button, a'))) {
+          if (!visible(el)) continue;
+          const named =
+            (el.textContent ?? '').trim() ||
+            el.getAttribute('aria-label') ||
+            el.getAttribute('title') ||
+            el.getAttribute('aria-labelledby');
+          if (!named) offenders.push(describe(el, 'no accessible name'));
+        }
+
+        for (const el of Array.from(
+          document.querySelectorAll('input:not([type=hidden]), textarea, select')
+        )) {
+          if (!visible(el)) continue;
+          const id = el.getAttribute('id');
+          const labelled =
+            el.getAttribute('aria-label') ||
+            el.getAttribute('aria-labelledby') ||
+            (id && document.querySelector(`label[for="${id}"]`)) ||
+            el.closest('label') ||
+            el.closest('mat-form-field')?.querySelector('mat-label');
+          if (!labelled) offenders.push(describe(el, 'form control has no label'));
+        }
+
+        return offenders.slice(0, 15);
+      });
+
+      expect(unnamed, `${where}: interactive elements without accessible names`).toEqual([]);
     }
-    
-    // Check buttons have accessible names
-    const buttons = await page.locator('button').all();
-    for (const button of buttons.slice(0, 5)) { // Check first 5 buttons
-      const buttonText = await button.textContent();
-      const ariaLabel = await button.getAttribute('aria-label');
-      const title = await button.getAttribute('title');
-      
-      // Button should have text content, aria-label, or title
-      expect(buttonText?.trim() || ariaLabel || title).toBeTruthy();
-    }
-    
-    // Check for ARIA landmarks
-    const landmarks = await page.locator('[role="main"], [role="navigation"], [role="banner"], [role="complementary"], [role="contentinfo"], main, nav, header, aside, footer').all();
-    expect(landmarks.length).toBeGreaterThan(0);
-    
-    // Verify links have accessible names
-    const links = await page.locator('a').all();
-    for (const link of links.slice(0, 5)) { // Check first 5 links
-      const linkText = await link.textContent();
-      const ariaLabel = await link.getAttribute('aria-label');
-      
-      // Link should have text or aria-label
-      expect(linkText?.trim() || ariaLabel).toBeTruthy();
-    }
-    
-    // Check for live regions (for status messages and notifications)
-    const liveRegions = await page.locator('[role="status"], [role="alert"], [aria-live]').count();
-    // Note: Live regions may not always be present, but we're checking if the pattern is used
-    
-    // Verify no empty interactive elements
-    const emptyButtons = await page.locator('button:empty:not([aria-label]):not([title])').count();
-    expect(emptyButtons).toBe(0);
   });
 });

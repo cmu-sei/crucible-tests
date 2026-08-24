@@ -9,6 +9,9 @@ playwright/.cache/
 # Full run logs from run-tests.sh
 .logs/
 
+# Scratch output from the playwright-test MCP server (downloads, traces)
+.playwright-mcp/
+
 # Authentication state
 .auth/
 
