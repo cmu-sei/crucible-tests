@@ -5,40 +5,40 @@
 // seed: seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
-import { getFirstViewId } from '../../fixtures';
+import { seedView } from '../../vm-helpers';
 
 test.describe('Map Application', () => {
+  // A freshly seeded view has no maps, which is exactly the state under test.
+  // Discovering a view instead would leave the assertion at the mercy of the
+  // environment: a discovered view might already have a map, which is why this
+  // spec used to accept either the no-map message or a rendered map and so could
+  // pass without ever exercising the no-map path.
+  let seeded: Awaited<ReturnType<typeof seedView>>;
+
+  test.beforeAll(async () => {
+    seeded = await seedView('E2E No Map');
+  });
+
+  test.afterAll(async () => {
+    await seeded?.cleanup();
+  });
+
   // Regression: a valid view with no map assigned showed "View Not Found"
   // instead of "No Map is assigned to this Team" (vm.ui #579).
   test('Map shows "No Map is assigned" for a valid view without a map', async ({
     playerVmAuthenticatedPage: page,
   }) => {
-    // 1. Discover a real view id from the authenticated user's "My Views" list
-    const viewId = await getFirstViewId(page);
-    test.skip(!viewId, 'No views available for the admin user to test against');
+    // 1. Open the Map application for the seeded view
+    await page.goto(`${Services.PlayerVM.UI}/views/${seeded.viewId}/map`);
 
-    // 2. Open the Map application for that view
-    await page.goto(`${Services.PlayerVM.UI}/views/${viewId}/map`);
+    // 2. The view exists and has no map, so the page must settle on the no-map
+    //    message. Reaching it also proves the view resolved: map-main renders
+    //    app-page-not-found whenever it cannot find a primary team for the view.
+    await expect(
+      page.getByRole('heading', { name: 'No Map is assigned to this Team' })
+    ).toBeVisible({ timeout: 30000 });
 
-    // 3. The page resolves to one of the map states. For a view with no map
-    //    assigned to the team, it must show the "No Map is assigned" message
-    //    and must NOT fall through to "View Not Found".
-    const noMap = page.getByRole('heading', {
-      name: 'No Map is assigned to this Team',
-    });
-    const mapImage = page.locator('app-map-team-display img, app-map img').first();
-
-    // Wait for the page to settle into either the no-map state (the case under
-    // test) or, if this environment happens to have a map on the first view,
-    // the rendered map.
-    await expect(async () => {
-      const hasNoMap = await noMap.isVisible();
-      const hasMap = await mapImage.isVisible();
-      expect(hasNoMap || hasMap).toBeTruthy();
-    }).toPass({ timeout: 30000 });
-
-    // Whichever map state we landed in, a valid view must never show the
-    // view-not-found page on the map route.
+    // 3. And it must never fall through to the view-not-found page.
     await expect(
       page.getByRole('heading', { name: 'View Not Found' })
     ).toHaveCount(0);

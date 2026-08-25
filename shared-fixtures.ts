@@ -423,6 +423,54 @@ export async function checkServiceHealth(page: Page, url: string): Promise<boole
 }
 
 /**
+ * True when a test that cannot meet its preconditions must fail instead of
+ * skipping. Set automatically under CI; `CRUCIBLE_STRICT=1` turns it on locally.
+ */
+export const strictPreconditions =
+  !!process.env.CI || ['1', 'true'].includes((process.env.CRUCIBLE_STRICT ?? '').toLowerCase());
+
+/**
+ * Gate a test on a precondition the *environment* owns, without turning a broken
+ * environment into a passing run.
+ *
+ * The pattern this replaces is `test.skip(!thing, 'no thing available')`. Locally
+ * that is helpful — a developer running one app's specs against a partial stack
+ * doesn't want a wall of red for services they never started. Under CI it is a
+ * false green: the whole stack is supposed to be up, so "no thing available"
+ * means something is wrong, and the run reports success while asserting nothing.
+ *
+ * So: skip when running locally, throw when running under CI (or with
+ * `CRUCIBLE_STRICT=1`, which is how you reproduce a CI verdict on your machine).
+ *
+ * Use this only for preconditions a test genuinely cannot create — an optional
+ * service being reachable, a capability the deployment may not have. A
+ * precondition the test could seed itself should be seeded, not gated: see
+ * `player-helpers.ts` and `playerVm/vm-helpers.ts`.
+ *
+ * @param condition - the precondition; falsy means "not met"
+ * @param reason - what is missing and why the test needs it
+ */
+export function requirePrecondition(condition: unknown, reason: string): void {
+  if (condition) {
+    return;
+  }
+
+  if (strictPreconditions) {
+    throw new Error(
+      `Precondition not met: ${reason}\n` +
+        'Failing rather than skipping because CRUCIBLE_STRICT/CI is set, which means the ' +
+        'full stack is expected to be running. Start the missing service, or unset ' +
+        'CRUCIBLE_STRICT to skip this test locally.'
+    );
+  }
+
+  // `test.skip()` resolves the running test from the runner's process-wide state,
+  // so calling it on the base `test` works from a spec that imports its own
+  // app-extended `test`.
+  base.skip(true, reason);
+}
+
+/**
  * Extended test with common fixtures
  * Apps can import this and extend it further with app-specific fixtures
  */

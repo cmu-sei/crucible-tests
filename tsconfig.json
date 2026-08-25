@@ -1,0 +1,28 @@
+{
+  // Exists so `npm run typecheck` can catch what Playwright's runner cannot:
+  // Playwright strips types rather than checking them, so a helper called with
+  // the wrong arguments, a renamed export, or an option that no longer exists
+  // fails at runtime — often as a confusing selector timeout minutes into a run,
+  // and only if the stack is up. `tsc --noEmit` finds those without a stack.
+  //
+  // `strict` is off deliberately: this suite was written without a typecheck, and
+  // turning strict on would bury real errors under thousands of pre-existing
+  // strict-null findings. Everything below is chosen to match how Playwright
+  // already loads these files, so adding this file changes nothing about a run.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    // DOM.Iterable is required because specs spread NodeListOf<Element> inside
+    // page.evaluate callbacks.
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "strict": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "noEmit": true
+  },
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules", "playwright-report", "test-results", ".claude", ".codex"]
+}
