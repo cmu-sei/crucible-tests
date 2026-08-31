@@ -41,10 +41,12 @@
 import { APIRequestContext, request as playwrightRequest } from '@playwright/test';
 import { Services } from '../shared-fixtures';
 import {
+  createTeam,
   createView,
   deleteView,
   getPlayerToken,
   getViewTeams,
+  PlayerTeam,
 } from '../player-helpers';
 
 async function newContext(): Promise<APIRequestContext> {
@@ -178,15 +180,61 @@ export async function getTeamVms(token: string, teamId: string): Promise<SeededV
   return r.data;
 }
 
+/**
+ * Whether the VM API was started with usage logging turned on
+ * (`VmUsageLogging:Enabled`). The VM UI reads the same endpoint and uses it to
+ * *disable* the Usage Logging tab rather than hide it, so a spec that clicks
+ * that tab has to gate on this: the tab is present either way, and clicking a
+ * disabled `mat-tab` mounts nothing.
+ *
+ * Deployment configuration, not something a test can seed — hand the result to
+ * `requirePrecondition`. Never throws; unreachable reads as "not enabled".
+ */
+export async function isUsageLoggingEnabled(token: string): Promise<boolean> {
+  try {
+    const r = await vmCall<boolean>(
+      token,
+      '/api/vmusageloggingsessions/isloggingenabled'
+    );
+    return r.ok && r.data === true;
+  } catch {
+    return false;
+  }
+}
+
 export interface SeededViewWithVm {
   token: string;
   viewId: string;
   /** The view's Admin team — the caller is a member and it is their primary team. */
   teamId: string;
+  /**
+   * Teams created by `options.extraTeamNames`, in the order requested. Empty
+   * unless asked for. The caller is *not* a member of these — they exist so the
+   * view has more than one team, which is the only thing the VM list's
+   * `canSortByTeams$` looks at.
+   */
+  extraTeams: PlayerTeam[];
   vmId: string;
   vmName: string;
   /** Removes the VM and the view. Safe to call more than once. */
   cleanup: () => Promise<void>;
+}
+
+export interface SeedViewWithVmOptions {
+  /**
+   * Additional team names to create in the view. The VM list only offers "Sort
+   * by Team" when `getTeams(viewId)` returns more than one team, so a spec that
+   * exercises grouping needs a second team even though no VM is assigned to it.
+   */
+  extraTeamNames?: string[];
+  /**
+   * `Vm.url` — what the VM UI loads into the `app-focused-app` iframe when the
+   * VM's name is clicked. Defaults to empty, as the API does. Point it at
+   * something inert and same-origin-ish when a spec asserts on the iframe: the
+   * assertion should be about the `src` the UI computed, not about whatever
+   * that page then does.
+   */
+  vmUrl?: string;
 }
 
 /**
@@ -202,7 +250,10 @@ export interface SeededViewWithVm {
  * `namePrefix` should identify the spec, so leftovers from a crashed run are
  * recognisable in the Player and VM admin lists.
  */
-export async function seedViewWithVm(namePrefix: string): Promise<SeededViewWithVm> {
+export async function seedViewWithVm(
+  namePrefix: string,
+  options: SeedViewWithVmOptions = {}
+): Promise<SeededViewWithVm> {
   const token = await getPlayerToken();
   // Date.now() keeps concurrent projects (chromium + firefox) off each other's
   // records; the suite is not fully parallel, but retries reuse the same spec.
@@ -234,11 +285,27 @@ export async function seedViewWithVm(namePrefix: string): Promise<SeededViewWith
       throw new Error(`Seeded view ${view.id} has no Admin team — createAdminTeam did not take effect`);
     }
 
+    // Extra teams are created before the VM only so that a failure here still
+    // leaves nothing behind but the view, which `cleanup` already removes —
+    // teams cascade with it.
+    const extraTeams: PlayerTeam[] = [];
+    for (const name of options.extraTeamNames ?? []) {
+      extraTeams.push(await createTeam(token, view.id, `${name} ${stamp}`));
+    }
+
     const vmName = `${namePrefix} VM ${stamp}`;
-    const vm = await createVm(token, vmName, [adminTeam.id]);
+    const vm = await createVm(token, vmName, [adminTeam.id], { url: options.vmUrl });
     vmId = vm.id;
 
-    return { token, viewId: view.id, teamId: adminTeam.id, vmId: vm.id, vmName, cleanup };
+    return {
+      token,
+      viewId: view.id,
+      teamId: adminTeam.id,
+      extraTeams,
+      vmId: vm.id,
+      vmName,
+      cleanup,
+    };
   } catch (error) {
     await cleanup();
     throw error;
