@@ -40,12 +40,16 @@
 
 import { APIRequestContext, request as playwrightRequest } from '@playwright/test';
 import { Services } from '../shared-fixtures';
+import { getClientSecret, getKeycloakAdminToken } from '../keycloak-admin';
 import {
   createTeam,
   createView,
+  createWebhookSubscription,
   deleteView,
+  deleteWebhookSubscription,
   getPlayerToken,
   getViewTeams,
+  getWebhookSubscriptions,
   PlayerTeam,
 } from '../player-helpers';
 
@@ -137,25 +141,83 @@ export async function deleteVm(token: string, vmId: string): Promise<void> {
   }
 }
 
-export interface SeededMap {
+export interface VmMapCoordinate {
   id: string;
+  xPosition: number;
+  yPosition: number;
+  radius: number;
+  urls: string[];
+  label: string;
+}
+
+export interface VmMap {
+  id: string;
+  viewId: string;
   name: string;
+  imageUrl: string;
+  teamIds: string[];
+  coordinates: VmMapCoordinate[];
+}
+
+export interface VmMapForm {
+  name: string;
+  /** The teams the map is drawn for. Must belong to the view. */
+  teamIds: string[];
+  /**
+   * The map image. Loaded by the browser verbatim, so point it at something in the
+   * deployment when a spec renders the map, and leave it alone otherwise.
+   */
+  imageUrl?: string;
+  /** Clickable regions. Cloned with the map, coordinates and labels included. */
+  coordinates?: Partial<VmMapCoordinate>[];
+}
+
+/** Create a map on a view. Pair every call with {@link deleteMap}. */
+export async function createMap(
+  token: string,
+  viewId: string,
+  form: VmMapForm
+): Promise<VmMap> {
+  const r = await vmCall<VmMap>(token, `/api/views/${viewId}/map`, {
+    method: 'POST',
+    body: {
+      name: form.name,
+      teamIds: form.teamIds,
+      imageUrl: form.imageUrl ?? '',
+      coordinates: form.coordinates ?? [],
+    },
+  });
+  if (!r.ok) {
+    throw new Error(`createMap failed for "${form.name}" on view ${viewId} (${r.status}): ${r.text}`);
+  }
+  return r.data;
 }
 
 /**
- * Maps assigned to a view. Returns an empty list for a view with no maps and
- * (per the API) 404s for a view the caller cannot see — treated as "no maps"
- * here so this is usable from teardown after the view has already been deleted.
+ * Every map in the deployment, coordinates included (`getAllMaps`). Needs the
+ * `ViewViews` system permission, which the seeding admin has.
  */
-export async function getViewMaps(token: string, viewId: string): Promise<SeededMap[]> {
-  const r = await vmCall<SeededMap[]>(token, `/api/views/maps/viewMaps/${viewId}`);
-  if (r.status === 404) {
-    return [];
-  }
+export async function getAllMaps(token: string): Promise<VmMap[]> {
+  const r = await vmCall<VmMap[]>(token, '/api/views/maps');
   if (!r.ok) {
-    throw new Error(`getViewMaps failed for ${viewId} (${r.status}): ${r.text}`);
+    throw new Error(`getAllMaps failed (${r.status}): ${r.text}`);
   }
   return r.data ?? [];
+}
+
+/**
+ * The maps filed under a view id, whoever they are drawn for.
+ *
+ * Filtered out of {@link getAllMaps} rather than read from the view's own endpoint,
+ * because that endpoint (`getViewMaps`, `/api/views/maps/viewMaps/{viewId}`) cannot
+ * see the maps this suite most needs to look at. It returns only maps whose teams
+ * intersect the caller's *visibility context*, and that context is empty unless the
+ * caller holds a primary team membership in the view — so a cloned view, which copies
+ * no memberships, reads as having no maps at all, and a deleted view 404s. Neither is
+ * distinguishable from "the map is not there", which is the assertion.
+ */
+export async function getMapsForView(token: string, viewId: string): Promise<VmMap[]> {
+  return (await getAllMaps(token)).filter((map) => map.viewId === viewId);
 }
 
 /** Delete a map. Tolerates 404 and warns rather than throws, as with deleteVm. */
@@ -175,7 +237,7 @@ export async function deleteMap(token: string, mapId: string): Promise<void> {
  * though its view is gone. Call this from teardown as the safety net.
  */
 export async function deleteViewMaps(token: string, viewId: string): Promise<void> {
-  for (const map of await getViewMaps(token, viewId).catch(() => [])) {
+  for (const map of await getMapsForView(token, viewId).catch(() => [])) {
     await deleteMap(token, map.id);
   }
 }
@@ -547,4 +609,107 @@ export async function seedView(namePrefix: string): Promise<{
     await cleanup();
     throw error;
   }
+}
+
+/**
+ * The Keycloak client the Player API authenticates as when it calls the VM API's
+ * callback. Its scopes have to include the one the VM API's privileged policy
+ * requires (`player-vm-privileged` in the dev realm), or every delivery is a 403.
+ */
+const CALLBACK_CLIENT_ID = process.env.PLAYERVM_WEBHOOK_CLIENT_ID || 'player.vm.webhooks';
+
+export interface VmCallbackSubscription {
+  id: string;
+  callbackUri: string;
+  /**
+   * The Player API's own account of the last delivery that failed, re-read on each
+   * call and null once one succeeds. Worth folding into anything that waits on a
+   * callback: it separates "the event never arrived" from "it arrived and did
+   * nothing", and only the second is a fault in the VM API.
+   */
+  lastError: () => Promise<string | null>;
+  /** Deletes the subscription. Safe to call more than once. */
+  cleanup: () => Promise<void>;
+}
+
+/**
+ * Subscribe the VM API's callback endpoint to the Player API's view events, which is
+ * the only thing that makes half of the VM API's behaviour reachable at all.
+ *
+ * Maps and usage-logging sessions are copied onto a cloned view, and removed when a
+ * view is deleted, by `CallbackBackgroundService` — and nothing calls that endpoint
+ * but the Player API's webhook sender. There is no in-app trigger, no scheduler and
+ * no UI for it, so a deployment with no subscription has the feature switched off
+ * without saying so anywhere. **The Aspire dev stack is such a deployment**:
+ * `SeedData.Subscriptions` is commented out in `player.api/appsettings.json` and the
+ * AppHost sets none, so `GET /api/webhooks` is empty and a cloned view keeps none of
+ * its parent's maps. A spec that wants to assert the contract has to make the
+ * subscription itself.
+ *
+ * Two things it needs that this suite cannot seed, both handed to
+ * `requirePrecondition` by way of a throw:
+ *
+ *   - **Credentials.** The Player API fetches a client-credentials token before each
+ *     delivery, so the subscription carries a client id and secret. Read from
+ *     Keycloak (`PLAYERVM_WEBHOOK_CLIENT_ID`, default `player.vm.webhooks`) rather
+ *     than checked in, so this works on any deployment whose realm has the client;
+ *     `PLAYERVM_WEBHOOK_CLIENT_SECRET` skips the lookup when the Keycloak admin
+ *     account is not available.
+ *   - **A callback address the Player API can reach.** `Services.PlayerVM.API` is
+ *     resolved by *this process*, and the Player API is the one that has to connect.
+ *     That is the same address under Aspire (both are local processes) and a
+ *     different one anywhere the services are containerised, where
+ *     `PLAYERVM_CALLBACK_URL` is the way in.
+ *
+ * The subscription is deployment-wide while it exists — every view created or
+ * deleted by any spec is delivered through it — so `cleanup()` belongs in an
+ * `afterAll`, and each caller creates its own rather than sharing one: two
+ * subscriptions mean the same event is delivered twice, which the VM API handles
+ * idempotently apart from cloning a map twice, while a shared one deleted by
+ * whichever project finishes first would strand the other mid-poll.
+ */
+export async function subscribeVmToViewEvents(
+  playerToken: string,
+  name: string
+): Promise<VmCallbackSubscription> {
+  const callbackUri =
+    process.env.PLAYERVM_CALLBACK_URL ||
+    `${Services.PlayerVM.API.replace(/\/$/, '')}/api/callback`;
+
+  let clientSecret = process.env.PLAYERVM_WEBHOOK_CLIENT_SECRET ?? null;
+  if (!clientSecret) {
+    clientSecret = await getClientSecret(await getKeycloakAdminToken(), CALLBACK_CLIENT_ID);
+  }
+  if (!clientSecret) {
+    throw new Error(
+      `No secret available for the Keycloak client "${CALLBACK_CLIENT_ID}" that the Player API ` +
+        'would authenticate as, so a webhook subscription would fail every delivery. Set ' +
+        'PLAYERVM_WEBHOOK_CLIENT_SECRET, or PLAYERVM_WEBHOOK_CLIENT_ID if this deployment names ' +
+        'the client differently.'
+    );
+  }
+
+  const subscription = await createWebhookSubscription(playerToken, {
+    name,
+    callbackUri,
+    clientId: CALLBACK_CLIENT_ID,
+    clientSecret,
+    eventTypes: ['ViewCreated', 'ViewDeleted'],
+  });
+
+  let id: string | null = subscription.id;
+  return {
+    id: subscription.id,
+    callbackUri,
+    lastError: async () =>
+      (await getWebhookSubscriptions(playerToken).catch(() => [])).find(
+        (x) => x.id === subscription.id
+      )?.lastError ?? null,
+    cleanup: async () => {
+      if (id) {
+        await deleteWebhookSubscription(playerToken, id);
+        id = null;
+      }
+    },
+  };
 }

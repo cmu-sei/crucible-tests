@@ -240,6 +240,54 @@ export async function deleteKeycloakUser(
 }
 
 /**
+ * The secret of a confidential realm client, read out of Keycloak.
+ *
+ * Needed when a test has to hand one Crucible service the credentials another one
+ * authenticates with — `playerVm/vm-helpers.ts` subscribes the Player API to view
+ * events and has to tell it which client to get its callback token as.
+ *
+ * Read rather than hardcoded on purpose: a secret checked in here would be right
+ * for the dev realm and silently wrong everywhere else, with nothing but a failing
+ * delivery to say so. The master-realm admin token this file already uses can ask
+ * for the real one, so every deployment gets its own. Returns null when the client
+ * does not exist or is public (no secret to read) — a deployment fact for
+ * `requirePrecondition`, not a failure.
+ */
+export async function getClientSecret(
+  adminToken: string,
+  clientId: string,
+  realm: string = 'crucible'
+): Promise<string | null> {
+  const keycloak = Services.Keycloak.replace(/\/$/, '');
+  const ctx = await newContext();
+  try {
+    const headers = { Authorization: `Bearer ${adminToken}` };
+    const found = await ctx.fetch(
+      `${keycloak}/admin/realms/${realm}/clients?clientId=${encodeURIComponent(clientId)}`,
+      { headers }
+    );
+    if (!found.ok()) {
+      return null;
+    }
+    // `clientId` is the human name; every admin path below keys off the uuid.
+    const uuid = ((await found.json()) as any[])[0]?.id;
+    if (!uuid) {
+      return null;
+    }
+    const secret = await ctx.fetch(
+      `${keycloak}/admin/realms/${realm}/clients/${uuid}/client-secret`,
+      { headers }
+    );
+    if (!secret.ok()) {
+      return null;
+    }
+    return ((await secret.json()) as { value?: string }).value ?? null;
+  } finally {
+    await ctx.dispose();
+  }
+}
+
+/**
  * Generate a unique username suitable for temporary test accounts.
  * Format: `<prefix>-<timestamp>-<random>`.
  */

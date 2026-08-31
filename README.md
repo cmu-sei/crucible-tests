@@ -206,6 +206,7 @@ KEYCLOAK_URL=https://mycluster.example.com/keycloak
 - The Aspire dashboard does not exist under Minikube; `Services.AspireDashboard` is empty in that profile.
 - `gameboard/db-helpers.ts` uses `docker inspect crucible-postgres` to read the DB password. Under Minikube that container does not exist — set `CRUCIBLE_POSTGRES_PASSWORD` and port-forward `5432` to the in-cluster `crucible-infra-postgresql-rw` service, or skip the affected scoreboard tests.
 - A handful of tests still hardcode `localhost:4xxx` / `localhost:8443` regex matchers (mostly under `player/tests/`). They do not pass against Minikube without per-test fixes — convert them to `Services.X.UI` if you need them green.
+- `playerVm/tests/callback/` subscribes the Player API to view events, which means the Player API — not the test runner — has to be able to reach the VM API's `/api/callback`. It builds that address from `PLAYERVM_API_URL`, which is right when both are local processes and is the ingress address under Minikube; set `PLAYERVM_CALLBACK_URL` to the in-cluster service address if the API cannot call back through the ingress. It also reads the callback client's secret from Keycloak, so it needs working `KEYCLOAK_ADMIN_USER`/`KEYCLOAK_ADMIN_PASSWORD` credentials, or `PLAYERVM_WEBHOOK_CLIENT_SECRET` set directly.
 
 ## Directory Structure
 

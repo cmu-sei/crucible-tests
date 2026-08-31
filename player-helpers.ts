@@ -154,6 +154,42 @@ export async function createView(
 }
 
 /**
+ * Clone a view: `POST /api/views/{id}/clone`, the call the Player UI's "Clone"
+ * makes and the one an exercise is started from a template with.
+ *
+ * Two things about the child matter to anything that asserts on it, and neither is
+ * obvious from the call:
+ *
+ *   - **The caller is not in it.** `ViewEntity.Clone()` copies the teams (names,
+ *     roles, permissions and applications) but resets `Memberships`, so nobody is a
+ *     member of the new view and the caller has no *primary* team in it. Endpoints
+ *     that filter by the caller's teams therefore return nothing for a clone even
+ *     to the user who made it — see `getMapsForView` in `playerVm/vm-helpers.ts`.
+ *   - **Its teams are the parent's by name, not by id.** New rows, new ids, same
+ *     names — which is exactly how the VM API re-points a cloned map at the child's
+ *     team.
+ *
+ * The child holds `ParentViewId`, and that is what the Player API puts in the
+ * `ViewCreated` webhook as `ParentId`. Pair every call with {@link deleteView}.
+ */
+export async function cloneView(
+  token: string,
+  viewId: string,
+  name?: string
+): Promise<PlayerView> {
+  const r = await playerCall<PlayerView>(token, `/api/views/${viewId}/clone`, {
+    method: 'POST',
+    // An omitted name is "Clone of {parent}", which is fine but not unique; specs
+    // pass their own so a leftover is recognisable.
+    body: { name },
+  });
+  if (!r.ok) {
+    throw new Error(`cloneView failed for ${viewId} (${r.status}): ${r.text}`);
+  }
+  return r.data;
+}
+
+/**
  * Delete a view and everything Player cascades from it (teams, memberships).
  * Tolerates 404 so it is safe to call from a `finally` that may run after the
  * view is already gone. Cleanup failures are warnings, not throws: a teardown
@@ -218,6 +254,93 @@ export async function addUserToTeam(token: string, teamId: string, userId: strin
   const r = await playerCall(token, `/api/teams/${teamId}/users/${userId}`, { method: 'POST' });
   if (!r.ok) {
     throw new Error(`addUserToTeam failed for user ${userId} on team ${teamId} (${r.status}): ${r.text}`);
+  }
+}
+
+export interface PlayerWebhookSubscription {
+  id: string;
+  name: string;
+  callbackUri: string;
+  clientId: string;
+  /** Never the secret itself — the API returns `""` and reports its presence below. */
+  clientSecret: string;
+  clientSecretSet: boolean;
+  /**
+   * What went wrong the last time Player tried to deliver an event to
+   * `callbackUri`, or null. Set on a refused connection, a token it could not get,
+   * or any status that is not 200/202, and cleared on the next success — so it is
+   * the deployment's own account of a webhook that is configured but not working,
+   * and worth reading into the failure output of anything that waits on a delivery.
+   */
+  lastError: string | null;
+  /** `["ViewCreated", "ViewDeleted"]` — names on the way out, in no fixed order. */
+  eventTypes: string[];
+}
+
+export interface WebhookSubscriptionForm {
+  name: string;
+  /**
+   * Where Player POSTs the event. Resolved by *Player's* process, not by the test
+   * runner: a subscription is only useful if the API can reach the address itself.
+   */
+  callbackUri: string;
+  /** The confidential Keycloak client Player gets its callback token as. */
+  clientId: string;
+  clientSecret: string;
+  /** Names (`ViewCreated`) or numbers; the API accepts either. */
+  eventTypes: string[];
+}
+
+/**
+ * Subscribe a callback endpoint to Player's view events.
+ *
+ * Player's webhooks are not per-view and not per-user: one subscription makes the
+ * API POST *every* view creation and deletion in the deployment to `callbackUri`
+ * until it is deleted. So a test that creates one is changing deployment-wide
+ * behaviour for as long as it holds it — create it as late as possible, delete it
+ * in teardown, and expect other specs' views to be delivered through it meanwhile.
+ *
+ * Returns 200 (not 201) with the subscription, the secret blanked out. Needs the
+ * `ManageWebhookSubscriptions` system permission.
+ */
+export async function createWebhookSubscription(
+  token: string,
+  form: WebhookSubscriptionForm
+): Promise<PlayerWebhookSubscription> {
+  const r = await playerCall<PlayerWebhookSubscription>(token, '/api/webhooks/subscribe', {
+    method: 'POST',
+    body: form,
+  });
+  if (!r.ok) {
+    throw new Error(`createWebhookSubscription failed for "${form.name}" (${r.status}): ${r.text}`);
+  }
+  return r.data;
+}
+
+/**
+ * Every webhook subscription in the deployment. There is no get-by-id, so this is
+ * also how a single subscription is read back — filter on the id.
+ */
+export async function getWebhookSubscriptions(
+  token: string
+): Promise<PlayerWebhookSubscription[]> {
+  const r = await playerCall<PlayerWebhookSubscription[]>(token, '/api/webhooks');
+  if (!r.ok) {
+    throw new Error(`getWebhookSubscriptions failed (${r.status}): ${r.text}`);
+  }
+  return r.data ?? [];
+}
+
+/**
+ * Delete a webhook subscription. Tolerates 404 and warns rather than throws, as
+ * with {@link deleteView} — and unlike most cleanup, this one is not optional: a
+ * subscription left behind keeps every later view creation in the deployment
+ * POSTing to an endpoint no test is watching.
+ */
+export async function deleteWebhookSubscription(token: string, id: string): Promise<void> {
+  const r = await playerCall(token, `/api/webhooks/${id}`, { method: 'DELETE' });
+  if (!r.ok && r.status !== 404) {
+    console.warn(`deleteWebhookSubscription failed for ${id} (${r.status}): ${r.text}`);
   }
 }
 

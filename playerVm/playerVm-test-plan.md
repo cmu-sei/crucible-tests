@@ -228,6 +228,79 @@ through to "View Not Found".
 - **Map shows "View Not Found" for an invalid view** — navigate to
   `/views/00000000-0000-0000-0000-000000000000/map`; expect "View Not Found".
 
+## View event callback
+
+`tests/callback/view-event-callback.spec.ts`. No browser: nothing in the estate
+draws any of this.
+
+Half of the VM API's behaviour is reachable only from the Player API. When a view
+is created, the Player API POSTs `ViewCreated { ViewId, ParentId, ViewName }` to
+every webhook subscription; when one is deleted, `ViewDeleted { ViewId }`. The VM
+API takes those at `POST api/callback` and spends them in
+`CallbackBackgroundService`: a view with a parent gets the parent's maps
+re-pointed at its own teams and a usage-logging session of its own, and a deleted
+view loses its maps and has its running sessions closed. That is the whole of
+"starting an exercise from a template keeps the map", and there is no endpoint,
+no schedule and no button that does any of it.
+
+**Why it needs a test here rather than in either repository.** Both sides are
+already covered in process — and that is the gap. `CallbacksEndpointTests` and
+`CallbackBackgroundServiceTests` drive the VM API from a *hand-written* event, so
+what they assert is the payload a fixture decided the Player API would send. The
+VM API reads the inner payload with Newtonsoft, where a name it does not
+recognise is silently null, and the Player API serialises it with
+`System.Text.Json` from its own DTO. A field renamed on either side leaves both
+suites green and a cloned view quietly without its map. Only a run against both
+real APIs compares them.
+
+Four things shape the file:
+
+- **The webhook is off unless a subscription exists, and the dev stack has
+  none.** `SeedData.Subscriptions` is commented out in `player.api`'s
+  `appsettings.json` and the AppHost sets nothing, so `GET /api/webhooks` is
+  empty and this feature has never run there. The spec creates the subscription
+  itself (`subscribeVmToViewEvents`), which needs the callback client's secret —
+  read from Keycloak rather than checked in — and an address for the VM API that
+  *the Player API's process* can reach.
+- **A subscription is deployment-wide while it exists.** Every view any spec
+  creates or deletes is delivered through it, and both browser projects run this
+  file, so one event can be delivered twice. Nothing here asserts a count: a
+  doubled delivery clones a map twice and is otherwise idempotent.
+- **A cloned view cannot be observed through the view's own endpoints.**
+  `ViewEntity.Clone()` copies no memberships, so the caller has no primary team
+  in the child and `getViewMaps` — which filters to the caller's visibility
+  teams — reports it as having no maps at all; after a delete it 404s. Both are
+  indistinguishable from the assertion failing. `getMapsForView` in
+  `vm-helpers.ts` reads the deployment-wide list instead.
+- **Every wait is bounded and reports why it gave up.** Delivery is a background
+  queue on one side and a background service on the other, with a retry between.
+  `awaitingDelivery` adds the subscription's `lastError` to a timeout, which
+  separates the two failures: an error means the event never landed (unreachable
+  callback, refused token — a deployment fault), and no error with nothing done
+  means it landed and the VM API made nothing of it, which is the contract
+  breaking.
+
+### Tests
+
+- **A view cloned from a parent is given the parent's maps, on its own team** —
+  the copy is a new map with new coordinate rows, drawn for the child's team
+  (matched to the parent's by *name*, since a clone's teams are new ids), and the
+  parent keeps its own: a copy, not a move. Coordinates are asserted because a
+  map cloned without them renders as a working map with nothing clickable on it.
+- **A cloned view is given a usage-logging session of its own, named after it** —
+  named from the payload's `ViewName`, which makes this the assertion that the
+  field arrived at all; a null session name is what a rename on the sending side
+  looks like from here. Also its teams and its window, which is "now, for a
+  year", because a console cannot be logged against a session that is not open.
+  Gated on `VmUsageLogging:Enabled`.
+- **Deleting a view removes the maps filed under it** — asserted present first,
+  because the VM API's maps outlive their view otherwise, which is the reason
+  this callback exists.
+- **Deleting a view closes a usage-logging session that is still running** —
+  seeded an hour out so it is unambiguously running, and asserted as *closed
+  rather than gone*: sessions live in a separate database that nothing cascades,
+  which is what keeps an ended exercise's usage readable in the report.
+
 ## Client/server contracts
 
 `tests/contract/` is the exception to everything above: no browser, no
