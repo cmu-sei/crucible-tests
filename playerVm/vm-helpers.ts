@@ -56,7 +56,16 @@ async function newContext(): Promise<APIRequestContext> {
 async function vmCall<T = any>(
   token: string,
   path: string,
-  opts: { method?: 'GET' | 'POST' | 'PUT' | 'DELETE'; body?: unknown } = {}
+  opts: {
+    method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+    body?: unknown;
+    /**
+     * `Accept`, when the endpoint does not produce JSON. `[Produces("text/csv")]`
+     * on the download endpoint means the default `application/json` gets a 406
+     * rather than a file.
+     */
+    accept?: string;
+  } = {}
 ): Promise<{ ok: boolean; status: number; data: T; text: string }> {
   const base = Services.PlayerVM.API.replace(/\/$/, '');
   const ctx = await newContext();
@@ -66,7 +75,7 @@ async function vmCall<T = any>(
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
-        Accept: 'application/json',
+        Accept: opts.accept ?? 'application/json',
       },
       data: opts.body,
     });
@@ -200,6 +209,193 @@ export async function isUsageLoggingEnabled(token: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+export interface UsageLoggingSession {
+  id: string;
+  sessionName: string;
+  viewId: string;
+  teamIds: string[];
+  sessionStart: string;
+  sessionEnd: string;
+}
+
+export interface CreateUsageLoggingSessionOptions {
+  viewId: string;
+  teamIds: string[];
+  sessionName: string;
+  /** Defaults to a window that starts an hour ago and ends at the end of today. */
+  sessionStart?: Date;
+  sessionEnd?: Date;
+}
+
+/**
+ * The start of today and the last minute of it, in local time — the window the
+ * usage-logging specs seed inside.
+ *
+ * It has to be inside a single day for both halves of the feature to see the
+ * session at once. `VmUsageLoggingService.CreateVmLogEntry` only attaches an
+ * entry to a session whose `SessionStart` has passed and whose `SessionEnd` has
+ * not, and `GetVmUsageReport` only counts a session the report range *fully
+ * contains* (`reportStart <= SessionStart && reportEnd >= SessionEnd`), while
+ * the report page floors its start date to 00:00 and ceilings its end to
+ * 23:59:59. A session that ran past midnight satisfies the first and fails the
+ * second, and the report would come back empty for reasons nothing on the page
+ * explains.
+ */
+export function todaysLoggingWindow(): { start: Date; end: Date } {
+  const start = new Date();
+  start.setHours(0, 1, 0, 0);
+  const end = new Date();
+  end.setHours(23, 59, 0, 0);
+  return { start, end };
+}
+
+/**
+ * Create a usage-logging session over the API.
+ *
+ * Seeded rather than created through the form when the session is a
+ * *precondition* — the form is only worth driving in the one spec whose subject
+ * it is. Pair every call with {@link deleteUsageLoggingSession}, or with
+ * {@link deleteViewUsageLoggingSessions} in teardown.
+ */
+export async function createUsageLoggingSession(
+  token: string,
+  options: CreateUsageLoggingSessionOptions
+): Promise<UsageLoggingSession> {
+  const window = todaysLoggingWindow();
+  const r = await vmCall<UsageLoggingSession>(token, '/api/vmusageloggingsessions', {
+    method: 'POST',
+    body: {
+      sessionName: options.sessionName,
+      viewId: options.viewId,
+      teamIds: options.teamIds,
+      sessionStart: (options.sessionStart ?? window.start).toISOString(),
+      sessionEnd: (options.sessionEnd ?? window.end).toISOString(),
+    },
+  });
+  if (!r.ok) {
+    throw new Error(
+      `createUsageLoggingSession failed for view ${options.viewId} (${r.status}): ${r.text}`
+    );
+  }
+  return r.data;
+}
+
+/**
+ * Usage-logging sessions, optionally narrowed to one view.
+ *
+ * Returns an empty list when logging is switched off: every endpoint but
+ * `isloggingenabled` answers 404 with "Vm Usage Logging is disabled", which is a
+ * configuration answer and not a failure to report from teardown.
+ */
+export async function listUsageLoggingSessions(
+  token: string,
+  viewId?: string
+): Promise<UsageLoggingSession[]> {
+  const r = await vmCall<UsageLoggingSession[]>(
+    token,
+    `/api/vmusageloggingsessions${viewId ? `?viewId=${viewId}` : ''}`
+  );
+  if (r.status === 404) {
+    return [];
+  }
+  if (!r.ok) {
+    throw new Error(`listUsageLoggingSessions failed (${r.status}): ${r.text}`);
+  }
+  return r.data ?? [];
+}
+
+/** Delete a usage-logging session. Tolerates 404 and warns rather than throws, as with deleteVm. */
+export async function deleteUsageLoggingSession(token: string, id: string): Promise<void> {
+  const r = await vmCall(token, `/api/vmusageloggingsessions/${id}`, { method: 'DELETE' });
+  if (!r.ok && r.status !== 404) {
+    console.warn(`deleteUsageLoggingSession failed for ${id} (${r.status}): ${r.text}`);
+  }
+}
+
+/**
+ * Remove every usage-logging session on a view.
+ *
+ * The same hazard as {@link deleteViewMaps}, and worse: sessions live in a
+ * *separate* database from the VM API's own (`VmUsageLogging:PostgreSQL`), keyed
+ * by view id, so deleting the Player view cascades to neither the session nor
+ * the usage-log entries hanging off it. Call this from teardown as the safety
+ * net for anything that created a session, including one created through the UI.
+ */
+export async function deleteViewUsageLoggingSessions(
+  token: string,
+  viewId: string
+): Promise<void> {
+  for (const session of await listUsageLoggingSessions(token, viewId).catch(() => [])) {
+    await deleteUsageLoggingSession(token, session.id);
+  }
+}
+
+/**
+ * The session's log as the CSV endpoint renders it: a header line and one line
+ * per log entry, CRLF-separated.
+ *
+ * `[Produces("text/csv")]` means this has to ask for `text/csv` — the default
+ * `Accept: application/json` gets a 406 and no file.
+ */
+export async function usageLoggingSessionCsv(token: string, id: string): Promise<string> {
+  const r = await vmCall(token, `/api/vmusageloggingsessions/${id}/download`, {
+    accept: 'text/csv',
+  });
+  if (!r.ok) {
+    throw new Error(`usageLoggingSessionCsv failed for ${id} (${r.status}): ${r.text}`);
+  }
+  return r.text;
+}
+
+export interface UsageLogEntryRow {
+  vmId: string;
+  vmName: string;
+  userName: string;
+  activeAt: string;
+  inactiveAt: string;
+  /**
+   * Whether the entry has been closed. Only closed entries reach the report -
+   * `GetVmUsageReport` filters on `VmInactiveDT > VmActiveDT` - so this is the
+   * difference between a console that is open and one that has been left.
+   */
+  closed: boolean;
+}
+
+/**
+ * `DateTimeOffset.MinValue` as the CSV prints it, which is what an open entry's
+ * inactive column holds. The VM UI makes the same comparison against its
+ * `CSHARP_MIN_DATE` constant; matched as text here rather than parsed because
+ * `Date.parse` does not reliably accept .NET's `M/d/yyyy h:mm:ss tt zzz`.
+ */
+const csvMinDate = /^0?1\/0?1\/0001/;
+
+/**
+ * The log entries recorded against a usage-logging session.
+ *
+ * There is no endpoint that returns these as JSON - the CSV download is the only
+ * way to see them - so this parses it. Nothing a test writes contains a comma:
+ * the API joins on `", "` and does not quote, and it replaces the separators
+ * inside the one field that can hold several values (`IpAddress`).
+ */
+export async function usageLogEntries(token: string, id: string): Promise<UsageLogEntryRow[]> {
+  const lines = (await usageLoggingSessionCsv(token, id))
+    .split(/\r?\n/)
+    .slice(1)
+    .filter((x) => x.trim().length > 0);
+
+  return lines.map((line) => {
+    const [, , vmId, vmName, , , userName, activeAt, inactiveAt] = line.split(', ');
+    return {
+      vmId,
+      vmName,
+      userName,
+      activeAt,
+      inactiveAt,
+      closed: !csvMinDate.test((inactiveAt ?? '').trim()),
+    };
+  });
 }
 
 export interface SeededViewWithVm {

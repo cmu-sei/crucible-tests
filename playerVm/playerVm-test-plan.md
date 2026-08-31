@@ -62,7 +62,8 @@ through `pressSequentially`.
 - **Usage Logging tab mounts the session form** — gated on
   `GET /api/vmusageloggingsessions/isloggingenabled`, because the tab is rendered
   either way and `[disabled]="!usageLoggingEnabled"` is what changes; clicking a
-  disabled `mat-tab` mounts nothing.
+  disabled `mat-tab` mounts nothing. `usage-logging.spec.ts` is the rest of that
+  tab.
 - **Selected tab survives a reload** — and the restored index re-mounts the lazy
   content, which a restore that only moved the highlight would not.
 - **Unknown view renders View Not Found with no tab strip** — the all-zero uuid
@@ -110,11 +111,91 @@ computed is ever asserted):
 - **An opened VM tab is restored after a reload** — tab *and* iframe, since a
   restored tab with no url is an empty pane with the right label.
 
+`usage-logging.spec.ts` (the Usage Logging tab, the one feature of this page behind
+a deployment switch):
+
+- **Usage Logging tab is enabled exactly when the API says logging is on** — the
+  only test in this file that is *not* gated on the setting, and deliberately so.
+  With `VmUsageLogging:Enabled` off, every endpoint but `isloggingenabled` answers
+  404 and the tab is rendered disabled rather than hidden; a browser only ever sees
+  the branch its deployment is configured for, so this asserts both against what
+  the API reports and one of them is always real. The disabled branch dispatches
+  the click event directly, because a disabled `mat-tab` is `pointer-events: none`
+  and a real click cannot reach `_handleClick` — which is where the guard that
+  matters is, since the tab body is a `matTabContent` template.
+- **A session created through the form appears in the table** — with the team it
+  was filed against (the Teams column renders `getTeamName`, so "Unknown" is what a
+  session with the wrong team ids looks like), and the record read back from the
+  API. The Log Name box is typed into rather than filled: the value reaches the
+  component through `(change)`, and a `change` event only follows a blur when the
+  value was changed by keystrokes.
+- **Download CSV saves the session log under the session name** — the client names
+  the file itself (`saveAs(blob, name + '.csv')`) rather than using the API's
+  `FileDownloadName`, so this is the browser half and not a restatement of the
+  endpoint. A session with no console activity still has the header row, which is
+  the report's whole vocabulary.
+- **End closes a session that is still running** — the End button exists only for a
+  session whose end is in the future, so its disappearance is the row reporting the
+  new end.
+- **Delete removes the row only after the confirmation is confirmed** — cancel
+  keeps both the row and the record. Log entries cascade off the session in the
+  logging database, so the confirmation is all that stands between a mis-click and
+  an exercise's recorded history.
+
 ### Not covered here
 
 The view page's other routes — `views/:viewId/vms/:name/console`,
-`views/:viewId/auto-deploy`, `views/:viewName/:teamId/welder` and `usage` — have
-no tests in either suite yet.
+`views/:viewId/auto-deploy` and `views/:viewName/:teamId/welder` — have no tests in
+either suite yet.
+
+## Usage reporting (`usage`)
+
+The read side of usage logging, and the only route in this app that is not about a
+single view. `usage-reporting.spec.ts`.
+
+One thing shapes the whole file: **a row in this report cannot be seeded.** Log
+entries are written in exactly one place — `VmHub.SetActiveVirtualMachine` — there is
+no endpoint that creates one, and this suite has no SignalR client. The only way to
+put data in the report is to open a VM console in a browser and leave it. So the
+data-dependent assertions are all in one test, which drives `console.ui` in a second
+page of the same browser context; closing that page is what disconnects the hub, and
+`OnDisconnectedAsync` → `CloseVmLogEntry` is the only thing that closes the entry.
+The report filters on `VmInactiveDT > VmActiveDT`: an open console is not yet usage.
+
+Two more traps in the seeding, both in `vm-helpers.ts`:
+
+- **A session has to fit inside one day.** The hub attaches an entry only to a
+  session that is running *now*, and the report selects only a session its range
+  *wholly contains* — while the page floors the start to 00:00 and ceilings the end
+  to 23:59:59. A session that ran past midnight satisfies the first and fails the
+  second, and the report comes back empty for reasons nothing on the page explains.
+- **Sessions live in a separate database** (`VmUsageLogging:PostgreSQL`), keyed by
+  view id, so deleting the Player view cascades to neither the session nor its
+  entries. `deleteViewUsageLoggingSessions` is the teardown net.
+
+### Tests
+
+- **Usage report page renders both formats with nothing to report yet** —
+  unconditional, because the page is behind no permission and no setting: with
+  logging off the report request 404s and the empty state is the same. Get is
+  disabled until a range is set, CSV until a report has rows, and the table is not
+  rendered at all.
+- **A range with no sessions in it reports no data** — a range far enough back that
+  no deployment can have data in it. The empty-state message is on screen *before*
+  Get is pressed, so the response is what separates "no data" from "never asked":
+  the test waits for the report call and asserts it came back `200 []`.
+- **A console session that has ended appears in the report** — seed a session
+  covering today, open the seeded VM's console in `console.ui` until the log entry
+  appears, close it so the entry closes, then report on today. Asserts the row (by
+  session name, since the report is deployment-wide), that switching to By Session
+  rebuilds the table around a different first column, and that the CSV button —
+  which builds its file from the rows the page already has — produces
+  `VmUsageData.csv`.
+  The wait re-fires `window:focus` while it polls: `ngOnInit` claims the VM only
+  `if (document.hasFocus())`, which a page that has never been interacted with may
+  not report, and only after `startConnection()` resolves, which nothing on the page
+  announces. Each focus that lands records its own entry; the report groups by
+  session, VM and user, so several are still one row.
 
 ## Map application
 
