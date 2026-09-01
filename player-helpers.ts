@@ -40,9 +40,19 @@ import { Services } from './shared-fixtures';
  * contributes its own audience — so one token is accepted by the Player API and
  * the Player VM API alike. That is what lets `player-helpers` and
  * `playerVm/vm-helpers` share a token instead of fetching one each.
+ *
+ * It is overridable because the client is *not* in every realm. The Aspire dev
+ * realm has it; the helm/Minikube realm
+ * (`helm-charts/charts/crucible-apps/files/crucible-realm.json`) ships
+ * `player.ui`, `player.vm.ui`, `player.vm.console.ui`, `player.vm.swagger`,
+ * `player.vm.admin` and `player.vm.webhooks` and no `player.vm.api` at all, so
+ * seeding there needs a different client named through the environment.
+ * Whichever client you point this at must allow a direct access grant and must
+ * carry both the `player` and `player-vm` audiences, or half the seeding calls
+ * will 401 while the other half succeed.
  */
-const SEEDING_CLIENT_ID = 'player.vm.api';
-const SEEDING_SCOPE = 'openid profile player player-vm';
+const SEEDING_CLIENT_ID = process.env.PLAYER_SEEDING_CLIENT_ID || 'player.vm.api';
+const SEEDING_SCOPE = process.env.PLAYER_SEEDING_SCOPE || 'openid profile player player-vm';
 
 async function newContext(): Promise<APIRequestContext> {
   return playwrightRequest.newContext({ ignoreHTTPSErrors: true });
@@ -71,7 +81,19 @@ export async function getPlayerToken(
       },
     });
     if (!res.ok()) {
-      throw new Error(`Player token request failed for ${username} (${res.status()}): ${await res.text()}`);
+      const body = await res.text();
+      // A 400/401 here is almost always the client rather than the credentials:
+      // `player.vm.api` does not exist in the helm realm. Say so, because the
+      // failure surfaces in a `beforeAll` and otherwise reads as a bad password.
+      const hint =
+        res.status() === 400 || res.status() === 401
+          ? `\nThe seeding client is '${SEEDING_CLIENT_ID}'. If this deployment's realm does not ` +
+            'have that client (the helm/Minikube realm does not), set PLAYER_SEEDING_CLIENT_ID to ' +
+            'one that allows a direct access grant and carries the player and player-vm audiences.'
+          : '';
+      throw new Error(
+        `Player token request failed for ${username} (${res.status()}): ${body}${hint}`
+      );
     }
     const data = await res.json();
     return data.access_token as string;
@@ -194,12 +216,18 @@ export async function cloneView(
  * Tolerates 404 so it is safe to call from a `finally` that may run after the
  * view is already gone. Cleanup failures are warnings, not throws: a teardown
  * that throws replaces the test's real failure with its own.
+ *
+ * Returns whether the view is actually gone, so a caller that logs its own
+ * cleanup does not report a leak as a deletion. A leaked view is worth noticing:
+ * they accumulate across runs and skew any spec that reads the view list.
  */
-export async function deleteView(token: string, viewId: string): Promise<void> {
+export async function deleteView(token: string, viewId: string): Promise<boolean> {
   const r = await playerCall(token, `/api/views/${viewId}`, { method: 'DELETE' });
   if (!r.ok && r.status !== 404) {
     console.warn(`deleteView failed for ${viewId} (${r.status}): ${r.text}`);
+    return false;
   }
+  return true;
 }
 
 /**

@@ -32,7 +32,7 @@
 import fs from 'fs';
 import path from 'path';
 import { expect, test } from '@playwright/test';
-import { requirePrecondition } from '../../../shared-fixtures';
+import { requireAppSources } from '../../../shared-fixtures';
 import {
   OpenApiSurface,
   allPresent,
@@ -50,7 +50,7 @@ const surfaceFile = path.join(contractsDirectory(), 'openapi-surface.json');
 
 /** The surface and the generated client, or a skip when either repository is not checked out. */
 function bothSides(): OpenApiSurface {
-  requirePrecondition(
+  requireAppSources(
     allPresent(surfaceFile, generatedClientDirectory()),
     `Both ${surfaceFile} and the generated vm.ui API client must be checked out.`
   );
@@ -207,7 +207,7 @@ test.describe('Player VM generated client freshness', () => {
   });
 
   test('the surface snapshot the API publishes is readable', () => {
-    requirePrecondition(fs.existsSync(surfaceFile), `${surfaceFile} is not checked out.`);
+    requireAppSources(fs.existsSync(surfaceFile), `${surfaceFile} is not checked out.`);
 
     const surface = readJson<OpenApiSurface>(surfaceFile);
 

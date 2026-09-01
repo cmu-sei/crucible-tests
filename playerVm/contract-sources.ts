@@ -142,18 +142,81 @@ export type HubCall = {
   count: number;
 };
 
+/**
+ * Bracket pairs for `contents` — parentheses, square brackets and braces, and deliberately *not* `<`
+ * and `>`. Finding the `)` that closes a `(` does not need angle brackets, and counting them there is
+ * actively wrong: a comparison inside a call argument (`a > b`) closes a bracket that was never opened,
+ * which silently truncates the argument range and miscounts the call's arity.
+ */
+const CONTENTS_OPENING = '([{';
+const CONTENTS_CLOSING = ')]}';
+
+/**
+ * Bracket pairs for `items` — angle brackets included, because a generic type in a parameter list
+ * (`Map<string, Vm>`) holds a comma that must not split an argument. Depth is clamped at zero there so
+ * a stray comparison cannot suppress a real split.
+ */
 const OPENING = '([{<';
 const CLOSING = ')]}>';
 
+/** Keywords after which a `/` begins a regex literal rather than a division. */
+const REGEX_PRECEDING_KEYWORDS = new Set([
+  'return',
+  'typeof',
+  'instanceof',
+  'in',
+  'of',
+  'new',
+  'delete',
+  'void',
+  'do',
+  'else',
+  'yield',
+  'await',
+  'case',
+]);
+
 /**
- * The source with comments removed and every string's contents blanked out, so a brace inside a
- * comment or a quoted `)` cannot be mistaken for structure. The result is the same length as the input,
- * so an index into it indexes the original.
+ * Whether the `/` at `at` opens a regex literal, judged from what precedes it in the output so far
+ * (already masked, so scanning back over whitespace skips comments and strings too).
+ *
+ * A regex literal cannot follow a value, so the question is whether the last significant character
+ * could have ended one. `)` is genuinely ambiguous (`if (x) /re/.test(y)`) and is read as a value here,
+ * which is the common case.
+ */
+function startsRegexLiteral(out: string[], at: number): boolean {
+  let j = at - 1;
+  while (j >= 0 && /\s/.test(out[j])) j--;
+  if (j < 0) return true;
+
+  if (/[\w$)\]'"`]/.test(out[j])) {
+    // Unless it closes a keyword: `return /re/` looks like `n /` from here.
+    let start = j;
+    while (start >= 0 && /[\w$]/.test(out[start])) start--;
+    return REGEX_PRECEDING_KEYWORDS.has(out.slice(start + 1, j + 1).join(''));
+  }
+
+  return true;
+}
+
+/**
+ * The source with comments removed and every string's and regex literal's contents blanked out, so a
+ * brace inside a comment or a quoted `)` cannot be mistaken for structure. The result is the same length
+ * as the input, so an index into it indexes the original.
+ *
+ * Regex literals are masked for the same reason as strings, and getting it wrong is worse: the quote
+ * characters in a pattern like `/'/g` would otherwise open a phantom string that blanks the quotes of
+ * the following `.on('VmCreated', …)`, and `hubCalls` would fail claiming a hub call does not name a
+ * string literal — a red contract suite blaming this reader rather than the app it is reading.
+ *
+ * `scripts/check-self-skips.mjs` has a near-identical scanner. Keep the two in step; they are separate
+ * only because that one has to run under plain `node`, with no TypeScript loader.
  */
 function mask(source: string): string {
   const out = source.split('');
   let quote: string | null = null;
   let comment: 'line' | 'block' | null = null;
+  let regex: 'literal' | 'class' | null = null;
 
   for (let i = 0; i < out.length; i++) {
     const c = out[i];
@@ -179,7 +242,10 @@ function mask(source: string): string {
     if (quote) {
       if (c === '\\') {
         out[i] = ' ';
-        out[i + 1] = ' ';
+        // Bounded: a backslash as the final character would otherwise append a
+        // character and break the "same length as the input" invariant this
+        // function's callers index against.
+        if (i + 1 < out.length) out[i + 1] = ' ';
         i++;
       } else if (c === quote) {
         quote = null;
@@ -189,8 +255,39 @@ function mask(source: string): string {
       continue;
     }
 
+    if (regex) {
+      if (c === '\\') {
+        out[i] = ' ';
+        if (i + 1 < out.length) out[i + 1] = ' ';
+        i++;
+      } else if (c === '\n') {
+        // An unterminated literal: it was a division after all. Nothing already
+        // blanked can be recovered, but at least stop here rather than eating the
+        // rest of the file.
+        regex = null;
+      } else if (regex === 'class') {
+        out[i] = ' ';
+        if (c === ']') regex = 'literal';
+      } else if (c === '[') {
+        out[i] = ' ';
+        regex = 'class';
+      } else if (c === '/') {
+        // Closing delimiter. Left in place, like a quote, so the literal is still
+        // recognisable as one.
+        regex = null;
+      } else {
+        out[i] = ' ';
+      }
+      continue;
+    }
+
     if (c === "'" || c === '"' || c === '`') {
       quote = c;
+      continue;
+    }
+
+    if (c === '/' && out[i + 1] !== '/' && out[i + 1] !== '*' && startsRegexLiteral(out, i)) {
+      regex = 'literal';
       continue;
     }
 
@@ -227,9 +324,9 @@ function contents(masked: string, open: number): [number, number] {
   let depth = 0;
 
   for (let i = open; i < masked.length; i++) {
-    if (OPENING.includes(masked[i])) {
+    if (CONTENTS_OPENING.includes(masked[i])) {
       depth++;
-    } else if (CLOSING.includes(masked[i]) && --depth === 0) {
+    } else if (CONTENTS_CLOSING.includes(masked[i]) && --depth === 0) {
       return [open + 1, i];
     }
   }
@@ -247,7 +344,9 @@ function items(masked: string, from: number, to: number): Array<[number, number]
     const c = masked[i];
 
     if (OPENING.includes(c)) depth++;
-    else if (CLOSING.includes(c)) depth--;
+    // Clamped, so a `>` that closes nothing — a comparison rather than a generic —
+    // cannot drive depth negative and suppress every split after it.
+    else if (CLOSING.includes(c)) depth = Math.max(0, depth - 1);
     else if (c === ',' && depth === 0) {
       found.push([start, i]);
       start = i + 1;
@@ -272,7 +371,10 @@ export function hubCalls(source: string): HubCall[] {
   const masked = mask(source);
   const found: HubCall[] = [];
 
-  for (const match of masked.matchAll(/\.(on|invoke|send)\s*\(/g)) {
+  // The optional `<...>` is the type argument of a generic call: `.invoke<Vm>('GetVm', id)` is how the
+  // generated clients spell a typed invoke, and a matcher that only allowed `.invoke(` skipped it
+  // silently — so a client calling a hub method the API does not declare passed the contract test.
+  for (const match of masked.matchAll(/\.(on|invoke|send)\s*(?:<[^<>()]*>\s*)?\(/g)) {
     const kind = match[1] === 'on' ? 'on' : 'invoke';
     const open = match.index + match[0].length - 1;
     const [from, to] = contents(masked, open);

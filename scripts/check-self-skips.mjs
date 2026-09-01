@@ -28,8 +28,12 @@
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = new URL('..', import.meta.url).pathname;
+// `fileURLToPath`, not `.pathname`: the latter keeps URL percent-encoding, so a
+// checkout under a path with a space in it fails the gate with an ENOENT on
+// `/tmp/pr%20obe` rather than a skip verdict (and yields `/C:/...` on Windows).
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const IGNORED_DIRS = new Set([
   'node_modules',
   'playwright-report',
@@ -57,14 +61,68 @@ function collectTsFiles(dir, found = []) {
   return found;
 }
 
+/** Keywords after which a `/` begins a regex literal rather than a division. */
+const REGEX_PRECEDING_KEYWORDS = new Set([
+  'return',
+  'typeof',
+  'instanceof',
+  'in',
+  'of',
+  'new',
+  'delete',
+  'void',
+  'do',
+  'else',
+  'yield',
+  'await',
+  'case',
+]);
+
 /**
- * Replace comment and string-literal contents with spaces, preserving every
- * character offset so reported line numbers still match the real file.
+ * Whether the `/` at `at` opens a regex literal, judged from what precedes it in
+ * `blanked` — the output array in progress, which already has earlier comments and
+ * strings blanked, so scanning back over whitespace skips them too.
+ *
+ * A regex literal cannot follow a value, so the question is whether the last
+ * significant character could have ended one. `)` is genuinely ambiguous
+ * (`if (x) /re/.test(y)`) and is read as a value here, which is the common case.
+ */
+function startsRegexLiteral(blanked, at) {
+  let j = at - 1;
+  while (j >= 0 && /\s/.test(blanked[j])) j--;
+  if (j < 0) return true;
+
+  const previous = blanked[j];
+  if (/[\w$)\]'"`]/.test(previous)) {
+    // Unless it closes a keyword: `return /re/` looks like `n /` from here.
+    let start = j;
+    while (start >= 0 && /[\w$]/.test(blanked[start])) start--;
+    return REGEX_PRECEDING_KEYWORDS.has(blanked.slice(start + 1, j + 1).join(''));
+  }
+
+  return true;
+}
+
+/**
+ * Replace comment, string-literal and regex-literal contents with spaces,
+ * preserving every character offset so reported line numbers still match the real
+ * file.
  *
  * Blanking is not cosmetic: this repo's specs discuss `test.skip()` in prose
  * constantly (the blueprint suite documents what each spec was rewritten *from*),
  * and a URL in a string literal contains `//`. A naive regex over raw text
  * either drowns in false positives or truncates lines at the wrong place.
+ *
+ * Regex literals have to be understood for the same reason, and the cost of not
+ * doing it is worse than a false positive: quote characters inside a regex — as in
+ * `playerVm/contract-sources.ts`, which matches on `['"`]` — otherwise open a
+ * phantom string that blanks everything to the next matching quote, hundreds of
+ * lines of it, and every self-skip in that range stops being seen. A gate that
+ * silently stops checking is worse than no gate.
+ *
+ * `playerVm/contract-sources.ts` has a near-identical scanner (`mask`) for reading
+ * the app clients. Keep the two in step; they are separate only because this file
+ * has to run under plain `node`, with no TypeScript loader.
  */
 function blankCommentsAndStrings(source) {
   const out = source.split('');
@@ -92,6 +150,33 @@ function blankCommentsAndStrings(source) {
     }
 
     const ch = source[i];
+
+    if (ch === '/' && startsRegexLiteral(out, i)) {
+      // Scan to the closing delimiter. A `/` inside a character class does not
+      // close the literal, which is why the class is tracked.
+      let j = i + 1;
+      let inClass = false;
+      while (j < source.length && source[j] !== '\n') {
+        if (source[j] === '\\') {
+          j += 2;
+          continue;
+        }
+        if (source[j] === '[') inClass = true;
+        else if (source[j] === ']') inClass = false;
+        else if (source[j] === '/' && !inClass) break;
+        j++;
+      }
+
+      // An unterminated literal means this was a division after all; leave it be
+      // rather than blanking the rest of the line on a guess.
+      if (source[j] === '/') {
+        i += 1;
+        blankTo(j);
+        i = j + 1;
+        continue;
+      }
+    }
+
     if (ch === '"' || ch === "'" || ch === '`') {
       let j = i + 1;
       while (j < source.length) {

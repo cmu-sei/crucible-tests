@@ -136,14 +136,21 @@ test.describe('VM Usage Reporting', () => {
     );
 
     const sessionName = `E2E Report Session ${Date.now()}`;
-    // The default window is today 00:01 to today 23:59, which is what makes the
-    // session both *running* now (so the hub attaches an entry to it) and wholly
-    // *inside* a report range of today (so the report selects it). See
-    // `todaysLoggingWindow` for why one day is the only window that satisfies both.
+    // Today 00:01 to today 23:59, which is what makes the session both *running*
+    // now (so the hub attaches an entry to it) and wholly *inside* a report range
+    // of today (so the report selects it). See `todaysLoggingWindow` for why one
+    // day is the only window that satisfies both.
+    //
+    // Captured once and used for both the session and the report range below. The
+    // console work between them takes minutes, and recomputing the window after it
+    // would silently ask for the *next* day's range on a run that crossed midnight.
+    const reportWindow = todaysLoggingWindow();
     const session = await createUsageLoggingSession(seeded.token, {
       viewId: seeded.viewId,
       teamIds: [seeded.teamId],
       sessionName,
+      sessionStart: reportWindow.start,
+      sessionEnd: reportWindow.end,
     });
 
     // A second page in the same browser context: the Keycloak session is shared, and
@@ -193,7 +200,6 @@ test.describe('VM Usage Reporting', () => {
       timeout: 30000,
     });
 
-    const reportWindow = todaysLoggingWindow();
     await setRange(page, reportWindow.start, reportWindow.end);
     await page.getByRole('button', { name: 'Get' }).click();
 

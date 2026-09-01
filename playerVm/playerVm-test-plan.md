@@ -462,9 +462,18 @@ npx playwright test playerVm/tests/contract --project=chromium
 ```
 
 They read the app repositories from the directory that holds this one, which is
-how the workspace is laid out; `CRUCIBLE_SOURCE_ROOT` overrides it. A repository
-that is not checked out is a `requirePrecondition` skip locally and a failure
-under `CRUCIBLE_STRICT`/CI, like every other precondition in this suite.
+how the workspace is laid out; `CRUCIBLE_SOURCE_ROOT` overrides it.
+
+A repository that is not checked out is a `requireAppSources` skip — deliberately
+*not* `requirePrecondition`, which escalates to a failure under CI. The two look
+alike at the call site and are not the same claim: CI means the stack is expected
+to be up, which says nothing about sibling checkouts, and a job that clones only
+this repo can never satisfy these specs. So the escalation is opt-in instead —
+setting `CRUCIBLE_SOURCE_ROOT` or `CRUCIBLE_REQUIRE_CONTRACTS=1` asserts the
+sources are there and turns the skips into failures. A pipeline that checks the
+app repos out should set one of them; otherwise these specs would report green
+having read nothing, which is the failure mode this whole directory exists to
+prevent, one level up.
 
 ### Tests
 
@@ -500,3 +509,28 @@ client:
 - **every method on a generated service is an operation the API declares** —
   a method the API no longer has still compiles and fails as a 404, which
   reads as an outage rather than as a rename.
+
+`contract-reader.spec.ts`, the odd one out: `hubCalls` against fixture source
+rather than against an app repo.
+
+Everything above is only as good as the scanner underneath it, and that scanner
+is hand-rolled — the suite has no TypeScript AST to hand. Its failure mode is
+not a broken test but a *passing* one: a call it does not recognise is a call it
+does not check, and `signalr-contract.spec.ts` then compares the calls it found
+against the API's declarations and finds nothing wrong with a set it never read.
+Each case below produced a wrong answer at some point, so read them as the
+reader's own contract:
+
+- **a generic invoke is read, not skipped** — `.invoke<Vm>('GetVm', id)` is how
+  a typed call is spelled, and a matcher allowing only `.invoke(` passed over it
+  in silence.
+- **a regex literal does not corrupt the call after it** — the quotes inside
+  `/'/g` opened a string that ran to the next quote in the file, which was the
+  one opening the following `.on('VmCreated', …)`.
+- **a division is not read as a regex literal** — the other half of the same
+  judgement; over-eager literal detection blanks real code.
+- **a comparison in an argument does not truncate the argument list**, and
+  **a generic type in a handler parameter list does not split it** — the two
+  sides of what `<` and `>` mean, which is why they are counted when splitting
+  arguments and not when finding the end of a call.
+- **a hub call inside a comment or a string is not a hub call.**

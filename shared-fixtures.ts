@@ -471,6 +471,52 @@ export function requirePrecondition(condition: unknown, reason: string): void {
 }
 
 /**
+ * True when the contract specs must run rather than skip: they read the sibling
+ * application repositories, so whoever set this is asserting those are checked
+ * out. `CRUCIBLE_SOURCE_ROOT` counts as that assertion — pointing the reader at a
+ * root is asking for the check.
+ */
+export const requireAppSourceChecks =
+  !!process.env.CRUCIBLE_SOURCE_ROOT ||
+  ['1', 'true'].includes((process.env.CRUCIBLE_REQUIRE_CONTRACTS ?? '').toLowerCase());
+
+/**
+ * Gate a test on an application repository being checked out next to this one.
+ *
+ * Deliberately *not* {@link requirePrecondition}, even though it reads the same at
+ * the call site. That one escalates under CI because CI means the whole stack is
+ * expected to be up — a fair assumption about services, and a false one about
+ * sibling checkouts. A CI job that clones only `crucible-tests` has no `vm.api`
+ * source and never will, and escalating there would turn the entire contract
+ * directory red for a reason no one can fix from inside the job.
+ *
+ * So the escalation is opt-in instead: skip unless the caller has said the sources
+ * are there, via `CRUCIBLE_SOURCE_ROOT` or `CRUCIBLE_REQUIRE_CONTRACTS=1`. A
+ * pipeline that does check out the app repos should set one of those, and then a
+ * missing contract file fails as it should.
+ *
+ * @param condition - the precondition; falsy means "not checked out"
+ * @param reason - which source is missing and what it is needed for
+ */
+export function requireAppSources(condition: unknown, reason: string): void {
+  if (condition) {
+    return;
+  }
+
+  if (requireAppSourceChecks) {
+    throw new Error(
+      `Application source not found: ${reason}\n` +
+        'Failing rather than skipping because CRUCIBLE_SOURCE_ROOT or ' +
+        'CRUCIBLE_REQUIRE_CONTRACTS is set, which asserts the application repositories are ' +
+        'checked out. Check them out beside this repo, point CRUCIBLE_SOURCE_ROOT at the ' +
+        'directory holding them, or unset both to skip the contract specs.'
+    );
+  }
+
+  base.skip(true, reason);
+}
+
+/**
  * Extended test with common fixtures
  * Apps can import this and extend it further with app-specific fixtures
  */

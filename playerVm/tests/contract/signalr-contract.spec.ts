@@ -27,7 +27,7 @@
 import fs from 'fs';
 import path from 'path';
 import { expect, test } from '@playwright/test';
-import { requirePrecondition } from '../../../shared-fixtures';
+import { requireAppSources } from '../../../shared-fixtures';
 import {
   ContractHub,
   HubCall,
@@ -55,7 +55,7 @@ const contract: SignalRContract | null = fs.existsSync(contractFile)
  * The client source a contract entry points at, or null when that repository is not checked out.
  *
  * A repository that is checked out but does not hold the file is a different thing, and throws. The two
- * have to be told apart because `requirePrecondition` skips locally: a `source` that is a typo, or an
+ * have to be told apart because `requireAppSources` skips locally: a `source` that is a typo, or an
  * entry left behind when a client's service file was renamed, would otherwise read as "vm.ui is not
  * checked out" on the machine of the only person in a position to see that it was there all along - and
  * the contract entry would keep naming a file that no longer exists while its four tests quietly did
@@ -100,7 +100,7 @@ function describeHub(hub: ContractHub): void {
          */
         test(`invokes only methods the API declares, with the arguments it declares`, () => {
           const found = callsFor(client.app, client.source);
-          requirePrecondition(found, `${client.app}/${client.source} is not checked out.`);
+          requireAppSources(found, `${client.app}/${client.source} is not checked out.`);
 
           const declared = new Set(hub.invocations.map((x) => `${x.name}/${x.arguments}`));
           const invoked = [
@@ -120,7 +120,7 @@ function describeHub(hub: ContractHub): void {
          */
         test(`listens only for messages the API sends`, () => {
           const found = callsFor(client.app, client.source);
-          requirePrecondition(found, `${client.app}/${client.source} is not checked out.`);
+          requireAppSources(found, `${client.app}/${client.source} is not checked out.`);
 
           const known = new Set([
             ...hub.broadcasts.map((x) => x.name),
@@ -142,7 +142,7 @@ function describeHub(hub: ContractHub): void {
          */
         test(`binds no more arguments than the API sends`, () => {
           const found = callsFor(client.app, client.source);
-          requirePrecondition(found, `${client.app}/${client.source} is not checked out.`);
+          requireAppSources(found, `${client.app}/${client.source} is not checked out.`);
 
           const sent = new Map(hub.broadcasts.map((x) => [x.name, Math.min(...x.arguments)]));
           const overbound = found.calls
@@ -158,7 +158,7 @@ function describeHub(hub: ContractHub): void {
 
         test(`connects to the hub path the API maps`, () => {
           const found = callsFor(client.app, client.source);
-          requirePrecondition(found, `${client.app}/${client.source} is not checked out.`);
+          requireAppSources(found, `${client.app}/${client.source} is not checked out.`);
 
           expect(found.paths).toContain(hub.path);
         });
@@ -172,7 +172,7 @@ function describeHub(hub: ContractHub): void {
      */
     test(`every message it broadcasts is listened for by some client`, () => {
       const sources = hub.clients.map((x) => callsFor(x.app, x.source));
-      requirePrecondition(
+      requireAppSources(
         sources.every((x) => x),
         `Not every client of the ${hub.name} hub is checked out.`
       );
@@ -197,7 +197,7 @@ function describeHub(hub: ContractHub): void {
           found: callsFor(app, hub.clients.find((x) => x.app === app).source),
         }));
 
-        requirePrecondition(
+        requireAppSources(
           sources.every((x) => x.found),
           `Not every client listed for ${listener.name} is checked out.`
         );
@@ -226,7 +226,7 @@ test.describe('Player VM SignalR contract', () => {
    */
   test.describe('modifiedProperties', () => {
     test('every name the API can send is a property of the generated Vm interface', () => {
-      requirePrecondition(
+      requireAppSources(
         contract && allPresent(generatedClientDirectory()),
         'The contract or the generated vm.ui API client is not checked out.'
       );
@@ -243,7 +243,7 @@ test.describe('Player VM SignalR contract', () => {
      * reading the list does not conclude they do not exist, and asserted so the list does not rot.
      */
     test('every key no update ever names is a property of the generated Vm interface', () => {
-      requirePrecondition(
+      requireAppSources(
         contract && allPresent(generatedClientDirectory()),
         'The contract or the generated vm.ui API client is not checked out.'
       );
@@ -258,7 +258,7 @@ test.describe('Player VM SignalR contract', () => {
   });
 
   test('the contract file the API publishes is readable', () => {
-    requirePrecondition(contract, `${contractFile} is not checked out.`);
+    requireAppSources(contract, `${contractFile} is not checked out.`);
 
     expect(contract.hubs.length).toBeGreaterThan(0);
   });

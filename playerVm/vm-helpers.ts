@@ -317,14 +317,44 @@ export interface CreateUsageLoggingSessionOptions {
   viewId: string;
   teamIds: string[];
   sessionName: string;
-  /** Defaults to a window that starts an hour ago and ends at the end of today. */
+  /**
+   * Both default to today in local time: 00:01 for the start, 23:59 for the end.
+   *
+   * Note that the default start is the *beginning of the day*, not a moment shortly
+   * before now — a spec asserting on the entries a session holds is bracketing the
+   * whole day, and anything this view logged earlier is in there too. Pass an
+   * explicit `sessionStart` when the test needs a tighter bracket.
+   *
+   * A spec that needs the session to be *readable in the report* wants
+   * {@link todaysLoggingWindow} instead of these defaults, passed for both ends.
+   */
   sessionStart?: Date;
   sessionEnd?: Date;
 }
 
 /**
- * The start of today and the last minute of it, in local time — the window the
- * usage-logging specs seed inside.
+ * Today's bounds in local time, 00:01 to 23:59 — the defaults a seeded session gets
+ * when the caller does not care exactly when it runs, only that it exists.
+ */
+function todayBounds(): { start: Date; end: Date } {
+  const start = new Date();
+  start.setHours(0, 1, 0, 0);
+  const end = new Date();
+  end.setHours(23, 59, 0, 0);
+  return { start, end };
+}
+
+/**
+ * How much of the day {@link todaysLoggingWindow} needs left for its scenario to
+ * finish inside it: create the session, drive a console, wait for the entry to
+ * close, then load the report. The polls in that spec alone allow two minutes.
+ */
+const LOGGING_WINDOW_MARGIN_MS = 15 * 60 * 1000;
+
+/**
+ * Today's bounds, for a session that has to be *running now* and *readable in the
+ * report* at the same time — which is a stricter thing than {@link todayBounds},
+ * and the reason it can fail.
  *
  * It has to be inside a single day for both halves of the feature to see the
  * session at once. `VmUsageLoggingService.CreateVmLogEntry` only attaches an
@@ -335,13 +365,32 @@ export interface CreateUsageLoggingSessionOptions {
  * 23:59:59. A session that ran past midnight satisfies the first and fails the
  * second, and the report would come back empty for reasons nothing on the page
  * explains.
+ *
+ * Which leaves a cliff at the end of the day that no window can straddle, so this
+ * refuses to return one rather than return a window that cannot work: a session
+ * seeded at 23:58 has expired before the console is even open, and a run that
+ * crosses midnight is comparing against a report range for the wrong day. Both of
+ * those look like an empty report and neither says why.
+ *
+ * Capture the result *once* and use it for the session and the report range both.
+ * Calling this twice either side of the console work is the same bug wearing a
+ * different hat: the second call answers for the day the clock is on by then.
  */
 export function todaysLoggingWindow(): { start: Date; end: Date } {
-  const start = new Date();
-  start.setHours(0, 1, 0, 0);
-  const end = new Date();
-  end.setHours(23, 59, 0, 0);
-  return { start, end };
+  const bounds = todayBounds();
+
+  const remaining = bounds.end.getTime() - Date.now();
+  if (remaining < LOGGING_WINDOW_MARGIN_MS) {
+    throw new Error(
+      `Only ${Math.max(0, Math.round(remaining / 60000))} minute(s) of the local day remain, and a ` +
+        'session that must be both running and report-visible has to start and end inside one day ' +
+        '(see the comment on todaysLoggingWindow). Seeding one now would expire mid-test and read ' +
+        'as an empty report for no visible reason. Re-run after midnight, or set TZ so the suite ' +
+        'is not running at the end of the local day.'
+    );
+  }
+
+  return bounds;
 }
 
 /**
@@ -356,15 +405,19 @@ export async function createUsageLoggingSession(
   token: string,
   options: CreateUsageLoggingSessionOptions
 ): Promise<UsageLoggingSession> {
-  const window = todaysLoggingWindow();
+  // `todayBounds`, not `todaysLoggingWindow`: most callers here only need the
+  // session to exist — to appear in a table, or to be cloned — and holding those to
+  // the report-visible window's end-of-day guard would fail them for a constraint
+  // they do not have. A spec that does need it passes the guarded window itself.
+  const defaults = todayBounds();
   const r = await vmCall<UsageLoggingSession>(token, '/api/vmusageloggingsessions', {
     method: 'POST',
     body: {
       sessionName: options.sessionName,
       viewId: options.viewId,
       teamIds: options.teamIds,
-      sessionStart: (options.sessionStart ?? window.start).toISOString(),
-      sessionEnd: (options.sessionEnd ?? window.end).toISOString(),
+      sessionStart: (options.sessionStart ?? defaults.start).toISOString(),
+      sessionEnd: (options.sessionEnd ?? defaults.end).toISOString(),
     },
   });
   if (!r.ok) {

@@ -313,8 +313,15 @@ export async function createPlayerView(
 export async function deletePlayerView(viewId: string): Promise<void> {
   if (!viewId) return;
   try {
-    await deleteView(await getPlayerToken(), viewId);
-    console.log(`API cleanup: Deleted Player view ${viewId}`);
+    // deleteView warns and resolves on a failed DELETE rather than throwing, so
+    // the log has to follow its verdict — claiming a deletion that did not happen
+    // sends the next person looking anywhere but at the leaked view.
+    const deleted = await deleteView(await getPlayerToken(), viewId);
+    console.log(
+      deleted
+        ? `API cleanup: Deleted Player view ${viewId}`
+        : `API cleanup: Player view ${viewId} was NOT deleted and has leaked (see warning above)`
+    );
   } catch (error) {
     // deleteView already swallows a failed DELETE (it warns); this catches the
     // token fetch, which would otherwise throw out of a teardown and replace the
