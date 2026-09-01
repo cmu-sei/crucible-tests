@@ -247,8 +247,45 @@ export async function getUsers(token: string): Promise<PlayerUser[]> {
 }
 
 /**
+ * Provision the Player user record for whoever owns `token`, and return it.
+ *
+ * Player has no "create user" call a test can reach for another account: rows are
+ * created by `UserClaimsService.ValidateUser` the first time a token is presented,
+ * keyed by the token's `sub` (so the id matches Keycloak's) and named from its
+ * `name` claim. Reading the user back is the cheapest request that does it, and
+ * `GET api/users/{id}` is allowed for oneself, so this works with a plain user
+ * token and no permissions at all.
+ *
+ * `userId` must be that user's own id — a token for someone else gets a 403.
+ * Pair with {@link deletePlayerUser} (which does need an admin token).
+ */
+export async function provisionPlayerUser(token: string, userId: string): Promise<PlayerUser> {
+  const r = await playerCall<PlayerUser>(token, `/api/users/${userId}`);
+  if (!r.ok) {
+    throw new Error(`provisionPlayerUser failed for ${userId} (${r.status}): ${r.text}`);
+  }
+  return r.data;
+}
+
+/**
+ * Delete a Player user, including their team memberships. Tolerates 404 so it is
+ * safe from a cleanup that may run twice, and warns rather than throws so a
+ * cleanup failure cannot mask the test's own. Needs a token with ManageUsers.
+ */
+export async function deletePlayerUser(token: string, userId: string): Promise<void> {
+  const r = await playerCall(token, `/api/users/${userId}`, { method: 'DELETE' });
+  if (!r.ok && r.status !== 404) {
+    console.warn(`deletePlayerUser failed for ${userId} (${r.status}): ${r.text}`);
+  }
+}
+
+/**
  * Add a user to a team. The team must belong to a view the caller can manage, and
  * the user must already exist in Player (see {@link getUsers}).
+ *
+ * A user's *first* membership in a view becomes their primary team there, which is
+ * what the VM API's presence broadcasts are scoped to — a console opened by a user
+ * with no primary team in the view is reported to nobody.
  */
 export async function addUserToTeam(token: string, teamId: string, userId: string): Promise<void> {
   const r = await playerCall(token, `/api/teams/${teamId}/users/${userId}`, { method: 'POST' });

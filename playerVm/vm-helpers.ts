@@ -131,6 +131,37 @@ export async function createVm(
 }
 
 /**
+ * Rename/re-point a VM.
+ *
+ * `PUT api/vms/{id}` is a **whole-record replacement**: `VmService.UpdateAsync`
+ * maps the form onto the tracked entity, so every field the form carries is
+ * written, including the ones left out. Omitting `url` therefore clears it, and a
+ * VM with an empty url breaks the VM UI's "Last VM" link (`getVmUrl` runs
+ * `new URL('')`, which throws) — pass the url back in whenever the spec renders
+ * that column.
+ *
+ * `name` is `[Required]` on `VmUpdateForm`, which is why it is not optional here.
+ */
+export async function updateVm(
+  token: string,
+  vmId: string,
+  form: { name: string; url?: string; embeddable?: boolean }
+): Promise<SeededVm> {
+  const r = await vmCall<SeededVm>(token, `/api/vms/${vmId}`, {
+    method: 'PUT',
+    body: {
+      name: form.name,
+      url: form.url ?? '',
+      embeddable: form.embeddable ?? true,
+    },
+  });
+  if (!r.ok) {
+    throw new Error(`updateVm failed for ${vmId} (${r.status}): ${r.text}`);
+  }
+  return r.data;
+}
+
+/**
  * Delete a VM. Tolerates 404 so it is safe from a `finally` that may run twice,
  * and warns rather than throws so a cleanup failure cannot mask the test's own.
  */

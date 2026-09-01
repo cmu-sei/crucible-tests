@@ -301,6 +301,126 @@ Four things shape the file:
   rather than gone*: sessions live in a separate database that nothing cascades,
   which is what keeps an ended exercise's usage readable in the report.
 
+## Real-time delivery (`tests/realtime/`)
+
+`VmHub` driven over a live connection from a browser, which nothing else in either
+repository does. Two files, and between them the only place in this suite that opens
+**two sessions as two different users**.
+
+The two halves that already exist stop just short of each other. `vm.api`'s
+`ContractTests`/event-handler tests drive the handlers into a recording hub context
+and assert the *group names* they send to; `tests/contract/signalr-contract.spec.ts`
+asserts that the clients register handlers of the right arity for the names the hub
+sends. Neither runs a connection. What sits between them fails silently every time:
+the connection itself (`${basePath}/hubs/vm` and the bearer token it carries),
+`JoinView`/`JoinViewUsers`/`JoinVm` actually being invoked for what is on screen, the
+group name assembled the same way on both ends, and the store update reaching the
+binding. All of it looks exactly like a list nobody has changed.
+
+Three things shape both files:
+
+- **The list is fetched once and never refetched.** `vm-list.component` calls
+  `GetViewVms` behind a `hasLoadedVms` guard and nothing in `vm.ui` polls, so
+  `live-vm-list.spec.ts` counts responses on `/views/{viewId}/vms` and asserts the
+  count did not move across the mutation. Without that counter a passing assertion
+  is equally consistent with the page having quietly reloaded and the hub being
+  dead; with it, the row can only have arrived over the connection. A guard asserts
+  the count *started*, so a moved URL fails loudly instead of passing vacuously.
+- **The page joins its groups a beat after it draws.** The list comes from an HTTP
+  response while `SignalRService` connects independently, so a mutation fired the
+  moment the row appears is routinely broadcast before the browser is in the view's
+  group — and a broadcast to a group nobody has joined is simply gone. Every test
+  waits for the `JoinView` *completion* frame (SignalR `type: 3`, matched on the
+  invocation id read off the sent frame) before mutating: an invocation the hub
+  rejects leaves the connection up and is identical from the client. A real session
+  has the same blind spot for the second it takes to connect; nothing here can fix
+  that, so the tests wait for the state a user spends the session in.
+- **Presence is addressed to somebody else.** Every message in
+  `console-presence.spec.ts` is broadcast to groups derived from the *acting* user's
+  teams and views, so one session can watch the whole feature work and learn
+  nothing. Hence two Keycloak accounts in two browser contexts: presence is keyed by
+  `sub`, and two sessions as `admin` are one user to the hub.
+
+Four preconditions in the presence file, each of which fails invisibly:
+
+- **The second user must be in a team in the view, and it must be their first.** A
+  user's first membership in a view becomes their *primary* team, and
+  `SetActiveVirtualMachine` scopes both broadcasts to that team and the views
+  reachable from it. A user with no primary team is reported to nobody, and neither
+  screen says so.
+- **They must exist in Player.** Nothing creates a user for someone else; the row
+  appears when a token is first presented, so the spec fetches
+  `GET api/users/{id}` with the member's own token (`provisionPlayerUser`) and
+  asserts the name Player derived from the `name` claim.
+- **The watcher must be an admin** for the console readout. `.connected-users` is
+  gated on `!readOnly`, and `readOnly` is false only for a user who can edit the
+  view or the team.
+- **The seeded VM needs an absolute url.** The Last VM cell renders
+  `getVmUrl(vm.url)` → `new URL(url)`, which *throws* on the empty string the API
+  defaults to and takes the whole table's render with it. The spec points it at the
+  VM API's health endpoint: inert, reachable, absolute.
+
+Both presence readouts also need the member's console to *claim* the VM, which
+`console-page.component` does in `ngOnInit` only `if (document.hasFocus())` and only
+after `startConnection()` resolves — neither of which the page announces. Waits
+re-dispatch `window:focus` each round, the same path a user switching back to the tab
+takes; that also covers a watcher that joined its group late, since every focus
+re-broadcasts.
+
+### Tests
+
+`live-vm-list.spec.ts`, each seeding its own view (two of them change what it
+contains), mutating through the VM API — which is not a contrived stand-in, since
+Caster and Steamfitter do exactly that while people sit in front of the page:
+
+- **A VM created by another client appears in an open list** — `VmCreated` to the
+  view group, into the store, out as a row, with no refetch.
+- **A VM renamed by another client is renamed in the open list** — the narrowest
+  test of `modifiedProperties` there is: the client copies only the named
+  properties, so a name missing from the list leaves the old label and a name that
+  is not a property of the client's `Vm` writes `undefined` and blanks it. The old
+  label is asserted gone as well as the new one present.
+- **A VM deleted by another client disappears from the open list** — `VmDeleted`
+  carries only the id, so the row going is the client having found the entity by it.
+  The record is confirmed deleted through the API first, because `deleteVm` warns
+  rather than throws and a refused delete looks identical from the browser.
+
+`console-presence.spec.ts`, sharing one view, one temporary Keycloak user and one
+Player user across both tests, each of which opens and closes its own console
+context:
+
+- **Another user's console appears against them in User Follow, and clears when
+  they leave** — the VM List tab is loaded first, because the Virtual Machine cell
+  renders `vmsQuery.selectEntity(activeVmId)` and a VM the store has never heard of
+  draws as "None", indistinguishable from nobody being on a console. Asserted per
+  cell rather than per row: after a session the row contains the VM name twice.
+  Closing the console page returns Active to "None" via `OnDisconnectedAsync` —
+  nothing polls it, so a client that ignored the null would show the console
+  occupied forever — while Last VM keeps the name.
+- **A console names the other user connected to the same VM** — `.connected-users`
+  in `console.ui`'s options bar, the literal answer to "who else is looking at this
+  machine", fed only by `CurrentVirtualMachineUsers` and only for a connection that
+  invoked `JoinVm`. Asserted as *contains*: the watcher's own name may be beside the
+  member's and the order comes from a `ConcurrentDictionary`. The disconnect
+  re-sends the list with the departing user left out, which is the half a client
+  keeping its own tally would get wrong.
+
+### Not covered here
+
+- **`ProgressHub` over a connection.** `Progress` is sent from exactly two places —
+  `Vsphere/Services/TaskService` and `Proxmox/Services/ProxmoxTaskService`, both
+  polling a hypervisor task — so there is no way to make a real progress bar move
+  without a hypervisor behind the VM API. `vm.api` asserts the group names from both
+  ends and does one in-process round trip; that is as far as it goes.
+- **Only the vSphere/Unknown options bar has a connected-users readout.**
+  `app-options-bar2`, the Proxmox one, renders none, so the second test above says
+  nothing about a Proxmox console.
+- **One row leaks, as it already does in `usage-reporting.spec.ts`.**
+  `VmHub.UpdateVmUser` writes a `VmUsers` row per (user, team) that no endpoint can
+  delete and nothing cascades. Deleting the Keycloak user, the Player user and the
+  view leaves it orphaned on ids that no longer resolve, invisible to every list in
+  the estate.
+
 ## Client/server contracts
 
 `tests/contract/` is the exception to everything above: no browser, no
