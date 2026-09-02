@@ -44,6 +44,26 @@ import {
  * frame, or rendered DOM. There is deliberately NO `page.reload()` — the whole point is
  * that recovery happens on its own.
  *
+ * ── Why this runs on Chromium only ──
+ * The interruption is produced by `context.setOffline(true)`, and in Firefox that does not
+ * reach an already-established WebSocket. Measured on this stack (Playwright 1.58.2,
+ * bundled Firefox): with the context offline, `navigator.onLine` is `false` and `fetch()`
+ * rejects with "NetworkError when attempting to fetch resource", yet the open hub socket
+ * kept receiving frames — 3 server keepalive pings during a 45s offline window (the server
+ * sends one every ~15s). Because messages keep arriving, the client's 30s `serverTimeout`
+ * never elapses: 75s offline produced no transport error, no
+ * "Connection reconnecting…", and no reconnect attempt at all. Chromium, by contrast,
+ * severs the socket — keepalives stop, the timeout fires at ~32s, and the reconnect
+ * sequence proceeds as described above.
+ *
+ * So on Firefox the test cannot interrupt the connection it is trying to interrupt; there is
+ * nothing to detect and nothing to recover from. Closing the socket from page context
+ * instead would test a clean client-side close (which logs "Connection reconnecting." with
+ * no error, a different code path) rather than a network partition, so it is not a
+ * substitute. This is a browser-automation limit, not an app or client defect — the SignalR
+ * client code under test is the same JavaScript in both browsers, and Chromium exercises it
+ * end to end.
+ *
  * `page.on('websocket')` is filtered to `/hubs/main`, because the hub is not the only socket
  * the page may open. When the UI resource runs in dev mode (`Launch__Blueprint=true` ->
  * `ng serve`), `@angular-devkit/build-angular:dev-server` also opens a Vite HMR socket at
@@ -56,6 +76,11 @@ const HUB_PATH = '/hubs/main';
 test.describe('Real-time Collaboration and SignalR', () => {
   let token: string;
   let mselId: string;
+
+  test.skip(
+    ({ browserName }) => browserName !== 'chromium',
+    'Chromium-only: context.setOffline() does not interrupt an open WebSocket in Firefox — see the comment above'
+  );
 
   test.beforeEach(async () => {
     token = await getBlueprintToken();

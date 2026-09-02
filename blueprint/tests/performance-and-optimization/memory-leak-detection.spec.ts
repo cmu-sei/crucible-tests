@@ -54,10 +54,26 @@ import {
  * detached nodes per render, accompanied by steady heap growth with no plateau; a correctly
  * torn-down subscription yields a slope of 0.0 and a flat heap. The threshold below sits far
  * enough under a real leak's magnitude to catch a dropped `takeUntil` in any MSEL section.
+ *
+ * ── Why this runs on Chromium only ──
+ * Both measurements come from CDP (`HeapProfiler.collectGarbage`,
+ * `HeapProfiler.takeHeapSnapshot`, `Performance.getMetrics`), and
+ * `browserContext.newCDPSession()` throws "CDP session is only available in Chromium"
+ * anywhere else. Firefox exposes no Playwright-reachable equivalent: there is no forced-GC
+ * hook, no heap snapshot, and no per-node `detachedness` verdict, so the technique above
+ * cannot be ported — only weakened into the `Nodes`-counter subtraction that section 3
+ * explains is not a valid retention measure. A leak is a property of the Angular code, not
+ * of the engine, so measuring it once under Chromium covers the risk; the skip is a tooling
+ * limit, not an untested gap.
  */
 test.describe('Performance and Optimization', () => {
   let token: string;
   let mselId: string;
+
+  test.skip(
+    ({ browserName }) => browserName !== 'chromium',
+    'Chromium-only: the leak measurement needs CDP HeapProfiler (no Firefox equivalent) — see the comment above'
+  );
 
   test.beforeEach(async () => {
     token = await getBlueprintToken();

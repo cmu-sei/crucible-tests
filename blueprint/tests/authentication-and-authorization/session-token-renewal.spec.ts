@@ -27,7 +27,14 @@
 // through the OIDC client's own API yields a *new, valid* access token while the session
 // stays usable and no interactive login is required. That is the substance of the plan item.
 
-import { test, expect, Services, serviceUrlPattern, oidcStorageKey } from '../../fixtures';
+import {
+  test,
+  expect,
+  Services,
+  serviceUrlPattern,
+  oidcStorageKey,
+  waitForPageFunction,
+} from '../../fixtures';
 
 const OIDC_STORAGE_KEY = oidcStorageKey('blueprint.ui');
 
@@ -42,9 +49,15 @@ test.describe('Authentication and Authorization', () => {
     await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 70000 });
 
     // 1. The OIDC client stores a token of its own accord after login.
-    const rawInitial = await page
-      .waitForFunction((key) => sessionStorage.getItem(key), OIDC_STORAGE_KEY, { timeout: 20000 })
-      .then((handle) => handle.jsonValue() as Promise<string>);
+    //    `waitForPageFunction`, not `page.waitForFunction`: the latter hands back a
+    //    zone.js `ZoneAwarePromise` object in Firefox instead of the stored string, so
+    //    the parse below saw `[object Object]`. See shared-fixtures.ts for the details.
+    const rawInitial = await waitForPageFunction(
+      page,
+      (key) => sessionStorage.getItem(key),
+      OIDC_STORAGE_KEY,
+      { timeout: 20000, message: 'the OIDC client never wrote its token to sessionStorage' }
+    );
 
     const initial = JSON.parse(rawInitial);
     expect(initial.access_token, 'OIDC entry must carry an access token').toBeTruthy();

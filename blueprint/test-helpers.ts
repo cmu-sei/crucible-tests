@@ -25,7 +25,7 @@ import {
   request as playwrightRequest,
   expect,
 } from '@playwright/test';
-import { Services, waitForFirstVisible } from '../shared-fixtures';
+import { Services, waitForFirstVisible, waitForPageFunction } from '../shared-fixtures';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -1850,10 +1850,16 @@ export async function assertJoinedMselGroup(
   });
 
   try {
-    const joined = await page
-      .waitForFunction((m: string) => document.body.innerText.includes(m), marker, {
-        timeout: timeoutMs,
-      })
+    // `waitForPageFunction`, not `page.waitForFunction`: the latter resolves immediately on
+    // a zone.js page in Firefox without ever evaluating the predicate (see
+    // shared-fixtures.ts), which made `joined` unconditionally true — this probe reported a
+    // healthy group join on Firefox no matter what the client had done.
+    const joined = await waitForPageFunction(
+      page,
+      (m: string) => document.body.innerText.includes(m),
+      marker,
+      { timeout: timeoutMs }
+    )
       .then(() => true)
       .catch(() => false);
 

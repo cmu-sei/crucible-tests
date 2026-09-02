@@ -2,6 +2,7 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 import { test as base, expect as baseExpect, Page, Locator } from '@playwright/test';
+import type { PageFunction } from 'playwright-core/types/structs';
 import { loadCrucibleEnv } from './load-env';
 
 // Load environment based on CRUCIBLE_TARGET (aspire | minikube). Defaults to .env.
@@ -84,6 +85,84 @@ export const Services = {
 export function oidcStorageKey(clientId: string): string {
   const authority = Services.KeycloakRealm.replace(/\/$/, '');
   return `oidc.user:${authority}:${clientId}`;
+}
+
+/**
+ * Wait until an in-page predicate returns a truthy value, and resolve with that value —
+ * a **required** replacement for `page.waitForFunction()` in this suite.
+ *
+ * ── Why this exists (do not "simplify" it back to `page.waitForFunction`) ──
+ *
+ * `page.waitForFunction()` is silently broken in Firefox on every Crucible UI, because
+ * every Crucible UI is Angular and Angular loads zone.js, which replaces the global
+ * `Promise` with `ZoneAwarePromise`. Playwright's injected poller builds its result
+ * promise inside the page, so it gets a `ZoneAwarePromise`; Firefox's Juggler protocol
+ * does not recognise that as a promise to await, and hands the *object itself* straight
+ * back to the test. The consequences, measured against `blueprint.ui` (Playwright 1.58.2,
+ * bundled Firefox):
+ *
+ *   - `waitForFunction(() => false, …, { timeout: 4000 })` resolves in **26 ms** instead
+ *     of timing out. The predicate's value is never examined, so the wait is a no-op and
+ *     any spec relying on it to settle the UI races ahead of the app.
+ *   - `waitForFunction(() => 'hello').jsonValue()` resolves to
+ *     `{ __zone_symbol__state: …, __zone_symbol__value: 'hello' }` instead of `'hello'`,
+ *     so reading a value through it yields `[object Object]`.
+ *
+ * Both behave correctly in Chromium, which is why this only ever showed up as a
+ * Firefox-only failure (or, worse, a Firefox-only vacuous pass). Restoring the native
+ * `Promise` in the page makes `waitForFunction` behave — proof that zone.js is the
+ * trigger, not the predicate.
+ *
+ * `page.evaluate()` is unaffected (its result is serialised directly, with no in-page
+ * promise in the path), so this helper polls `evaluate` from the test side instead.
+ *
+ * Semantics match `page.waitForFunction`: resolves with the first truthy value, throws on
+ * timeout. Keep the predicate **synchronous** — an `async` predicate returns a
+ * `ZoneAwarePromise` and reintroduces exactly the problem above.
+ *
+ * @param page - Playwright Page
+ * @param pageFunction - synchronous predicate evaluated in the page; truthy ends the wait
+ * @param arg - single serialisable argument passed to the predicate
+ * @param options.timeout - max wait in ms (default 15000)
+ * @param options.pollIntervalMs - poll cadence in ms (default 250)
+ * @param options.message - message for the timeout error, in place of the generic one
+ * @returns the first truthy value the predicate produced
+ */
+export async function waitForPageFunction<A, R>(
+  page: Page,
+  // Same shape `page.evaluate` accepts, so predicates move over unchanged.
+  pageFunction: PageFunction<A, R>,
+  arg: A,
+  options: { timeout?: number; pollIntervalMs?: number; message?: string } = {}
+): Promise<NonNullable<R>> {
+  const timeout = options.timeout ?? 15000;
+  const pollIntervalMs = options.pollIntervalMs ?? 250;
+  const deadline = Date.now() + timeout;
+  let lastError: Error | undefined;
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    try {
+      const value = await page.evaluate(pageFunction, arg);
+      if (value) {
+        return value as NonNullable<R>;
+      }
+      lastError = undefined;
+    } catch (err) {
+      // An in-flight navigation tears down the execution context mid-evaluate;
+      // `waitForFunction` rides that out, so this does too. The error is retained and
+      // reported on timeout so a genuinely broken predicate is not swallowed.
+      lastError = err as Error;
+    }
+    if (Date.now() >= deadline) {
+      throw new Error(
+        (options.message ??
+          `waitForPageFunction: predicate did not return a truthy value within ${timeout}ms`) +
+          (lastError ? ` (last evaluate error: ${lastError.message})` : '')
+      );
+    }
+    await page.waitForTimeout(pollIntervalMs);
+  }
 }
 
 /**

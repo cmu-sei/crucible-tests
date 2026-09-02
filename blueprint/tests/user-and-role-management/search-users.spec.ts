@@ -16,7 +16,7 @@
 //   3. Types "admin" in the Search input and verifies only matching rows appear
 //   4. Clears the search and verifies all users return
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, waitForPageFunction } from '../../fixtures';
 
 // ---------------------------------------------------------------------------
 // Helper: navigate to admin section and click a sidebar item
@@ -67,14 +67,16 @@ test.describe('User and Role Management', () => {
     await expect(usersTable).toBeAttached({ timeout: 5000 });
     await searchInput.press('Enter');
 
-    // Wait for the table to update after the filter is applied - the row count will change
-    await page.waitForFunction(
-      (initialRowCount) => {
-        const rows = document.querySelectorAll('table tbody tr');
-        return rows.length !== initialRowCount;
-      },
+    // Wait for the table to update after the filter is applied - the row count will change.
+    // `waitForPageFunction`, not `page.waitForFunction`: on a zone.js page in Firefox the
+    // latter returns immediately without ever testing the predicate (see
+    // shared-fixtures.ts), so the counts below would be read mid-filter.
+    await waitForPageFunction(
+      page,
+      (initialRowCount) =>
+        document.querySelectorAll('table tbody tr').length !== initialRowCount,
       initialCount,
-      { timeout: 10000 }
+      { timeout: 10000, message: 'the users table row count never changed after filtering' }
     );
 
     // expect: Filtered results are fewer than the initial count
@@ -92,13 +94,12 @@ test.describe('User and Role Management', () => {
     await searchInput.press('Enter');
 
     // Wait for the table to update after clearing the filter - the row count will change back
-    await page.waitForFunction(
-      (filteredRowCount) => {
-        const rows = document.querySelectorAll('table tbody tr');
-        return rows.length > filteredRowCount;
-      },
+    await waitForPageFunction(
+      page,
+      (filteredRowCount) =>
+        document.querySelectorAll('table tbody tr').length > filteredRowCount,
       filteredCount,
-      { timeout: 10000 }
+      { timeout: 10000, message: 'the users table never grew back after the search was cleared' }
     );
 
     // expect: All users are displayed again

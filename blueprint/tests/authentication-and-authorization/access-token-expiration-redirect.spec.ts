@@ -5,7 +5,13 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect } from '@playwright/test';
-import { authenticateBlueprintWithKeycloak, Services, serviceUrlPattern, oidcStorageKey } from '../../fixtures';
+import {
+  authenticateBlueprintWithKeycloak,
+  Services,
+  serviceUrlPattern,
+  oidcStorageKey,
+  waitForPageFunction,
+} from '../../fixtures';
 
 const OIDC_STORAGE_KEY = oidcStorageKey('blueprint.ui');
 
@@ -23,10 +29,14 @@ test.describe('Authentication and Authorization', () => {
     const topbarText = page.locator('text=Event Dashboard');
     await expect(topbarText).toBeVisible();
 
-    // Wait for OIDC token to be stored in session storage
-    await page.waitForFunction((key) => {
-      return sessionStorage.getItem(key);
-    }, OIDC_STORAGE_KEY, { timeout: 15000 });
+    // Wait for OIDC token to be stored in session storage. `waitForPageFunction`, not
+    // `page.waitForFunction` — the latter never waits at all on a zone.js page in Firefox
+    // (see shared-fixtures.ts), which would let the invalidation below run against an
+    // absent entry and quietly do nothing.
+    await waitForPageFunction(page, (key) => sessionStorage.getItem(key), OIDC_STORAGE_KEY, {
+      timeout: 15000,
+      message: 'the OIDC client never wrote its token to sessionStorage after login',
+    });
 
     // 2. Manually invalidate the token by modifying it in session storage
     await page.evaluate((key) => {

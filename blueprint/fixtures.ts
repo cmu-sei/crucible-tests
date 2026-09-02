@@ -9,6 +9,7 @@ import {
   oidcStorageKey,
   authenticateWithKeycloak,
   waitForFirstVisible,
+  waitForPageFunction,
 } from '../shared-fixtures';
 import { authSessionStatePath, authStatePath } from '../auth-paths';
 
@@ -179,4 +180,4 @@ export const test = base.extend<BlueprintFixtures>({
 });
 
 export { expect } from '@playwright/test';
-export { Services, serviceUrlPattern, oidcStorageKey, waitForFirstVisible };
+export { Services, serviceUrlPattern, oidcStorageKey, waitForFirstVisible, waitForPageFunction };
