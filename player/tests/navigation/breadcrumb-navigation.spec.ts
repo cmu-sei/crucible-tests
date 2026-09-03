@@ -4,17 +4,19 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, seededPrimaryViewName, findAdminViewButton } from '../../fixtures';
 
 test.describe('Navigation', () => {
   test('Breadcrumb Navigation', async ({ playerAuthenticatedPage: page }) => {
+    const primaryViewName = seededPrimaryViewName();
+
     // 1. Navigate to a nested page (e.g., admin view edit)
     await page.getByRole('button', { name: 'Menu' }).click();
     await page.getByRole('menuitem', { name: 'Administration' }).click();
     await expect(page).toHaveURL(/\/admin/, { timeout: 10000 });
 
-    // Click on a view to open edit form
-    await page.getByRole('button', { name: 'Project Lagoon TTX - Admin User' }).click();
+    // Search for the seeded view, then open its edit form
+    await (await findAdminViewButton(page, primaryViewName)).click();
     await expect(page.getByRole('heading', { name: /Edit View:/ })).toBeVisible();
 
     // expect: Breadcrumb trail is visible showing navigation path

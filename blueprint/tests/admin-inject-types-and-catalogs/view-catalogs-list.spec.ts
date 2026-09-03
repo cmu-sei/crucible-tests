@@ -5,19 +5,30 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
+import { acquireAdminCatalogLock, releaseAdminCatalogLock } from '../../test-helpers';
 
 test.describe('Admin - Inject Types and Catalogs Management', () => {
+  // Serialize access to the shared admin Catalogs / Inject Types pages: they are not
+  // safely concurrent (one unfiltered global inject store shared by an
+  // app-inject-list mounted per row). See acquireAdminCatalogLock in test-helpers.
+  test.beforeEach(async () => {
+    await acquireAdminCatalogLock();
+  });
+
+  test.afterEach(async () => {
+    await releaseAdminCatalogLock();
+  });
+
   test('View Catalogs List', async ({ blueprintAuthenticatedPage: page }) => {
     // 1. Navigate to Admin section and select 'Catalogs'
     await page.goto(`${Services.Blueprint.UI}/admin`);
-    await page.waitForLoadState('networkidle');
+    await expect(page).toHaveURL(/\/admin/, { timeout: 10000 });
 
     const catalogsNav = page.locator(
       'mat-list-item:has-text("Catalogs"), a:has-text("Catalogs"), button:has-text("Catalogs")'
     ).first();
     await expect(catalogsNav).toBeVisible({ timeout: 5000 });
     await catalogsNav.click();
-    await page.waitForLoadState('networkidle');
 
     // expect: Catalogs list is displayed with columns: Public (checkbox), Name, Inject Type, Description
     const catalogsTable = page.locator('table, [class*="catalogs-table"]').first();

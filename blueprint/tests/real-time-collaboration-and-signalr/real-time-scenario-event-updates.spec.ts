@@ -2,92 +2,150 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 // spec: specs/blueprint-test-plan.md
-// seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
-import { chromium, BrowserContext } from '@playwright/test';
-import { authenticateBlueprintWithKeycloak } from '../../fixtures';
+import { test, expect } from '../../fixtures';
+import { chromium } from '@playwright/test';
+import fs from 'fs';
+import { authStatePath, authSessionStatePath } from '../../../auth-paths';
+import {
+  getBlueprintToken,
+  createMsel,
+  deleteMsel,
+  createRenderableScenarioEvent,
+  setScenarioEventFieldValue,
+  tempBlueprintName,
+  navigateToMselSection,
+} from '../../test-helpers';
 
+/**
+ * Verifies SignalR pushes an *edit* of an existing scenario event to a second window with
+ * no refresh. (`real-time-msel-updates` covers the create case; this one covers update.)
+ *
+ * Rewritten. The previous version could not fail, and mostly did not run:
+ *
+ * 1. Its entire body was inside `if (await existingEvent.isVisible(...))`, keyed on
+ *    `[class*="event"], [class*="scenario"]` against whatever MSEL happened to be first on
+ *    the dashboard. It seeded nothing, so on a stack without a suitable pre-existing MSEL it
+ *    asserted nothing and reported green.
+ * 2. Its verdict was `expect(textUpdated || textChanged).toBeTruthy()` — an OR over two soft
+ *    probes, one of which (`textChanged`) compares the first matched element's text before
+ *    and after and so is satisfied by *any* unrelated re-render.
+ * 3. It navigated by clicking `a[href*="/msel"], div[class*="msel"]`, then edited "an
+ *    existing event" belonging to a MSEL it did not own — mutating another test's or the
+ *    user's data.
+ * 4. Three fixed sleeps (1s, 2s, 3s) stood in for waiting on the actual propagation, which
+ *    CLAUDE.md forbids: they slow the suite and make the outcome a coin flip.
+ *
+ * Now: seed a MSEL with one renderable event, open it in two independently-authenticated
+ * contexts, change the event's Title through the API (the same write path the UI uses, and
+ * the one that raises the SignalR notification), and poll window 2 for the new text.
+ * Window 2 is never reloaded, so only a pushed update can satisfy the assertion.
+ */
 test.describe('Real-time Collaboration and SignalR', () => {
+  let token: string;
+  let mselId: string;
+  let eventId: string;
+
+  const ORIGINAL_TITLE = 'Realtime edit baseline';
+
+  test.beforeEach(async () => {
+    token = await getBlueprintToken();
+    const msel = await createMsel(token, {
+      name: tempBlueprintName('TestBP-RealtimeEdit'),
+      description: 'Seeded to verify SignalR scenario-event edit propagation.',
+    });
+    mselId = msel.id;
+
+    const event = await createRenderableScenarioEvent(token, mselId, ORIGINAL_TITLE, {
+      deltaSeconds: 60,
+    });
+    eventId = event.id;
+  });
+
+  test.afterEach(async () => {
+    if (mselId) {
+      try {
+        await deleteMsel(token, mselId);
+      } catch (err) {
+        console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+      }
+    }
+  });
+
   test('Real-time Scenario Event Updates', async ({ blueprintAuthenticatedPage: page }) => {
-    // 1. Open two windows viewing the same MSEL timeline
-    await page.waitForLoadState('networkidle');
-    
-    // Navigate to an existing MSEL with events
-    const mselLink = page.locator('a[href*="/msel"], div[class*="msel"]').first();
-    let mselUrl = '';
-    
-    if (await mselLink.isVisible({ timeout: 5000 })) {
-      await mselLink.click();
-      await page.waitForLoadState('networkidle');
-      mselUrl = page.url();
-    }
-    
-    // expect: Both windows show the same timeline
-    // Open second browser context
+    // ── Window 1: the seeded MSEL's Scenario Events ─────────────────────────────
+    await navigateToMselSection(page, mselId, 'Scenario Events');
+
+    // The seeded title must be on screen before the edit, otherwise "the new title appeared"
+    // proves nothing about propagation.
+    await expect(page.getByText(ORIGINAL_TITLE).first()).toBeVisible({ timeout: 20000 });
+
+    // ── Window 2: a separate context on the same MSEL ───────────────────────────
+    // Reuses the storageState global-setup captured, so this costs no extra Keycloak
+    // round-trip. sessionStorage is restored too, since the OIDC client may keep its token
+    // there rather than in localStorage.
+    const statePath = authStatePath('blueprint');
+    expect(
+      fs.existsSync(statePath),
+      `expected global-setup to have written ${statePath}`
+    ).toBe(true);
+
+    const sessionPath = authSessionStatePath('blueprint');
+    const sessionState: Array<[string, string]> = fs.existsSync(sessionPath)
+      ? JSON.parse(fs.readFileSync(sessionPath, 'utf8'))
+      : [];
+
     const browser = await chromium.launch();
-    const context2 = await browser.newContext({ ignoreHTTPSErrors: true });
-    const page2 = await context2.newPage();
-    
-    await authenticateBlueprintWithKeycloak(page2, 'admin', 'admin');
-    await page2.goto(mselUrl);
-    await page2.waitForLoadState('networkidle');
-    
-    // Find an existing event to edit
-    const existingEvent = page.locator('[class*="event"], [class*="scenario"]').first();
-    
-    if (await existingEvent.isVisible({ timeout: 5000 })) {
-      // Get initial event text in window 2
-      const eventSelector = '[class*="event"], [class*="scenario"]';
-      const initialEventText = await page2.locator(eventSelector).first().textContent();
-      
-      // 2. In window 1, edit an existing event
-      const editButton = existingEvent.locator('button[class*="edit"], mat-icon:has-text("edit")').first();
-      
-      if (await editButton.isVisible({ timeout: 2000 })) {
-        await editButton.click();
-      } else {
-        await existingEvent.click();
+    try {
+      const context2 = await browser.newContext({
+        ignoreHTTPSErrors: true,
+        storageState: statePath,
+      });
+      if (sessionState.length > 0) {
+        await context2.addInitScript((entries: Array<[string, string]>) => {
+          for (const [key, value] of entries) {
+            sessionStorage.setItem(key, value);
+          }
+        }, sessionState);
       }
-      
-      await page.waitForTimeout(1000);
-      
-      // expect: Event is updated in window 1
-      const descriptionField = page.locator(
-        'input[name="description"], ' +
-        'textarea[name="description"], ' +
-        'input[formControlName="description"]'
-      ).first();
-      
-      if (await descriptionField.isVisible({ timeout: 2000 })) {
-        await descriptionField.clear();
-        await descriptionField.fill('Updated via real-time test at ' + new Date().toISOString());
-        
-        const saveButton = page.locator('button:has-text("Save"), button[type="submit"]').last();
-        await saveButton.click();
-        await page.waitForTimeout(2000);
-      }
-      
-      // 3. Observe window 2
-      // expect: Event updates automatically in window 2
-      // expect: Changes are reflected in real-time
-      // expect: Color or position changes are immediately visible
-      
-      // Wait for SignalR to propagate the update
-      await page2.waitForTimeout(3000);
-      
-      const updatedEventText = await page2.locator(eventSelector).first().textContent();
-      
-      // Verify that the event was updated
-      const updateText = page2.locator('text=Updated via real-time test');
-      const textUpdated = await updateText.isVisible({ timeout: 5000 }).catch(() => false);
-      const textChanged = initialEventText !== updatedEventText;
-      
-      expect(textUpdated || textChanged).toBeTruthy();
+      const page2 = await context2.newPage();
+
+      await navigateToMselSection(page2, mselId, 'Scenario Events');
+
+      // Both windows start from the same state.
+      await expect(page2.getByText(ORIGINAL_TITLE).first()).toBeVisible({ timeout: 20000 });
+
+      // ── Edit the event ─────────────────────────────────────────────────────────
+      // `createRenderableScenarioEvent` writes its text into the 'Description' DataField, so
+      // that is the field to change — a ScenarioEvent has no `description` column of its own,
+      // its text lives in DataValue rows.
+      const updatedTitle = `Realtime edited ${Date.now()}`;
+      await setScenarioEventFieldValue(token, eventId, 'Description', updatedTitle);
+
+      // ── Window 2 must receive it with NO reload ────────────────────────────────
+      // expect.poll re-reads the live DOM; window 2 is never refreshed, so the only way the
+      // new title can appear is a server-pushed update.
+      await expect
+        .poll(() => page2.getByText(updatedTitle).count(), {
+          timeout: 30000,
+          intervals: [250, 500, 1000],
+          message:
+            'window 2 never received the scenario-event edit via SignalR (no reload was performed)',
+        })
+        .toBeGreaterThan(0);
+
+      // expect: it is genuinely an update, not an extra row — the old title is gone.
+      await expect
+        .poll(() => page2.getByText(ORIGINAL_TITLE).count(), {
+          timeout: 15000,
+          intervals: [250, 500, 1000],
+          message: 'the pre-edit title should be replaced, not duplicated',
+        })
+        .toBe(0);
+
+      await context2.close();
+    } finally {
+      await browser.close();
     }
-    
-    // Cleanup
-    await context2.close();
-    await browser.close();
   });
 });

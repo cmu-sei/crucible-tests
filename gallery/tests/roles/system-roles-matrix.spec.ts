@@ -4,17 +4,14 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
-import { authenticateGalleryWithKeycloak } from '../../fixtures';
+import { test, expect, gotoGalleryAdmin, gotoAdminSection } from '../../fixtures';
 
 test.describe('Role and Permission Management', () => {
-  test('System Roles Permission Matrix', async ({ page }) => {
-    await authenticateGalleryWithKeycloak(page);
-    await page.getByRole('button', { name: 'Administration' }).click();
-    await expect(page).toHaveTitle('Gallery Admin');
+  test('System Roles Permission Matrix', async ({ galleryAuthenticatedPage: page }) => {
+    await gotoGalleryAdmin(page);
 
     // 1. Navigate to admin section and click 'Roles' in the sidebar
-    await page.locator('mat-list-item').filter({ hasText: 'Roles' }).getByRole('button').click();
+    await gotoAdminSection(page, 'Roles');
 
     // expect: Roles management page loads with three tabs
     await expect(page.getByRole('tab', { name: 'Roles', exact: true })).toBeVisible();

@@ -4,14 +4,24 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import {
+  test,
+  expect,
+  Services,
+  seededPrimaryViewName,
+  findPlayerHomeViewLink,
+  typeIntoSearch,
+  clickWithoutOverlayInterference,
+} from '../../fixtures';
 
 test.describe('View Details', () => {
   test('Search Users', async ({ playerAuthenticatedPage: page }) => {
+    const primaryViewName = seededPrimaryViewName();
+
     // 1. Log in and navigate to a view, then open the Users dialog
-    await page.getByRole('link', { name: 'Project Lagoon TTX - Admin' }).click();
+    await (await findPlayerHomeViewLink(page, primaryViewName)).click();
     await expect(page).toHaveURL(/\/view\//, { timeout: 10000 });
-    await page.getByRole('button', { name: 'Users' }).click();
+    await clickWithoutOverlayInterference(page, page.getByRole('button', { name: 'Users' }));
 
     // expect: The Users dialog is open
     const dialog = page.getByRole('dialog');
@@ -19,7 +29,7 @@ test.describe('View Details', () => {
 
     // 2. Enter a user name in the Search field
     const searchField = dialog.getByRole('textbox', { name: 'Search' });
-    await searchField.fill('Admin');
+    await typeIntoSearch(searchField, 'Admin');
 
     // expect: The teams list filters to show only teams with matching users
     await expect(dialog.getByRole('button', { name: /Admin Count:/ })).toBeVisible();
@@ -28,7 +38,7 @@ test.describe('View Details', () => {
     // Teams with 0 matching users may be hidden or show count: 0
 
     // 3. Clear the search field
-    await searchField.clear();
+    await typeIntoSearch(searchField, '');
 
     // expect: All teams are displayed again
     await expect(dialog.getByRole('button', { name: /Admin Count:/ })).toBeVisible();

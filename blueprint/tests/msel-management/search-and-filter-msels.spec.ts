@@ -5,105 +5,93 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
+import {
+  getBlueprintToken,
+  createMsel,
+  deleteMsel,
+  tempBlueprintName,
+} from '../../test-helpers';
 
 test.describe('MSEL Management', () => {
   test('Search and Filter MSELs', async ({ blueprintAuthenticatedPage: page }) => {
+    const token = await getBlueprintToken();
 
-    // 1. Navigate to MSELs list
-    await page.goto(`${Services.Blueprint.UI}/build`);
-    await expect(page).toHaveURL(/.*\/build.*/, { timeout: 10000 });
-    await page.waitForLoadState('networkidle');
+    // 1. Seed two MSELs with distinct names and statuses
+    const searchableName = tempBlueprintName('SearchMe');
+    const otherName = tempBlueprintName('OtherMSEL');
 
-    // expect: MSELs list is visible with multiple MSELs
-    const mselList = page.getByRole('table');
-    await expect(mselList).toBeVisible({ timeout: 5000 });
+    const searchableMsel = await createMsel(token, {
+      name: searchableName,
+      description: 'MSEL for search test with unique keyword SearchMe',
+      status: 'Pending',
+    });
 
-    // Count initial MSELs
-    const mselItems = page.getByRole('row').filter({ hasNotText: 'Name Description Template Status Created By Date Created Date Modified' });
-    const initialCount = await mselItems.count();
-    expect(initialCount).toBeGreaterThan(0);
+    const otherMsel = await createMsel(token, {
+      name: otherName,
+      description: 'Another MSEL without the search keyword',
+      status: 'Approved',
+    });
 
-    // 2. Enter a search term in the search box
-    const searchBox = page.getByRole('textbox', { name: 'Search' });
-    await expect(searchBox).toBeVisible({ timeout: 5000 });
-    
-    // Search for a specific term (using first word from visible MSEL if possible)
-    const searchTerm = 'Training'; // or 'Exercise' or 'Cyber'
-    await searchBox.fill(searchTerm);
-    
-    // expect: The list filters to show only MSELs matching the search term
-    await page.waitForTimeout(1000); // Allow time for filtering
-    const filteredItems = page.getByRole('row').filter({ hasNotText: 'Name Description Template Status Created By Date Created Date Modified' });
-    const filteredCount = await filteredItems.count();
-    
-    // expect: Search works on MSEL name and description
-    // Verify that filtered results contain the search term
-    if (filteredCount > 0) {
-      const firstFilteredItem = filteredItems.first();
-      const itemText = await firstFilteredItem.textContent();
-      expect(itemText?.toLowerCase()).toContain(searchTerm.toLowerCase());
-    }
-    
-    // expect: Results update in real-time or after pressing enter
-    // Results should already be filtered at this point
-    expect(filteredCount).toBeLessThanOrEqual(initialCount);
-    
-    // 3. Clear the search box
-    await searchBox.clear();
-    
-    // expect: All MSELs are displayed again
-    await page.waitForTimeout(1000); // Allow time for list to refresh
-    const restoredItems = page.getByRole('row').filter({ hasNotText: 'Name Description Template Status Created By Date Created Date Modified' });
-    const restoredCount = await restoredItems.count();
-    expect(restoredCount).toBe(initialCount);
-    
-    // 4. Apply filters such as status or date range
-    // Look for filter controls
-    const statusFilter = page.locator(
-      'select[name*="status"], ' +
-      '[class*="status-filter"], ' +
-      'mat-select[placeholder*="Status"]'
-    ).first();
-    
-    const dateRangeFilter = page.locator(
-      'input[name*="date"], ' +
-      'input[placeholder*="Date"], ' +
-      '[class*="date-picker"]'
-    ).first();
-    
-    // Try to apply status filter if available
-    if (await statusFilter.isVisible({ timeout: 2000 })) {
+    try {
+      // 2. Navigate to MSELs list
+      await page.goto(`${Services.Blueprint.UI}/build`);
+      await expect(page.getByRole('table')).toBeVisible({ timeout: 10000 });
+
+      // 3. Test search functionality
+      const searchBox = page.getByRole('textbox', { name: 'Search' });
+      await expect(searchBox).toBeVisible();
+
+      // Search for the unique keyword
+      await searchBox.fill('SearchMe');
+
+      // expect: Only the searchable MSEL appears
+      const searchableRow = page.getByRole('row').filter({ hasText: searchableName });
+      await expect(searchableRow).toBeVisible({ timeout: 10000 });
+
+      const otherRow = page.getByRole('row').filter({ hasText: otherName });
+      await expect(otherRow).not.toBeVisible({ timeout: 5000 });
+
+      // 4. Clear search
+      await searchBox.clear();
+      await searchBox.fill(''); // Ensure it's completely cleared
+
+      // Wait for the search to process and show all rows
+      // Use the searchable name to check it's back
+      await searchBox.fill(searchableName);
+      await expect(page.getByRole('row').filter({ hasText: searchableName })).toBeVisible({ timeout: 10000 });
+
+      // Clear again and check the other name
+      await searchBox.clear();
+      await searchBox.fill(otherName);
+      await expect(page.getByRole('row').filter({ hasText: otherName })).toBeVisible({ timeout: 10000 });
+
+      // Clear for the next test step
+      await searchBox.clear();
+
+      // 5. Test status filter
+      const statusFilter = page.getByRole('combobox', { name: /All Statuses/i });
+      await expect(statusFilter).toBeVisible();
       await statusFilter.click();
-      await page.waitForTimeout(500);
-      
-      // Select first available option
-      const filterOption = page.locator(
-        'mat-option, ' +
-        'option, ' +
-        '[role="option"]'
-      ).first();
-      
-      if (await filterOption.isVisible({ timeout: 2000 })) {
-        await filterOption.click();
-        await page.waitForTimeout(1000);
-        
-        // expect: The list filters according to the selected criteria
-        const statusFilteredItems = page.getByRole('row').filter({ hasNotText: 'Name Description Template Status Created By Date Created Date Modified' });
-        const statusFilteredCount = await statusFilteredItems.count();
-        expect(statusFilteredCount).toBeGreaterThanOrEqual(0);
-      }
-    } else if (await dateRangeFilter.isVisible({ timeout: 2000 })) {
-      // Try date range filter if status filter not available
-      await dateRangeFilter.fill('2026-01-01');
-      await page.waitForTimeout(1000);
-      
-      // expect: The list filters according to the selected criteria
-      const dateFilteredItems = page.getByRole('row').filter({ hasNotText: 'Name Description Template Status Created By Date Created Date Modified' });
-      const dateFilteredCount = await dateFilteredItems.count();
-      expect(dateFilteredCount).toBeGreaterThanOrEqual(0);
+
+      const pendingOption = page.getByRole('option', { name: 'Pending' });
+      await expect(pendingOption).toBeVisible();
+      await pendingOption.click();
+
+      // expect: Only the Pending MSEL appears
+      await searchBox.fill(searchableName);
+      const pendingRow = page.getByRole('row').filter({ hasText: searchableName });
+      await expect(pendingRow).toBeVisible({ timeout: 10000 });
+
+      // The Approved MSEL should not appear in the Pending filter
+      await searchBox.clear();
+      await searchBox.fill(otherName);
+      const approvedRow = page.getByRole('row').filter({ hasText: otherName });
+      const isApprovedVisible = await approvedRow.isVisible({ timeout: 3000 }).catch(() => false);
+      expect(isApprovedVisible).toBe(false);
+    } finally {
+      // 7. Clean up: delete both MSELs
+      await deleteMsel(token, searchableMsel.id);
+      await deleteMsel(token, otherMsel.id);
     }
-    
-    // Verify the filtering functionality works
-    await page.waitForLoadState('networkidle');
   });
 });

@@ -7,7 +7,7 @@
 // This file combines all report tests into a single file to run them serially,
 // avoiding parallel execution issues where multiple tests compete for the same "Admin User" visibility.
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, ensureScoringModelExists, purgeStaleEvaluations, settleForResponse } from '../../fixtures';
 import { navigateToAdminSection, deleteEvaluationByName, deleteTeamTypeByName } from '../../test-helpers';
 
 // Test data constants
@@ -21,6 +21,10 @@ const DISPLAY_TEAM_TYPE = 'E2E Display Team Type';
 const DISPLAY_EVAL_NAME = 'E2E Display Test Evaluation';
 
 async function createActiveEvalWithMoveAndTeam(page: import('@playwright/test').Page, teamTypeName: string, evalName: string, teamName: string, teamShortName: string) {
+  // 0. Ensure a scoring model exists so the Add Evaluation dialog's Scoring Model
+  //    dropdown is populated (the empty seed.spec.ts stub leaves a clean DB with none).
+  await ensureScoringModelExists();
+
   // 1. Create a team type
   await navigateToAdminSection(page, 'Team Types');
 
@@ -49,11 +53,7 @@ async function createActiveEvalWithMoveAndTeam(page: import('@playwright/test').
 
   const scoringModelSelect = page.getByRole('combobox', { name: 'Scoring Model' });
   await expect(scoringModelSelect).toBeVisible({ timeout: 5000 });
-  await page.waitForResponse(
-    response => response.url().includes('/api/scoringmodels') && response.status() === 200,
-    { timeout: 15000 }
-  ).catch(() => {});
-  await page.waitForTimeout(1500);
+  await settleForResponse(page, '/api/scoringmodels');
   await scoringModelSelect.click();
   await page.waitForTimeout(1000);
 
@@ -219,6 +219,12 @@ test.describe.configure({ mode: 'serial' });
 
 test.describe('Report Interface', () => {
 
+  // Keep the evaluations list small/deterministic — the admin suite may have flooded it.
+  test.beforeAll(async () => {
+    await purgeStaleEvaluations();
+  });
+
+
   test('Report Display', async ({ citeAuthenticatedPage: page }) => {
 
     await createActiveEvalWithMoveAndTeam(page, DISPLAY_TEAM_TYPE, DISPLAY_EVAL_NAME, 'Display Test Team', 'DTT');
@@ -301,19 +307,26 @@ test.describe('Report Interface', () => {
     const reportHeading = page.locator('h2').filter({ hasText: /Submissions Report/ });
     await expect(reportHeading).toBeVisible({ timeout: 10000 });
 
-    // Toggle between user and team scores
+    // Toggle between user and team scores.
+    // NOTE: the report's initial User/Team state is persisted in localStorage and can
+    // carry over from a previous test in the same worker, so do NOT assume it starts on
+    // "User". Instead, read the current state and assert that each toggle FLIPS it.
     const toggleButton = page.locator('button[title="Toggle between user and team scores"]');
     await expect(toggleButton).toBeVisible({ timeout: 5000 });
 
-    await expect(reportHeading).toContainText('User', { timeout: 5000 });
+    const isUser = async () => ((await reportHeading.textContent()) ?? '').includes('User');
+
+    const startUser = await isUser();
 
     await toggleButton.click();
     await page.waitForTimeout(1000);
-    await expect(reportHeading).toContainText('Team', { timeout: 5000 });
+    // After one toggle the heading should be the opposite of where it started.
+    await expect(reportHeading).toContainText(startUser ? 'Team' : 'User', { timeout: 5000 });
 
     await toggleButton.click();
     await page.waitForTimeout(1000);
-    await expect(reportHeading).toContainText('User', { timeout: 5000 });
+    // A second toggle returns it to the starting state.
+    await expect(reportHeading).toContainText(startUser ? 'User' : 'Team', { timeout: 5000 });
 
     // Cleanup
     await deleteEvaluationByName(page, COMPARISON_EVAL_NAME);

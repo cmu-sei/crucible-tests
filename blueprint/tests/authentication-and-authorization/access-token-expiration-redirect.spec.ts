@@ -9,6 +9,10 @@ import { authenticateBlueprintWithKeycloak, Services, serviceUrlPattern, oidcSto
 
 const OIDC_STORAGE_KEY = oidcStorageKey('blueprint.ui');
 
+// Override global storageState so this test starts from a fresh unauthenticated state
+// and can manually log in to test token expiration behavior.
+test.use({ storageState: { cookies: [], origins: [] } });
+
 test.describe('Authentication and Authorization', () => {
   test('Access Token Expiration Redirect', async ({ page }) => {
     // 1. Log in as admin user

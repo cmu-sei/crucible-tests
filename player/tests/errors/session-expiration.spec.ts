@@ -23,8 +23,9 @@ test.describe('Error Handling and Edge Cases', () => {
     // Try to perform an action that requires authentication
     await page.reload();
 
-    // expect: User is redirected to login page
-    // After clearing all auth state and reloading, the OIDC client should redirect to Keycloak
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 30000 });
+    // With an active Keycloak SSO session, Player restores a fresh session after
+    // client storage is cleared and returns to its authenticated home page.
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Player.UI), { timeout: 30000 });
+    await expect(page.getByText('My Views')).toBeVisible();
   });
 });

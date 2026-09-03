@@ -33,7 +33,6 @@ test.describe('Search and Filtering', () => {
     await globalSearchBox.fill(searchTerm);
     
     // Give some time for search results to appear
-    await page.waitForTimeout(1500);
     
     // expect: Search results appear in real-time or after submission
     const searchResults = page.locator(

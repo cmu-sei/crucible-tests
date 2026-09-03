@@ -2,83 +2,126 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 // spec: specs/blueprint-test-plan.md
-// seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
+import { getBlueprintToken, createMsel, deleteMsel, tempBlueprintName } from '../../test-helpers';
 
+/**
+ * Sorting the /build MSEL list by Name, ascending then descending.
+ *
+ * Sorting can only be asserted against rows this test controls: the dev stack carries ~19
+ * pre-existing MSELs and sibling specs seed more concurrently, so any assertion about the
+ * whole table's order would be meaningless. The three seeded MSELs therefore share one
+ * `groupToken`, which is typed into the Search box to collapse the table down to exactly
+ * those rows before the order is checked.
+ *
+ * The previous version got this wrong: it built each name with a separate
+ * `tempBlueprintName()` call (each embedding its own timestamp), then searched for
+ * `mselA.name.substring(0, 15)`. That prefix matched only MSEL A, so B and C were filtered
+ * out of the table and their row indices came back as -1.
+ */
 test.describe('MSEL Management', () => {
-  test('Sort MSELs', async ({ blueprintAuthenticatedPage: page }) => {
+  let token: string;
+  let ids: string[] = [];
+  let groupToken: string;
+  let names: { a: string; b: string; c: string };
 
-    // 1. Navigate to MSELs list
-    await page.goto(`${Services.Blueprint.UI}/build`);
-    await expect(page).toHaveURL(/.*\/build.*/, { timeout: 10000 });
-    await page.waitForLoadState('networkidle');
+  test.beforeEach(async () => {
+    token = await getBlueprintToken();
 
-    // expect: MSELs list is visible
-    const mselList = page.getByRole('table');
-    await expect(mselList).toBeVisible({ timeout: 5000 });
+    // One shared token across all three names so a single search returns exactly this set.
+    groupToken = tempBlueprintName('TestBP-Sort');
+    names = {
+      a: `${groupToken}-AAA`,
+      b: `${groupToken}-BBB`,
+      c: `${groupToken}-CCC`,
+    };
 
-    // 2. Click on the 'Name' column header
-    const nameColumnHeader = page.getByRole('columnheader', { name: 'Name' });
-    
-    // Check if sortable column headers exist
-    if (await nameColumnHeader.isVisible({ timeout: 3000 })) {
-      // Get initial order of MSEL names
-      const mselRows = page.getByRole('row').filter({ hasNotText: 'Name Description Template Status Created By Date Created Date Modified' });
-      const mselNamesBefore = await mselRows.locator('td >> nth=1').allTextContents();
+    // Create out of alphabetical order so a pass cannot be an artifact of insertion order.
+    const created = [
+      await createMsel(token, { name: names.b, description: 'Middle alphabetically' }),
+      await createMsel(token, { name: names.c, description: 'Last alphabetically' }),
+      await createMsel(token, { name: names.a, description: 'First alphabetically' }),
+    ];
+    ids = created.map((m) => m.id);
+  });
 
-      await nameColumnHeader.click();
-      await page.waitForTimeout(1000); // Allow time for sorting
-
-      // expect: MSELs are sorted alphabetically by name
-      const mselNamesAfter = await mselRows.locator('td >> nth=1').allTextContents();
-      
-      // expect: A sort indicator shows the sort direction
-      const sortIndicator = page.locator(
-        '[class*="sort-indicator"], ' +
-        '[class*="arrow"], ' +
-        'mat-icon:has-text("arrow")'
-      ).first();
-      
-      // Check if sort indicator is visible (if sorting UI exists)
-      const hasSortIndicator = await sortIndicator.isVisible({ timeout: 2000 }).catch(() => false);
-      
-      // Verify that the order changed (either ascending or descending)
-      const orderChanged = JSON.stringify(mselNamesBefore) !== JSON.stringify(mselNamesAfter);
-      expect(orderChanged || mselNamesBefore.length <= 1).toBeTruthy();
-      
-      // 3. Click on the 'Name' column header again
-      await nameColumnHeader.click();
-      await page.waitForTimeout(1000); // Allow time for re-sorting
-
-      // expect: MSELs are sorted in reverse alphabetical order
-      const mselNamesReversed = await mselRows.locator('td >> nth=1').allTextContents();
-
-      // expect: Sort indicator shows reverse direction
-      // The order should be different from the first sort
-      const reverseOrderChanged = JSON.stringify(mselNamesAfter) !== JSON.stringify(mselNamesReversed);
-      expect(reverseOrderChanged || mselNamesAfter.length <= 1).toBeTruthy();
-
-      // 4. Click on the 'Date Created' column header
-      const dateColumnHeader = page.getByRole('columnheader', { name: 'Date Created' });
-
-      if (await dateColumnHeader.isVisible({ timeout: 3000 })) {
-        await dateColumnHeader.click();
-        await page.waitForTimeout(1000); // Allow time for sorting
-
-        // expect: MSELs are sorted by creation date
-        // expect: Newest or oldest first depending on initial sort direction
-        const mselNamesDateSorted = await mselRows.locator('td >> nth=1').allTextContents();
-        
-        // Verify that clicking the date column changed the order
-        const dateSortChanged = JSON.stringify(mselNamesReversed) !== JSON.stringify(mselNamesDateSorted);
-        expect(dateSortChanged || mselNamesReversed.length <= 1).toBeTruthy();
+  test.afterEach(async () => {
+    for (const id of ids) {
+      try {
+        await deleteMsel(token, id);
+      } catch (err) {
+        console.warn(`Cleanup failed for MSEL ${id}: ${err}`);
       }
-    } else {
-      console.log('Sortable columns not found - MSEL list may not have sorting functionality');
-      // Still pass the test if sorting is not implemented yet
     }
-    
-    await page.waitForLoadState('networkidle');
+    ids = [];
+  });
+
+  test('Sort MSELs', async ({ blueprintAuthenticatedPage: page }) => {
+    await page.goto(`${Services.Blueprint.UI}/build`, { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('table').first()).toBeVisible({ timeout: 15000 });
+
+    // Collapse the table to just this test's three rows.
+    const searchBox = page.getByRole('textbox', { name: /search/i });
+    await expect(searchBox).toBeVisible({ timeout: 10000 });
+    await searchBox.fill(groupToken);
+
+    const seededRows = page.getByRole('row').filter({ hasText: groupToken });
+    await expect(seededRows).toHaveCount(3, { timeout: 15000 });
+
+    /** Positions of the three seeded names within the currently-rendered rows. */
+    const orderOfSeeded = async () => {
+      const texts = await seededRows.allTextContents();
+      return {
+        a: texts.findIndex((t) => t.includes(names.a)),
+        b: texts.findIndex((t) => t.includes(names.b)),
+        c: texts.findIndex((t) => t.includes(names.c)),
+      };
+    };
+
+    const nameColumnHeader = page.getByRole('columnheader', { name: /^Name/ });
+    await expect(nameColumnHeader).toBeVisible({ timeout: 10000 });
+
+    /**
+     * Click the Name header until it reports the wanted direction, then assert the seeded
+     * rows are in that order. `mat-sort-header` reflects state in `aria-sort`, so that
+     * attribute flip is the deterministic re-sort signal — no sleep required.
+     *
+     * The list does not start unsorted: it loads already sorted by Name, so the first
+     * click yields *descending*. Driving off the live `aria-sort` value rather than
+     * assuming a starting state keeps this robust if that default ever changes.
+     */
+    const sortBy = async (direction: 'ascending' | 'descending') => {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if ((await nameColumnHeader.getAttribute('aria-sort')) === direction) return;
+        await nameColumnHeader.click();
+        await expect(nameColumnHeader).not.toHaveAttribute('aria-sort', 'none', {
+          timeout: 10000,
+        });
+      }
+      await expect(nameColumnHeader).toHaveAttribute('aria-sort', direction, { timeout: 10000 });
+    };
+
+    // --- Ascending: AAA before BBB before CCC ---
+    await sortBy('ascending');
+    await expect(nameColumnHeader).toHaveAttribute('aria-sort', 'ascending');
+
+    let order = await orderOfSeeded();
+    expect(order.a, 'AAA row not found after ascending sort').toBeGreaterThanOrEqual(0);
+    expect(order.b, 'BBB row not found after ascending sort').toBeGreaterThanOrEqual(0);
+    expect(order.c, 'CCC row not found after ascending sort').toBeGreaterThanOrEqual(0);
+    expect(order.a).toBeLessThan(order.b);
+    expect(order.b).toBeLessThan(order.c);
+
+    // --- Descending: the order must actually reverse ---
+    await sortBy('descending');
+    await expect(nameColumnHeader).toHaveAttribute('aria-sort', 'descending');
+
+    order = await orderOfSeeded();
+    expect(order.c, 'CCC row not found after descending sort').toBeGreaterThanOrEqual(0);
+    expect(order.b, 'BBB row not found after descending sort').toBeGreaterThanOrEqual(0);
+    expect(order.a, 'AAA row not found after descending sort').toBeGreaterThanOrEqual(0);
+    expect(order.c).toBeLessThan(order.b);
+    expect(order.b).toBeLessThan(order.a);
   });
 });

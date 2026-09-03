@@ -46,9 +46,9 @@ test.describe('Error Handling', () => {
     if (sponsor) await deleteSponsor(token, sponsor.id);
   });
 
-  // Skipped: blocked on Gameboard API /api/game/{id}/score scaling fix.
-  // The endpoint issues ~7-9 SQL round-trips per team; with 120 seeded teams
-  // the request consistently exceeds 60s. See testing README "Skipped tests".
+  // Pending upstream: /api/game/{id}/score issues ~7-9 SQL round-trips per team, so with
+  // 120 seeded teams the request consistently exceeds 60s. Re-enable once the endpoint
+  // batches its per-team queries.
   test.skip('Large Data Set Handling - Leaderboard Pagination', async ({ gameboardAuthenticatedPage: page }) => {
     const client = await gbConnect();
     try {

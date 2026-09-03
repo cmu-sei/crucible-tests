@@ -4,10 +4,16 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, seedScoringModel, apiDeleteScoringModel, settleForResponse } from '../../fixtures';
 import { navigateToAdminSection, deleteEvaluationByName } from '../../test-helpers';
 
 test.describe('Administration - Evaluations', () => {
+  let scoringModelId: string | null = null;
+
+  test.beforeEach(async () => {
+    // Seed a scoring model so evaluations can be created
+    scoringModelId = await seedScoringModel(`Test Scoring Model ${Date.now()}`);
+  });
 
   test('Create Evaluation', async ({ citeAuthenticatedPage: page }) => {
 
@@ -38,8 +44,7 @@ test.describe('Administration - Evaluations', () => {
     await expect(scoringModelSelect).toBeVisible({ timeout: 5000 });
 
     // Wait for scoring models API to load
-    await page.waitForResponse(response => response.url().includes('/api/scoringmodels') && response.status() === 200, { timeout: 10000 }).catch(() => {});
-    await page.waitForTimeout(1000);
+    await settleForResponse(page, '/api/scoringmodels');
 
     // Click the dropdown to open options
     await scoringModelSelect.click();
@@ -74,5 +79,11 @@ test.describe('Administration - Evaluations', () => {
   test.afterEach(async ({ citeAuthenticatedPage: page }) => {
     // Cleanup: Delete test evaluations
     await deleteEvaluationByName(page, 'Test Evaluation Automation');
+
+    // Cleanup: Delete scoring model
+    if (scoringModelId) {
+      await apiDeleteScoringModel(scoringModelId);
+      scoringModelId = null;
+    }
   });
 });

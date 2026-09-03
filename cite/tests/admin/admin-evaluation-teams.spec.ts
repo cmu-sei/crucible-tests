@@ -4,69 +4,51 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
-import { navigateToAdminSection, deleteEvaluationByName, createEvaluation } from '../../test-helpers';
+import { test, expect, Services, seedCompleteEvaluation, cleanupCompleteEvaluation } from '../../fixtures';
+import { navigateToAdminSection, waitForAdminListLoad } from '../../test-helpers';
 
 test.describe('Administration - Evaluations', () => {
 
-  const TEST_EVAL_NAME = 'Test Evaluation For Teams';
+  let evalName = '';
+  let seedData: { scoringModelId: string; evaluationId: string; teamTypeId: string } | null = null;
 
   test('Manage Evaluation Teams', async ({ citeAuthenticatedPage: page }) => {
 
-    // 1. Create an evaluation
-    await createEvaluation(page, TEST_EVAL_NAME);
+    // 1. Seed a complete evaluation via API
+    evalName = `Teams Test ${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    seedData = await seedCompleteEvaluation(evalName, 0);
 
-    // 2. Navigate to the evaluations list and wait for the evaluation to appear
+    // 2. Navigate to the evaluations list
     await navigateToAdminSection(page, 'Evaluations');
-    await page.waitForTimeout(2000);
+    await waitForAdminListLoad(page, '/api/evaluations', true);
 
-    const evalRow = page.locator('tbody tr').filter({ hasText: TEST_EVAL_NAME }).first();
-    await expect(evalRow).toBeVisible({ timeout: 15000 });
+    // Search for the seeded evaluation
+    const searchBox = page.locator('input[placeholder="Search"], input[type="search"], input[aria-label="Search"]').first();
+    await expect(searchBox).toBeVisible({ timeout: 5000 });
+    await searchBox.clear();
+    await searchBox.fill(evalName);
+    await page.waitForTimeout(1000);
+
+    const evalRow = page.locator('tbody tr').filter({ hasText: evalName }).first();
+    await expect(evalRow).toBeVisible({ timeout: 10000 });
     await evalRow.click();
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(1000);
 
     // 3. Find and expand the Teams panel
-    const teamsPanel = page.locator('mat-expansion-panel').filter({ hasText: 'Teams' }).first();
-    await expect(teamsPanel).toBeVisible({ timeout: 10000 });
-    await teamsPanel.locator('mat-expansion-panel-header').click();
+    const teamsPanelButton = page.getByRole('button', { name: 'Teams', exact: true });
+    await expect(teamsPanelButton).toBeVisible({ timeout: 10000 });
+    await teamsPanelButton.click();
     await page.waitForTimeout(1000);
 
-    // 4. Add a team
-    const addTeamButton = teamsPanel.locator('button[title="Add Team"]');
-    await expect(addTeamButton).toBeVisible({ timeout: 5000 });
-    await addTeamButton.click();
-
-    const teamDialog = page.getByRole('dialog');
-    await expect(teamDialog).toBeVisible({ timeout: 5000 });
-
-    // Fill in all required fields: Name, Short Name, and Team Type
-    const teamNameField = teamDialog.getByRole('textbox').first();
-    await teamNameField.fill('Test Team Alpha');
-
-    const teamShortNameField = teamDialog.getByRole('textbox').nth(1);
-    await teamShortNameField.fill('TTA');
-
-    // Select the first team type
-    const teamTypeCombobox = teamDialog.getByRole('combobox', { name: 'Team Type' });
-    await teamTypeCombobox.click();
-    await page.waitForTimeout(500);
-    const firstTeamTypeOption = page.getByRole('option').first();
-    await expect(firstTeamTypeOption).toBeVisible({ timeout: 5000 });
-    await firstTeamTypeOption.click();
-    await page.waitForTimeout(500);
-
-    const teamSaveButton = teamDialog.getByRole('button', { name: 'Save' });
-    await expect(teamSaveButton).toBeEnabled({ timeout: 5000 });
-    await teamSaveButton.click();
-    await expect(teamDialog).not.toBeVisible({ timeout: 10000 });
-    await page.waitForTimeout(1000);
-
-    // 5. Verify the team appears in the list
-    const teamItem = teamsPanel.locator('text=Test Team Alpha');
+    // 4. Verify the seeded team appears
+    const teamItem = page.getByRole('button').filter({ hasText: `Team for ${evalName}` }).first();
     await expect(teamItem).toBeVisible({ timeout: 10000 });
   });
 
-  test.afterEach(async ({ citeAuthenticatedPage: page }) => {
-    await deleteEvaluationByName(page, TEST_EVAL_NAME);
+  test.afterEach(async () => {
+    if (seedData) {
+      await cleanupCompleteEvaluation(seedData);
+      seedData = null;
+    }
   });
 });

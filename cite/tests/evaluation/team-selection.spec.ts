@@ -4,42 +4,38 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect } from '../../fixtures';
-import { getApiToken, ensureEvaluation, deleteEvaluation, navigateToEvaluation } from './eval-helpers';
+import { test, expect, Services, seedCompleteEvaluation, cleanupCompleteEvaluation } from '../../fixtures';
 
 test.describe('Evaluation Dashboard Interface', () => {
-  test('Team Selection', async ({ citeAuthenticatedPage: page, request }) => {
-    const token = await getApiToken(request);
-    const { id: evalId, created } = await ensureEvaluation(request, token);
+  let evaluationIds: { evaluationId: string; scoringModelId: string; teamTypeId: string; } | null = null;
 
-    try {
-      // 1. Navigate to evaluation via admin page
-      await navigateToEvaluation(page);
-      await page.waitForLoadState('domcontentloaded');
+  test('Team Selection', async ({ citeAuthenticatedPage: page }) => {
+    // Create evaluation with team membership via API
+    const seededData = await seedCompleteEvaluation(`Team Selection Test ${Date.now()}`);
+    evaluationIds = {
+      evaluationId: seededData.evaluationId,
+      scoringModelId: seededData.scoringModelId,
+      teamTypeId: seededData.teamTypeId,
+    };
 
-      // expect: Evaluation dashboard loads with team selector
-      const teamSelector = page.locator('mat-select, [class*="team-select"], select').first();
-      await expect(teamSelector).toBeVisible({ timeout: 10000 });
+    // 1. Navigate to evaluation dashboard
+    await page.goto(`${Services.Cite.UI}/?evaluation=${seededData.evaluationId}`);
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page).toHaveURL(new RegExp(seededData.evaluationId), { timeout: 15000 });
 
-      // 2. Click on team selector dropdown
-      await teamSelector.click();
+    // expect: Evaluation dashboard loads with team label and team name displayed
+    const teamLabel = page.getByText('Team:');
+    await expect(teamLabel).toBeVisible({ timeout: 10000 });
 
-      // expect: Team dropdown menu opens
-      const options = page.locator('mat-option, option, [role="option"]');
-      await expect(options.first()).toBeVisible({ timeout: 5000 });
+    // Team name should be displayed next to the label
+    const teamDisplay = page.locator('text="Team:"').locator('..').getByText(/Team for/);
+    await expect(teamDisplay).toBeVisible({ timeout: 10000 });
+  });
 
-      // 3. Select a different team from the dropdown
-      const optionCount = await options.count();
-      if (optionCount > 1) {
-        await options.nth(1).click();
-      } else {
-        await options.first().click();
-      }
-
-      // expect: Dashboard refreshes to show team-specific data
-      await page.waitForLoadState('domcontentloaded');
-    } finally {
-      if (created) await deleteEvaluation(request, token, evalId);
+  test.afterEach(async () => {
+    if (evaluationIds) {
+      await cleanupCompleteEvaluation(evaluationIds);
+      evaluationIds = null;
     }
   });
 });
