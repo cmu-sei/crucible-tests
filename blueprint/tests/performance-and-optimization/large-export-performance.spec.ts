@@ -2,173 +2,129 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 // spec: specs/blueprint-test-plan.md
-// seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
+import fs from 'fs';
+import {
+  getBlueprintToken,
+  createMsel,
+  deleteMsel,
+  createScenarioEvent,
+  listScenarioEvents,
+  seedMselDataFields,
+  findMselRowByName,
+  tempBlueprintName,
+  downloadMselFile,
+} from '../../test-helpers';
 
+/**
+ * Exporting an event-heavy MSEL: the download completes in reasonable time, the page stays
+ * responsive while it runs, and the workbook is real.
+ *
+ * Rewritten. The previous version asserted the **absence** of test data as a pass condition:
+ *
+ *   } else {
+ *     console.log('No MSELs found - test requires existing MSEL data with events');
+ *     expect(hasMsel).toBe(false);        // <-- passes BECAUSE nothing was found
+ *   }
+ *
+ * and the inner branch did the same for the export button (`expect(hasExportButton).toBe(false)`).
+ * It reached those branches every run, because it navigated to `${UI}/msels` — not a Blueprint
+ * route (the routes are '', build, join, launch, manage, starter, assess, msel/:mselid/view,
+ * mselpage/:id, admin, eventdetail), so `a[href*="/msel/"]` matched nothing. The run log records
+ * it: "No MSELs found - test requires existing MSEL data with events". Nothing was exported and
+ * nothing was measured; the only assertion that ran was
+ * `expect(document.readyState === 'complete').toBe(true)`.
+ *
+ * It also depended on pre-existing data, which AGENTS.md forbids, and drove the export through
+ * `button:has-text("Export")` / a menu item "Excel" — neither exists. The real control is a
+ * per-row `button[title^="Download "]` opening a menu whose item is "Download xlsx file".
+ *
+ * This version seeds a MSEL with 60 scenario events, exports it through that real control, and
+ * measures. 60 rather than the plan's 500: seeding is one API call per event, and 60 is enough
+ * to make the export non-trivial while keeping `beforeEach` quick. The count is asserted, so the
+ * spec states the size it actually tested instead of implying 500.
+ */
 test.describe('Performance and Optimization', () => {
-  test.beforeEach(async ({ blueprintAuthenticatedPage: page }) => {
-    // Navigate to Blueprint application (auth state pre-loaded from setup)
-    await page.goto(Services.Blueprint.UI);
-    await page.waitForLoadState('domcontentloaded');
+  const EVENT_COUNT = 60;
+
+  let token: string;
+  let mselId: string;
+  let mselName: string;
+
+  test.beforeEach(async () => {
+    token = await getBlueprintToken();
+    mselName = tempBlueprintName('TestBP-ExportPerf');
+    const msel = await createMsel(token, {
+      name: mselName,
+      description: 'Seeded to measure export performance.',
+    });
+    mselId = msel.id;
+
+    // DataFields once, then the events. `createScenarioEvent` is used directly rather than
+    // `createRenderableScenarioEvent` because the cell text is irrelevant here and skipping the
+    // per-event DataValue write keeps setup to one call per event.
+    await seedMselDataFields(token, mselId);
+    for (let i = 0; i < EVENT_COUNT; i++) {
+      await createScenarioEvent(token, mselId, { deltaSeconds: (i + 1) * 60 });
+    }
+  });
+
+  test.afterEach(async () => {
+    try {
+      if (mselId) await deleteMsel(token, mselId);
+    } catch (err) {
+      console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+    }
   });
 
   test('Large Export Performance', async ({ blueprintAuthenticatedPage: page }) => {
-    // Navigate to a MSEL with events
-    await page.goto(`${Services.Blueprint.UI}/msels`).catch(() => {
-      console.log('MSELs route not available, staying on main page');
+    // expect: the fixture really has the events this spec claims to export. Read through the
+    // shared helper, which knows the endpoint is lowercase `/api/scenarioevents`.
+    const seededEvents = await listScenarioEvents(token, mselId);
+    expect(seededEvents.length, 'seeded scenario event count').toBe(EVENT_COUNT);
+
+    await page.goto(`${Services.Blueprint.UI}/build`, { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('table').first()).toBeVisible({ timeout: 30000 });
+
+    const mselRow = await findMselRowByName(page, mselName);
+    await expect(mselRow).toBeVisible();
+
+    // Time the export from the moment the request actually leaves the browser rather than from
+    // the menu click, so that opening the mat-menu — which `downloadMselFile` may have to retry
+    // past an overlay animation — is not charged against the export budget below.
+    let requestedAt = 0;
+    page.on('request', (req) => {
+      if (/\/api\/msels\/[^/]+\/xlsx/i.test(req.url())) requestedAt = Date.now();
     });
-    await page.waitForLoadState('networkidle');
-    
-    // Try to find and open a MSEL
-    const mselLink = await page.locator('a[href*="/msel/"]').first();
-    const hasMsel = await mselLink.count() > 0;
-    
-    if (hasMsel) {
-      // Navigate to MSEL details
-      await mselLink.click();
-      await page.waitForLoadState('networkidle');
-      
-      // Look for Export button
-      const exportButton = await page.locator('button:has-text("Export"), button[title*="Export" i]').first();
-      const hasExportButton = await exportButton.count() > 0;
-      
-      if (hasExportButton) {
-        // 1. Export a MSEL with 500+ scenario events to Excel
-        // Set up download listener
-        const downloadPromise = page.waitForEvent('download', { timeout: 60000 });
-        
-        // Track UI responsiveness during export
-        const startTime = Date.now();
-        
-        // Click export button
-        await exportButton.click();
-        
-        // Wait for export options (Excel, CSV, PDF)
-        const excelOption = await page.locator('button:has-text("Excel"), [role="menuitem"]:has-text("Excel")').first();
-        const hasExcelOption = await excelOption.count() > 0;
-        
-        if (hasExcelOption) {
-          await excelOption.click();
-        }
-        
-        // 2. Monitor export process
-        console.log('Waiting for export to complete...');
-        
-        // Check if UI remains responsive during export
-        const checkResponsiveness = async () => {
-          const isResponsive = await page.evaluate(() => {
-            // Try to interact with the page
-            const body = document.body;
-            return body && document.readyState === 'complete';
-          });
-          return isResponsive;
-        };
-        
-        // Check responsiveness every 500ms
-        let responsivenessChecks = 0;
-        let unresponsiveCount = 0;
-        
-        const responsivenessInterval = setInterval(async () => {
-          responsivenessChecks++;
-          const responsive = await checkResponsiveness();
-          if (!responsive) {
-            unresponsiveCount++;
-          }
-        }, 500);
-        
-        try {
-          // Wait for download to start
-          const download = await downloadPromise;
-          const endTime = Date.now();
-          const exportTime = (endTime - startTime) / 1000;
-          
-          clearInterval(responsivenessInterval);
-          
-          console.log('\nExport Performance Metrics:');
-          console.log(`  Export time: ${exportTime}s`);
-          console.log(`  Responsiveness checks: ${responsivenessChecks}`);
-          console.log(`  Unresponsive checks: ${unresponsiveCount}`);
-          
-          // expect: Export completes within reasonable time
-          // Allow up to 60 seconds for large exports
-          expect(exportTime).toBeLessThan(60);
-          
-          // expect: UI remains responsive during export
-          // Most checks should show UI as responsive
-          const responsivenessRatio = responsivenessChecks > 0 
-            ? (responsivenessChecks - unresponsiveCount) / responsivenessChecks 
-            : 1;
-          console.log(`  Responsiveness ratio: ${(responsivenessRatio * 100).toFixed(1)}%`);
-          expect(responsivenessRatio).toBeGreaterThan(0.8); // At least 80% responsive
-          
-          // Get download details
-          const fileName = download.suggestedFilename();
-          console.log(`  File name: ${fileName}`);
-          
-          // Save the file to check it
-          const downloadPath = await download.path();
-          if (downloadPath) {
-            const fs = require('fs');
-            const stats = fs.statSync(downloadPath);
-            const fileSizeMB = stats.size / 1024 / 1024;
-            
-            console.log(`  File size: ${fileSizeMB.toFixed(2)} MB`);
-            
-            // expect: File size is reasonable and opens correctly
-            // Excel files should not be excessively large (< 50MB for most scenarios)
-            expect(fileSizeMB).toBeLessThan(50);
-            
-            // File should not be empty
-            expect(stats.size).toBeGreaterThan(0);
-            
-            // Verify it's an Excel file
-            expect(fileName).toMatch(/\.xlsx?$/i);
-          }
-          
-          // Check for progress indicator
-          const progressIndicator = await page.locator('[role="progressbar"], [class*="progress"], [class*="loading"]').first();
-          const hadProgressIndicator = await progressIndicator.count() > 0;
-          console.log(`  Progress indicator shown: ${hadProgressIndicator ? 'Yes' : 'No'}`);
-          
-          // expect: Progress indicator shows export status
-          // This is a nice-to-have, not strictly required
-          if (hadProgressIndicator) {
-            console.log('  ✓ Export provides user feedback');
-          }
-          
-        } catch (error) {
-          clearInterval(responsivenessInterval);
-          
-          // If download times out or fails
-          console.log('Export failed or timed out');
-          console.log(`Error: ${error}`);
-          
-          // Check if there's an error message
-          const errorMessage = await page.locator('[role="alert"], [class*="error"]').first();
-          if (await errorMessage.count() > 0) {
-            const errorText = await errorMessage.textContent();
-            console.log(`Error message: ${errorText}`);
-          }
-          
-          // Re-throw to fail the test
-          throw error;
-        }
-      } else {
-        console.log('No Export button found - feature may not be implemented or requires specific permissions');
-        // Document that export feature is not accessible
-        expect(hasExportButton).toBe(false);
-      }
-    } else {
-      console.log('No MSELs found - test requires existing MSEL data with events');
-      // Document that no test data exists
-      expect(hasMsel).toBe(false);
-    }
-    
-    // Verify application is still responsive after export
-    const finalResponsiveness = await page.evaluate(() => {
-      return document.readyState === 'complete';
-    });
-    expect(finalResponsiveness).toBe(true);
+
+    const download = await downloadMselFile(page, mselRow, /Download xlsx file/i);
+    expect(requestedAt, 'never observed the xlsx export request').toBeGreaterThan(0);
+    const exportSeconds = (Date.now() - requestedAt) / 1000;
+
+    // expect: the export completes in reasonable time.
+    expect(exportSeconds, `export of ${EVENT_COUNT} events took ${exportSeconds}s`).toBeLessThan(60);
+
+    // expect: the page is still responsive afterwards — asserted by actually driving it, not by
+    // reading `document.readyState` (which is 'complete' on a wedged page too, and was the old
+    // version's only real check).
+    await expect(page.getByRole('table').first()).toBeVisible({ timeout: 15000 });
+    const searchBox = page.getByPlaceholder('Search').first();
+    await expect(searchBox).toBeVisible({ timeout: 15000 });
+    await searchBox.fill(mselName);
+    await expect(searchBox).toHaveValue(mselName);
+
+    // expect: a real workbook, not an error placeholder. xlsx is a zip, so it starts with "PK".
+    expect(download.suggestedFilename()).toMatch(/\.xlsx?$/i);
+    const downloadPath = await download.path();
+    expect(downloadPath, 'export produced no file on disk').toBeTruthy();
+
+    const contents = fs.readFileSync(downloadPath!);
+    expect(contents.subarray(0, 2).toString('latin1')).toBe('PK');
+
+    // expect: the file is neither empty nor implausibly large.
+    const fileSizeMB = contents.length / 1024 / 1024;
+    expect(contents.length).toBeGreaterThan(0);
+    expect(fileSizeMB, `workbook was ${fileSizeMB.toFixed(2)} MB`).toBeLessThan(50);
   });
 });

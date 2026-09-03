@@ -4,84 +4,75 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services } from '../../fixtures';
+import {
+  getBlueprintToken,
+  createMsel,
+  deleteMsel,
+  createRenderableScenarioEvent,
+  navigateToMselSection,
+} from '../../test-helpers';
 
 test.describe('Scenario Events Management', () => {
+  let token: string;
+  let mselId: string;
+  let eventId: string;
+
+  test.beforeEach(async () => {
+    // Seed: create a MSEL with a scenario event that has rich text content
+    token = await getBlueprintToken();
+    const msel = await createMsel(token);
+    mselId = msel.id;
+
+    const event = await createRenderableScenarioEvent(token, mselId, 'Test event with rich content for detail page', { deltaSeconds: 300 });
+    eventId = event.id;
+  });
+
+  test.afterEach(async () => {
+    // Cleanup: delete the MSEL (cascade deletes its events)
+    try {
+      if (mselId) await deleteMsel(token, mselId);
+    } catch (err) {
+      console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+    }
+  });
+
   test('Open Event in Detail Page', async ({ blueprintAuthenticatedPage: page }) => {
-    // Authenticate and navigate to Blueprint
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
-    await page.waitForLoadState('networkidle');
-
-    // Navigate to the Build page
-    const manageEventButton = page.getByRole('button', { name: /Manage an Event/ });
-    await expect(manageEventButton).toBeVisible({ timeout: 5000 });
-    await manageEventButton.click();
-    await expect(page).toHaveURL(/.*\/build.*/, { timeout: 10000 });
-    await page.waitForLoadState('networkidle');
-
-    // Open a MSEL that has existing scenario events
-    const mselLink = page.getByRole('link', { name: /Project Lagoon TTX/ }).first();
-    await expect(mselLink).toBeVisible({ timeout: 5000 });
-    await mselLink.click();
-
-    // expect: MSEL configuration page is displayed
-    await expect(page).toHaveURL(/.*\/build\?msel=.*/, { timeout: 10000 });
-    await page.waitForLoadState('networkidle');
-
-    // Extract mselId from current URL for later verification
-    const currentUrl = page.url();
-    const mselIdMatch = currentUrl.match(/msel=([^&]+)/);
-    expect(mselIdMatch).toBeTruthy();
-    const mselId = mselIdMatch![1];
-
-    // Navigate to Scenario Events section
-    const scenarioEventsNav = page.locator(
-      'a:has-text("Scenario Events"), mat-list-item:has-text("Scenario Events")'
-    ).first();
-    await expect(scenarioEventsNav).toBeVisible({ timeout: 5000 });
-    await scenarioEventsNav.click();
-    await page.waitForLoadState('networkidle');
+    // Navigate to the MSEL Scenario Events section
+    await navigateToMselSection(page, mselId, 'Scenario Events');
 
     // Verify scenario events are loaded
-    const eventRow = page.locator('table tbody tr').first();
-    await expect(eventRow).toBeVisible({ timeout: 10000 });
+    const eventRow = page.locator('table tbody tr').last();
+    await expect(eventRow).toBeVisible({ timeout: 5000 });
 
-    // 1. In the Scenario Events list, find an event and click the 'open in new tab' button for a data field
-    const openInTabButton = eventRow.locator(
-      'button[title*="new tab"], button:has(mat-icon:has-text("open_in_new")), ' +
-      'a[target="_blank"], [title*="Open"]'
-    ).first();
-    const openInTabVisible = await openInTabButton.isVisible({ timeout: 3000 }).catch(() => false);
+    // 1. Look for the View button (open in new tab) in the action menu
+    const actionListButton = eventRow.getByRole('button', { name: /Action List/i });
+    await expect(actionListButton).toBeVisible({ timeout: 5000 });
+    await actionListButton.click();
 
-    if (openInTabVisible) {
-      // expect: The Event Detail page opens in a new browser tab at /eventdetail
-      const [newPage] = await Promise.all([
-        page.context().waitForEvent('page'),
-        openInTabButton.click(),
-      ]);
-      await newPage.waitForLoadState('networkidle');
+    // Click the View option which opens in a new tab
+    const viewMenuItem = page.getByRole('menuitem', { name: /view/i });
+    await expect(viewMenuItem).toBeVisible({ timeout: 5000 });
 
-      // expect: URL includes msel, scenarioEvent, and dataValue query parameters
-      await expect(newPage).toHaveURL(/.*\/eventdetail.*msel.*/, { timeout: 10000 });
-      const detailUrl = newPage.url();
-      expect(detailUrl).toContain('msel');
+    // expect: The Event Detail page opens in a new browser tab at /eventdetail
+    const [newPage] = await Promise.all([
+      page.context().waitForEvent('page', { timeout: 10000 }),
+      viewMenuItem.click(),
+    ]);
 
-      // expect: The data field content is displayed
-      const topbar = newPage.locator('[class*="topbar"], mat-toolbar').first();
-      await expect(topbar).toBeVisible({ timeout: 5000 });
+    // Wait for the new page to load
+    await newPage.waitForLoadState('domcontentloaded');
 
-      await newPage.close();
-    } else {
-      // Fallback: navigate directly to /eventdetail with the mselId
-      await page.goto(`${Services.Blueprint.UI}/eventdetail?msel=${mselId}`);
-      await page.waitForLoadState('networkidle');
+    // expect: URL includes msel, scenarioEvent, and dataValue query parameters
+    await expect(newPage).toHaveURL(/.*\/eventdetail.*msel.*/, { timeout: 10000 });
+    const detailUrl = newPage.url();
+    expect(detailUrl).toContain('msel');
+    expect(detailUrl).toContain(mselId);
 
-      // expect: The Event Detail page loads at the /eventdetail route
-      await expect(page).toHaveURL(/.*\/eventdetail.*/, { timeout: 10000 });
+    // expect: The data field content is displayed
+    const topbar = newPage.locator('mat-toolbar').first();
+    await expect(topbar).toBeVisible({ timeout: 5000 });
 
-      // expect: The data field content is displayed (topbar confirms page loaded)
-      const topbar = page.locator('[class*="topbar"], mat-toolbar').first();
-      await expect(topbar).toBeVisible({ timeout: 5000 });
-    }
+    await newPage.close();
   });
 });

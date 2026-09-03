@@ -5,105 +5,72 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
+import {
+  getBlueprintToken,
+  createMsel,
+  deleteMsel,
+  tempBlueprintName,
+  findMselRowByName,
+} from '../../test-helpers';
 
 test.describe('MSEL Management', () => {
   test('Clone MSEL', async ({ blueprintAuthenticatedPage: page }) => {
+    const token = await getBlueprintToken();
+    const mselName = tempBlueprintName('Clone-Source');
 
-    // 1. Navigate to MSELs list
-    await page.goto(`${Services.Blueprint.UI}/build`);
-    await expect(page).toHaveURL(/.*\/build.*/, { timeout: 10000 });
-    await page.waitForLoadState('networkidle');
+    // 1. Seed a MSEL to clone via API
+    const createdMsel = await createMsel(token, {
+      name: mselName,
+      description: 'Test MSEL for cloning',
+    });
 
-    // expect: MSELs list is visible
-    const mselList = page.getByRole('table');
-    await expect(mselList).toBeVisible({ timeout: 5000 });
+    let clonedMselId: string | null = null;
 
-    // Get the count of MSELs before cloning
-    const mselItemsBefore = page.getByRole('row').filter({ hasNotText: 'Name Description Template Status Created By Date Created Date Modified' });
-    const countBefore = await mselItemsBefore.count();
-    expect(countBefore).toBeGreaterThan(0);
+    try {
+      // 2. Navigate to MSELs list
+      await page.goto(`${Services.Blueprint.UI}/build`);
+      await expect(page.getByRole('table')).toBeVisible({ timeout: 10000 });
 
-    // Get the name of the first MSEL to clone
-    const firstMselRow = mselItemsBefore.first();
-    const firstMselName = await firstMselRow.getByRole('link').first().textContent();
-    
-    // 2. Select a MSEL and click 'Copy' button (clone button in the first row)
-    // The Copy button is in the first MSEL row
-    const cloneButton = firstMselRow.getByRole('button', { name: /Copy/i });
-    
-    // Check if clone functionality is available
-    const isCloneVisible = await cloneButton.isVisible({ timeout: 3000 }).catch(() => false);
-    if (isCloneVisible) {
-      // 3. Click 'Copy' button - this directly clones the MSEL without showing a dialog
+      // 3. Find the seeded MSEL using the search box
+      const mselRow = await findMselRowByName(page, mselName);
+      await expect(mselRow).toBeVisible();
+
+      // 4. Click the Copy button in the row
+      const cloneButton = mselRow.getByRole('button', { name: /Copy/i });
+      await expect(cloneButton).toBeVisible();
       await cloneButton.click();
 
-      // expect: A copy of the MSEL is created with all scenario events
-      // Wait for the clone operation to complete
-      await page.waitForTimeout(1000);
-      await page.waitForLoadState('networkidle');
+      // 5. Confirm the copy dialog
+      const confirmDialog = page.locator('[role="dialog"]').filter({ hasText: 'Copy MSEL' });
+      await expect(confirmDialog).toBeVisible({ timeout: 10000 });
+      const yesButton = confirmDialog.getByRole('button', { name: 'Yes' });
+      await expect(yesButton).toBeVisible();
+      await yesButton.click();
 
-      // expect: The cloned MSEL appears in the list
-      const mselItemsAfter = page.getByRole('row').filter({ hasNotText: 'Name Description Template Status Created By Date Created Date Modified' });
-      const countAfter = await mselItemsAfter.count();
+      // 6. Wait for the clone operation to complete by detecting the new row
+      // The cloned MSEL typically gets a name like "OriginalName - Admin User"
+      const clonedMselName = `${mselName} - Admin User`;
 
-      // Verify that a new MSEL was added
-      expect(countAfter).toBeGreaterThan(countBefore);
+      // Use the search box to find the cloned MSEL
+      const clonedRow = await findMselRowByName(page, clonedMselName);
+      await expect(clonedRow).toBeVisible({ timeout: 15000 });
 
-      // The cloned MSEL typically has " - Admin User" appended to the original name
-      const clonedMselName = `${firstMselName} - Admin User`;
-      const clonedMsel = page.getByRole('link', { name: clonedMselName });
-
-      const clonedMselExists = await clonedMsel.isVisible({ timeout: 5000 }).catch(() => false);
-
-      // expect: Cloned MSEL has independent data from the original
-      if (clonedMselExists) {
-        console.log(`Successfully found cloned MSEL: ${clonedMselName}`);
-        await expect(clonedMsel).toBeVisible();
-      } else {
-        // If we can't find by exact name, check that count increased
-        console.log(`MSEL count increased from ${countBefore} to ${countAfter} - clone successful`);
+      // 7. Extract the cloned MSEL's ID from its link for cleanup
+      const clonedLink = clonedRow.locator('a[href*="msel="]').first();
+      const href = await clonedLink.getAttribute('href');
+      const match = href?.match(/msel=([a-f0-9-]+)/);
+      if (match) {
+        clonedMselId = match[1];
       }
-    } else {
-      console.log('Clone/Duplicate button not found - Clone functionality may not be implemented yet');
-      
-      // Try to check if there's a context menu with clone option
-      const firstMselRowRetry = mselItemsBefore.first();
-      
-      // Right-click to check for context menu
-      await firstMselRowRetry.click({ button: 'right' });
-      await page.waitForTimeout(500);
-      
-      const contextMenuClone = page.locator(
-        'button:has-text("Clone"), ' +
-        'button:has-text("Duplicate"), ' +
-        '[role="menuitem"]:has-text("Clone")'
-      ).first();
-      
-      if (await contextMenuClone.isVisible({ timeout: 2000 })) {
-        console.log('Clone option found in context menu');
-        await contextMenuClone.click();
-        await page.waitForTimeout(1000);
-        
-        // Follow same steps as above for dialog
-        const cloneDialog = page.locator(
-          'mat-dialog-container, ' +
-          '[role="dialog"]'
-        ).first();
-        
-        if (await cloneDialog.isVisible({ timeout: 3000 })) {
-          const clonedMselName = `Cloned ${firstMselName} ${Date.now()}`;
-          const nameInput = page.locator('mat-dialog-container input[type="text"]').first();
-          await nameInput.fill(clonedMselName);
-          
-          const confirmButton = page.locator('mat-dialog-container button:has-text("Clone")').first();
-          await confirmButton.click();
-          await page.waitForTimeout(2000);
-        }
-      } else {
-        console.log('Clone functionality not found via context menu either - feature may not be implemented');
+
+      // expect: Clone succeeded and the cloned MSEL is visible
+      await expect(clonedRow).toBeVisible();
+    } finally {
+      // 8. Clean up: delete both the original and the cloned MSEL
+      await deleteMsel(token, createdMsel.id);
+      if (clonedMselId) {
+        await deleteMsel(token, clonedMselId);
       }
     }
-    
-    await page.waitForLoadState('networkidle');
   });
 });

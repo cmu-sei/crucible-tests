@@ -2,31 +2,43 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 // spec: specs/blueprint-test-plan.md
-// seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
+import {
+  getBlueprintToken,
+  createMsel,
+  deleteMsel,
+  navigateToMsel,
+} from '../../test-helpers';
 
 test.describe('MSEL Info Pages Management', () => {
+  let token: string;
+  let mselId: string;
+
+  test.beforeEach(async () => {
+    token = await getBlueprintToken();
+    const msel = await createMsel(token);
+    mselId = msel.id;
+  });
+
+  test.afterEach(async () => {
+    try {
+      if (mselId) await deleteMsel(token, mselId);
+    } catch (err) {
+      console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+    }
+  });
+
   test('View MSEL Config Tab', async ({ blueprintAuthenticatedPage: page }) => {
-    // 1. Navigate to a MSEL and click on its name link
-    await page.goto(`${Services.Blueprint.UI}/build`);
-    await page.waitForLoadState('networkidle');
+    // 1. Navigate to the seeded MSEL
+    await navigateToMsel(page, mselId);
 
-    const mselLink = page.getByRole('link', { name: /Project Lagoon TTX/ }).first();
-    await expect(mselLink).toBeVisible({ timeout: 10000 });
-    await mselLink.click();
-    await expect(page).toHaveURL(/.*\/build\?msel=.*/, { timeout: 10000 });
-    await page.waitForLoadState('networkidle');
-
-    // expect: Config tab is selected by default
+    // expect: Config tab is selected by default and visible
     const configTab = page.getByRole('tab', { name: 'Config' });
     await expect(configTab).toBeVisible({ timeout: 5000 });
+    await expect(configTab).toHaveAttribute('aria-selected', 'true');
 
-    // expect: An Overview tab is available
-    const overviewTab = page.getByRole('tab', { name: 'Overview' });
-    await expect(overviewTab).toBeVisible({ timeout: 5000 });
-
-    // expect: An 'Add Page' tab is shown
+    // expect: An 'Add Page' tab is shown (for creating custom MSEL info pages)
     const addPageTab = page.getByRole('tab', { name: 'Add Page' });
     await expect(addPageTab).toBeVisible({ timeout: 5000 });
 

@@ -2,61 +2,77 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 // spec: specs/blueprint-test-plan.md
-// seed: tests/seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, openBlueprintUserMenu } from '../../fixtures';
 
+/**
+ * Reaching the admin section from the dashboard, and what it must render on arrival.
+ *
+ * Tidied. The previous version worked, but only by accident and with three fixed/idle waits:
+ *
+ *   - It looked for the admin control as `text=Administration, text=Admin,
+ *     [class*="menu-item"]:has-text("Admin")`. Playwright's `text=` engine cannot be
+ *     comma-combined, so that locator matched **zero** elements; the spec then silently took
+ *     its `else` branch and navigated to `/admin` directly. The UI control was never exercised.
+ *     It is a `mat-menu-item` labelled "Administration" inside the menu opened by the
+ *     user-name button in the topbar (topbar.component.html:37-51) -- the dashboard itself
+ *     renders no Administration button, so it has to be opened first.
+ *   - The version assertion was wrapped in `if (versionVisible)` over the same broken
+ *     comma-joined locator, so it never ran. The element is real:
+ *     `admin-container.component.html:244-245` renders
+ *     `Versions: UI {{ uiVersion }}, API {{ apiVersion }}` in `div.app-versions`.
+ *   - Three `waitForLoadState('networkidle')` calls stood in for waiting on rendered state.
+ *     Each is replaced by an assertion on what should actually be on screen.
+ */
 test.describe('Event Dashboard and Navigation', () => {
   test('Navigation to Admin Section', async ({ blueprintAuthenticatedPage: page }) => {
     await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 30000 });
-    await page.waitForLoadState('networkidle');
 
-    // Open user menu in topbar
-    const userMenuButton = page.locator(
-      'button[mat-icon-button][aria-label*="user"], ' +
-      'button[class*="user-menu"], ' +
-      'mat-toolbar button:last-of-type, ' +
-      '[class*="user-avatar"], ' +
-      'button:has-text("admin")'
-    ).first();
-    await expect(userMenuButton).toBeVisible({ timeout: 5000 });
-    await userMenuButton.click();
+    // 1. Open the topbar user menu, then click Administration — the real control path.
+    // The Administration item is permission-gated on `canViewAdmin`, which TopbarComponent
+    // (OnPush, plain property) assigns from an async `permissionDataService.load()`
+    // subscription. A panel opened before that resolves never gains the item, however long
+    // it is waited on, so openBlueprintUserMenu reopens the menu until the item is there.
+    const userMenuTrigger = page.locator('button.menu-trigger').first();
+    await expect(userMenuTrigger).toBeVisible({ timeout: 30000 });
+    await openBlueprintUserMenu(page, userMenuTrigger);
 
-    // Click 'Administration' in dropdown
-    const adminMenuItem = page.locator(
-      'text=Administration, text=Admin, [class*="menu-item"]:has-text("Admin")'
-    ).first();
+    await page.getByRole('menuitem', { name: 'Administration' }).click();
 
-    const adminMenuVisible = await adminMenuItem.isVisible({ timeout: 3000 }).catch(() => false);
-    if (adminMenuVisible) {
-      await adminMenuItem.click();
-    } else {
-      // Navigate directly to admin URL
-      await page.goto(`${Services.Blueprint.UI}/admin`);
-    }
+    // expect: navigation to /admin occurs.
+    await expect(page).toHaveURL(/\/admin/, { timeout: 30000 });
 
-    // expect: Navigation to /admin occurs
-    await expect(page).toHaveURL(/.*\/admin.*/, { timeout: 10000 });
-    await page.waitForLoadState('networkidle');
+    // expect: the admin shell has rendered.
+    await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible({
+      timeout: 30000,
+    });
 
-    // expect: The admin interface loads with sidebar navigation
-    const sidebar = page.locator('mat-list, [class*="sidebar"], [class*="nav-list"]').first();
-    await expect(sidebar).toBeVisible({ timeout: 5000 });
+    // expect: the sidebar lists every admin section. Waiting on these replaces the idle waits —
+    // if the sidebar has not rendered, this is what fails.
+    const sidebar = page.locator('.appitems-container').first();
+    await expect(sidebar).toBeVisible({ timeout: 30000 });
 
-    // expect: Admin sections are visible: Units, Data Fields, Inject Types, Catalogs, Organizations, Gallery Cards, CITE Actions, CITE Duties, Users, Roles, Groups
     const expectedSections = [
-      'Units', 'Data Fields', 'Inject Types', 'Catalogs',
-      'Organizations', 'Users', 'Roles', 'Groups',
+      'Units',
+      'Data Fields',
+      'Inject Types',
+      'Catalogs',
+      'Organizations',
+      'Users',
+      'Roles',
+      'Groups',
     ];
     for (const section of expectedSections) {
-      await expect(sidebar.locator(`text=${section}`).first()).toBeVisible({ timeout: 5000 });
+      await expect(
+        sidebar.getByText(section, { exact: true }).first(),
+        `admin sidebar should list "${section}"`
+      ).toBeVisible({ timeout: 15000 });
     }
 
-    // expect: A version display at the bottom of the admin sidebar shows 'Versions: UI 0.0.0, API 1.6.1' or similar
-    const versionDisplay = page.locator('text=/Versions:/i, [class*="version"]').first();
-    const versionVisible = await versionDisplay.isVisible({ timeout: 3000 }).catch(() => false);
-    if (versionVisible) {
-      await expect(versionDisplay).toContainText(/Version/i);
-    }
+    // expect: the sidebar's version display is present and populated — asserted
+    // unconditionally, unlike the previous `if (versionVisible)` guard.
+    const versions = page.locator('.app-versions').first();
+    await expect(versions).toBeVisible({ timeout: 15000 });
+    await expect(versions).toHaveText(/Versions:\s*UI\s*\S+,\s*API\s*\S+/i);
   });
 });

@@ -2,69 +2,120 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 // spec: specs/blueprint-test-plan.md
-// seed: tests/seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
-import path from 'node:path';
-import os from 'node:os';
+import { test, expect, Services } from '../../fixtures';
+import {
+  getBlueprintToken,
+  createMsel,
+  deleteMsel,
+  createRenderableScenarioEvent,
+  listScenarioEvents,
+  getScenarioEvent,
+  tempBlueprintName,
+} from '../../test-helpers';
 
+/**
+ * Importing scenario events into an existing MSEL from a spreadsheet.
+ *
+ * The previous version was effectively a duplicate of `upload-xlsx-to-existing-msel.spec.ts`:
+ * both downloaded `Standard MSEL`, both clicked a `Upload .xlsx file to Standard MSEL` button
+ * that **does not exist anywhere in the Angular app**, and both ended by asserting only that
+ * the page had not navigated away and the MSEL link was still visible — i.e. "no crash",
+ * which passes regardless of whether any import happened. Both also mutated the shared
+ * `Standard MSEL` and used `networkidle` + a 2s sleep.
+ *
+ * This spec now covers what the sibling does not: that the **scenario events themselves**
+ * survive an xlsx round-trip into an existing MSEL, including their data-value text — which is
+ * the actual subject ("import scenario events"). Replacing an existing MSEL is API-only
+ * (`PUT /api/msels/{id}/xlsx`); the multipart field must be named `ToUpload`
+ * (`ViewModels/FileForm.cs`).
+ *
+ * Note the spec name says CSV, but Blueprint's import/export for this surface is xlsx and json
+ * only — there is no CSV path (see `msel-list.component.html`).
+ */
 test.describe('Export and Import', () => {
-  test('Import Scenario Events from Excel into existing MSEL', async ({ blueprintAuthenticatedPage: page }) => {
+  let token: string;
+  let mselId: string;
+  let mselName: string;
+  const eventText = 'Imported scenario event';
 
-    // 1. Navigate to MSELs list
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
-    await page.waitForLoadState('networkidle');
+  test.beforeEach(async () => {
+    token = await getBlueprintToken();
+    mselName = tempBlueprintName('TestBP-EventImport');
+    const msel = await createMsel(token, {
+      name: mselName,
+      description: 'Seeded for scenario-event import',
+    });
+    mselId = msel.id;
 
-    // Navigate to the build page
-    const manageEventButton = page.getByRole('button', { name: /Manage an Event/ });
-    await expect(manageEventButton).toBeVisible({ timeout: 5000 });
-    await manageEventButton.click();
-    await expect(page).toHaveURL(/.*\/build.*/, { timeout: 10000 });
-    await page.waitForLoadState('networkidle');
+    // Two events at distinct offsets, so ordering and count are both meaningful.
+    await createRenderableScenarioEvent(token, mselId, eventText, { deltaSeconds: 300 });
+    await createRenderableScenarioEvent(token, mselId, 'Second imported event', {
+      deltaSeconds: 900,
+    });
+  });
 
-    // expect: MSELs list is displayed - wait for Standard MSEL
-    const downloadButton = page.getByRole('button', { name: 'Download Standard MSEL' });
-    await expect(downloadButton).toBeVisible({ timeout: 10000 });
+  test.afterEach(async () => {
+    try {
+      if (mselId) await deleteMsel(token, mselId);
+    } catch (err) {
+      console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+    }
+  });
 
-    // 2. Download the Standard MSEL as xlsx
-    await downloadButton.click();
-    const downloadXlsxMenuItem = page.getByRole('menuitem', { name: 'Download xlsx file' });
-    await expect(downloadXlsxMenuItem).toBeVisible({ timeout: 5000 });
-    const downloadPromise = page.waitForEvent('download');
-    await downloadXlsxMenuItem.click();
-    const download = await downloadPromise;
+  test('Import Scenario Events from Excel into existing MSEL', async () => {
+    const authHeader = { Authorization: `Bearer ${token}` };
 
-    // expect: File downloads successfully
-    const suggestedFilename = download.suggestedFilename();
-    expect(suggestedFilename).toContain('.xlsx');
+    const before = await listScenarioEvents(token, mselId);
+    expect(before.length).toBe(2);
 
-    // Save to temp path for re-upload
-    const downloadPath = path.join(os.tmpdir(), `msel-events-import-test-${Date.now()}.xlsx`);
-    await download.saveAs(downloadPath);
+    // 1. Export the MSEL — this workbook carries the scenario events.
+    const downloadRes = await fetch(`${Services.Blueprint.API}/api/msels/${mselId}/xlsx`, {
+      headers: authHeader,
+    });
+    expect(downloadRes.ok, `xlsx download failed with ${downloadRes.status}`).toBe(true);
 
-    // 3. Verify per-MSEL upload button triggers file chooser
-    const uploadToMselButton = page.getByRole('button', { name: /Upload \.xlsx file to Standard MSEL/ });
-    await expect(uploadToMselButton).toBeVisible({ timeout: 5000 });
+    const workbook = Buffer.from(await downloadRes.arrayBuffer());
+    expect(workbook.subarray(0, 2).toString('latin1')).toBe('PK');
 
-    const fileChooserPromise = page.waitForEvent('filechooser');
-    await uploadToMselButton.click();
-    const fileChooser = await fileChooserPromise;
+    // 2. Import it back into the same MSEL.
+    const form = new FormData();
+    form.append(
+      'ToUpload',
+      new Blob([workbook], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      }),
+      `${mselName}.xlsx`
+    );
 
-    // expect: File chooser is displayed and accepts xlsx files
-    expect(fileChooser).toBeTruthy();
+    const importRes = await fetch(`${Services.Blueprint.API}/api/msels/${mselId}/xlsx`, {
+      method: 'PUT',
+      headers: authHeader,
+      body: form,
+    });
+    expect(
+      importRes.ok,
+      `scenario-event import failed with ${importRes.status}: ${await importRes.text()}`
+    ).toBe(true);
 
-    // 4. Upload the xlsx file
-    await fileChooser.setFiles(downloadPath);
+    // 3. The events survived: same count, same offsets, and the text is still present.
+    // `deltaSeconds` needs coercing — the API's `JsonIntegerConverter` writes every int as a
+    // JSON string, so these arrive as "300"/"900".
+    const after = await listScenarioEvents(token, mselId);
+    expect(after.length).toBe(before.length);
+    expect(
+      after.map((e: any) => Number(e.deltaSeconds)).sort((a: number, b: number) => a - b)
+    ).toEqual([300, 900]);
 
-    // Wait for the upload to be processed
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(2000);
-
-    // 5. Verify we're still on the build page (no navigation crash)
-    await expect(page).toHaveURL(/.*\/build.*/, { timeout: 5000 });
-
-    // Verify the MSEL list is still displayed
-    const standardMselLink = page.getByRole('link', { name: 'Standard MSEL' });
-    await expect(standardMselLink).toBeVisible({ timeout: 10000 });
+    // Data values are only populated on the single-event endpoint, so read the
+    // events individually to confirm the imported text round-tripped rather than being dropped.
+    const allValues: string[] = [];
+    for (const event of after) {
+      const full = await getScenarioEvent(token, event.id);
+      allValues.push(
+        ...(full.dataValues ?? []).map((dv: any) => dv.value).filter(Boolean)
+      );
+    }
+    expect(allValues).toContain(eventText);
   });
 });

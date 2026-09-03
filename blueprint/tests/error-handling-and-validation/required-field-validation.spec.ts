@@ -4,136 +4,79 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect } from '../../fixtures';
+import {
+  getBlueprintToken,
+  createMsel,
+  deleteMsel,
+  navigateToMsel,
+  retypeMselField,
+} from '../../test-helpers';
 
 test.describe('Error Handling and Validation', () => {
-  const TEST_MSEL_NAME = 'Required Field Validation Test MSEL';
+  let token: string;
+  let mselId: string;
 
-  test.afterEach(async ({ blueprintAuthenticatedPage: page }) => {
-    // Cleanup: Delete the test MSEL if it exists
-    // Navigate to MSEL list if not already there
-    const currentUrl = page.url();
-    if (!currentUrl.includes('/build')) {
-      await page.goto(`${Services.Blueprint.UI}/build`);
-      await page.waitForLoadState('networkidle');
-    } else if (currentUrl.includes('?msel=')) {
-      // We're on a MSEL detail page, navigate back to list
-      await page.goto(`${Services.Blueprint.UI}/build`);
-      await page.waitForLoadState('networkidle');
-    }
+  test.beforeEach(async () => {
+    token = await getBlueprintToken();
+    const msel = await createMsel(token);
+    mselId = msel.id;
+  });
 
-    // Look for the test MSEL or "New MSEL" in the list
-    const testMselLink = page.getByRole('link', { name: TEST_MSEL_NAME }).first();
-    const newMselLink = page.getByRole('link', { name: 'New MSEL' }).first();
-
-    // Try to find and delete the test MSEL
-    let mselToDelete = await testMselLink.isVisible({ timeout: 2000 }).catch(() => false)
-      ? testMselLink
-      : await newMselLink.isVisible({ timeout: 2000 }).catch(() => false)
-      ? newMselLink
-      : null;
-
-    if (mselToDelete) {
-      await mselToDelete.click();
-      await page.waitForLoadState('networkidle');
-
-      // Delete the MSEL
-      const deleteButton = page.getByRole('button', { name: 'Delete this MSEL' });
-      if (await deleteButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await deleteButton.click();
-
-        // Confirm deletion in the dialog
-        await page.waitForTimeout(500);
-        const confirmDialog = page.getByRole('dialog', { name: 'Delete MSEL' });
-        if (await confirmDialog.isVisible({ timeout: 2000 }).catch(() => false)) {
-          const yesButton = confirmDialog.getByRole('button', { name: 'YES' });
-          await yesButton.click();
-
-          // Wait for redirect back to MSEL list
-          await expect(page).toHaveURL(/.*\/build$/, { timeout: 10000 });
-        }
-      }
+  test.afterEach(async () => {
+    if (mselId) {
+      await deleteMsel(token, mselId);
     }
   });
 
-  // This test verifies that the Name field has required field validation.
-  // The Save Changes button should be disabled when the Name field is empty.
   test('Required Field Validation', async ({ blueprintAuthenticatedPage: page }) => {
+    // Navigate to the seeded MSEL
+    await navigateToMsel(page, mselId);
 
-    // 1. Navigate to Blueprint MSEL management page
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
-    await page.waitForLoadState('networkidle');
-
-    // Click on "Manage an Event" button to navigate to Blueprint page
-    const manageEventButton = page.getByRole('button', { name: /Manage an Event/ });
-    await expect(manageEventButton).toBeVisible({ timeout: 5000 });
-    await manageEventButton.click();
-
-    // Wait for navigation to /build page
-    await expect(page).toHaveURL(/.*\/build.*/, { timeout: 10000 });
-    await page.waitForLoadState('networkidle');
-
-    // 2. Create a new MSEL by clicking "Add blank MSEL"
-    const createButton = page.getByRole('button', { name: 'Add blank MSEL' });
-    await expect(createButton).toBeVisible({ timeout: 5000 });
-    await createButton.click();
-
-    // expect: New MSEL is created and appears in the list
-    await page.waitForTimeout(2000);
-
-    // 3. Open the newly created MSEL (it will be the first "New MSEL" link)
-    const newMselLink = page.getByRole('link', { name: 'New MSEL' }).first();
-    await expect(newMselLink).toBeVisible({ timeout: 5000 });
-    await newMselLink.click();
-
-    // expect: MSEL configuration page is displayed
-    await expect(page).toHaveURL(/.*\/build\?msel=.*/, { timeout: 10000 });
-    await page.waitForLoadState('networkidle');
-
-    // 4. Test field validation behavior on the Name field
+    // Locate the Name field and Save button
     const nameField = page.getByRole('textbox', { name: 'Name' });
-    await expect(nameField).toBeVisible({ timeout: 5000 });
+    const descriptionField = page.getByRole('textbox', { name: 'Description' });
+    const saveButton = page.getByRole('button', { name: 'Save Changes' });
+    await expect(nameField).toBeVisible({ timeout: 10000 });
+    await expect(saveButton).toBeVisible({ timeout: 10000 });
 
-    // The new MSEL should have "New MSEL" as default name
-    const originalName = await nameField.inputValue();
-    expect(originalName).toBe('New MSEL');
+    // Initially, save button should be disabled (no changes)
+    await expect(saveButton).toBeDisabled();
 
-    // 5. Change the name field to trigger form dirty state and test validation
-    const saveChangesButton = page.getByRole('button', { name: 'Save Changes' });
-    await expect(saveChangesButton).toBeVisible({ timeout: 5000 });
+    // Dirty the form via another field first — clearing Name alone does not set
+    // `isChanged`, so Save staying disabled afterward would prove nothing about
+    // validation (it would just mean nothing was edited).
+    // Typed via retypeMselField, not fill(): the Config tab marks itself dirty from keypress
+    // handlers, so a fill()ed edit leaves Save disabled and the test never reaches validation.
+    await retypeMselField(descriptionField, 'Dirtying the form so Save becomes available');
+    await expect(saveButton).toBeEnabled();
 
-    // Initially, save button should be disabled (no changes made yet)
-    await expect(saveChangesButton).toBeDisabled();
+    // Clear the name field to trigger required-field validation
+    await retypeMselField(nameField, '');
 
-    // 6. Fill in the Name field with a test value using pressSequentially to trigger Angular change detection
-    await nameField.click();
-    await page.keyboard.press('Control+A');
-    await nameField.pressSequentially(TEST_MSEL_NAME, { delay: 50 });
-    await expect(nameField).toHaveValue(TEST_MSEL_NAME);
-    await page.waitForTimeout(500);
+    // expect: Save button becomes disabled again when the required field is empty
+    await expect(saveButton).toBeDisabled();
 
-    // 7. Save button should now be enabled since we made a valid change
-    await expect(saveChangesButton).toBeEnabled({ timeout: 3000 });
+    // expect: A validation error message should appear indicating the field is required
+    const errorMessage = page.locator('mat-error').filter({ hasText: /required|must not be empty/i });
+    await expect(errorMessage).toBeVisible({ timeout: 5000 });
 
-    // 8. Save the changes
-    await saveChangesButton.click();
-    await page.waitForTimeout(1000);
+    // Fill in a valid name
+    await retypeMselField(nameField, 'Valid MSEL Name');
 
-    // expect: Changes are saved successfully
-    await expect(saveChangesButton).toBeDisabled();
+    // expect: Error message disappears
+    await expect(errorMessage).not.toBeVisible();
 
-    // Check if "Changes have not been saved" message is not visible
-    const unsavedChangesMessage = page.locator('text=/Changes have not been saved/');
-    const messageVisible = await unsavedChangesMessage.isVisible({ timeout: 2000 }).catch(() => false);
-    expect(messageVisible).toBe(false);
+    // expect: Save button becomes enabled with valid data
+    await expect(saveButton).toBeEnabled({ timeout: 5000 });
 
-    // 9. Verify the MSEL name was updated in the list
-    await page.goto(`${Services.Blueprint.UI}/build`);
-    await page.waitForLoadState('networkidle');
+    // Clear the name again to re-trigger validation
+    await retypeMselField(nameField, '');
 
-    const savedMselLink = page.getByRole('link', { name: TEST_MSEL_NAME });
-    await expect(savedMselLink).toBeVisible({ timeout: 5000 });
+    // expect: Save button is disabled again
+    await expect(saveButton).toBeDisabled();
 
-    // Cleanup will happen automatically in test.afterEach()
+    // expect: Validation error re-appears
+    await expect(errorMessage).toBeVisible();
   });
 });

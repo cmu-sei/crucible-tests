@@ -8,3 +8,12 @@ args = [
 cwd = "."
 startup_timeout_sec = 20
 tool_timeout_sec = 300
+
+[mcp_servers.playwright-test.tools.browser_open]
+approval_mode = "approve"
+
+[mcp_servers.playwright-test.tools.browser_run_code]
+approval_mode = "approve"
+
+[mcp_servers.playwright-test.tools.browser_tabs]
+approval_mode = "approve"
