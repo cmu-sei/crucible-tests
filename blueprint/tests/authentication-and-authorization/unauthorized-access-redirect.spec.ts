@@ -7,6 +7,9 @@
 import { test, expect } from '@playwright/test';
 import { Services, serviceUrlPattern } from '../../../shared-fixtures';
 
+// Override global storageState so this test starts from a fresh unauthenticated state.
+test.use({ storageState: { cookies: [], origins: [] } });
+
 test.describe('Authentication and Authorization', () => {
   test('Unauthorized Access Redirect', async ({ page }) => {
     // 1. Clear all browser cookies (storage is already empty in fresh context)

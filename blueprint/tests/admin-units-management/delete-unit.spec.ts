@@ -5,99 +5,72 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
+import {
+  getBlueprintToken,
+  createUnit,
+  deleteUnit,
+  tempBlueprintName,
+} from '../../test-helpers';
 
 test.describe('Admin - Units Management', () => {
   test('Delete Unit', async ({ blueprintAuthenticatedPage: page }) => {
-    // 1. Navigate to Units list, create a unit, click delete icon for it, then confirm
-    await page.goto(`${Services.Blueprint.UI}/admin`);
-    await page.waitForLoadState('networkidle');
+    const token = await getBlueprintToken();
+    const unitName = tempBlueprintName('DeleteUnit');
+    const shortName = 'DTU';
+    let unitId: string | undefined;
 
-    const unitsNav = page.locator(
-      'mat-list-item:has-text("Units"), a:has-text("Units"), button:has-text("Units")'
-    ).first();
-    await expect(unitsNav).toBeVisible({ timeout: 5000 });
-    await unitsNav.click();
-    await page.waitForLoadState('networkidle');
+    try {
+      // Seed a unit via API
+      const unit = await createUnit(token, { name: unitName, shortName });
+      unitId = unit.id;
 
-    // Pre-cleanup: remove any pre-existing 'Delete Test Unit' from previous test runs
-    const deleteAllTestUnits = async () => {
-      let deleteBtn = page.getByRole('button', { name: 'Delete Delete Test Unit' }).first();
-      while (await deleteBtn.isVisible().catch(() => false)) {
-        await deleteBtn.click();
-        const confirmDialog = page.locator(
-          '[role="dialog"], .mat-dialog-container, [class*="dialog"]'
-        ).first();
-        await expect(confirmDialog).toBeVisible({ timeout: 5000 });
-        const confirmButton = page.locator(
-          'button:has-text("Confirm"), button:has-text("Delete"), button:has-text("Yes"), button:has-text("OK")'
-        ).last();
-        await confirmButton.click();
-        await page.waitForLoadState('networkidle');
-        await page.waitForTimeout(500);
-        deleteBtn = page.getByRole('button', { name: 'Delete Delete Test Unit' }).first();
+      // Navigate to Admin → Units
+      await page.goto(`${Services.Blueprint.UI}/admin`);
+      const unitsNav = page.locator('mat-list-item').filter({ hasText: 'Units' }).first();
+      await expect(unitsNav).toBeVisible({ timeout: 10000 });
+      await unitsNav.click();
+
+      // Wait for the table to be visible
+      const unitsTable = page.locator('table').first();
+      await expect(unitsTable).toBeVisible({ timeout: 5000 });
+
+      // Verify the unit was seeded and appears in the table
+      const unitCell = page.getByRole('cell', { name: unitName, exact: true }).first();
+      await expect(unitCell).toBeVisible({ timeout: 5000 });
+
+      // Click delete button for the unit
+      const deleteButton = page.getByRole('button', { name: `Delete ${unitName}` });
+      await expect(deleteButton).toBeVisible({ timeout: 5000 });
+      await deleteButton.click();
+
+      // expect: Confirmation dialog appears
+      const confirmDialog = page.locator('[role="dialog"]').first();
+      await expect(confirmDialog).toBeVisible({ timeout: 5000 });
+
+      // Confirm the deletion, waiting for the DELETE API call
+      const deleteResponse = page.waitForResponse(
+        (resp) => resp.url().includes(`/api/units/${unitId}`) && resp.request().method() === 'DELETE'
+      );
+      const confirmButton = page.locator('button:has-text("Confirm"), button:has-text("Delete"), button:has-text("Yes"), button:has-text("OK")').last();
+      await confirmButton.click();
+      await deleteResponse;
+
+      // expect: Unit is deleted successfully and removed from table
+      await expect(unitCell).not.toBeVisible({ timeout: 5000 });
+
+      // Verify server-side deletion
+      const checkResp = await fetch(`${Services.Blueprint.API}/api/units/${unitId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      expect(checkResp.status).toBe(404);
+
+      // Clear unitId so afterEach doesn't try to delete it again
+      unitId = undefined;
+    } finally {
+      // Cleanup: delete the unit if it still exists (e.g., test failed before UI delete)
+      if (unitId) {
+        await deleteUnit(token, unitId);
       }
-    };
-
-    await deleteAllTestUnits();
-
-    // Create a unit named "Delete Test Unit" so we always have something to delete
-    const addButton = page.getByRole('button', { name: 'Add Unit' });
-    await expect(addButton).toBeVisible({ timeout: 5000 });
-    await addButton.click();
-
-    await page.waitForTimeout(500);
-    const form = page.locator('[role="dialog"], [class*="dialog"], [class*="form"]').first();
-    await expect(form).toBeVisible({ timeout: 5000 });
-
-    const shortNameField = page.locator(
-      'input[formControlName*="shortName"], input[placeholder*="Short Name"], input[name*="short"]'
-    ).first();
-    await expect(shortNameField).toBeVisible({ timeout: 5000 });
-    await shortNameField.fill('DTU');
-
-    const nameField = page.locator(
-      'input[formControlName="name"], input[placeholder*="Name"]:not([placeholder*="Short"])'
-    ).first();
-    await expect(nameField).toBeVisible({ timeout: 5000 });
-    await nameField.fill('Delete Test Unit');
-
-    const saveButton = page.locator(
-      'button:has-text("Save"), button[type="submit"]'
-    ).first();
-    await saveButton.click();
-
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(1000);
-
-    // Verify the unit was created
-    const newUnit = page.getByRole('cell', { name: 'Delete Test Unit', exact: true }).first();
-    await expect(newUnit).toBeVisible({ timeout: 5000 });
-
-    // Record the current unit count
-    const unitRows = page.locator('table tbody tr');
-    const initialCount = await unitRows.count();
-
-    // Click delete button for the created unit
-    const deleteButton = page.getByRole('button', { name: /^Delete / }).first();
-    await expect(deleteButton).toBeVisible({ timeout: 5000 });
-    await deleteButton.click();
-
-    // expect: Confirmation dialog appears
-    const confirmDialog = page.locator(
-      '[role="dialog"], .mat-dialog-container, [class*="dialog"]'
-    ).first();
-    await expect(confirmDialog).toBeVisible({ timeout: 5000 });
-
-    // Confirm the deletion
-    const confirmButton = page.locator(
-      'button:has-text("Confirm"), button:has-text("Delete"), button:has-text("Yes"), button:has-text("OK")'
-    ).last();
-    await confirmButton.click();
-
-    // expect: Unit is deleted successfully and removed from table
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(500);
-    const newCount = await unitRows.count();
-    expect(newCount).toBeLessThan(initialCount);
+    }
   });
 });

@@ -2,150 +2,126 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 // spec: specs/blueprint-test-plan.md
-// seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect } from '../../fixtures';
+import {
+  getBlueprintToken,
+  createMsel,
+  deleteMsel,
+  createRenderableScenarioEvent,
+  createScenarioEvent,
+  listScenarioEvents,
+  seedMselDataFields,
+  navigateToMselSection,
+  tempBlueprintName,
+} from '../../test-helpers';
 
+/**
+ * A MSEL with many scenario events: the grid renders all of them in reasonable time, and
+ * filtering stays responsive.
+ *
+ * Rewritten. The previous version, like `large-export-performance`, treated missing data as a
+ * pass: its `else` branch was `expect(hasMsel).toBe(false)` with the comment "Document that no
+ * test data exists". It took that branch every run, because it navigated to `${UI}/msels`, which
+ * is not a Blueprint route, so `a[href*="/msel/"]` matched nothing — the run log shows "No MSELs
+ * found with timeline - test requires existing MSEL data". The only assertion that ever executed
+ * was `expect(document.readyState === 'complete').toBe(true)`.
+ *
+ * Its scroll-performance measurement could not fail either. The `page.evaluate` block began:
+ *
+ *   const scrollContainer = document.querySelector('[class*="timeline"], ...') as HTMLElement;
+ *   if (!scrollContainer) {
+ *     return { fps: 60, dropped: 0, smooth: true };   // <-- hardcoded pass
+ *   }
+ *
+ * so `expect(scrollMetrics.smooth).toBe(true)` was satisfied by a literal whenever the container
+ * was absent. Its "FPS" was also computed from `setInterval(…, 50)` ticks, which measures the
+ * timer, not frame production, and cannot detect jank.
+ *
+ * Frame-rate is not measurable honestly from Playwright without tracing, so this version drops
+ * that claim rather than dressing up a fake number. It asserts what can be measured and matters:
+ * all seeded events reach the DOM, the grid renders within a time budget, and filtering narrows
+ * the grid — waiting on the filtered result instead of sleeping 500ms.
+ */
 test.describe('Performance and Optimization', () => {
-  test.beforeEach(async ({ blueprintAuthenticatedPage: page }) => {
-    // Navigate to Blueprint application (auth state pre-loaded from setup)
-    await page.goto(Services.Blueprint.UI);
-    await page.waitForLoadState('domcontentloaded');
+  const EVENT_COUNT = 60;
+  const UNIQUE_TITLE = 'ZZUniqueTimelineEvent';
+
+  let token: string;
+  let mselId: string;
+
+  test.beforeEach(async () => {
+    token = await getBlueprintToken();
+    const msel = await createMsel(token, {
+      name: tempBlueprintName('TestBP-TimelinePerf'),
+      description: 'Seeded to measure timeline rendering.',
+    });
+    mselId = msel.id;
+
+    await seedMselDataFields(token, mselId);
+    for (let i = 0; i < EVENT_COUNT - 1; i++) {
+      await createScenarioEvent(token, mselId, { deltaSeconds: (i + 1) * 60 });
+    }
+    // One event carrying searchable text, so the filter assertion has a known target.
+    await createRenderableScenarioEvent(token, mselId, UNIQUE_TITLE, {
+      deltaSeconds: EVENT_COUNT * 60,
+    });
+  });
+
+  test.afterEach(async () => {
+    try {
+      if (mselId) await deleteMsel(token, mselId);
+    } catch (err) {
+      console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+    }
   });
 
   test('Large Timeline Performance', async ({ blueprintAuthenticatedPage: page }) => {
-    // 1. Navigate to a MSEL with 100+ scenario events
-    // First, check if such a MSEL exists or create test data
-    
-    // Navigate to MSELs list
-    await page.goto(`${Services.Blueprint.UI}/msels`).catch(() => {
-      console.log('MSELs route not available, staying on main page');
-    });
-    await page.waitForLoadState('networkidle');
-    
-    // Try to find a MSEL with many events
-    const mselLink = await page.locator('a[href*="/msel/"]').first();
-    const hasMsel = await mselLink.count() > 0;
-    
-    if (hasMsel) {
-      // Navigate to MSEL details
-      await mselLink.click();
-      await page.waitForLoadState('networkidle');
-      
-      // Check for timeline view
-      const timelineView = await page.locator('[class*="timeline"], [class*="event-list"]').first();
-      await expect(timelineView).toBeVisible({ timeout: 10000 });
-      
-      // 2. Scroll through the timeline
-      // Measure scroll performance
-      const scrollMetrics = await page.evaluate(async () => {
-        const scrollContainer = document.querySelector('[class*="timeline"], [class*="event-list"], [class*="scroll"]') as HTMLElement;
-        if (!scrollContainer) {
-          return { fps: 60, dropped: 0, smooth: true };
-        }
-        
-        let frameCount = 0;
-        let droppedFrames = 0;
-        let lastTimestamp = performance.now();
-        
-        const measureFrame = () => {
-          const currentTimestamp = performance.now();
-          const delta = currentTimestamp - lastTimestamp;
-          frameCount++;
-          
-          // If frame took longer than 16.67ms (60fps), consider it dropped
-          if (delta > 16.67) {
-            droppedFrames++;
-          }
-          
-          lastTimestamp = currentTimestamp;
-        };
-        
-        return new Promise<{ fps: number; dropped: number; smooth: boolean }>((resolve) => {
-          let scrollPosition = 0;
-          const scrollHeight = scrollContainer.scrollHeight;
-          const scrollStep = 100; // pixels per step
-          const totalSteps = 10;
-          let currentStep = 0;
-          
-          const scrollInterval = setInterval(() => {
-            measureFrame();
-            scrollPosition += scrollStep;
-            scrollContainer.scrollTop = scrollPosition;
-            currentStep++;
-            
-            if (currentStep >= totalSteps || scrollPosition >= scrollHeight) {
-              clearInterval(scrollInterval);
-              
-              const fps = 1000 / (performance.now() - lastTimestamp) * frameCount / currentStep;
-              const dropRate = droppedFrames / frameCount;
-              
-              resolve({
-                fps: Math.round(fps),
-                dropped: droppedFrames,
-                smooth: dropRate < 0.1 // Less than 10% dropped frames
-              });
-            }
-          }, 50);
-        });
-      });
-      
-      console.log('Scroll Performance Metrics:');
-      console.log(`  FPS: ${scrollMetrics.fps}`);
-      console.log(`  Dropped Frames: ${scrollMetrics.dropped}`);
-      console.log(`  Smooth: ${scrollMetrics.smooth}`);
-      
-      // expect: Scrolling is smooth without jank
-      expect(scrollMetrics.smooth).toBe(true);
-      
-      // expect: Browser remains responsive
-      // Test that we can still interact with the page
-      const isResponsive = await page.evaluate(() => {
-        return document.readyState === 'complete';
-      });
-      expect(isResponsive).toBe(true);
-      
-      // 3. Apply filters or search
-      const searchBox = await page.locator('input[type="search"], input[placeholder*="search" i]').first();
-      if (await searchBox.count() > 0) {
-        const startTime = Date.now();
-        await searchBox.fill('test');
-        
-        // Wait a bit for filtering to occur
-        await page.waitForTimeout(500);
-        
-        const endTime = Date.now();
-        const filterTime = endTime - startTime;
-        
-        console.log(`Filter response time: ${filterTime}ms`);
-        
-        // expect: Filtering is responsive
-        expect(filterTime).toBeLessThan(1000); // Less than 1 second
-        
-        // Clear the search
-        await searchBox.clear();
-      }
-      
-      // expect: Event rendering is optimized
-      // Check that not all events are rendered at once (virtual scrolling)
-      const visibleEvents = await page.locator('[class*="event"], [data-event-id]').count();
-      console.log(`Visible events in DOM: ${visibleEvents}`);
-      
-      // If using virtual scrolling, visible events should be less than total
-      // This is a heuristic check
-      if (visibleEvents > 0) {
-        expect(visibleEvents).toBeLessThan(1000); // Should not render 1000+ at once
-      }
-    } else {
-      console.log('No MSELs found with timeline - test requires existing MSEL data');
-      // Mark test as passed but with note
-      expect(hasMsel).toBe(false); // Document that no test data exists
-    }
-    
-    // expect: UI does not freeze
-    const pageIsResponsive = await page.evaluate(() => {
-      return document.readyState === 'complete';
-    });
-    expect(pageIsResponsive).toBe(true);
+    // expect: the fixture is the size this spec claims to measure.
+    const seeded = await listScenarioEvents(token, mselId);
+    expect(seeded.length, 'seeded scenario event count').toBe(EVENT_COUNT);
+
+    // 1. Open the Scenario Events grid and time the render.
+    const startedAt = Date.now();
+    await navigateToMselSection(page, mselId, 'Scenario Events');
+
+    // The Scenario Events grid is a native `<table>` (scenario-event-list.component.html:10),
+    // unlike the MSEL list which is a `<mat-table>` of `<mat-row>`. The template also emits
+    // `tr.move-start-row` separator rows, so those are excluded to count only event rows.
+    const rows = page.locator('table tbody tr:not(.move-start-row)');
+    await expect(rows).toHaveCount(EVENT_COUNT, { timeout: 60000 });
+    const renderSeconds = (Date.now() - startedAt) / 1000;
+
+    // expect: every seeded event is rendered — no silent truncation.
+    // expect: and it happens within a budget. 30s is generous for 60 rows; it is here to catch a
+    // regression into quadratic rendering, not to police small variance.
+    expect(
+      renderSeconds,
+      `rendering ${EVENT_COUNT} scenario events took ${renderSeconds.toFixed(1)}s`
+    ).toBeLessThan(30);
+
+    // 2. Filter the grid. The wait is on the filtered result, not a fixed 500ms.
+    //
+    // The search input is not rendered until the "Search Events" toggle is pressed --
+    // `@if (showSearch)` gates it (scenario-event-list.component.html:14-19) -- and it carries no
+    // placeholder, so it cannot be reached with getByPlaceholder the way the MSEL list's can.
+    await page.getByRole('button', { name: 'Search Events' }).click();
+    const searchBox = page.locator('input[matInput]').first();
+    await expect(searchBox).toBeVisible({ timeout: 15000 });
+
+    // The grid filters on keyup (`(keyup)="keyUp.next($event)"`), so type rather than set the
+    // value -- a bare fill() would not trigger it.
+    await searchBox.click();
+    await searchBox.pressSequentially(UNIQUE_TITLE);
+
+    // expect: filtering narrows the grid to the matching event.
+    await expect(rows).toHaveCount(1, { timeout: 30000 });
+    await expect(page.getByText(UNIQUE_TITLE).first()).toBeVisible({ timeout: 15000 });
+
+    // expect: clearing the filter restores every row, so the filter is not destructive.
+    // Two controls carry title="Clear Search" -- the input's matSuffix and a header button --
+    // so this is scoped rather than left to resolve ambiguously.
+    await page.getByRole('button', { name: 'Clear Search' }).first().click();
+    await expect(rows).toHaveCount(EVENT_COUNT, { timeout: 30000 });
   });
 });

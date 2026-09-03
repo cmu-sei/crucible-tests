@@ -67,6 +67,13 @@ const PROVISION: ProvisionTarget[] = [
     // so it is a reliable "authenticated shell is up" marker for Steamfitter.
     appShellSelector: 'app-root app-topbar mat-toolbar',
   },
+  {
+    app: 'blueprint',
+    homeUrl: Services.Blueprint.UI,
+    // mat-toolbar renders only after the OIDC client resolves a user, so it is a
+    // reliable "authenticated shell is up" marker for Blueprint.
+    appShellSelector: 'app-root mat-toolbar',
+  },
 ];
 
 /**

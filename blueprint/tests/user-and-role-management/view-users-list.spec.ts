@@ -34,7 +34,9 @@ test.describe('User and Role Management', () => {
     await expect(usersItem).toBeVisible({ timeout: 15000 });
     await usersItem.click();
     await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(500);
+
+    // Wait for the table to appear as proof the section loaded
+    await page.locator('table').first().waitFor({ state: 'visible', timeout: 10000 });
 
     // expect: URL remains at /admin
     await expect(page).toHaveURL(/.*\/admin.*/, { timeout: 5000 });
