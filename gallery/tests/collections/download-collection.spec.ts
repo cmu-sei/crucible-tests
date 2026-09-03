@@ -58,5 +58,9 @@ test.describe('Collection Management', () => {
     const payload = JSON.parse(fs.readFileSync(downloadPath!, 'utf-8'));
     expect(payload.Collection.Id).toBe(seeded.id);
     expect(payload.Collection.Name).toBe(testCollectionName);
+    expect(payload.Collection.Description).toBe('Collection for download test');
+    expect(payload.Cards.$values).toEqual([]);
+    expect(payload.Articles.$values).toEqual([]);
+    // Cleanup is handled by the afterEach hook (apiDeleteCollectionById).
   });
 });

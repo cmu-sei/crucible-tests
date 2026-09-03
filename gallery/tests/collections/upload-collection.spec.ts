@@ -10,7 +10,9 @@ import {
   gotoGalleryAdmin,
   apiCreateCollection,
   apiDeleteCollectionByName,
+  Services,
 } from '../../fixtures';
+import { request as pwRequest } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -71,6 +73,11 @@ test.describe('Collection Management', () => {
     await download.saveAs(tempPath);
     expect(fs.statSync(tempPath).size).toBeGreaterThan(0);
 
+    // Capture the source collection's contents to compare against the uploaded copy.
+    const originalFile = JSON.parse(fs.readFileSync(tempPath, 'utf8'));
+    const originalCardCount = originalFile.Cards.$values.length;
+    const originalArticleCount = originalFile.Articles.$values.length;
+
     // 1. Click the 'Upload Collection' button (upload icon) in the collections header
     const fileChooserPromise = page.waitForEvent('filechooser');
     await page.getByRole('button', { name: 'Upload Collection' }).click();
@@ -86,11 +93,49 @@ test.describe('Collection Management', () => {
     // expect: The collection is imported successfully
     const uploadResponse = await uploadResponsePromise;
     expect(uploadResponse.status()).toBe(200);
-    const uploaded = await uploadResponse.json();
-    expect(uploaded.name).toBe(expectedUploadedName);
+    const createdCollection = await uploadResponse.json();
+    expect(createdCollection.name).toBe(expectedUploadedName);
 
     // expect: The new collection appears in the list
     await searchField.fill(expectedUploadedName);
     await expect(page.getByRole('row').filter({ hasText: expectedUploadedName })).toHaveCount(1);
+
+    // expect: The uploaded copy carries the same card/article counts as the source.
+    const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
+    try {
+      const tokenResponse = await apiContext.post(
+        `${Services.Keycloak}/realms/crucible/protocol/openid-connect/token`,
+        {
+          form: {
+            grant_type: 'password',
+            client_id: 'gallery.ui',
+            username: 'admin',
+            password: 'admin',
+            scope: 'openid profile gallery',
+          },
+        }
+      );
+      expect(tokenResponse.ok()).toBeTruthy();
+      const token = (await tokenResponse.json()).access_token as string;
+
+      const articlesResponse = await apiContext.get(
+        `${Services.Gallery.API}/api/collections/${createdCollection.id}/articles`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      expect(articlesResponse.ok()).toBeTruthy();
+      const cardsResponse = await apiContext.get(
+        `${Services.Gallery.API}/api/collections/${createdCollection.id}/cards`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      expect(cardsResponse.ok()).toBeTruthy();
+
+      const articles = await articlesResponse.json();
+      const cards = await cardsResponse.json();
+      expect(articles).toHaveLength(originalArticleCount);
+      expect(cards).toHaveLength(originalCardCount);
+    } finally {
+      await apiContext.dispose();
+    }
+    // Cleanup is handled by the afterEach hook (apiDeleteCollectionByName + temp files).
   });
 });
