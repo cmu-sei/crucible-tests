@@ -283,6 +283,19 @@ export { expect } from '@playwright/test';
 
 **Note:** Authentication is handled by `authenticateWithKeycloak()` in `shared-fixtures.ts`, which works for all apps. No need to create per-app auth setup files.
 
+## Running the Blueprint suite
+
+The whole Blueprint suite runs at `--workers 2`. The `admin-inject-types-and-catalogs` specs
+serialize themselves behind a shared lock (`acquireAdminCatalogLock` in
+`blueprint/test-helpers.ts`) because those admin pages are not safe to exercise concurrently.
+Deleting an inject type also cascade-deletes every catalog that references it, so each spec
+selects the inject type it created itself and seeds under `tempBlueprintName()` rather than
+binding to whichever `mat-option` happens to be first.
+
+Note that **concurrent Blueprint suite runs against one stack will sabotage each other**: the
+`globalTeardown` purge deletes every row whose name matches the `tempBlueprintName()` shape,
+including another in-flight run's fixtures. Run the suite once at a time.
+
 ## Troubleshooting
 
 - **Services not running** — Start Aspire first via a VS Code launch profile or `aspire run`

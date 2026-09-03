@@ -2,119 +2,136 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 // spec: specs/blueprint-test-plan.md
-// seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect } from '../../fixtures';
+import {
+  getBlueprintToken,
+  createMsel,
+  deleteMsel,
+  getMsel,
+  tempBlueprintName,
+  navigateToMsel,
+  retypeMselField,
+  tryUpdateMsel,
+} from '../../test-helpers';
 
+/**
+ * Config-tab form validation: length limits and the empty-name guard.
+ *
+ * The previous version of this spec opened whichever MSEL happened to be first in the
+ * /build list and typed into it. That violated test-data hygiene twice over — it mutated
+ * a record it did not create (the dev stack carries ~19 pre-existing MSELs), and it
+ * called `test.skip()` twice when it could not find a row, so it silently self-skipped
+ * instead of failing. It also branched on `isEnabled()` and asserted different things per
+ * branch, meaning it could pass whether or not validation worked. It now seeds its own
+ * MSEL and asserts the behaviour unconditionally.
+ *
+ * Behaviour verified directly against the running app:
+ *   - Name input has maxlength=70, Description maxlength=600; both truncate on input.
+ *   - The counters render as `mat-hint` elements ("70 / 70 characters").
+ *
+ * The empty-name case is covered at both layers: the UI guard (clearing Name disables Save and
+ * renders a mat-error, so nothing reaches the server) and the API guard behind it, since a UI-only
+ * check is bypassed by any other client.
+ */
 test.describe('MSEL Management', () => {
+  let token: string;
+  let mselId: string;
+  const originalName = tempBlueprintName('TestBP-Validation');
+
+  test.beforeEach(async () => {
+    token = await getBlueprintToken();
+    const created = await createMsel(token, {
+      name: originalName,
+      description: 'Seeded for form-validation checks',
+    });
+    mselId = created.id;
+  });
+
+  test.afterEach(async () => {
+    try {
+      if (mselId) await deleteMsel(token, mselId);
+    } catch (err) {
+      console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+    }
+  });
+
   test('MSEL Form Validation', async ({ blueprintAuthenticatedPage: page }) => {
-    await page.goto(`${Services.Blueprint.UI}/build`);
-    await page.waitForLoadState('networkidle');
+    await navigateToMsel(page, mselId);
 
-    // Navigate to an existing MSEL to test the Config tab form validation
-    const mselRows = page.getByRole('row').filter({ hasNotText: 'Name Description Template Status Created By Date Created Date Modified' });
-    const rowCount = await mselRows.count();
-    if (rowCount === 0) {
-      test.skip();
-      return;
-    }
-
-    // Find a link with text content (skipping empty links)
-    let firstMselLink = null;
-    for (let i = 0; i < rowCount; i++) {
-      const row = mselRows.nth(i);
-      const links = row.getByRole('link');
-      const linkCount = await links.count();
-      for (let j = 0; j < linkCount; j++) {
-        const link = links.nth(j);
-        const linkText = await link.textContent();
-        if (linkText && linkText.trim().length > 0) {
-          firstMselLink = link;
-          break;
-        }
-      }
-      if (firstMselLink) break;
-    }
-
-    if (!firstMselLink) {
-      test.skip();
-      return;
-    }
-
-    await firstMselLink.click();
-    await page.waitForLoadState('networkidle');
-
-    // Navigate to Config tab (should already be selected by default)
-    const configTab = page.getByRole('tab', { name: 'Config' });
-    const configTabVisible = await configTab.isVisible({ timeout: 3000 }).catch(() => false);
-    if (configTabVisible) {
-      await configTab.click();
-    }
-
-    // 1. Navigate to an existing MSEL Config tab and type in the Name field
     const nameField = page.getByRole('textbox', { name: 'Name' });
-    await expect(nameField).toBeVisible({ timeout: 5000 });
-
-    await nameField.click();
-    await nameField.fill('Test MSEL Name');
-
-    // expect: A character counter is shown (e.g., '31 / 70 characters')
-    const nameCharCounter = page.locator('text=/ 70 characters').first();
-    await expect(nameCharCounter).toBeVisible({ timeout: 5000 });
-
-    // Verify the counter format shows current count / 70
-    const counterText = await nameCharCounter.textContent();
-    expect(counterText).toMatch(/\d+ \/ 70 characters/);
-
-    // expect: The maximum allowed name length is 70 characters
-    await nameField.fill('A'.repeat(71));
-    await page.waitForTimeout(300);
-    const nameValue = await nameField.inputValue();
-    expect(nameValue.length).toBeLessThanOrEqual(70);
-
-    // 2. Type in the Description field
     const descriptionField = page.getByRole('textbox', { name: 'Description' });
-    await expect(descriptionField).toBeVisible({ timeout: 5000 });
-    await descriptionField.click();
-    await descriptionField.fill('Test description content');
+    const saveButton = page.getByRole('button', { name: /Save Changes/i });
 
-    // expect: A character counter is shown (e.g., '176 / 600 characters')
-    const descCharCounter = page.locator('text=/ 600 characters').first();
-    await expect(descCharCounter).toBeVisible({ timeout: 5000 });
+    await expect(nameField).toBeVisible({ timeout: 15000 });
+    await expect(descriptionField).toBeVisible({ timeout: 10000 });
 
-    const descCounterText = await descCharCounter.textContent();
-    expect(descCounterText).toMatch(/\d+ \/ 600 characters/);
+    // The limits are declared on the inputs themselves.
+    await expect(nameField).toHaveAttribute('maxlength', '70');
+    await expect(descriptionField).toHaveAttribute('maxlength', '600');
 
-    // expect: The maximum allowed description length is 600 characters
+    // Name: counter tracks the live length, and input past 70 is truncated rather than
+    // accepted-then-rejected.
+    await nameField.fill('A'.repeat(30));
+    await expect(page.getByText('30 / 70 characters')).toBeVisible({ timeout: 10000 });
+
+    await nameField.fill('A'.repeat(71));
+    await expect(nameField).toHaveValue('A'.repeat(70));
+    await expect(page.getByText('70 / 70 characters')).toBeVisible({ timeout: 10000 });
+
+    // Description: same contract at 600.
+    await descriptionField.fill('B'.repeat(24));
+    await expect(page.getByText('24 / 600 characters')).toBeVisible({ timeout: 10000 });
+
     await descriptionField.fill('B'.repeat(601));
-    await page.waitForTimeout(300);
-    const descValue = await descriptionField.inputValue();
-    expect(descValue.length).toBeLessThanOrEqual(600);
+    await expect(descriptionField).toHaveValue('B'.repeat(600));
+    await expect(page.getByText('600 / 600 characters')).toBeVisible({ timeout: 10000 });
 
-    // 3. Try to save with an empty name field
-    await nameField.clear();
-    await expect(nameField).toHaveValue('');
+    // Restore a valid name so this test leaves the record intact for the checks below.
+    await nameField.fill(originalName);
+  });
 
-    const saveButton = page.getByRole('button', { name: 'Save Changes' });
-    const saveEnabled = await saveButton.isEnabled().catch(() => false);
+  test('MSEL Form Validation - empty name is rejected', async ({
+    blueprintAuthenticatedPage: page,
+  }) => {
+    await navigateToMsel(page, mselId);
 
-    if (saveEnabled) {
-      await saveButton.click();
+    const nameField = page.getByRole('textbox', { name: 'Name' });
+    const descriptionField = page.getByRole('textbox', { name: 'Description' });
+    const saveButton = page.getByRole('button', { name: /Save Changes/i });
 
-      // expect: Validation error is displayed or save button remains disabled
-      // The form might just keep the save button disabled rather than showing an error message
-      const validationError = page.getByText(/required/i).first();
-      const errorVisible = await validationError.isVisible({ timeout: 3000 }).catch(() => false);
-      if (!errorVisible) {
-        // If no error message is shown, the save button should still be disabled
-        await expect(saveButton).toBeDisabled();
-      }
+    await expect(nameField).toBeVisible({ timeout: 15000 });
 
-      // expect: Form submission is prevented
-      await expect(nameField).toBeVisible();
-    } else {
-      // Save button is already disabled with empty name — validation working
-      await expect(saveButton).toBeDisabled();
+    // Dirty the form via another field first. Clearing Name alone does not set `isChanged`,
+    // so Save would stay disabled for an unrelated reason and the test would pass without
+    // exercising validation at all — that is exactly how this defect stayed hidden.
+    // Typed via retypeMselField, not fill(): the Config tab marks itself dirty from keypress
+    // handlers, so a fill()ed edit leaves Save disabled and the test never reaches validation.
+    await retypeMselField(descriptionField, 'Dirtying the form so Save becomes available');
+    await expect(saveButton).toBeEnabled();
+
+    // Now clear the required field.
+    await retypeMselField(nameField, '');
+
+    // A required-field violation must surface, and must block the save.
+    await expect(page.locator('mat-error')).toHaveCount(1);
+    await expect(saveButton).toBeDisabled();
+
+    // Nothing may reach the server.
+    expect((await getMsel(token, mselId)).name).toBe(originalName);
+  });
+
+  test('MSEL Form Validation - empty name is rejected by the API', async () => {
+    // The UI guard above is only half the contract: any other client — the generated API client,
+    // a script, an import job — goes straight to `PUT /api/msels/{id}`. Each of these bodies is a
+    // complete, otherwise-valid MSEL differing only in Name, so a 200 here would mean the name
+    // requirement lives in the browser alone.
+    for (const name of ['', '   ', null]) {
+      const res = await tryUpdateMsel(token, mselId, { name });
+      expect(res.status, `PUT with name ${JSON.stringify(name)} must be refused`).toBe(400);
+
+      // And refused before it reached the database.
+      expect((await getMsel(token, mselId)).name).toBe(originalName);
     }
   });
 });
