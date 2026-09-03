@@ -4,13 +4,13 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
-import { authenticateGalleryWithKeycloak } from '../../fixtures';
+import { test, expect } from '../../fixtures';
 
 test.describe('Authentication and Authorization', () => {
-  test('Dark Theme Toggle', async ({ page }) => {
-    // 1. Log in and click 'Admin User' button in the top navigation
-    await authenticateGalleryWithKeycloak(page);
+  // Not an auth-flow test: it only needs to *be* logged in, so it uses the
+  // pre-authenticated storageState path rather than a full Keycloak login.
+  test('Dark Theme Toggle', async ({ galleryAuthenticatedPage: page }) => {
+    // 1. Open the 'Admin User' menu in the top navigation
     await page.getByRole('button', { name: 'Admin User' }).click();
 
     // expect: User menu dropdown appears with a 'Dark Theme' switch

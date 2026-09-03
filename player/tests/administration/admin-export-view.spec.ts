@@ -17,12 +17,18 @@ test.describe('Administration - Views', () => {
     await expect(page.getByRole('heading', { name: 'Views' })).toBeVisible();
 
     // Select a view first
-    const firstViewCheckbox = page.getByRole('row').nth(1).getByRole('checkbox');
-    await firstViewCheckbox.click();
+    const firstViewCheckbox = page
+      .locator('app-admin-view-search mat-row mat-checkbox')
+      .first()
+      .getByRole('checkbox');
+    await firstViewCheckbox.focus();
+    await page.keyboard.press('Space');
     await expect(firstViewCheckbox).toBeChecked();
 
     // 2. Click export button for a view (the export icon button)
-    const exportButton = page.locator('button:has(mat-icon.mdi-file-export)');
+    const exportButton = page
+      .locator('app-admin-view-search')
+      .locator('button:has(mat-icon[fonticon="mdi-file-export"])');
     await expect(exportButton).toBeVisible();
     await exportButton.click();
 

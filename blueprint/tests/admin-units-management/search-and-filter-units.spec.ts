@@ -5,53 +5,67 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
+import {
+  getBlueprintToken,
+  createUnit,
+  deleteUnit,
+  tempBlueprintName,
+} from '../../test-helpers';
 
 test.describe('Admin - Units Management', () => {
   test('Search and Filter Units', async ({ blueprintAuthenticatedPage: page }) => {
-    // 1. Navigate to Units list and enter search term in search field
-    await page.goto(`${Services.Blueprint.UI}/admin`);
-    await page.waitForLoadState('networkidle');
+    const token = await getBlueprintToken();
+    const matchingName = tempBlueprintName('SearchMatch');
+    const nonMatchingName = tempBlueprintName('ZZNonMatch');
+    let matchingId: string | undefined;
+    let nonMatchingId: string | undefined;
 
-    const unitsNav = page.locator(
-      'mat-list-item:has-text("Units"), a:has-text("Units"), button:has-text("Units")'
-    ).first();
-    await expect(unitsNav).toBeVisible({ timeout: 5000 });
-    await unitsNav.click();
-    await page.waitForLoadState('networkidle');
+    try {
+      // Seed two units: one with a searchable term, one without
+      const match = await createUnit(token, { name: matchingName, shortName: 'SM' });
+      matchingId = match.id;
+      const nonMatch = await createUnit(token, { name: nonMatchingName, shortName: 'NM' });
+      nonMatchingId = nonMatch.id;
 
-    const searchInput = page.locator(
-      'input[placeholder*="Search"], input[placeholder*="search"], [class*="search-input"]'
-    ).first();
-    await expect(searchInput).toBeVisible({ timeout: 5000 });
+      // Navigate to Admin → Units
+      await page.goto(`${Services.Blueprint.UI}/admin`);
+      const unitsNav = page.locator('mat-list-item').filter({ hasText: 'Units' }).first();
+      await expect(unitsNav).toBeVisible({ timeout: 10000 });
+      await unitsNav.click();
 
-    // Get total row count before filtering
-    const allRows = page.locator('table tbody tr');
-    const initialCount = await allRows.count();
+      // Wait for the table to be visible
+      const unitsTable = page.locator('table').first();
+      await expect(unitsTable).toBeVisible({ timeout: 5000 });
 
-    // Enter a search term
-    await searchInput.fill('a');
-    await page.waitForTimeout(500);
+      const searchInput = page.getByRole('textbox', { name: /search/i });
+      await expect(searchInput).toBeVisible({ timeout: 5000 });
 
-    // expect: Table filters to show matching units on Short Name and Name
-    const filteredCount = await allRows.count();
-    // Filtered count may be same or less than initial
+      // Both units should be visible before filtering
+      await expect(page.getByRole('cell', { name: matchingName, exact: true }).first()).toBeVisible({ timeout: 5000 });
+      await expect(page.getByRole('cell', { name: nonMatchingName, exact: true }).first()).toBeVisible({ timeout: 5000 });
 
-    // 2. Click clear button
-    const clearButton = page.locator(
-      'button[aria-label*="clear"], button:has(mat-icon:has-text("clear")), ' +
-      'button:has(mat-icon:has-text("close")), [class*="clear-btn"]'
-    ).first();
-    const clearVisible = await clearButton.isVisible({ timeout: 2000 }).catch(() => false);
-    if (clearVisible) {
-      await clearButton.click();
-    } else {
-      await searchInput.clear();
+      // Type the term rather than fill() it: this search filters on (keyup), so setting the
+      // value directly never triggers filtering and the "excluded" assertion below would fail
+      // while the feature works. (Same gotcha noted for the Alloy home-page search.)
+      await searchInput.click();
+      await searchInput.pressSequentially('SearchMatch');
+
+      // expect: Table filters to show only matching units
+      await expect(page.getByRole('cell', { name: matchingName, exact: true }).first()).toBeVisible({ timeout: 5000 });
+      await expect(page.getByRole('cell', { name: nonMatchingName, exact: true }).first()).not.toBeVisible({ timeout: 3000 });
+
+      // Clear the search — again via keyboard so the keyup handler runs.
+      await searchInput.click();
+      await searchInput.press('Control+a');
+      await searchInput.press('Backspace');
+
+      // expect: All units are displayed again
+      await expect(page.getByRole('cell', { name: matchingName, exact: true }).first()).toBeVisible({ timeout: 5000 });
+      await expect(page.getByRole('cell', { name: nonMatchingName, exact: true }).first()).toBeVisible({ timeout: 5000 });
+    } finally {
+      // Cleanup via API
+      if (matchingId) await deleteUnit(token, matchingId);
+      if (nonMatchingId) await deleteUnit(token, nonMatchingId);
     }
-
-    await page.waitForTimeout(500);
-
-    // expect: All units are displayed again
-    const resetCount = await allRows.count();
-    expect(resetCount).toBeGreaterThanOrEqual(filteredCount);
   });
 });

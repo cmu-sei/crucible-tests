@@ -4,56 +4,100 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, selectMatSelectOption } from '../../fixtures';
+import { getBlueprintToken, createMsel, deleteMsel, tempBlueprintName } from '../../test-helpers';
 
 test.describe('MSEL Management', () => {
   test('Filter MSELs by Type', async ({ blueprintAuthenticatedPage: page }) => {
-    // 1. Navigate to /build and click the 'All Types' dropdown
-    await page.goto(`${Services.Blueprint.UI}/build`);
-    await page.waitForLoadState('networkidle');
+    const token = await getBlueprintToken();
+    const templateName = tempBlueprintName('Template');
+    const nonTemplateName = tempBlueprintName('NonTemplate');
 
-    const allTypesDropdown = page.getByRole('combobox', { name: 'All Types' });
-    await expect(allTypesDropdown).toBeVisible({ timeout: 5000 });
-    await allTypesDropdown.click();
+    // 1. Seed one template and one non-template MSEL via API
+    const templateMsel = await createMsel(token, {
+      name: templateName,
+      description: 'Template MSEL',
+      isTemplate: true,
+    });
 
-    // expect: Dropdown shows type filter options
-    const options = page.getByRole('option');
-    await expect(options.first()).toBeVisible({ timeout: 5000 });
+    const nonTemplateMsel = await createMsel(token, {
+      name: nonTemplateName,
+      description: 'Non-template MSEL',
+      isTemplate: false,
+    });
 
-    // 2. Select the template filter option
-    const templateOption = page.getByRole('option', { name: 'Template' });
-    const templateVisible = await templateOption.isVisible({ timeout: 3000 }).catch(() => false);
+    try {
+      // 2. Navigate to /build and filter by Templates
+      await page.goto(`${Services.Blueprint.UI}/build`);
+      await expect(page.getByRole('table')).toBeVisible({ timeout: 10000 });
 
-    if (!templateVisible) {
-      // Try the second option if template is not labeled
-      await options.nth(1).click();
-    } else {
-      await templateOption.click();
+      // Every selection below goes through selectMatSelectOption. Clicking a mat-select trigger
+      // does not reliably leave the panel open, and an option resolved just before Material
+      // tears the overlay down detaches mid-click ("element was detached from the DOM,
+      // retrying") — which is exactly how this spec flaked, on the "Not Templates" step. The
+      // helper reopens and reissues rather than waiting longer on a panel that is already gone.
+      //
+      // The trigger is located positionally and reused, never by accessible name: a
+      // mat-select's name is its CURRENT selection ("All Types", then "Templates", ...), so a
+      // name-based locator goes stale the moment a filter is applied. The MSEL list renders
+      // exactly two comboboxes — type first, then status.
+      const typeDropdown = page.getByRole('combobox').first();
+      await expect(typeDropdown).toBeVisible({ timeout: 10000 });
+
+      await selectMatSelectOption(
+        page,
+        typeDropdown,
+        page.getByRole('option', { name: 'Templates', exact: true })
+      );
+
+      // expect: Only template MSELs appear
+      // Search for our template - it should be visible
+      const searchBox = page.getByRole('textbox', { name: 'Search' });
+      await searchBox.fill(templateName);
+      const templateRow = page.getByRole('row').filter({ hasText: templateName });
+      await expect(templateRow).toBeVisible({ timeout: 10000 });
+
+      // Search for our non-template - it should not be visible
+      await searchBox.clear();
+      await searchBox.fill(nonTemplateName);
+      const noResults = page.locator('text=No results found');
+      await expect(noResults).toBeVisible({ timeout: 10000 });
+
+      // 3. Reset filter to 'All Types'
+      await searchBox.clear();
+      await selectMatSelectOption(
+        page,
+        typeDropdown,
+        page.getByRole('option', { name: 'All Types', exact: true })
+      );
+
+      // expect: Both MSELs are now visible
+      await searchBox.fill(templateName);
+      await expect(page.getByRole('row').filter({ hasText: templateName })).toBeVisible({ timeout: 10000 });
+
+      await searchBox.clear();
+      await searchBox.fill(nonTemplateName);
+      await expect(page.getByRole('row').filter({ hasText: nonTemplateName })).toBeVisible({ timeout: 10000 });
+
+      // 4. Test "Not Templates" filter
+      await searchBox.clear();
+      await selectMatSelectOption(
+        page,
+        typeDropdown,
+        page.getByRole('option', { name: 'Not Templates', exact: true })
+      );
+
+      // expect: Only non-template MSELs appear
+      await searchBox.fill(nonTemplateName);
+      await expect(page.getByRole('row').filter({ hasText: nonTemplateName })).toBeVisible({ timeout: 10000 });
+
+      await searchBox.clear();
+      await searchBox.fill(templateName);
+      await expect(page.locator('text=No results found')).toBeVisible({ timeout: 10000 });
+    } finally {
+      // 5. Clean up: delete both MSELs
+      await deleteMsel(token, templateMsel.id);
+      await deleteMsel(token, nonTemplateMsel.id);
     }
-
-    await page.waitForTimeout(500);
-    await page.waitForLoadState('networkidle');
-
-    // expect: The MSEL list filters to show only MSELs marked as templates
-    // expect: MSELs without template status are hidden
-    const mselRows = page.getByRole('row').filter({ hasNotText: 'Name Description Template Status Created By Date Created Date Modified' });
-    const filteredCount = await mselRows.count();
-    // All visible rows should have template status checked
-
-    // 3. Select 'All Types' to reset
-    // After filtering, the dropdown label changes to the selected filter (e.g., "Templates")
-    // So we need to find the dropdown by its new label or position
-    const typeDropdown = page.getByRole('combobox').filter({ hasText: /Templates|All Types/i }).first();
-    await typeDropdown.click();
-    const allTypesOption = page.getByRole('option', { name: 'All Types' });
-    await expect(allTypesOption).toBeVisible({ timeout: 5000 });
-    await allTypesOption.click();
-
-    await page.waitForTimeout(500);
-    await page.waitForLoadState('networkidle');
-
-    // expect: All MSELs are displayed again
-    const resetCount = await mselRows.count();
-    expect(resetCount).toBeGreaterThanOrEqual(filteredCount);
   });
 });

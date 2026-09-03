@@ -117,9 +117,13 @@ Gallery is a content management application for the Crucible cybersecurity train
 
 **Steps:**
   1. Click on an exhibit name link in the table
-    - expect: User is navigated to the exhibit's Wall view
-    - expect: URL updates to include '?exhibit={exhibitId}'
-    - expect: The Wall view shows the exhibit's cards with unread article counts
+    - expect: User is navigated to the exhibit's Archive view
+    - expect: URL updates to include '?exhibit={exhibitId}&section=archive'
+    - expect: The Archive view shows the exhibit's released articles
+  2. Navigate to the Wall, then return to My Exhibits via the Gallery logo
+    - expect: The exhibit name link still points at '?exhibit={exhibitId}&section=archive'
+    - expect: The exhibit's remembered section is still 'wall' — rendering My Exhibits does
+      not overwrite it
 
 ### 3. Wall View Functionality
 
@@ -186,6 +190,23 @@ Gallery is a content management application for the Crucible cybersecurity train
     - expect: The Read button toggles to indicate the article has been read
   3. Navigate back to the Wall view
     - expect: The unread article count on the corresponding card decreases
+
+#### 3.6. A TeamCard for another exhibit does not change this Wall
+
+**File:** `tests/wall/foreign-exhibit-teamcard-ignored.spec.ts`
+
+Pending upstream: TeamCard SignalR events fan out beyond the exhibit being viewed, so the
+client must filter them by exhibit — a foreign TeamCard must not flip a card onto this Wall.
+
+**Steps:**
+  1. Seed one collection with two exhibits, view the Wall on exhibit B as a member of B's
+     team, and confirm only B's own card is shown
+    - expect: Only B's card is on the Wall
+  2. Flip B's own TeamCard off and on again
+    - expect: Both transitions render, proving the event chain reaches this tab
+  3. Flip a TeamCard belonging to a team of the *other* exhibit to shown
+    - expect: The foreign event is received by the browser but ignored — the Wall still
+      shows only B's own card
 
 ### 4. Archive Functionality
 
@@ -547,6 +568,56 @@ Gallery is a content management application for the Crucible cybersecurity train
   5. Click the 'Inject' column header
     - expect: Exhibits are sorted by current inject value
 
+#### 6.9. Expanded exhibit detail panel stays open across an exhibit update
+
+**File:** `tests/exhibits/exhibit-detail-panel-survives-update.spec.ts`
+
+Pending upstream: the exhibits table needs a `trackBy` so a store emission patches rows
+instead of rebuilding them; without it, an expanded row's detail panel is destroyed
+mid-interaction.
+
+**Steps:**
+  1. Expand an exhibit row, then expand its 'Exhibit Teams' sub-panel
+    - expect: The sub-panel is open and its content is visible
+  2. Update a *different* exhibit in the same collection, so the exhibit store emits
+    - expect: The sibling row's Move/Inject cells change, proving the update reached the
+      component
+    - expect: The expanded sub-panel is still open with its content still visible
+
+#### 6.10. Card Teams panel tolerates a team or card with no name
+
+**File:** `tests/exhibits/null-name-card-teams-panel.spec.ts`
+
+Pending upstream: on the "Card Teams" sub-panel of an expanded exhibit row — the sibling of
+"Exhibit Teams" — neither the sort comparator nor the search predicate may assume a name is
+present. `Team.name` and `Card.name` are both nullable and `POST /api/teams` and
+`POST /api/cards` each accept a null one. Companion to 13.4/13.5, which cover the same class
+of behaviour in the Exhibit Teams panel.
+
+The failure is not a degraded row: the `TypeError` reaches Angular's global `ErrorHandler`,
+which opens a modal error sheet over the whole Administration screen, and it does so on row
+expansion alone. Both tests seed their own collection so the malformed records never touch
+the shared exhibit.
+
+**Steps:**
+  1. Seed an exhibit with three TeamCards — one fully named, one whose team `name` is null,
+     one whose card `name` is null — then expand the exhibit row and its 'Card Teams' panel
+    - expect: The panel renders, with no application error sheet
+    - expect: All three rows are listed, each null-valued row identifiable by the name it
+      does carry in the other column
+  2. Click the 'Team' column header to sort ascending, then again for descending
+    - expect: Every row still renders, in the exact expected order, with the null team name
+      sorting as an empty value
+  3. Click the 'Card' column header to sort ascending, then again for descending
+    - expect: Same, for the null card name — the second, independent call site
+  4. Type the card name of the row whose *team* name is null, then the team name of the row
+     whose *card* name is null
+    - expect: Each search finds its row — a null name is neutralised without suppressing
+      the other field's match
+  5. Type a term that matches no row, then clear the search
+    - expect: Zero rows, distinguishing a correct empty filter from a crash; clearing
+      restores all three
+
 ### 7. User Management
 
 **Seed:** `tests/seed.spec.ts`
@@ -752,6 +823,41 @@ Gallery is a content management application for the Crucible cybersecurity train
   3. Remove a membership from the group
     - expect: Membership is removed successfully
 
+#### 9.5. Delete Group
+
+**File:** `tests/groups/delete-group.spec.ts`
+
+**Steps:**
+  1. Click the delete (trash) icon on a group's row
+    - expect: A 'Delete Group?' confirmation dialog appears naming the group
+  2. Click 'Cancel'
+    - expect: The dialog closes and the group is still listed
+  3. Click the delete icon again and click 'Delete'
+    - expect: The group is deleted successfully
+    - expect: The group is removed from the groups list
+
+#### 9.6. Rename Group
+
+**File:** `tests/groups/rename-group.spec.ts`
+
+**Steps:**
+  1. Click the rename (pencil) icon on a group's row
+    - expect: A 'Rename <group>' dialog opens with the Name field prefilled
+    - expect: The Save button is disabled until the name is changed
+  2. Enter a new name and click Save
+    - expect: The group is renamed successfully
+    - expect: The new name appears in the groups list and the old name is gone
+
+#### 9.7. Sort Groups
+
+**File:** `tests/groups/sort-groups.spec.ts`
+
+**Steps:**
+  1. Click the 'Group Name' column header
+    - expect: Groups are sorted by name in ascending order
+  2. Click the 'Group Name' column header again
+    - expect: Groups are sorted by name in descending order
+
 ### 10. Admin Navigation and UI
 
 **Seed:** `tests/seed.spec.ts`
@@ -947,6 +1053,35 @@ Gallery is a content management application for the Crucible cybersecurity train
     - expect: Team name is displayed (e.g. 'Team: CONTROL')
   2. Navigate to the Archive view and observe the team indicator
     - expect: The same team is displayed
+
+#### 13.4. Sorting Exhibit Teams by Full Name tolerates a team with no name
+
+**File:** `tests/teams/null-name-team-sort.spec.ts`
+
+Pending upstream: `Team.name` is nullable and `POST /api/teams` accepts a null one, so the
+sort comparator must not assume it is present.
+
+**Steps:**
+  1. Seed an exhibit with two named teams and one whose `name` is null, then open its
+     Exhibit Teams panel in admin
+    - expect: All three teams are listed
+  2. Click the "Full Name" column header to sort ascending, then again for descending
+    - expect: The list still renders every team in both directions — the null-name team
+      sorts as an empty value rather than blanking the whole list
+
+#### 13.5. Searching Exhibit Teams tolerates a team with no name or no short name
+
+**File:** `tests/teams/null-name-team-filter.spec.ts`
+
+Pending upstream: companion to 13.4 for the filter predicate, which needs a non-empty search
+string as well as a null-valued team.
+
+**Steps:**
+  1. Seed teams with a null `name` and with a null `shortName`, then open the Exhibit Teams
+     panel and type a term matching the null-name team's short name
+    - expect: The null-name team is listed — it still matches on `shortName`
+  2. Type a term that matches no team
+    - expect: Zero rows, distinguishing a correct empty filter from a crash
 
 ### 14. Integration and API
 

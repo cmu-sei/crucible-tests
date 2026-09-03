@@ -5,126 +5,79 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
+import {
+  getBlueprintToken,
+  createUnit,
+  deleteUnit,
+  tempBlueprintName,
+} from '../../test-helpers';
 
 test.describe('Admin - Units Management', () => {
   test('Edit Unit', async ({ blueprintAuthenticatedPage: page }) => {
-    // 1. Navigate to Units list and click edit icon for a unit, modify details, and click 'Save'
-    await page.goto(`${Services.Blueprint.UI}/admin`);
-    await page.waitForLoadState('networkidle');
+    const token = await getBlueprintToken();
+    const originalName = tempBlueprintName('EditUnit');
+    const updatedName = tempBlueprintName('EditedUnit');
+    const shortName = 'ETU';
+    let unitId: string | undefined;
 
-    const unitsNav = page.locator(
-      'mat-list-item:has-text("Units"), a:has-text("Units"), button:has-text("Units")'
-    ).first();
-    await expect(unitsNav).toBeVisible({ timeout: 5000 });
-    await unitsNav.click();
-    await page.waitForLoadState('networkidle');
+    try {
+      // Seed a unit via API
+      const unit = await createUnit(token, { name: originalName, shortName });
+      unitId = unit.id;
 
-    // Pre-cleanup: remove any pre-existing 'Edit Test Unit' from previous test runs
-    const deleteAllEditTestUnits = async () => {
-      let deleteBtn = page.getByRole('button', { name: 'Delete Edit Test Unit' }).first();
-      while (await deleteBtn.isVisible().catch(() => false)) {
-        await deleteBtn.click();
-        const confirmDialog = page.locator(
-          '[role="dialog"], .mat-dialog-container, [class*="dialog"]'
-        ).first();
-        await expect(confirmDialog).toBeVisible({ timeout: 5000 });
-        const confirmButton = page.locator(
-          'button:has-text("Confirm"), button:has-text("Delete"), button:has-text("Yes"), button:has-text("OK")'
-        ).last();
-        await confirmButton.click();
-        await page.waitForLoadState('networkidle');
-        await page.waitForTimeout(500);
-        deleteBtn = page.getByRole('button', { name: 'Delete Edit Test Unit' }).first();
+      // Navigate to Admin → Units
+      await page.goto(`${Services.Blueprint.UI}/admin`);
+      const unitsNav = page.locator('mat-list-item').filter({ hasText: 'Units' }).first();
+      await expect(unitsNav).toBeVisible({ timeout: 10000 });
+      await unitsNav.click();
+
+      // Wait for the table to be visible
+      const unitsTable = page.locator('table').first();
+      await expect(unitsTable).toBeVisible({ timeout: 5000 });
+
+      // Verify the unit appears in the table
+      const unitCell = page.getByRole('cell', { name: originalName, exact: true }).first();
+      await expect(unitCell).toBeVisible({ timeout: 5000 });
+
+      // Click edit button for the unit
+      const editButton = page.getByRole('button', { name: `Edit ${originalName}` });
+      await expect(editButton).toBeVisible({ timeout: 5000 });
+      await editButton.click();
+
+      // expect: Edit form appears
+      const editForm = page.locator('[role="dialog"]').first();
+      await expect(editForm).toBeVisible({ timeout: 5000 });
+
+      // Modify the Name field
+      const editNameField = page.getByRole('dialog').first().getByRole('textbox', { name: 'Name', exact: true });
+      await expect(editNameField).toBeVisible({ timeout: 5000 });
+      await editNameField.clear();
+      await editNameField.fill(updatedName);
+
+      // Click 'Save', waiting for PUT response
+      const updateResponse = page.waitForResponse(
+        (resp) => resp.url().includes(`/api/units/${unitId}`) && resp.request().method() === 'PUT'
+      );
+      const editSaveButton = page.locator('button:has-text("Save")').first();
+      await editSaveButton.click();
+      await updateResponse;
+
+      // expect: Changes are reflected in the table
+      const updatedCell = page.getByRole('cell', { name: updatedName, exact: true }).first();
+      await expect(updatedCell).toBeVisible({ timeout: 5000 });
+
+      // Verify server-side persistence
+      const checkResp = await fetch(`${Services.Blueprint.API}/api/units/${unitId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      expect(checkResp.ok).toBe(true);
+      const persisted = await checkResp.json();
+      expect(persisted.name).toBe(updatedName);
+    } finally {
+      // Cleanup via API
+      if (unitId) {
+        await deleteUnit(token, unitId);
       }
-    };
-
-    await deleteAllEditTestUnits();
-
-    // Create a unit named "Edit Test Unit" so we always have something to edit
-    const addButton = page.getByRole('button', { name: 'Add Unit' });
-    await expect(addButton).toBeVisible({ timeout: 5000 });
-    await addButton.click();
-
-    await page.waitForTimeout(500);
-    const form = page.locator('[role="dialog"], [class*="dialog"], [class*="form"]').first();
-    await expect(form).toBeVisible({ timeout: 5000 });
-
-    const shortNameField = page.locator(
-      'input[formControlName*="shortName"], input[placeholder*="Short Name"], input[name*="short"]'
-    ).first();
-    await expect(shortNameField).toBeVisible({ timeout: 5000 });
-    await shortNameField.fill('ETU');
-
-    const nameField = page.locator(
-      'input[formControlName="name"], input[placeholder*="Name"]:not([placeholder*="Short"])'
-    ).first();
-    await expect(nameField).toBeVisible({ timeout: 5000 });
-    await nameField.fill('Edit Test Unit');
-
-    const saveButton = page.locator(
-      'button:has-text("Save"), button[type="submit"]'
-    ).first();
-    await saveButton.click();
-
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(1000);
-
-    // Verify the unit was created
-    const createdUnit = page.getByRole('cell', { name: 'Edit Test Unit', exact: true }).first();
-    await expect(createdUnit).toBeVisible({ timeout: 5000 });
-
-    // Click edit button for the created unit
-    const editButton = page.getByRole('button', { name: /^Edit / }).first();
-    await expect(editButton).toBeVisible({ timeout: 5000 });
-    await editButton.click();
-
-    // expect: Edit form appears
-    await page.waitForTimeout(500);
-    const editForm = page.locator('[role="dialog"], [class*="dialog"], [class*="form"]').first();
-    await expect(editForm).toBeVisible({ timeout: 5000 });
-
-    // Modify the Name field
-    const editNameField = page.locator(
-      'input[formControlName="name"], input[placeholder*="Name"]:not([placeholder*="Short"])'
-    ).first();
-    await expect(editNameField).toBeVisible({ timeout: 5000 });
-    const timestamp = Date.now();
-    await editNameField.clear();
-    await editNameField.fill(`Updated Unit ${timestamp}`);
-
-    // Click 'Save'
-    const editSaveButton = page.locator(
-      'button:has-text("Save"), button[type="submit"]'
-    ).first();
-    await editSaveButton.click();
-
-    // expect: Unit is updated successfully
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(1000);
-
-    // expect: Changes are reflected in the table
-    const updatedUnit = page.locator(`text=Updated Unit ${timestamp}`).first();
-    await expect(updatedUnit).toBeVisible({ timeout: 5000 });
-
-    // Cleanup: delete the updated unit to restore state
-    const deleteButton = page.getByRole('button', { name: /^Delete / }).first();
-    await expect(deleteButton).toBeVisible({ timeout: 5000 });
-    await deleteButton.click();
-
-    const confirmDialog = page.locator(
-      '[role="dialog"], .mat-dialog-container, [class*="dialog"]'
-    ).first();
-    await expect(confirmDialog).toBeVisible({ timeout: 5000 });
-
-    const confirmButton = page.locator(
-      'button:has-text("Confirm"), button:has-text("Delete"), button:has-text("Yes"), button:has-text("OK")'
-    ).last();
-    await confirmButton.click();
-
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(500);
-
-    // expect: Updated unit no longer appears in the table
-    await expect(page.locator(`text=Updated Unit ${timestamp}`).first()).not.toBeVisible({ timeout: 5000 });
+    }
   });
 });

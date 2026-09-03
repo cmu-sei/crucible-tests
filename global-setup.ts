@@ -6,7 +6,7 @@ import fs from 'fs';
 import path from 'path';
 import { loadCrucibleEnv } from './load-env';
 import { Services, authenticateWithKeycloak } from './shared-fixtures';
-import { authStatePath } from './auth-paths';
+import { authSessionStatePath, authStatePath } from './auth-paths';
 import { pathFiltersIncludeApp } from './playwright-run-filters';
 
 // Load environment based on CRUCIBLE_TARGET (aspire | minikube) before reading Services.
@@ -31,15 +31,47 @@ interface ProvisionTarget {
  *
  * EXTENSION POINT: other apps (player, gameboard, topomojo, ...) should adopt this
  * by (a) adding an entry here and (b) pointing their own `fixtures.ts` at
- * `authStatePath('<app>')`, mirroring how cite/fixtures.ts consumes it. Only cite
- * is wired up for now.
+ * `authStatePath('<app>')`, mirroring how cite/fixtures.ts consumes it.
  */
 const PROVISION: ProvisionTarget[] = [
+  {
+    app: 'caster',
+    homeUrl: Services.Caster.UI,
+    appShellSelector: 'app-root',
+  },
+  {
+    app: 'player',
+    homeUrl: Services.Player.UI,
+    // The Menu control renders only once Player has resolved the OIDC user.
+    appShellSelector: 'app-root button[aria-label="Menu"]',
+  },
   {
     app: 'cite',
     homeUrl: Services.Cite.UI,
     // mat-toolbar renders only after the OIDC client resolves a user, so it is a
     // reliable "authenticated shell is up" marker for CITE.
+    appShellSelector: 'app-root mat-toolbar',
+  },
+  {
+    app: 'gallery',
+    homeUrl: Services.Gallery.UI,
+    // The topbar's `.options-text` block is guarded by `@if (currentUser$ | async)`,
+    // so it renders only once the OIDC client has resolved a user. The surrounding
+    // mat-toolbar renders before that and would snapshot state without a token.
+    appShellSelector: 'app-topbar .options-text button',
+  },
+  {
+    app: 'steamfitter',
+    homeUrl: Services.Steamfitter.UI,
+    // app-topbar's mat-toolbar renders only after the OIDC client resolves a user,
+    // so it is a reliable "authenticated shell is up" marker for Steamfitter.
+    appShellSelector: 'app-root app-topbar mat-toolbar',
+  },
+  {
+    app: 'blueprint',
+    homeUrl: Services.Blueprint.UI,
+    // mat-toolbar renders only after the OIDC client resolves a user, so it is a
+    // reliable "authenticated shell is up" marker for Blueprint.
     appShellSelector: 'app-root mat-toolbar',
   },
 ];
@@ -76,6 +108,8 @@ async function globalSetup(_config: FullConfig): Promise<void> {
       });
 
       await context.storageState({ path: statePath });
+      const sessionState = await page.evaluate(() => Object.entries(sessionStorage));
+      fs.writeFileSync(authSessionStatePath(target.app), JSON.stringify(sessionState));
       console.log(`[global-setup] Saved ${target.app} auth state to ${statePath}`);
 
       await context.close();
@@ -83,6 +117,7 @@ async function globalSetup(_config: FullConfig): Promise<void> {
       // Remove any stale/partial state so the fixture's fresh-login fallback kicks
       // in rather than loading a broken state file.
       fs.rmSync(statePath, { force: true });
+      fs.rmSync(authSessionStatePath(target.app), { force: true });
       console.warn(
         `[global-setup] Failed to provision auth for ${target.app}; tests will fall back to interactive login. Error: ${error}`,
       );

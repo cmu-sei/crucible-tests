@@ -4,34 +4,42 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
-import { authenticateGalleryWithKeycloak } from '../../fixtures';
+import { test, expect, gotoExhibitSection, Services } from '../../fixtures';
 
 test.describe('Integration and API', () => {
-  test('SignalR Real-Time Connection', async ({ page }) => {
-    // Set up console log listener before navigating
-    const consoleMessages: string[] = [];
-    page.on('console', (msg) => {
-      consoleMessages.push(msg.text());
+  test('SignalR Real-Time Connection', async ({ galleryAuthenticatedPage: page, seededExhibit }) => {
+    // Watch for the SignalR websocket itself rather than scraping console text.
+    // signalr.service.ts connects to `${ApiUrl}/hubs/main?bearer=<token>`, so the
+    // socket opening is direct proof the transport negotiated — console logging is
+    // incidental and can be stripped from a production build.
+    const hubSockets: string[] = [];
+    page.on('websocket', (ws) => {
+      if (ws.url().includes('/hubs/main')) {
+        hubSockets.push(ws.url());
+      }
     });
 
-    // 1. Log in and navigate to an exhibit Wall or Archive view
-    await authenticateGalleryWithKeycloak(page);
-    await expect(page.getByRole('table')).toBeVisible();
+    // 1. Navigate to an exhibit Wall view (the page that joins the hub). Go by id
+    // rather than via the paginated My Exhibits list so concurrent seeding by
+    // sibling specs can't push the target row onto page 2.
+    await gotoExhibitSection(page, seededExhibit.exhibitId, 'wall');
+    await expect(page).toHaveTitle('Gallery Wall');
 
-    // Navigate to an exhibit
-    const exhibitLink = page.getByRole('cell').getByRole('link').first();
-    await exhibitLink.click();
-    await expect(page).toHaveURL(/\?exhibit=/);
+    // expect: the SignalR hub connection is established over WebSocket
+    await expect
+      .poll(() => hubSockets.length, {
+        message: 'Expected a SignalR WebSocket connection to /hubs/main',
+        timeout: 30000,
+      })
+      .toBeGreaterThan(0);
 
-    // Wait for SignalR messages to appear in console
-    // expect: Console logs show SignalR WebSocket transport connected successfully
-    // Give it some time for SignalR to establish
-    await page.waitForFunction(() => true, null, { timeout: 5000 }).catch(() => {});
+    // expect: the hub is served by the Gallery API, and the connection is
+    // authenticated (the service appends the bearer token to the hub URL)
+    expect(hubSockets[0]).toContain(new URL(Services.Gallery.API).host);
+    expect(hubSockets[0]).toContain('bearer=');
 
-    const hasSignalRMessage = consoleMessages.some(
-      (msg) => msg.includes('WebSocket') || msg.includes('SignalR') || msg.includes('signalr')
-    );
-    expect(hasSignalRMessage).toBeTruthy();
+    // expect: real-time updates actually flow — the wall renders the seeded
+    // cards delivered for the exhibit rather than staying empty
+    await expect(page.getByText('Test Card 1')).toBeVisible();
   });
 });

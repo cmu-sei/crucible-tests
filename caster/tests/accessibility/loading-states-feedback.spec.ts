@@ -4,10 +4,10 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen } from '../../fixtures';
 
 test.describe('Accessibility and Usability', () => {
-  test('Loading States and Feedback', async ({ casterAuthenticatedPage: page }) => {
+  test('Loading States and Feedback', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
 
     await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
 
@@ -22,15 +22,7 @@ test.describe('Accessibility and Usability', () => {
     await saveButton.click();
 
     // expect: Dialog closes and project appears
-    await expect(page.getByRole('link', { name: projectName })).toBeVisible({ timeout: 10000 });
+    cleanupCasterProject(await expectCasterProjectOpen(page, projectName));
     await expect(page.getByRole('dialog', { name: 'Create New Project?' })).not.toBeVisible();
-
-    // Cleanup: delete the project created during the test
-    const projectRow = page.getByRole('row').filter({ hasText: projectName });
-    const deleteButton = projectRow.getByRole('button').last();
-    await deleteButton.click();
-    await expect(page.getByRole('dialog')).toBeVisible({ timeout: 5000 });
-    await page.getByRole('button', { name: /Confirm|Delete|Yes/ }).click();
-    await expect(page.getByRole('link', { name: projectName })).not.toBeVisible({ timeout: 10000 });
   });
 });

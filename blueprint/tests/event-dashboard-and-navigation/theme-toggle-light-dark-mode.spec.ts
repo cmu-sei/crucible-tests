@@ -10,7 +10,6 @@ test.describe('Event Dashboard and Navigation', () => {
   test('Theme Toggle Light Dark Mode', async ({ blueprintAuthenticatedPage: page }) => {
     // 1. Navigate to Event Dashboard and click user menu, toggle 'Dark Theme' switch
     await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 30000 });
-    await page.waitForLoadState('networkidle');
 
     // Open user menu
     const userMenuButton = page.getByRole('button', { name: 'Admin User' });
@@ -28,12 +27,19 @@ test.describe('Event Dashboard and Navigation', () => {
 
     await darkThemeToggle.click();
 
-    // expect: The application theme switches between light and dark mode
-    await page.waitForTimeout(500);
-    const newTheme = await page.evaluate(() => {
-      return document.body.className + document.documentElement.className;
-    });
-    expect(newTheme).not.toBe(initialTheme);
+    // expect: The application theme switches between light and dark mode.
+    // Polled rather than slept on: the class swap is what proves the toggle took effect, so
+    // waiting for that condition is both faster and not a race.
+    const readTheme = () =>
+      page.evaluate(() => document.body.className + document.documentElement.className);
+    await expect
+      .poll(readTheme, {
+        timeout: 15000,
+        intervals: [100, 200, 500],
+        message: 'the theme class should change after toggling Dark Theme',
+      })
+      .not.toBe(initialTheme);
+    const newTheme = await readTheme();
 
     // expect: Theme preference is saved in local storage
     const themeStorage = await page.evaluate(() => {
@@ -48,13 +54,16 @@ test.describe('Event Dashboard and Navigation', () => {
     // 2. Refresh the page
     await page.keyboard.press('Escape');
     await page.reload();
-    await page.waitForLoadState('networkidle');
 
-    // expect: The selected theme persists after page reload
-    const persistedTheme = await page.evaluate(() => {
-      return document.body.className + document.documentElement.className;
-    });
-    // Theme class should still reflect the toggled state
-    expect(persistedTheme).not.toBe(initialTheme);
+    // expect: The selected theme persists after page reload. Waits for the app shell so the
+    // class list is read from a rendered page, not mid-bootstrap.
+    await expect(page.locator('app-root mat-toolbar').first()).toBeVisible({ timeout: 30000 });
+    await expect
+      .poll(readTheme, {
+        timeout: 15000,
+        intervals: [100, 200, 500],
+        message: 'the toggled theme should survive a reload',
+      })
+      .not.toBe(initialTheme);
   });
 });

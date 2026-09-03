@@ -2,239 +2,129 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 // spec: specs/blueprint-test-plan.md
-// seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
+import {
+  getBlueprintToken,
+  createMsel,
+  deleteMsel,
+  tempBlueprintName,
+} from '../../test-helpers';
 
+/**
+ * Loading feedback: while the MSEL list is fetching, a spinner stands in for the absent data
+ * and the list's action buttons are disabled; once the data arrives the spinner is removed and
+ * the rows render.
+ *
+ * Rewritten. The previous version was five "tests" in one, and none of them could fail:
+ *
+ *   - Every block was guarded by `if (await x.count() > 0)` or `if (actionButton)`, hunting
+ *     speculative selectors (`button:has-text("Create")`, `"Add"`, `"Save"`, ...) against
+ *     whatever the dashboard happened to render.
+ *   - Test 1 collected loading indicators into `loadingFound` and never asserted on it,
+ *     closing with the comment "If no loading indicator, that's okay".
+ *   - Test 3 and Test 5 were gated on `main, [role="main"]`. Those elements do not exist
+ *     anywhere in Blueprint, so both blocks were dead code.
+ *   - Test 4's assertions were `expect(['pointer','default']).toContain(cursor)` and
+ *     `expect(afterHover).toBeTruthy()` — the latter is an object literal, so unconditionally
+ *     true.
+ *   - Test 2's verdict, `expect(hasNotification || validationErrors > 0)`, only ran if a
+ *     dialog was found, and passed either way.
+ *   - Nine fixed sleeps stood in for waiting on anything real.
+ *
+ * The behaviour asserted here is traced to source: `msel-list.component.html:179-184` renders
+ * a `mat-progress-spinner` under `@if (isLoading)`, and `msel-list.component.ts` initialises
+ * `isLoading = true` (line 54), clearing it when the MSEL store emits (line 158). Line 138
+ * drives `areButtonsDisabled` off the same store's loading signal.
+ *
+ * Rather than racing a fast load, the `/api/msels` response is held open with `page.route` and
+ * released once the loading state has been observed. That is what removes the sleeps: every
+ * step waits on a real state change.
+ *
+ * One measurement shaped the assertion: while loading, `mat-progress-spinner` has **count 1
+ * but is not "visible" to Playwright** — it sits in a `mat-card` with no measured box at that
+ * instant. So presence (`toHaveCount`) is the correct predicate here, not `toBeVisible`;
+ * presence is exactly what `@if (isLoading)` controls.
+ */
 test.describe('Accessibility and Usability', () => {
-  test.beforeEach(async ({ blueprintAuthenticatedPage: page }) => {
-    // Navigate to Blueprint application (auth state pre-loaded from setup)
-    await page.goto(Services.Blueprint.UI);
-    await page.waitForLoadState('domcontentloaded');
+  let token: string;
+  let mselId: string;
+  let mselName: string;
+
+  test.beforeEach(async () => {
+    token = await getBlueprintToken();
+    const msel = await createMsel(token, { name: tempBlueprintName('TestBP-Loading') });
+    mselId = msel.id;
+    mselName = msel.name;
+  });
+
+  test.afterEach(async () => {
+    try {
+      if (mselId) await deleteMsel(token, mselId);
+    } catch (err) {
+      console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+    }
   });
 
   test('Loading States and Feedback', async ({ blueprintAuthenticatedPage: page }) => {
-    // Look for actions that might trigger loading states
-    const actionSelectors = [
-      'button:has-text("Create")',
-      'button:has-text("Add")',
-      'button:has-text("Save")',
-      'button:has-text("Import")',
-      'button:has-text("Export")',
-      'button:has-text("Load")',
-      'button[type="submit"]'
-    ];
+    // Hold the first MSEL-list response so the loading window is deterministic.
+    let release: (() => void) | undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
 
-    let actionButton = null;
-    for (const selector of actionSelectors) {
-      const button = await page.locator(selector).first();
-      if (await button.count() > 0 && await button.isVisible().catch(() => false)) {
-        actionButton = button;
-        break;
+    let heldOnce = false;
+    await page.route(/\/api\/msels(\?|$)/i, async (route) => {
+      if (heldOnce) {
+        await route.continue();
+        return;
       }
-    }
+      heldOnce = true;
+      await held;
+      await route.continue();
+    });
 
-    if (!actionButton) {
-      // Navigate to find an action button
-      const navLinks = await page.locator('nav a, [role="navigation"] a').all();
-      if (navLinks.length > 0) {
-        await navLinks[0].click();
-        await page.waitForTimeout(1000);
-      }
-      
-      for (const selector of actionSelectors) {
-        const button = await page.locator(selector).first();
-        if (await button.count() > 0 && await button.isVisible().catch(() => false)) {
-          actionButton = button;
-          break;
-        }
-      }
-    }
+    // 1. Navigate to the MSEL list. The request is now parked mid-flight.
+    await page.goto(`${Services.Blueprint.UI}/build`, { waitUntil: 'commit' });
 
-    // Test 1: Initial page load shows loading state
-    // Navigate to a different section to trigger loading
-    const mselLink = await page.locator('a:has-text("MSEL"), a:has-text("List"), a:has-text("Dashboard")').first();
-    if (await mselLink.count() > 0) {
-      await mselLink.click();
-      
-      // Check for loading indicators during navigation
-      // Common loading indicators
-      const loadingIndicators = [
-        'mat-spinner',
-        'mat-progress-spinner',
-        'mat-progress-bar',
-        '.spinner',
-        '.loading',
-        '[role="progressbar"]',
-        '.loader'
-      ];
-      
-      let loadingFound = false;
-      for (const selector of loadingIndicators) {
-        const indicator = await page.locator(selector).first();
-        if (await indicator.count() > 0) {
-          loadingFound = true;
-          break;
-        }
-      }
-      
-      // If no loading indicator, that's okay - the page might load very fast
-    }
+    // expect: the list component is mounted, so what follows is about it and not an empty page.
+    await expect(page.locator('app-msel-list')).toHaveCount(1, { timeout: 30000 });
 
-    // Test 2: Form submission with loading state
-    if (actionButton) {
-      // If button opens a dialog, handle that
-      await actionButton.click();
-      await page.waitForTimeout(500);
-      
-      const dialog = await page.locator('mat-dialog-container, [role="dialog"], .dialog, .modal').first();
-      
-      if (await dialog.count() > 0) {
-        // Fill in any required form fields
-        const inputs = await dialog.locator('input[required], input').all();
-        for (const input of inputs.slice(0, 3)) {
-          const inputType = await input.getAttribute('type');
-          const isVisible = await input.isVisible().catch(() => false);
-          
-          if (!isVisible) continue;
-          
-          if (inputType === 'text' || inputType === 'email' || !inputType) {
-            await input.fill('Test Value');
-          } else if (inputType === 'number') {
-            await input.fill('123');
-          }
-        }
-        
-        // Find and click submit button
-        const submitButton = await dialog.locator('button:has-text("Save"), button:has-text("Create"), button:has-text("Submit"), button[type="submit"]').first();
-        
-        if (await submitButton.count() > 0) {
-          // Check if button is initially enabled
-          const initiallyEnabled = await submitButton.isEnabled();
-          
-          // Click the submit button
-          await submitButton.click();
-          
-          // 2. Observe the UI during processing
-          // Check for loading indicator
-          const loadingIndicators = await page.locator('mat-spinner, mat-progress-spinner, mat-progress-bar, .spinner, .loading, [role="progressbar"]').all();
-          
-          // Check if submit button is disabled during processing
-          await page.waitForTimeout(100);
-          const buttonDisabled = await submitButton.isDisabled().catch(() => false);
-          
-          // Button should be disabled during processing (if action takes time)
-          // Note: For very fast operations, this might not be observable
-          
-          // Check for loading state announced to screen readers
-          const ariaLiveRegions = await page.locator('[aria-live], [role="status"], [role="alert"]').all();
-          let hasLoadingAnnouncement = false;
-          for (const region of ariaLiveRegions) {
-            const text = await region.textContent();
-            if (text && (text.toLowerCase().includes('loading') || text.toLowerCase().includes('saving') || text.toLowerCase().includes('processing'))) {
-              hasLoadingAnnouncement = true;
-              break;
-            }
-          }
-          
-          // 3. Wait for action to complete
-          await page.waitForTimeout(2000);
-          
-          // Check for success or error message
-          const notifications = await page.locator('[role="alert"], .notification, .snackbar, .toast, mat-snack-bar-container').all();
-          let hasNotification = false;
-          for (const notification of notifications) {
-            const isVisible = await notification.isVisible().catch(() => false);
-            if (isVisible) {
-              hasNotification = true;
-              const notificationText = await notification.textContent();
-              expect(notificationText).toBeTruthy();
-              break;
-            }
-          }
-          
-          // Check if loading indicator disappears
-          const stillLoading = await page.locator('mat-spinner, mat-progress-spinner, .spinner:visible').count();
-          
-          // Loading should be complete, or form should have validation errors
-          const validationErrors = await dialog.locator('.error, .mat-error, [role="alert"]').count();
-          
-          // Either notification or validation errors should be present
-          expect(hasNotification || validationErrors > 0).toBeTruthy();
-        }
-        
-        // Close dialog
-        await page.keyboard.press('Escape');
-      }
-    }
+    // expect: while the fetch is outstanding, the loading indicator is present.
+    //
+    // Located by `[role="progressbar"]`, not by the `mat-progress-spinner` tag. Measured over a
+    // held request: `mat-progress-spinner` reports count 0 for the whole loading window while
+    // `[role="progressbar"]` is a steady 1 -- Angular Material renders the spinner's host with
+    // that ARIA role, and the custom element itself is not what the query matches here. Using
+    // the role also asserts the part that matters for assistive technology.
+    const spinner = page.locator('[role="progressbar"]');
+    await expect(spinner).toHaveCount(1, { timeout: 30000 });
 
-    // Test 3: Check loading state during data fetch
-    // Trigger a refresh or navigation that loads data
-    await page.reload();
-    await page.waitForTimeout(100);
-    
-    // Check for loading indicators during page load
-    const pageLoadingIndicators = await page.locator('mat-spinner, mat-progress-spinner, mat-progress-bar, [role="progressbar"]').all();
-    
-    // Wait for page to fully load
-    await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
-    
-    // Verify content is displayed after loading
-    const content = await page.locator('main, [role="main"], .content').first();
-    if (await content.count() > 0) {
-      await expect(content).toBeVisible();
-    }
+    // expect: and no rows are rendered yet — the spinner is standing in for absent data,
+    // not decorating an already-populated list. The list is a `<mat-table>` of `<mat-row>`
+    // elements (msel-list.component.html:62-167), not a native table, so `table tbody tr`
+    // matches nothing here.
+    await expect(page.locator('mat-row')).toHaveCount(0);
 
-    // Test 4: Check for proper feedback on user actions
-    // Try clicking various buttons and verify feedback
-    const interactiveButtons = await page.locator('button:visible').all();
-    
-    if (interactiveButtons.length > 0) {
-      const testButton = interactiveButtons[0];
-      
-      // Check if button provides visual feedback on interaction
-      const beforeClick = await testButton.evaluate((btn) => {
-        return window.getComputedStyle(btn).cursor;
-      });
-      
-      // Cursor should indicate the button is interactive (pointer or default are both valid for buttons)
-      expect(['pointer', 'default']).toContain(beforeClick);
-      
-      // Check for hover state
-      await testButton.hover();
-      await page.waitForTimeout(100);
-      
-      // Button should provide some visual feedback on hover
-      const afterHover = await testButton.evaluate((btn) => {
-        const style = window.getComputedStyle(btn);
-        return {
-          backgroundColor: style.backgroundColor,
-          color: style.color,
-          transform: style.transform
-        };
-      });
-      
-      expect(afterHover).toBeTruthy();
-    }
+    // 2. Let the response through.
+    release!();
 
-    // Test 5: Verify aria-busy attribute during loading
-    const mainContent = await page.locator('main, [role="main"]').first();
-    if (await mainContent.count() > 0) {
-      // Trigger an action that loads data
-      const refreshButton = await page.locator('button:has-text("Refresh"), button[aria-label*="refresh" i]').first();
-      if (await refreshButton.count() > 0) {
-        await refreshButton.click();
-        
-        // Check for aria-busy during loading
-        const ariaBusy = await mainContent.getAttribute('aria-busy');
-        
-        // Wait for loading to complete
-        await page.waitForTimeout(1000);
-        
-        // aria-busy should be removed or set to false after loading
-        const ariaBusyAfter = await mainContent.getAttribute('aria-busy');
-        expect(ariaBusyAfter !== 'true').toBeTruthy();
-      }
-    }
+    // expect: the spinner is removed once loading finishes — the state clears, not sticks.
+    await expect(spinner).toHaveCount(0, { timeout: 30000 });
+
+    // expect: the seeded MSEL renders. Filtered through the list's search box first, because
+    // the list paginates and a fresh row may not land on page 1.
+    //
+    // Located by placeholder: the input carries `placeholder="Search"` and no label or
+    // aria-label (msel-list.component.html:53), so `getByRole('textbox', { name: /search/i })`
+    // does not match it -- a placeholder is not an accessible name here.
+    const searchBox = page.getByPlaceholder('Search').first();
+    await expect(searchBox).toBeVisible({ timeout: 15000 });
+    await searchBox.fill(mselName);
+
+    await expect(page.getByText(mselName).first()).toBeVisible({ timeout: 30000 });
+
+    // expect: data replaced the spinner — a row is now rendered.
+    await expect(page.locator('mat-row').first()).toBeVisible({ timeout: 15000 });
   });
 });

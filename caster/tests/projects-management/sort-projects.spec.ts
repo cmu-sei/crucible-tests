@@ -15,17 +15,17 @@ test.describe('Projects Management', () => {
     // expect: Projects list is visible
     await expect(page.getByRole('table')).toBeVisible();
 
-    // 2. Click on the 'Project Name' column header
-    await page.getByRole('button', { name: 'Project Name' }).click();
+    // 2. Click on the Name column header
+    await page.getByRole('button', { name: 'Name' }).click();
 
     // expect: Projects are sorted alphabetically by name
     // expect: A sort indicator shows the sort direction
-    await expect(page.getByRole('button', { name: 'Project Name' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Name' })).toBeVisible();
 
-    // 3. Click on the 'Project Name' column header again
-    await page.getByRole('button', { name: 'Project Name' }).click();
+    // 3. Click on the Name column header again
+    await page.getByRole('button', { name: 'Name' }).click();
 
     // expect: Projects are sorted in reverse alphabetical order
-    await expect(page.getByRole('button', { name: 'Project Name' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Name' })).toBeVisible();
   });
 });

@@ -20,3 +20,7 @@ import path from 'path';
 export function authStatePath(app: string): string {
   return path.resolve(__dirname, '.auth', `${app}.json`);
 }
+
+export function authSessionStatePath(app: string): string {
+  return path.resolve(__dirname, '.auth', `${app}-session.json`);
+}

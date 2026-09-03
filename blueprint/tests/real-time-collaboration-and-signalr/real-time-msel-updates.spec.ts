@@ -2,101 +2,160 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 // spec: specs/blueprint-test-plan.md
-// seed: tests/seed.spec.ts
 
-import { test, expect, chromium, BrowserContext } from '@playwright/test';
-import { Services, authenticateBlueprintWithKeycloak } from '../../fixtures';
-import path from 'node:path';
+import { test, expect, Services } from '../../fixtures';
+import { chromium } from '@playwright/test';
+import fs from 'fs';
+import { authStatePath, authSessionStatePath } from '../../../auth-paths';
+import {
+  getBlueprintToken,
+  createMsel,
+  deleteMsel,
+  createRenderableScenarioEvent,
+  assertJoinedMselGroup,
+  tempBlueprintName,
+  navigateToMselSection,
+} from '../../test-helpers';
 
+/**
+ * Verifies SignalR pushes a new scenario event to a second window with no refresh.
+ *
+ * Rewritten. The previous version failed on three separate defects:
+ *
+ * 1. It clicked a link named "Project Lagoon TTX - Admin User". No such MSEL exists on
+ *    this stack, so `locator.click` timed out after 10s — the spec never reached its
+ *    SignalR assertion at all.
+ * 2. Its second context loaded `storageState` from `.auth/user.json`, a path that does
+ *    not exist. The real per-app files are `.auth/blueprint.json` (+ `-session.json`),
+ *    written by global-setup and addressed via `auth-paths.ts`.
+ * 3. It waited with `waitForTimeout(5000)` and then compared counts once. A fixed sleep
+ *    both slows the suite and makes the result a coin flip; CLAUDE.md forbids it.
+ *
+ * The real-time behaviour itself is sound — verified live, the new row reached window 2
+ * in ~1s without a reload. So this is a test defect, not an app bug.
+ *
+ * Now: seed a MSEL, open it in two independently-authenticated contexts, create an event
+ * through window 1's UI (paired with its POST), and poll window 2 with `expect.poll`.
+ * Window 2 is never reloaded, so only a pushed update can satisfy the assertion.
+ */
 test.describe('Real-time Collaboration and SignalR', () => {
-  // Verifies that SignalR real-time updates work: when a scenario event is created
-  // in one browser window, it automatically appears in another window viewing the
-  // same MSEL without a manual refresh.
-  test('Real-time MSEL Updates', async ({ page }) => {
-    // 1. Open two browser windows, both viewing the same MSEL
-    await authenticateBlueprintWithKeycloak(page, 'admin', 'admin');
+  let token: string;
+  let mselId: string;
 
-    // expect: Both windows display the same MSEL details
-    await page.waitForLoadState('load');
-
-    // Navigate to the Build page
-    await page.goto(`${Services.Blueprint.UI}/build`);
-    await page.waitForLoadState('load');
-
-    // Navigate to Project Lagoon TTX MSEL (full name includes " - Admin User")
-    const mselLink = page.getByRole('link', { name: 'Project Lagoon TTX - Admin User' });
-    await mselLink.click();
-    await page.waitForLoadState('load');
-    const mselUrl = page.url();
-
-    // Navigate to the Scenario Events tab (in the sidebar navigation)
-    await page.getByText('Scenario Events', { exact: true }).click();
-    await page.waitForLoadState('load');
-
-    // Open second browser context and window using saved auth state
-    const authFile = path.resolve(__dirname, '../../../.auth/user.json');
-    const browser = await chromium.launch();
-    const context2 = await browser.newContext({
-      ignoreHTTPSErrors: true,
-      storageState: authFile
+  test.beforeEach(async () => {
+    token = await getBlueprintToken();
+    const msel = await createMsel(token, {
+      name: tempBlueprintName('TestBP-Realtime'),
+      description: 'Seeded to verify SignalR scenario-event propagation.',
     });
-    const page2 = await context2.newPage();
+    mselId = msel.id;
 
-    // Navigate to the Build page in second window
-    await page2.goto(`${Services.Blueprint.UI}/build`);
-    await page2.waitForLoadState('load');
+    // One baseline event, so the grid is rendered and its DataFields exist before the
+    // window-1 UI creates the second one.
+    await createRenderableScenarioEvent(token, mselId, 'Baseline event', { deltaSeconds: 60 });
+  });
 
-    // Click on the same MSEL link in second window
-    const mselLink2 = page2.getByRole('link', { name: 'Project Lagoon TTX - Admin User' });
-    await mselLink2.click();
-    await page2.waitForLoadState('load');
+  test.afterEach(async () => {
+    if (mselId) {
+      try {
+        await deleteMsel(token, mselId);
+      } catch (err) {
+        console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+      }
+    }
+  });
 
-    // Wait for the page to be fully loaded by checking for a key element
-    await page2.getByText('Scenario Events', { exact: true }).waitFor({ timeout: 10000 });
+  test('Real-time MSEL Updates', async ({ blueprintAuthenticatedPage: page }) => {
+    // ── Window 1: the seeded MSEL's Scenario Events ─────────────────────────────
+    await navigateToMselSection(page, mselId, 'Scenario Events');
 
-    // Navigate to the Scenario Events tab in second window (in the sidebar navigation)
-    await page2.getByText('Scenario Events', { exact: true }).click();
-    await page2.waitForLoadState('load');
+    const rows1 = page.locator('table tbody tr');
+    await expect(rows1).toHaveCount(1, { timeout: 20000 });
 
-    // expect: Both windows show the same MSEL Scenario Events
-    // Count the existing scenario event rows in both windows
-    const initialEventCount1 = await page.locator('table tbody tr').count();
-    const initialEventCount2 = await page2.locator('table tbody tr').count();
+    // ── Window 2: a separate context on the same MSEL ───────────────────────────
+    // Reuses the storageState global-setup captured, so this costs no extra Keycloak
+    // round-trip. sessionStorage is restored too, since the OIDC client may keep its
+    // token there rather than in localStorage.
+    const statePath = authStatePath('blueprint');
+    expect(
+      fs.existsSync(statePath),
+      `expected global-setup to have written ${statePath}`
+    ).toBe(true);
 
-    // 2. In window 1, create a new scenario event
-    // Click the Action List button to open the menu
-    await page.locator('button[title="Action List"]').click();
-    await page.waitForTimeout(500);
+    const sessionPath = authSessionStatePath('blueprint');
+    const sessionState: Array<[string, string]> = fs.existsSync(sessionPath)
+      ? JSON.parse(fs.readFileSync(sessionPath, 'utf8'))
+      : [];
 
-    // Click "Add New Event" from the menu
-    await page.locator('text=Add New Event').click();
-    await page.waitForTimeout(1000);
+    const browser = await chromium.launch();
+    try {
+      const context2 = await browser.newContext({
+        ignoreHTTPSErrors: true,
+        storageState: statePath,
+      });
+      if (sessionState.length > 0) {
+        await context2.addInitScript((entries: Array<[string, string]>) => {
+          for (const [key, value] of entries) {
+            sessionStorage.setItem(key, value);
+          }
+        }, sessionState);
+      }
+      const page2 = await context2.newPage();
 
-    // The Create Event dialog appears with fields like Scenario Event Type,
-    // Integration Target, Execution Date/Time, etc. Click Save to create with defaults.
-    const saveEventButton = page.getByRole('button', { name: 'Save' });
-    await saveEventButton.click();
-    await page.waitForTimeout(2000);
+      await navigateToMselSection(page2, mselId, 'Scenario Events');
 
-    // 3. Observe window 2 without refreshing
-    // expect: Window 2 receives real-time update via SignalR
-    // expect: New event appears automatically in window 2
-    // expect: No manual refresh is required
+      // Both windows show the same MSEL, at the same starting count.
+      const rows2 = page2.locator('table tbody tr');
+      await expect(rows2).toHaveCount(1, { timeout: 20000 });
 
-    // Verify the event was created in window 1
-    const updatedEventCount1 = await page.locator('table tbody tr').count();
-    expect(updatedEventCount1).toBeGreaterThan(initialEventCount1);
+      // Both clients must actually be in the MSEL's SignalR group before propagation can be
+      // asserted. Under suite load the app's fire-and-forget join loses the race and a client
+      // ends up connected but never added to the group -- which is indistinguishable
+      // from a dropped push unless it is checked explicitly. These probes make the failure name
+      // its real cause.
+      await assertJoinedMselGroup(page, token, mselId);
+      await assertJoinedMselGroup(page2, token, mselId);
 
-    // 3. Wait for SignalR to propagate the update to window 2 (typically 1-3 seconds)
-    await page2.waitForTimeout(5000);
+      // The probes each add and remove an event, so both grids are back to the baseline count.
+      await expect(rows1).toHaveCount(1, { timeout: 20000 });
+      await expect(rows2).toHaveCount(1, { timeout: 20000 });
 
-    const finalEventCount2 = await page2.locator('table tbody tr').count();
-    const countIncreased = finalEventCount2 > initialEventCount2;
+      // ── Create an event in window 1 through the UI ─────────────────────────────
+      // Scope to the header Action List — the per-row button is titled
+      // "Event N Action List" and its menu has no "Add New Event".
+      await page.locator('button[title="Action List"]').click();
+      await page.getByRole('menuitem', { name: /Add New Event/i }).click();
 
-    expect(countIncreased).toBeTruthy();
+      const dialog = page.locator('[role="dialog"]').first();
+      await expect(dialog).toBeVisible({ timeout: 15000 });
 
-    // Cleanup
-    await context2.close();
-    await browser.close();
+      // Pair the save with the POST it triggers, so the wait ends on the real event.
+      // Note the endpoint is lowercase `/api/scenarioevents` — match case-insensitively.
+      const createResponse = page.waitForResponse(
+        (r) => /\/api\/scenarioevents/i.test(r.url()) && r.request().method() === 'POST',
+        { timeout: 30000 }
+      );
+      await page.getByRole('button', { name: /^\s*Save\s*$/ }).last().click();
+      expect((await createResponse).ok()).toBe(true);
+
+      // Window 1 reflects its own change.
+      await expect(rows1).toHaveCount(2, { timeout: 20000 });
+
+      // ── Window 2 must receive it with NO reload ────────────────────────────────
+      // expect.poll re-reads the live count; window 2 is never refreshed, so the only
+      // way this passes is a server-pushed update.
+      await expect
+        .poll(() => rows2.count(), {
+          timeout: 30000,
+          intervals: [250, 500, 1000],
+          message:
+            'window 2 never received the new scenario event via SignalR (no reload was performed)',
+        })
+        .toBe(2);
+
+      await context2.close();
+    } finally {
+      await browser.close();
+    }
   });
 });

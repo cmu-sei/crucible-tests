@@ -1,0 +1,4 @@
+interface:
+  display_name: "Generate Crucible Tests"
+  short_description: "Generate browser-verified Crucible test specs."
+  default_prompt: "Use $generate-crucible-tests to implement the requested Crucible test-plan scenarios."

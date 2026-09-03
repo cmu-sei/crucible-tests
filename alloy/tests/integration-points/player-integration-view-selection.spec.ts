@@ -14,17 +14,16 @@ test.describe('Integration Points', () => {
     await page.goto(`${Services.Alloy.UI}/admin`);
     await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
 
-    // Create a new event template if none exists
+    // "Add Event Template" opens the "Create New Event Template" form directly
+    // (Alloy.ui PR #711), which has the same fields as the edit dialog.
+    const dialog = page.getByRole('dialog', { name: 'Create New Event Template' });
     await page.getByRole('button', { name: 'Add Event Template' }).click();
 
-    // Wait for the new template to appear and click edit
-    await page.getByRole('button', { name: /^Edit: / }).first().click();
-
     // expect: Form is displayed
-    await expect(page.getByRole('dialog', { name: 'Edit Event Template' })).toBeVisible();
+    await expect(dialog).toBeVisible();
 
     // 2. Check the Player View dropdown
-    const playerViewCombobox = page.getByRole('combobox', { name: 'Player View Template' });
+    const playerViewCombobox = dialog.getByRole('combobox', { name: 'Player View Template' });
 
     // expect: Dropdown is visible
     await expect(playerViewCombobox).toBeVisible();
@@ -33,7 +32,7 @@ test.describe('Integration Points', () => {
     // expect: View is available in the template
     await expect(playerViewCombobox).toBeVisible();
 
-    // Close the dialog
-    await page.getByRole('button', { name: 'Cancel' }).first().click();
+    // Close the dialog (nothing is created until Save)
+    await dialog.getByRole('button', { name: 'Cancel' }).first().click();
   });
 });

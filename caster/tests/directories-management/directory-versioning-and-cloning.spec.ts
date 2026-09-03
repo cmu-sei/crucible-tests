@@ -4,7 +4,7 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen } from '../../fixtures';
 
 test.describe('Directories Management', () => {
   test('Directory Versioning and Cloning', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
@@ -16,10 +16,7 @@ test.describe('Directories Management', () => {
     await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
     await page.getByRole('textbox', { name: 'Name' }).fill(`Clone Dir Project ${uniqueSuffix}`);
     await page.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByRole('link', { name: `Clone Dir Project ${uniqueSuffix}` })).toBeVisible({ timeout: 10000 });
-
-    await page.getByRole('link', { name: `Clone Dir Project ${uniqueSuffix}` }).click();
-    await expect(page).toHaveURL(/\/projects\//, { timeout: 10000 });
+    await expectCasterProjectOpen(page, `Clone Dir Project ${uniqueSuffix}`);
 
     // Register project for cleanup after test completes
     const projectId = page.url().match(/\/projects\/([a-f0-9-]+)/)?.[1];

@@ -9,8 +9,18 @@ playwright/.cache/
 # Full run logs from run-tests.sh
 .logs/
 
+# Scratch output from the playwright-test MCP server (downloads, traces)
+.playwright-mcp/
+
 # Authentication state
 .auth/
+
+# Agent scratch space (subagent worktrees, Playwright MCP session output)
+.claude/worktrees/
+.playwright-mcp/
+
+# App bug writeups — internal review only, never committed
+*-app-bugs.md
 
 # Per-user env overrides (loaded last, overrides .env.<target>)
 .env.local

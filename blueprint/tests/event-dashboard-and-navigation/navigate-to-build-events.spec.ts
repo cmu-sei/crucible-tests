@@ -10,7 +10,6 @@ test.describe('Event Dashboard and Navigation', () => {
   test('Navigate to Build Events', async ({ blueprintAuthenticatedPage: page }) => {
     // 1. From Event Dashboard, click on 'Manage an Event' card
     await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 30000 });
-    await page.waitForLoadState('networkidle');
 
     const buildCard = page.locator(
       'text=Manage an Event, mat-card:has-text("Manage"), [class*="build-card"]'
@@ -27,7 +26,6 @@ test.describe('Event Dashboard and Navigation', () => {
 
     // expect: Navigation to /build occurs
     await expect(page).toHaveURL(/.*\/build.*/, { timeout: 10000 });
-    await page.waitForLoadState('networkidle');
 
     // expect: Page displays MSEL list
     const mselList = page.locator(

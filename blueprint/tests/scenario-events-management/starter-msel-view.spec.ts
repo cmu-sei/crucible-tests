@@ -5,58 +5,54 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
+import {
+  getBlueprintToken,
+  createMsel,
+  deleteMsel,
+  createRenderableScenarioEvent,
+} from '../../test-helpers';
 
 test.describe('Scenario Events Management', () => {
+  let token: string;
+  let mselId: string;
+  let eventId: string;
+
+  test.beforeEach(async () => {
+    // Seed: create a MSEL with a scenario event for the starter view
+    token = await getBlueprintToken();
+    const msel = await createMsel(token);
+    mselId = msel.id;
+
+    const event = await createRenderableScenarioEvent(token, mselId, 'Test event for starter view', { deltaSeconds: 300 });
+    eventId = event.id;
+  });
+
+  test.afterEach(async () => {
+    // Cleanup: delete the MSEL (cascade deletes its events)
+    try {
+      if (mselId) await deleteMsel(token, mselId);
+    } catch (err) {
+      console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+    }
+  });
+
   test('Starter MSEL View', async ({ blueprintAuthenticatedPage: page }) => {
     // 1. Navigate to /starter?msel={mselId}
-    await page.goto(`${Services.Blueprint.UI}/build`);
-    await page.waitForLoadState('domcontentloaded');
-
-    // Get a MSEL ID - either from URL if already on a MSEL page or from a link
-    let mselId: string | undefined;
-
-    // Check if we're already on a MSEL page by looking at the URL
-    const currentUrl = page.url();
-    const urlMselIdMatch = currentUrl.match(/[?&]msel=([^&]+)/);
-
-    if (urlMselIdMatch) {
-      mselId = urlMselIdMatch[1];
-    } else {
-      // We're on the MSEL list page, need to extract MSEL ID from a link
-      const mselLink = page.locator(
-        'a[href*="msel"], ' +
-        '[class*="msel-item"], ' +
-        '[class*="msel-card"], ' +
-        'table tbody tr'
-      ).first();
-      const mselLinkVisible = await mselLink.isVisible({ timeout: 5000 }).catch(() => false);
-      if (!mselLinkVisible) {
-        test.skip();
-        return;
-      }
-
-      const href = await mselLink.getAttribute('href');
-      const mselIdMatch = href?.match(/[?&]msel=([^&]+)/);
-      if (!mselIdMatch) {
-        test.skip();
-        return;
-      }
-      mselId = mselIdMatch[1];
-    }
-
-    await page.goto(`${Services.Blueprint.UI}/starter?msel=${mselId}`);
-    await page.waitForLoadState('domcontentloaded');
+    await page.goto(`${Services.Blueprint.UI}/starter?msel=${mselId}`, {
+      waitUntil: 'domcontentloaded',
+    });
 
     // expect: Starter page loads with Blueprint topbar
     await expect(page).toHaveURL(/.*\/starter.*/, { timeout: 10000 });
 
-    const topbar = page.locator('[class*="topbar"], mat-toolbar').first();
+    const topbar = page.locator('mat-toolbar').first();
     await expect(topbar).toBeVisible({ timeout: 5000 });
 
     // expect: Scenario event list is displayed in starter mode for direct editing
-    const scenarioContent = page.locator(
-      'table, [class*="scenario-events"], [class*="event-list"], [class*="starter"]'
-    ).first();
-    await expect(scenarioContent).toBeVisible({ timeout: 5000 });
+    const scenarioEventTable = page.locator('table').first();
+    await expect(scenarioEventTable).toBeVisible({ timeout: 5000 });
+
+    // Verify the seeded event is present
+    await expect(page.locator('table tbody tr').last()).toBeVisible();
   });
 });
