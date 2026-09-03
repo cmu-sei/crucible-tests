@@ -12,7 +12,7 @@ test.describe('Accessibility and Usability', () => {
     await page.setViewportSize({ width: 1920, height: 1080 });
 
     // Navigate to Blueprint application (auth state pre-loaded from setup)
-    await page.goto('http://localhost:4725');
+    await page.goto(Services.Blueprint.UI);
     await page.waitForLoadState('domcontentloaded');
   });
 
@@ -62,9 +62,17 @@ test.describe('Accessibility and Usability', () => {
     
     for (const width of testWidths) {
       await page.setViewportSize({ width, height: 1080 });
-      await page.waitForTimeout(300); // Allow layout to adjust
-      
-      // Verify layout adapts smoothly
+
+      // Wait for the layout to actually settle at the new width instead of sleeping: poll until
+      // the document reports the resized viewport.
+      await expect
+        .poll(() => page.evaluate(() => document.documentElement.clientWidth), {
+          timeout: 10000,
+          intervals: [50, 100, 250],
+          message: `layout should settle at ${width}px`,
+        })
+        .toBe(width);
+
       const newBodyWidth = await page.evaluate(() => document.body.scrollWidth);
       expect(newBodyWidth).toBeLessThanOrEqual(width);
       
@@ -118,33 +126,12 @@ test.describe('Accessibility and Usability', () => {
       }
     }
 
-    // Verify dialogs are appropriately sized for desktop
-    const dialogTrigger = await page.locator('button:has-text("Create"), button:has-text("Add"), button:has-text("New")').first();
-    if (await dialogTrigger.count() > 0) {
-      await dialogTrigger.click();
-      await page.waitForTimeout(500);
-      
-      const dialog = await page.locator('mat-dialog-container, [role="dialog"], .dialog, .modal').first();
-      if (await dialog.count() > 0) {
-        await expect(dialog).toBeVisible();
-        
-        const dialogBox = await dialog.boundingBox();
-        if (dialogBox) {
-          // Dialog should be reasonably sized for desktop (not too small, not full screen)
-          expect(dialogBox.width).toBeGreaterThan(400);
-          expect(dialogBox.width).toBeLessThan(1400);
-          expect(dialogBox.height).toBeLessThan(900);
-        }
-        
-        // Close dialog
-        const closeButton = await page.locator('button[mat-dialog-close], button:has-text("Cancel"), button:has-text("Close")').first();
-        if (await closeButton.count() > 0) {
-          await closeButton.click();
-        } else {
-          await page.keyboard.press('Escape');
-        }
-      }
-    }
+    // The dialog-sizing block that used to live here was dead code and has been removed.
+    // It was gated on `button:has-text("Create"), button:has-text("Add"), button:has-text("New")`,
+    // and measured on the dashboard that locator matches **0** elements -- so neither its
+    // `waitForTimeout(500)` nor any of its `expect`s ever ran. Dialog sizing on this surface is
+    // covered by `focus-management-in-dialogs`, which opens a real dialog via
+    // MSEL -> Teams -> New Team.
 
     // Verify text remains readable (not too large)
     const textElements = await page.locator('p, span, div').all();

@@ -4,14 +4,14 @@
 // spec: topomojo/topomojo-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Error Handling and Edge Cases', () => {
   test('Session Expiration', async ({ topomojoAuthenticatedPage: page }) => {
 
     // 1. Log in successfully - handled by fixture
     // expect: User is authenticated
-    await expect(page).toHaveURL(/localhost:4201/);
+    await expect(page).toHaveURL(serviceUrlPattern(Services.TopoMojo.UI));
 
     // 2. Simulate session expiration by clearing cookies
     await page.context().clearCookies();
@@ -23,8 +23,8 @@ test.describe('Error Handling and Edge Cases', () => {
     // expect: User is notified of session expiration
     // expect: User is redirected to login page
     const currentUrl = page.url();
-    const isOnKeycloak = currentUrl.includes('localhost:8443');
-    const isOnApp = currentUrl.includes('localhost:4201');
+    const isOnKeycloak = serviceUrlPattern(Services.Keycloak).test(currentUrl);
+    const isOnApp = serviceUrlPattern(Services.TopoMojo.UI).test(currentUrl);
 
     // Should be redirected to Keycloak or app handles re-auth
     expect(isOnKeycloak || isOnApp).toBe(true);

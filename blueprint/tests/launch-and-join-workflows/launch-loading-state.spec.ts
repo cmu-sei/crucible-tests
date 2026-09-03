@@ -3,57 +3,72 @@
 
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
+//
+// Test: Launch Loading State (plan item 8.2)
+//
+// Rewritten. The previous version self-skipped twice with bare `test.skip()` when no launch
+// card was present, and its remaining assertions sat inside `if (loadingVisible) { ... } else
+// { still on the app }` — both branches passed, so it could not fail either way.
+//
+// The launch card list is empty by design: `MselService.GetMyLaunchInvitationMselsAsync`
+// (MselService.cs:2203) returns `new List<ViewModels.Msel>()` unconditionally, with the
+// comment "DISABLED: Auto-discovery based on email domain matching / Users must now use
+// invitation links directly to launch MSELs". Verified live — `GET /api/my-launch-msels`
+// answers `[]` (200). So no launch can be *initiated* from this page, which is why the
+// loading state was never reachable. See launch-new-event.spec.ts for the same finding.
+//
+// What remains genuinely verifiable is the loading card's own contract. It is not gated on
+// discovery — launch.component.html renders it purely on `!showChoices`:
+//
+//   @if (!showChoices) { <mat-card> "Launching your event!" ...
+//     "Please wait until you are redirected to the event." <mat-progress-spinner> ...
+//
+// `showChoices` starts true, so this spec drives that one flag and asserts the three things
+// the plan item actually names (title, wait message, spinner) really render together. That
+// tests the component's loading contract without pretending a launch occurred.
 
 import { test, expect, Services } from '../../fixtures';
 
 test.describe('Launch and Join Event Workflows', () => {
   test('Launch Loading State', async ({ blueprintAuthenticatedPage: page }) => {
-    // 1. Start launching an event and observe the UI during a long launch
-    await page.goto(`${Services.Blueprint.UI}/launch`);
-    await page.waitForLoadState('networkidle');
+    await page.goto(`${Services.Blueprint.UI}/launch`, { waitUntil: 'domcontentloaded' });
+    await expect(page).toHaveURL(/\/launch/, { timeout: 15000 });
 
-    const mselCards = page.locator('mat-card, [class*="msel-card"], table tbody tr').first();
-    const hasCards = await mselCards.isVisible({ timeout: 5000 }).catch(() => false);
-    if (!hasCards) {
-      test.skip();
-      return;
-    }
+    const cardContainer = page.locator('.card-container');
+    await expect(cardContainer).toBeVisible({ timeout: 15000 });
 
-    const startButton = page.locator(
-      'button:has-text("Start"), button[aria-label*="Start"]'
-    ).first();
-    const startVisible = await startButton.isVisible({ timeout: 5000 }).catch(() => false);
-    if (!startVisible) {
-      test.skip();
-      return;
-    }
+    // Precondition: in its initial state the page is showing choices, so the loading card is
+    // NOT displayed. Asserted rather than assumed — if it were already visible the checks
+    // below would prove nothing about the transition.
+    const loadingCard = cardContainer.locator('mat-card').filter({ hasText: 'Launching your event!' });
+    await expect(loadingCard).toHaveCount(0);
 
-    await startButton.click();
+    // Flip the component into its launching state the same way `launch(...)` does, by
+    // clearing `showChoices`. Reaching into the Angular component is deliberate: a real
+    // launch cannot be started here (see the header), and the alternative was a spec that
+    // asserted nothing.
+    const flipped = await page.evaluate(() => {
+      const host = document.querySelector('app-launch') as any;
+      if (!host) return { ok: false, reason: 'app-launch host element not found' };
+      const ctx = window.ng?.getComponent?.(host);
+      if (!ctx) return { ok: false, reason: 'Angular debug context unavailable' };
+      ctx.showChoices = false;
+      ctx.launchStatus = 'Launching';
+      window.ng.applyChanges(ctx);
+      return { ok: true };
+    });
+    expect(flipped.ok, `could not drive the launch component: ${flipped.reason ?? ''}`).toBe(true);
 
-    // expect: Full-page loading card appears if launch takes long
-    const loadingCard = page.locator(
-      'text=Launching your event!, ' +
-      '[class*="loading-card"]:has-text("Launching"), ' +
-      'mat-card:has-text("Launching")'
-    ).first();
+    // expect: full-page loading card appears, with its title, wait message and spinner.
+    await expect(loadingCard).toBeVisible({ timeout: 10000 });
+    await expect(loadingCard).toContainText('Launching your event!');
+    await expect(loadingCard).toContainText(/Please wait until you are redirected to the event/i);
+    await expect(loadingCard.locator('mat-progress-spinner')).toBeVisible({ timeout: 10000 });
 
-    // expect: Loading card shows 'Launching your event!' title
-    // expect: Message 'Please wait until you are redirected to the event.' is displayed
-    // expect: Progress spinner is shown
-    const loadingVisible = await loadingCard.isVisible({ timeout: 10000 }).catch(() => false);
+    // expect: the launch status label is surfaced to the user during the wait.
+    await expect(loadingCard.locator('.status-message')).toHaveText('Launching');
 
-    if (loadingVisible) {
-      await expect(loadingCard).toContainText(/Launching your event!/i, { timeout: 5000 });
-
-      const waitMessage = page.locator('text=/Please wait.*redirected/i').first();
-      await expect(waitMessage).toBeVisible({ timeout: 5000 });
-
-      const spinner = page.locator('mat-spinner, mat-progress-spinner, [class*="spinner"]').first();
-      await expect(spinner).toBeVisible({ timeout: 5000 });
-    } else {
-      // Launch may have completed quickly or loading state was too brief to catch
-      // Verify we are still in the app
-      await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 5000 });
-    }
+    // expect: while launching, the choice cards are gone — no second launch can be started.
+    await expect(page.getByRole('button', { name: /^Start / })).toHaveCount(0);
   });
 });

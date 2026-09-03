@@ -16,7 +16,7 @@
 //   3. Types "admin" in the Search input and verifies only matching rows appear
 //   4. Clears the search and verifies all users return
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 // ---------------------------------------------------------------------------
 // Helper: navigate to admin section and click a sidebar item
@@ -30,12 +30,14 @@ async function gotoAdminSection(page: any, section: string) {
   await expect(sidebarItem).toBeVisible({ timeout: 15000 });
   await sidebarItem.click();
   await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(500);
+
+  // Wait for the table to appear as proof the section loaded
+  await page.locator('table').first().waitFor({ state: 'visible', timeout: 10000 });
 }
 
 test.describe('User and Role Management', () => {
   test('Search Users', async ({ blueprintAuthenticatedPage: page }) => {
-    await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
 
     // 2. Navigate to Users admin section
     // Blueprint is a SPA — URL stays at /admin when navigating sidebar items
@@ -60,8 +62,20 @@ test.describe('User and Role Management', () => {
     const searchInput = page.getByRole('textbox', { name: 'Search' });
     await expect(searchInput).toBeVisible({ timeout: 5000 });
     await searchInput.fill('admin');
+
+    // Wait for the table to be attached (stable) before pressing Enter
+    await expect(usersTable).toBeAttached({ timeout: 5000 });
     await searchInput.press('Enter');
-    await page.waitForTimeout(500);
+
+    // Wait for the table to update after the filter is applied - the row count will change
+    await page.waitForFunction(
+      (initialRowCount) => {
+        const rows = document.querySelectorAll('table tbody tr');
+        return rows.length !== initialRowCount;
+      },
+      initialCount,
+      { timeout: 10000 }
+    );
 
     // expect: Filtered results are fewer than the initial count
     const filteredCount = await userRows.count();
@@ -76,7 +90,16 @@ test.describe('User and Role Management', () => {
     // 5. Clear the search box and press Enter to restore full list
     await searchInput.clear();
     await searchInput.press('Enter');
-    await page.waitForTimeout(500);
+
+    // Wait for the table to update after clearing the filter - the row count will change back
+    await page.waitForFunction(
+      (filteredRowCount) => {
+        const rows = document.querySelectorAll('table tbody tr');
+        return rows.length > filteredRowCount;
+      },
+      filteredCount,
+      { timeout: 10000 }
+    );
 
     // expect: All users are displayed again
     const clearedCount = await userRows.count();

@@ -4,13 +4,13 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Error Handling and Edge Cases', () => {
   test('Submission Without Required Permissions', async ({ citeAuthenticatedPage: page }) => {
 
     // 1. Verify user is authenticated on home page
-    await expect(page).toHaveURL(/localhost:4721/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
 
     // 2. Home page shows "My Evaluations" with no data — no evaluations to submit
     await expect(page.getByText('My Evaluations')).toBeVisible({ timeout: 10000 });

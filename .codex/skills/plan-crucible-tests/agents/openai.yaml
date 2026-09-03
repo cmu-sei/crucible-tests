@@ -1,0 +1,4 @@
+interface:
+  display_name: "Plan Crucible Tests"
+  short_description: "Explore an app and create its test plan."
+  default_prompt: "Use $plan-crucible-tests to plan tests for the target Crucible app."

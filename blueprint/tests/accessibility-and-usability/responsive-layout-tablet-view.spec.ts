@@ -12,7 +12,7 @@ test.describe('Accessibility and Usability', () => {
     await page.setViewportSize({ width: 768, height: 1024 });
 
     // Navigate to Blueprint application (auth state pre-loaded from setup)
-    await page.goto('http://localhost:4725');
+    await page.goto(Services.Blueprint.UI);
     await page.waitForLoadState('domcontentloaded');
 
     // 2. Navigate through the application
@@ -123,31 +123,10 @@ test.describe('Accessibility and Usability', () => {
       }
     }
 
-    // Verify dialogs and modals work properly on tablet
-    const dialogTrigger = await page.locator('button:has-text("Create"), button:has-text("Add"), button:has-text("New")').first();
-    if (await dialogTrigger.count() > 0) {
-      await dialogTrigger.click();
-      await page.waitForTimeout(500);
-      
-      const dialog = await page.locator('mat-dialog-container, [role="dialog"], .dialog, .modal').first();
-      if (await dialog.count() > 0) {
-        await expect(dialog).toBeVisible();
-        
-        const dialogBox = await dialog.boundingBox();
-        if (dialogBox) {
-          // Dialog should fit within tablet viewport with margins
-          expect(dialogBox.width).toBeLessThan(768);
-        }
-        
-        // Close dialog
-        const closeButton = await page.locator('button[mat-dialog-close], button:has-text("Cancel"), button:has-text("Close")').first();
-        if (await closeButton.count() > 0) {
-          await closeButton.click();
-        } else {
-          await page.keyboard.press('Escape');
-        }
-      }
-    }
+    // The dialog block that used to live here was dead code and has been removed: it was gated
+    // on `button:has-text("Create"), button:has-text("Add"), button:has-text("New")`, which
+    // matches **0** elements on the dashboard (measured), so its `waitForTimeout(500)` and every
+    // assertion inside were unreachable.
 
     // Verify multi-column layouts adapt appropriately
     const contentAreas = await page.locator('.content, main, [role="main"]').first();

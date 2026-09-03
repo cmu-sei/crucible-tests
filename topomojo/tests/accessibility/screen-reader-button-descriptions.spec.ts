@@ -4,13 +4,13 @@
 // spec: topomojo/topomojo-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Accessibility', () => {
   test('Screen Reader - Button Descriptions', async ({ topomojoAuthenticatedPage: page }) => {
 
     // 1. Navigate to page with icon buttons - home page
-    await expect(page).toHaveURL(/localhost:4201/);
+    await expect(page).toHaveURL(serviceUrlPattern(Services.TopoMojo.UI));
 
     // expect: All icon buttons have aria-labels or titles
     const iconButtons = page.locator('button:has(mat-icon), button:has(fa-icon), button:has(svg)');

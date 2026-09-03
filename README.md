@@ -22,9 +22,42 @@ To use the agents, describe what you need. The right agent is automatically sele
 - *"Generate tests for the Blueprint authentication section"* — the **generator** creates spec files from the test plan
 - *"Fix the failing Blueprint tests"* — the **healer** debugs and repairs broken tests
 
+To generate comprehensive coverage for an application, use a prompt like:
+
+> @"playwright-test-generator (agent)" look at the `<app>-test-plan.md` and generate all tests mentioned in the test plan with multiple agents running in parallel using the established shared fixtures and authentication mechanism. Read the application documentation for additional context and add test-plan coverage where necessary.
+
 The agents require Crucible services to be running since they interact with the applications through a real browser.
 
-The agent definitions are generated during container creation by `npx playwright init-agents` (see `postcreate.sh` in the crucible-development repo) and stored in the crucible-development workspace.
+The Claude agent definitions are stored in `.claude/agents/`. The
+repository-local `.mcp.json` starts the `playwright-test` MCP server using this
+suite's Playwright configuration.
+
+### Codex Agents
+
+Codex uses equivalent project-scoped agents in `.codex/agents/`:
+`playwright-test-planner`, `playwright-test-generator`, and
+`playwright-test-healer`. The `.codex/config.toml` file starts the local
+`playwright-test` MCP server using this repository's Playwright configuration.
+
+From a Codex session opened in this repository, prefer the repository-local
+skills in `.codex/skills/`. They explicitly dispatch the matching agent role
+and wait for it to complete:
+
+```text
+$plan-crucible-tests Plan CITE team-management coverage.
+$generate-crucible-tests Implement CITE scenario "Create a team".
+$heal-crucible-tests Repair the failing gameboard leaderboard spec.
+```
+
+Name the target app and the feature, test-plan scenario, or failing spec in the
+prompt. Include the failing command, logs, trace, or screenshot when healing a
+test. Use `/mcp` to confirm that `playwright-test` is connected before
+browser-driven work.
+
+Use `/agent playwright-test-planner`, `/agent playwright-test-generator`, or
+`/agent playwright-test-healer` if project skills are unavailable in
+the Codex surface. Crucible services must be running before any agent can
+drive the browser or run an end-to-end test.
 
 ## Running Tests
 
@@ -112,6 +145,10 @@ cd /mnt/data/crucible/crucible-tests
 ./run-tests.sh gallery --filter "home"
 ./run-tests.sh all --filter login --app player
 
+# Control the number of parallel workers (count or percentage)
+./run-tests.sh all --workers 4
+./run-tests.sh cite --workers 50%
+
 # Skip service health checks
 ./run-tests.sh topomojo --no-check
 
@@ -124,28 +161,51 @@ npx playwright test --project=chromium topomojo/tests/
 
 The script automatically checks that **Keycloak** and the **target application** are reachable before running tests. Use `--no-check` to skip these checks.
 
+By default the number of parallel workers comes from `playwright.config.ts` (1 on CI, 2 locally). Use `--workers <n>` to override it per run — accepting either a count (`4`) or a percentage of CPU cores (`50%`). The flag is ignored for the interactive `ui` and `debug` modes, which Playwright always runs with a single worker. Note that tests share a single Crucible stack, so raising the worker count increases concurrent load on Keycloak and the apps and can surface auth/timing flakiness.
+
 **Supported applications:** `alloy`, `blueprint`, `caster`, `cite`, `gallery`, `gameboard`, `keycloak`, `moodle`, `player`, `steamfitter`, `topomojo`
 
 ## Configuring Service URLs
 
-All service URLs are defined in a single file at the root of this repository:
+Service URLs live in env files at the root of this repository. The suite supports two deployment topologies and selects between them via the `CRUCIBLE_TARGET` environment variable (or the `--target` flag on `run-tests.sh`):
 
-```
-.env
-```
+| `CRUCIBLE_TARGET` | File loaded     | Use when…                                                                |
+|-------------------|-----------------|--------------------------------------------------------------------------|
+| _(unset)_         | `.env`          | You want today's behavior — whatever you have configured locally.        |
+| `aspire`          | `.env.aspire`   | Crucible is running via .NET Aspire (each app on its own `localhost:<port>`). |
+| `minikube`        | `.env.minikube` | Crucible is running in Minikube via Helm (single ingress host).          |
 
-Edit this file to change ports or hostnames for your environment. The `.env` file is loaded by:
-- **Shell scripts** (`run-tests.sh`, `setup.sh`) via `source`
-- **Playwright config and fixtures** via `dotenv`
+`.env.local` (gitignored) is loaded last — use it to override individual values without editing the tracked profile files. Shell-exported vars beat all of the above.
 
-If the file is missing, all URLs fall back to their default `localhost` values.
-
-Example entries:
 ```bash
-TOPOMOJO_UI_URL=http://localhost:4201
-KEYCLOAK_URL=https://localhost:8443
-BLUEPRINT_UI_URL=http://localhost:4725
+# One-off
+CRUCIBLE_TARGET=minikube ./run-tests.sh blueprint
+
+# Same thing via the flag
+./run-tests.sh blueprint --target minikube
+
+# Aspire (the default; equivalent to today)
+./run-tests.sh blueprint --target aspire
+
+# Set for the whole shell
+export CRUCIBLE_TARGET=minikube
+./run-tests.sh all
 ```
+
+If you copy `.env.minikube` to `.env.local`, you can edit a single override (e.g. a custom ingress host) without touching the tracked file:
+
+```bash
+# .env.local
+CRUCIBLE_HOST=mycluster.example.com
+KEYCLOAK_URL=https://mycluster.example.com/keycloak
+# …only the keys you want to override
+```
+
+### Minikube caveats
+
+- The Aspire dashboard does not exist under Minikube; `Services.AspireDashboard` is empty in that profile.
+- `gameboard/db-helpers.ts` uses `docker inspect crucible-postgres` to read the DB password. Under Minikube that container does not exist — set `CRUCIBLE_POSTGRES_PASSWORD` and port-forward `5432` to the in-cluster `crucible-infra-postgresql-rw` service, or skip the affected scoreboard tests.
+- A handful of tests still hardcode `localhost:4xxx` / `localhost:8443` regex matchers (mostly under `player/tests/`). They do not pass against Minikube without per-test fixes — convert them to `Services.X.UI` if you need them green.
 
 ## Directory Structure
 
@@ -222,6 +282,19 @@ export { expect } from '@playwright/test';
 6. Add feature directories and spec files following the test plan
 
 **Note:** Authentication is handled by `authenticateWithKeycloak()` in `shared-fixtures.ts`, which works for all apps. No need to create per-app auth setup files.
+
+## Running the Blueprint suite
+
+The whole Blueprint suite runs at `--workers 2`. The `admin-inject-types-and-catalogs` specs
+serialize themselves behind a shared lock (`acquireAdminCatalogLock` in
+`blueprint/test-helpers.ts`) because those admin pages are not safe to exercise concurrently.
+Deleting an inject type also cascade-deletes every catalog that references it, so each spec
+selects the inject type it created itself and seeds under `tempBlueprintName()` rather than
+binding to whichever `mat-option` happens to be first.
+
+Note that **concurrent Blueprint suite runs against one stack will sabotage each other**: the
+`globalTeardown` purge deletes every row whose name matches the `tempBlueprintName()` shape,
+including another in-flight run's fixtures. Run the suite once at a time.
 
 ## Troubleshooting
 

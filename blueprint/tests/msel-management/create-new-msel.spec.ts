@@ -5,50 +5,46 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
+import { getBlueprintToken, deleteMsel } from '../../test-helpers';
 
 test.describe('MSEL Management', () => {
   test('Create New MSEL', async ({ blueprintAuthenticatedPage: page }) => {
+    const token = await getBlueprintToken();
+    let createdMselId: string | null = null;
 
-    // 1. Navigate to MSELs list
-    await page.goto(`${Services.Blueprint.UI}/build`);
-    await expect(page).toHaveURL(/.*\/build.*/, { timeout: 10000 });
+    try {
+      // 1. Navigate to MSELs list
+      await page.goto(`${Services.Blueprint.UI}/build`);
+      await expect(page.getByRole('table')).toBeVisible({ timeout: 10000 });
 
-    // expect: MSELs list is visible
-    await page.waitForLoadState('networkidle');
+      // 2. Click 'Add blank MSEL' button
+      const createButton = page.getByRole('button', { name: 'Add blank MSEL' });
+      await expect(createButton).toBeVisible();
+      await createButton.click();
 
-    // 2. Click 'Add blank MSEL' button
-    const createButton = page.getByRole('button', { name: 'Add blank MSEL' });
+      // expect: Blueprint creates a "New MSEL" and redirects to its detail page
+      await expect(page).toHaveURL(/.*\/build\?msel=.*/, { timeout: 10000 });
 
-    await expect(createButton).toBeVisible({ timeout: 10000 });
+      // Extract the MSEL ID from the URL for cleanup
+      const url = page.url();
+      const match = url.match(/msel=([a-f0-9-]+)/);
+      if (match) {
+        createdMselId = match[1];
+      }
 
-    // Get count of MSELs before creating
-    const rowsBefore = await page.getByRole('row').filter({ hasNotText: 'Name Description Template Status Created By Date Created Date Modified' }).count();
+      // expect: The MSEL detail page loads showing the Info section
+      const infoSection = page.locator('mat-list-item').filter({ hasText: 'Info' });
+      await expect(infoSection).toBeVisible({ timeout: 10000 });
 
-    await createButton.click();
-
-    // expect: A new MSEL is created immediately without a form dialog
-    // Blueprint creates a "New MSEL" with default values and redirects to edit it
-    await page.waitForTimeout(1000);
-
-    // expect: The new MSEL appears in the MSELs list or we're redirected to edit page
-    // Check if we're on the build page with a msel parameter or still on the list
-    const currentUrl = page.url();
-
-    if (currentUrl.includes('msel=')) {
-      // We were redirected to edit the new MSEL
-      // The MSEL details/edit page should be visible
-      await expect(page).toHaveURL(/.*msel=.*/, { timeout: 5000 });
-    } else {
-      // We're still on the list, new MSEL should appear
-      const rowsAfter = await page.getByRole('row').filter({ hasNotText: 'Name Description Template Status Created By Date Created Date Modified' }).count();
-      expect(rowsAfter).toBeGreaterThan(rowsBefore);
-
-      // The new MSEL should be visible (typically named "New MSEL")
-      const newMselItem = page.getByRole('link', { name: /New MSEL/i });
-      await expect(newMselItem.first()).toBeVisible({ timeout: 5000 });
+      // expect: Default MSEL name "New MSEL" is visible in the title or name field
+      const nameField = page.getByRole('textbox', { name: /Name/i }).first();
+      await expect(nameField).toBeVisible();
+      await expect(nameField).toHaveValue(/New MSEL/);
+    } finally {
+      // 3. Clean up: delete the created MSEL
+      if (createdMselId) {
+        await deleteMsel(token, createdMselId);
+      }
     }
-
-    // expect: User can access the newly created MSEL
-    await page.waitForLoadState('networkidle');
   });
 });

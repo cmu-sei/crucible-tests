@@ -6,9 +6,8 @@
 
 import { test, expect, APIRequestContext } from '@playwright/test';
 import { Services, authenticateWithKeycloak } from '../../../shared-fixtures';
-
 async function getApiToken(request: APIRequestContext): Promise<string> {
-  const resp = await request.post('https://localhost:8443/realms/crucible/protocol/openid-connect/token', {
+  const resp = await request.post(`${Services.Keycloak}/realms/crucible/protocol/openid-connect/token`, {
     form: {
       grant_type: 'password',
       client_id: 'cite.ui',
@@ -26,13 +25,24 @@ async function createEvaluation(request: APIRequestContext, token: string): Prom
     headers: { Authorization: `Bearer ${token}` },
   });
   const models = await modelsResp.json();
-  if (!models.length) throw new Error('No scoring models available');
+  // On a clean database no scoring model exists (the seed.spec.ts stub is empty), so
+  // create one rather than failing — an evaluation requires a scoringModelId.
+  let scoringModelId: string;
+  if (models.length) {
+    scoringModelId = models[0].id;
+  } else {
+    const smResp = await request.post(`${Services.Cite.API}/api/scoringmodels`, {
+      headers: { Authorization: `Bearer ${token}` },
+      data: { description: `E2E Realtime Scoring Model - ${Date.now()}`, status: 'Pending' },
+    });
+    scoringModelId = (await smResp.json()).id;
+  }
 
   const resp = await request.post(`${Services.Cite.API}/api/evaluations`, {
     headers: { Authorization: `Bearer ${token}` },
     data: {
       description: `E2E Test Evaluation - ${Date.now()}`,
-      scoringModelId: models[0].id,
+      scoringModelId,
       status: 'Active',
     },
   });

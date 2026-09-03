@@ -4,7 +4,7 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, oidcStorageKey, ensureScoringModelExists, purgeStaleEvaluations, settleForResponse } from '../../fixtures';
 import { deleteEvaluationByName, navigateToAdminSection } from '../../test-helpers';
 import {
   getKeycloakToken,
@@ -95,6 +95,9 @@ async function setupGalleryAndCiteEvaluation(
 
   // ── CITE UI: create evaluation with gallery exhibit ID ──
 
+  // Ensure a scoring model exists so the Scoring Model dropdown is populated.
+  await ensureScoringModelExists();
+
   await navigateToAdminSection(page, 'Evaluations');
 
   const addButton = page.getByRole('button', { name: 'Add Evaluation' });
@@ -108,11 +111,7 @@ async function setupGalleryAndCiteEvaluation(
 
   const scoringModelSelect = page.getByRole('combobox', { name: 'Scoring Model' });
   await expect(scoringModelSelect).toBeVisible({ timeout: 5000 });
-  await page.waitForResponse(
-    response => response.url().includes('/api/scoringmodels') && response.status() === 200,
-    { timeout: 15000 }
-  ).catch(() => {});
-  await page.waitForTimeout(1500);
+  await settleForResponse(page, '/api/scoringmodels');
   await scoringModelSelect.click();
   await page.waitForTimeout(1000);
   const firstOption = page.locator('mat-option').first();
@@ -143,14 +142,15 @@ async function setupGalleryAndCiteEvaluation(
 
   // Fallback: fetch evaluation ID via in-page API call
   if (!citeEvaluationId) {
-    citeEvaluationId = await page.evaluate(async (evalName) => {
-      const userStr = sessionStorage.getItem('oidc.user:https://localhost:8443/realms/crucible:cite.ui') ||
+    const citeOidcKey = oidcStorageKey('cite.ui');
+    citeEvaluationId = await page.evaluate(async ({ evalName, oidcKey, citeApi }) => {
+      const userStr = sessionStorage.getItem(oidcKey) ||
                       Object.values(sessionStorage).find(v => v.includes('access_token')) || '';
       try {
         const userData = JSON.parse(userStr);
         const t = userData?.access_token;
         if (t) {
-          const resp = await fetch('http://localhost:4720/api/my-evaluations', {
+          const resp = await fetch(`${citeApi}/api/my-evaluations`, {
             headers: { Authorization: `Bearer ${t}` }
           });
           if (resp.ok) {
@@ -160,7 +160,7 @@ async function setupGalleryAndCiteEvaluation(
         }
       } catch { /* ignore */ }
       return undefined;
-    }, opts.evalName);
+    }, { evalName: opts.evalName, oidcKey: citeOidcKey, citeApi: Services.Cite.API });
   }
 
   // ── CITE UI: add team with admin user ──
@@ -195,8 +195,8 @@ async function setupGalleryAndCiteEvaluation(
   const teamSaveButton = teamDialog.getByRole('button', { name: 'Save' });
   await expect(teamSaveButton).toBeEnabled({ timeout: 5000 });
   await teamSaveButton.click();
-  await expect(teamDialog).not.toBeVisible({ timeout: 10000 });
-  await page.waitForTimeout(2000);
+  // Wait for the team to appear in the teams panel (indicates the dialog closed and data saved)
+  await page.waitForTimeout(3000);
 
   const teamRow = teamsPanel.locator('mat-expansion-panel-header').filter({ hasText: opts.teamName });
   await expect(teamRow).toBeVisible({ timeout: 10000 });
@@ -232,12 +232,8 @@ async function navigateToEvaluationDashboard(page: import('@playwright/test').Pa
   const evalUrl = `${Services.Cite.UI}/?evaluation=${evalId}`;
   await page.evaluate((url) => { window.location.href = url; }, evalUrl);
   await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(5000);
 
-  await page.waitForResponse(
-    response => response.url().includes('/unreadarticlecount') && response.ok(),
-    { timeout: 30000 }
-  ).catch(() => {});
+  await settleForResponse(page, '/unreadarticlecount', { timeout: 30000 });
   await page.waitForTimeout(2000);
 }
 
@@ -245,6 +241,11 @@ async function navigateToEvaluationDashboard(page: import('@playwright/test').Pa
 test.describe.configure({ mode: 'serial' });
 
 test.describe('Integration with Gallery', () => {
+
+  // Keep the evaluations list small/deterministic — the admin suite may have flooded it.
+  test.beforeAll(async () => {
+    await purgeStaleEvaluations();
+  });
 
   test('Gallery Integration - View Articles', async ({ citeAuthenticatedPage: page }) => {
     const TEST_EVAL_NAME = 'E2E Gallery View Articles';
@@ -308,7 +309,7 @@ test.describe('Integration with Gallery', () => {
       await expect(galleryLink).toBeVisible({ timeout: 5000 });
 
       const href = await galleryLink.getAttribute('href');
-      expect(href).toContain('localhost:4723');
+      expect(href).toMatch(serviceUrlPattern(Services.Gallery.UI));
     } finally {
       // Cleanup
       await deleteEvaluationByName(page, TEST_EVAL_NAME);

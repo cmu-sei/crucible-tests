@@ -6,111 +6,132 @@
 //
 // Test: Assign Role to User
 //
-// In Blueprint, user roles are assigned via the Users admin section at /admin.
-// The Users table has columns: ID, Name, Role. Each user row has a mat-select
-// combobox in the Role column. Available roles are:
-//   "None Locally", "Observer", "Content Developer", "Administrator"
+// In Blueprint, system roles are assigned via the Users admin section at /admin (a SPA
+// tab — the URL does not change). The Users table has ID, Name and Role columns; the Role
+// cell holds a mat-select whose first option is a literal "None Locally" (meaning
+// `roleId: null`) followed by one option per system role from `GET /api/system-roles`.
+//
+// This test seeds its OWN user via `POST /api/users` so the starting state is
+// deterministic: a fresh user has `roleId: null`, i.e. "None Locally". It then assigns a
+// real role and asserts the change persisted server-side. The seeded user is deleted in
+// afterEach, so nothing here depends on — or mutates — any pre-existing user row.
 //
 // This test:
-//   1. Navigates to the admin section and clicks "Users" in the sidebar
-//   2. Verifies the users table is visible with expected columns
-//   3. Finds a user with "None Locally" role (non-admin user)
-//   4. Opens the role dropdown and verifies available role options
-//   5. Assigns the "Observer" role to that user
-//   6. Verifies the role was assigned (dropdown shows "Observer")
-//   7. Reverts the role back to "None Locally" to avoid side effects
+//   1. Seeds a uniquely-named user with no role (beforeEach)
+//   2. Opens the Users admin section and filters the list down to that user
+//   3. Asserts the seeded user starts at "None Locally"
+//   4. Opens the role dropdown and verifies the expected role options are offered
+//   5. Assigns "Observer" and asserts the trigger label changes
+//   6. Asserts `GET /api/users/{id}` now reports the Observer role id — proving the
+//      assignment persisted rather than only updating the mat-select's local selection
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import {
+  getBlueprintToken,
+  createBlueprintUser,
+  deleteBlueprintUser,
+  getBlueprintUser,
+  getSystemRoleByName,
+  tempBlueprintName,
+  gotoBlueprintAdminSection,
+  findAdminUserRowByName,
+  openAdminUserRolePanel,
+  setAdminUserRole,
+  adminUserRoleLabel,
+} from '../../test-helpers';
 
-// ---------------------------------------------------------------------------
-// Helper: navigate to admin section and click a sidebar item
-// ---------------------------------------------------------------------------
-async function gotoAdminSection(page: any, section: string) {
-  await page.goto(`${Services.Blueprint.UI}/admin`);
-  await page.waitForLoadState('domcontentloaded');
-
-  // Wait for the admin sidebar to load
-  const sidebarItem = page.locator('.appitems-container mat-list-item').filter({ hasText: section }).first();
-  await expect(sidebarItem).toBeVisible({ timeout: 15000 });
-  await sidebarItem.click();
-  await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(500);
-}
+/** The role this spec assigns. Any non-null system role would do. */
+const ROLE_TO_ASSIGN = 'Observer';
 
 test.describe('User and Role Management', () => {
+  let token: string;
+  let userId: string;
+  let userName: string;
+
+  test.beforeEach(async () => {
+    token = await getBlueprintToken();
+    userName = tempBlueprintName('AssignRole-User');
+
+    // Seed our own user rather than borrowing a row from the shared users table. A fresh
+    // user has roleId: null, so the starting role is known to be "None Locally" and no
+    // branching on "whatever state the shared user was in" is needed.
+    const created = await createBlueprintUser(token, { name: userName });
+    userId = created.id;
+    expect(created.roleId).toBeNull();
+  });
+
+  test.afterEach(async () => {
+    // Runs even when the test body throws, so a mid-test failure cannot leak the user.
+    await deleteBlueprintUser(token, userId);
+  });
+
   test('Assign Role to User', async ({ blueprintAuthenticatedPage: page }) => {
-    await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
 
-    // 2. Navigate to Users admin section
-    // expect: Users admin section is visible with user table
-    await gotoAdminSection(page, 'Users');
+    const roleToAssign = await getSystemRoleByName(token, ROLE_TO_ASSIGN);
 
-    // expect: Users table is visible with ID, Name, Role columns
-    const usersTable = page.locator('table');
-    await expect(usersTable).toBeVisible({ timeout: 10000 });
+    // 2. Navigate to the Users admin section
+    // expect: Users admin section is visible with the user table
+    await gotoBlueprintAdminSection(page, 'Users');
 
-    // expect: Table has expected column headers
+    // expect: Table has the expected column headers
+    await expect(page.getByRole('columnheader', { name: 'ID' })).toBeVisible({ timeout: 5000 });
     await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible({ timeout: 5000 });
     await expect(page.getByRole('columnheader', { name: 'Role' })).toBeVisible({ timeout: 5000 });
 
-    // 3. Find a user row in the table (use the first user row with a role dropdown)
-    // expect: At least one user is visible in the table
-    const userRows = page.locator('table tbody tr').filter({
-      has: page.locator('mat-select'),
+    // 3. Filter the (paginated) list down to the seeded user and scope everything below to
+    // that one row. Never index into the unfiltered table — the seeded row rarely lands on
+    // page 1, and a row picked by position can be a user another spec is concurrently editing.
+    const userRow = await findAdminUserRowByName(page, userName);
+
+    // expect: The seeded user's row shows its id and name
+    await expect(userRow).toContainText(userId);
+    await expect(userRow).toContainText(userName);
+
+    // expect: The seeded user starts with no role — deterministic, because we just created it
+    const roleLabel = adminUserRoleLabel(userRow);
+    await expect(roleLabel).toHaveText('None Locally');
+
+    // 4. Open this row's role dropdown
+    // expect: Dropdown opens listing "None Locally" plus every system role
+    const panel = await openAdminUserRolePanel(page, userRow);
+
+    await expect(panel.getByRole('option', { name: 'None Locally', exact: true })).toBeVisible({
+      timeout: 5000,
     });
-    await expect(userRows.first()).toBeVisible({ timeout: 5000 });
-
-    // Get the first user row and its current role dropdown
-    const firstUserRow = userRows.first();
-    const userName = await firstUserRow.locator('td').nth(1).textContent();
-    const roleSelect = firstUserRow.locator('mat-select');
-    await expect(roleSelect).toBeVisible({ timeout: 5000 });
-
-    // 4. Note the current role value
-    const initialRole = await roleSelect.textContent();
-
-    // 5. Open the role dropdown
-    // expect: Dropdown opens with available role options
-    await roleSelect.click();
-    await page.waitForTimeout(300);
-
-    // expect: Role dropdown shows available options
-    const roleOptions = page.locator('mat-option');
-    await expect(roleOptions.first()).toBeVisible({ timeout: 5000 });
-
-    // Verify expected role options exist
-    await expect(page.locator('mat-option').filter({ hasText: 'None Locally' })).toBeVisible({ timeout: 3000 });
-    await expect(page.locator('mat-option').filter({ hasText: 'Observer' })).toBeVisible({ timeout: 3000 });
-    await expect(page.locator('mat-option').filter({ hasText: 'Content Developer' })).toBeVisible({ timeout: 3000 });
-    await expect(page.locator('mat-option').filter({ hasText: 'Administrator' })).toBeVisible({ timeout: 3000 });
-
-    // 6. Select the "Observer" role
-    // expect: Role is assigned to the user
-    const observerOption = page.locator('mat-option').filter({ hasText: 'Observer' });
-    await observerOption.click();
-    await page.waitForTimeout(500);
-
-    // expect: Role dropdown now shows "Observer"
-    await expect(roleSelect).toContainText('Observer', { timeout: 5000 });
-
-    // 7. Revert: Restore the original role to avoid side effects
-    // Re-open the dropdown
-    await roleSelect.click();
-    await page.waitForTimeout(300);
-
-    // Select the original role (or "None Locally" as fallback)
-    const originalRoleText = initialRole?.trim() ?? 'None Locally';
-    const originalOption = page.locator('mat-option').filter({ hasText: originalRoleText }).first();
-    if (await originalOption.isVisible({ timeout: 2000 })) {
-      await originalOption.click();
-    } else {
-      // Fallback to "None Locally"
-      await page.locator('mat-option').filter({ hasText: 'None Locally' }).click();
+    for (const builtInRole of ['Observer', 'Content Developer', 'Administrator']) {
+      await expect(panel.getByRole('option', { name: builtInRole, exact: true })).toBeVisible({
+        timeout: 5000,
+      });
     }
-    await page.waitForTimeout(500);
 
-    // expect: Role reverted successfully (dropdown shows original role or "None Locally")
-    const finalRole = await roleSelect.textContent();
-    expect(finalRole?.trim()).toBeTruthy();
+    // expect: "None Locally" is the currently-selected option
+    await expect(
+      panel.getByRole('option', { name: 'None Locally', exact: true })
+    ).toHaveAttribute('aria-selected', 'true');
+
+    // 5. Assign the role. Closing the panel first keeps setAdminUserRole's own
+    // open-then-select flow unambiguous.
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeHidden({ timeout: 5000 });
+
+    await setAdminUserRole(page, userRow, userId, ROLE_TO_ASSIGN);
+
+    // expect: The row's role label now shows the assigned role
+    await expect(roleLabel).toHaveText(ROLE_TO_ASSIGN);
+
+    // 6. expect: The assignment persisted server-side.
+    // This is the assertion that actually has teeth. The mat-select keeps its own selection
+    // independently of the app's store, so a UI label alone would still read "Observer" even
+    // if the PUT had never been applied.
+    const persisted = await getBlueprintUser(token, userId);
+    expect(persisted.roleId).toBe(roleToAssign.id);
+
+    // expect: ...and re-reading the row after a full page load still shows the role, so the
+    // change survives a fresh load of the users list rather than living only in the
+    // component that made it.
+    await gotoBlueprintAdminSection(page, 'Users');
+    const reloadedRow = await findAdminUserRowByName(page, userName);
+    await expect(adminUserRoleLabel(reloadedRow)).toHaveText(ROLE_TO_ASSIGN);
   });
 });

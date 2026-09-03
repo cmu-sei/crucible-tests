@@ -17,7 +17,7 @@
 //   3. Verifies at least one user row is visible with data in each column
 //   4. Opens a role dropdown to confirm role options are visible (without changing anything)
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 // ---------------------------------------------------------------------------
 // Helper: navigate to admin section and click a sidebar item
@@ -31,12 +31,14 @@ async function gotoAdminSection(page: any, section: string) {
   await expect(sidebarItem).toBeVisible({ timeout: 15000 });
   await sidebarItem.click();
   await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(500);
+
+  // Wait for the table to appear as proof the section loaded
+  await page.locator('table').first().waitFor({ state: 'visible', timeout: 10000 });
 }
 
 test.describe('User and Role Management', () => {
   test('View User Details', async ({ blueprintAuthenticatedPage: page }) => {
-    await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
 
     // 2. Navigate to Users admin section
     // Note: URL stays at /admin — there is no /admin/users route
@@ -73,9 +75,8 @@ test.describe('User and Role Management', () => {
     // 4. Open the role dropdown to verify role options are visible
     // (Read-only check — no role change)
     await roleSelect.click();
-    await page.waitForTimeout(300);
 
-    // expect: Role dropdown shows available options
+    // expect: Role dropdown shows available options (mat-option elements appear in an overlay)
     const roleOptions = page.locator('mat-option');
     await expect(roleOptions.first()).toBeVisible({ timeout: 5000 });
 
@@ -87,6 +88,8 @@ test.describe('User and Role Management', () => {
 
     // Close the dropdown without making changes (press Escape)
     await page.keyboard.press('Escape');
-    await page.waitForTimeout(200);
+
+    // Wait for the dropdown overlay to disappear
+    await expect(roleOptions.first()).not.toBeVisible({ timeout: 3000 });
   });
 });

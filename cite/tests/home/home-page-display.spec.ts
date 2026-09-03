@@ -4,14 +4,14 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Home Page and Evaluation List', () => {
   test('Home Page Display', async ({ citeAuthenticatedPage: page }) => {
 
     // 1. Log in and land on home page
     // expect: Home page displays with 'CITE' icon and 'My Evaluations' title
-    await expect(page).toHaveURL(/localhost:4721/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
 
     // expect: CITE branding is visible
     const citeIcon = page.locator('img[src*="cite"], [class*="cite-logo"], mat-toolbar img, mat-toolbar [class*="icon"]').first();

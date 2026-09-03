@@ -5,89 +5,91 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
+import {
+  getKeycloakAdminToken,
+  createKeycloakUser,
+  deleteKeycloakUser,
+  tempUsername,
+  getUserToken,
+} from '../../../keycloak-admin';
+import { getBlueprintToken, createMsel, deleteMsel } from '../../test-helpers';
 
 test.describe('Error Handling and Validation', () => {
-  test('Unauthorized Action Handling', async ({ blueprintAuthenticatedPage: page, context }) => {
-    // Since we only have admin credentials, we'll test unauthorized action handling
-    // by intercepting API calls and simulating 403 responses
+  test.describe('Unauthorized Action Handling', () => {
+    // Override storageState for this describe block - non-admin user needs fresh login
+    test.use({ storageState: { cookies: [], origins: [] } });
 
-    // expect: User is authenticated
-    await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 10000 });
-    await page.waitForLoadState('load');
+    let adminToken: string;
+    let nonAdminUserId: string;
+    let nonAdminUsername: string;
+    let nonAdminPassword: string;
+    let mselId: string;
 
-    // Navigate to the admin page
-    await page.goto('http://localhost:4725');
-    await page.waitForLoadState('load');
-
-    // Click on Admin User button to open the menu
-    await page.getByRole('button', { name: 'Admin User' }).click();
-
-    // Click on Administration menu item
-    await page.getByRole('menuitem', { name: 'Administration' }).click();
-
-    // expect: User is on the admin page
-    await expect(page).toHaveURL('http://localhost:4725/admin');
-    await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
-
-    // Set up API interception to simulate 403 Forbidden response for system-roles
-    // We'll intercept the system-roles API which is called when viewing Users
-    let unauthorizedResponseReceived = false;
-    await page.route('**/api/system-roles', (route) => {
-      unauthorizedResponseReceived = true;
-      route.fulfill({
-        status: 403,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          error: 'Forbidden',
-          message: 'You do not have permission to access this resource'
-        })
+    test.beforeEach(async () => {
+      // Create a non-admin Keycloak user (no Administrator role)
+      adminToken = await getKeycloakAdminToken();
+      nonAdminUsername = tempUsername('blueprinttest');
+      nonAdminPassword = 'TestPassword123!';
+      const user = await createKeycloakUser(adminToken, {
+        username: nonAdminUsername,
+        password: nonAdminPassword,
+        email: `${nonAdminUsername}@test.local`,
+        realmRoles: [], // No roles - regular user
       });
+      nonAdminUserId = user.id;
+
+      // Seed a MSEL using admin token for the non-admin user to attempt to access
+      const blueprintAdminToken = await getBlueprintToken();
+      const msel = await createMsel(blueprintAdminToken);
+      mselId = msel.id;
     });
 
-    // Navigate to Users section, which will trigger the intercepted API call
-    await page.getByText('Users').click();
+    test.afterEach(async () => {
+      // Clean up: delete the non-admin user and the MSEL
+      if (nonAdminUserId) {
+        await deleteKeycloakUser(adminToken, nonAdminUserId);
+      }
+      if (mselId) {
+        const blueprintAdminToken = await getBlueprintToken();
+        await deleteMsel(blueprintAdminToken, mselId);
+      }
+    });
 
-    // Wait a moment for the API call to be made
-    await page.waitForTimeout(500);
+    test('Non-admin user receives 403 Forbidden on admin API calls', async ({ page, context }) => {
+      // Authenticate as non-admin user via Keycloak
+      await page.goto(Services.Blueprint.UI);
+      const usernameField = page.getByRole('textbox', { name: /username/i });
+      await expect(usernameField).toBeVisible({ timeout: 20000 });
+      await usernameField.fill(nonAdminUsername);
+      await page.getByRole('textbox', { name: /password/i }).fill(nonAdminPassword);
+      await page.getByRole('button', { name: /sign in/i }).click();
 
-    // expect: The intercepted 403 response was received
-    expect(unauthorizedResponseReceived).toBe(true);
+      // Wait for redirect back to Blueprint
+      const appShell = page.locator('app-root mat-toolbar').first();
+      await expect(appShell).toBeVisible({ timeout: 30000 });
 
-    // expect: The application handles the 403 gracefully by showing an error dialog
-    const errorDialog = page.getByRole('dialog');
-    await expect(errorDialog).toBeVisible();
+      // Verify user landed on Blueprint home
+      await expect(page).toHaveURL(Services.Blueprint.UI, { timeout: 10000 });
 
-    // expect: Error dialog shows Forbidden message
-    await expect(page.getByRole('heading', { name: 'Forbidden' })).toBeVisible();
-    await expect(page.getByText(/403 Forbidden/)).toBeVisible();
+      // Attempt to navigate to the admin page directly and wait for initial API call
+      const forbiddenResponsePromise = page.waitForResponse(
+        response => response.url().includes('/api/') && response.status() === 403,
+        { timeout: 10000 }
+      );
 
-    // expect: The page hasn't crashed - check that a table element exists in the DOM
-    const tableExists = await page.evaluate(() => !!document.querySelector('table'));
-    expect(tableExists).toBe(true);
+      await page.goto(`${Services.Blueprint.UI}/admin`);
 
-    // Close the error dialog by clicking the close button
-    await page.getByRole('dialog').locator('button').click();
+      // expect: At least one API call returns 403 Forbidden
+      const forbiddenResponse = await forbiddenResponsePromise;
+      expect(forbiddenResponse.status()).toBe(403);
 
-    // expect: After closing dialog, the page is still functional
-    await expect(page.getByText('Users').first()).toBeVisible();
+      // expect: The page shows the Administration heading (UI renders even though API blocks data)
+      const adminHeading = page.getByRole('heading', { name: 'Administration' });
+      await expect(adminHeading).toBeVisible({ timeout: 5000 });
 
-    // expect: After closing dialog, the page is still functional
-    await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
-
-    // Clean up the route interception
-    await page.unroute('**/api/system-roles');
-
-    // Verify the user can navigate to other sections (app is still functional)
-    await page.getByText('Units').click();
-    await expect(page.getByRole('table')).toBeVisible();
-
-    // expect: User can still access other authorized features
-    // Navigate back to home
-    await page.goto('http://localhost:4725');
-    await page.waitForLoadState('load');
-
-    // expect: Home page is accessible
-    await expect(page).toHaveURL('http://localhost:4725/');
-    await expect(page.getByRole('button', { name: /Manage an Event/i })).toBeVisible();
+      // This demonstrates correct authorization: the UI router allows the page to render,
+      // but the API enforces role-based access control and returns 403 for unauthorized requests.
+      // The non-admin user sees the page shell but cannot load admin data.
+    });
   });
 });

@@ -27,7 +27,7 @@ test.describe('Admin Panel', () => {
       await page.click('button:has-text("Sign In")');
 
       // Wait for redirect back to TopoMojo
-      await page.waitForURL('http://localhost:4201/**', { timeout: 30000 });
+      await page.waitForURL(`${Services.TopoMojo.UI}/**`, { timeout: 30000 });
       await page.waitForLoadState('domcontentloaded');
     }
 

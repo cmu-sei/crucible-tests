@@ -4,122 +4,72 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect } from '../../fixtures';
+import {
+  getBlueprintToken,
+  createMsel,
+  deleteMsel,
+  navigateToMsel,
+} from '../../test-helpers';
 
 test.describe('Error Handling and Validation', () => {
-  test.afterEach(async ({ blueprintAuthenticatedPage: page }) => {
-    // Cleanup: Delete the test MSEL if it exists
-    const currentUrl = page.url();
-    if (!currentUrl.includes('/build')) {
-      await page.goto(`${Services.Blueprint.UI}/build`);
-      await page.waitForLoadState('networkidle');
-    } else if (currentUrl.includes('?msel=')) {
-      // We're on a MSEL detail page, navigate back to list
-      await page.goto(`${Services.Blueprint.UI}/build`);
-      await page.waitForLoadState('networkidle');
-    }
+  let token: string;
+  let mselId: string;
 
-    // Look for the test MSEL or "New MSEL" in the list
-    const newMselLink = page.getByRole('link', { name: 'New MSEL' }).first();
+  test.beforeEach(async () => {
+    token = await getBlueprintToken();
+    const msel = await createMsel(token);
+    mselId = msel.id;
+  });
 
-    if (await newMselLink.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await newMselLink.click();
-      await page.waitForLoadState('networkidle');
-
-      // Delete the MSEL
-      const deleteButton = page.getByRole('button', { name: 'Delete this MSEL' });
-      if (await deleteButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await deleteButton.click();
-
-        // Confirm deletion in the dialog
-        await page.waitForTimeout(500);
-        const confirmDialog = page.getByRole('dialog', { name: 'Delete MSEL' });
-        if (await confirmDialog.isVisible({ timeout: 2000 }).catch(() => false)) {
-          const yesButton = confirmDialog.getByRole('button', { name: 'YES' });
-          await yesButton.click();
-
-          // Wait for redirect back to MSEL list
-          await expect(page).toHaveURL(/.*\/build$/, { timeout: 10000 });
-        }
-      }
+  test.afterEach(async () => {
+    if (mselId) {
+      await deleteMsel(token, mselId);
     }
   });
 
   test('MSEL Character Limit Validation', async ({ blueprintAuthenticatedPage: page }) => {
-    // 1. Navigate to Blueprint MSEL management page
-    await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 10000 });
-    await page.waitForLoadState('networkidle');
+    // Navigate to the seeded MSEL's Config tab
+    await navigateToMsel(page, mselId);
 
-    // Click on "Manage an Event" button to navigate to Blueprint page
-    const manageEventButton = page.getByRole('button', { name: /Manage an Event/ });
-    await expect(manageEventButton).toBeVisible({ timeout: 5000 });
-    await manageEventButton.click();
-
-    // Wait for navigation to /build page
-    await expect(page).toHaveURL(/.*\/build.*/, { timeout: 10000 });
-    await page.waitForLoadState('networkidle');
-
-    // 2. Create a new MSEL by clicking "Add blank MSEL"
-    const createButton = page.getByRole('button', { name: 'Add blank MSEL' });
-    await expect(createButton).toBeVisible({ timeout: 5000 });
-    await createButton.click();
-
-    // expect: New MSEL is created and appears in the list
-    await page.waitForTimeout(2000);
-
-    // 3. Open the newly created MSEL (it will be the first "New MSEL" link)
-    const newMselLink = page.getByRole('link', { name: 'New MSEL' }).first();
-    await expect(newMselLink).toBeVisible({ timeout: 5000 });
-    await newMselLink.click();
-
-    // expect: MSEL configuration page is displayed
-    await expect(page).toHaveURL(/.*\/build\?msel=.*/, { timeout: 10000 });
-    await page.waitForLoadState('networkidle');
-
-    // 4. Test the Name field character limit
-    // expect: Name field shows character counter (e.g., '31 / 70 characters') with 70 character maximum
+    // 1. Test the Name field character limit
     const nameField = page.getByRole('textbox', { name: 'Name' });
-    await expect(nameField).toBeVisible({ timeout: 5000 });
+    await expect(nameField).toBeVisible({ timeout: 10000 });
 
-    // Clear and fill with test data
-    await nameField.clear();
+    // Clear and fill with test data to verify the counter appears
+    await nameField.click();
     await nameField.fill('Test MSEL Name');
 
-    // Verify character counter is visible
+    // expect: Name field shows character counter (e.g., '15 / 70 characters') with 70 character maximum
     const nameCharCounter = page.locator('text=/\\d+ \\/ 70 characters/').first();
     await expect(nameCharCounter).toBeVisible({ timeout: 5000 });
 
     // Try to type more than 70 characters in name field
     const seventyOneChars = 'A'.repeat(71);
     await nameField.fill(seventyOneChars);
-    await page.waitForTimeout(300);
 
     const nameValue = await nameField.inputValue();
-    // expect: The field should not accept more than 70 characters (enforced by maxlength or validation)
+    // expect: The field should not accept more than 70 characters (enforced by maxlength attribute)
     expect(nameValue.length).toBeLessThanOrEqual(70);
 
-    // 5. Test the Description field character limit
-    // expect: Description field shows character counter (e.g., '176 / 600 characters') with 600 character maximum
+    // 2. Test the Description field character limit
     const descField = page.getByRole('textbox', { name: 'Description' });
     await expect(descField).toBeVisible({ timeout: 5000 });
 
     // Clear and fill with test data
-    await descField.clear();
+    await descField.click();
     await descField.fill('Test description');
 
-    // Verify character counter is visible
+    // expect: Description field shows character counter (e.g., '16 / 600 characters') with 600 character maximum
     const descCharCounter = page.locator('text=/\\d+ \\/ 600 characters/').first();
     await expect(descCharCounter).toBeVisible({ timeout: 5000 });
 
     // Try to type more than 600 characters in description
     const sixHundredOneChars = 'B'.repeat(601);
     await descField.fill(sixHundredOneChars);
-    await page.waitForTimeout(300);
 
     const descValue = await descField.inputValue();
-    // expect: The field should not accept more than 600 characters
+    // expect: The field should not accept more than 600 characters (enforced by maxlength attribute)
     expect(descValue.length).toBeLessThanOrEqual(600);
-
-    // Cleanup will happen automatically in test.afterEach()
   });
 });

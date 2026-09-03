@@ -4,14 +4,14 @@
 // spec: topomojo/topomojo-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Search and Filtering', () => {
   test('Search - Keyboard Shortcut', async ({ topomojoAuthenticatedPage: page }) => {
 
     // 1. Navigate to home page - handled by fixture
     // expect: Home page is displayed
-    await expect(page).toHaveURL(/localhost:4201/);
+    await expect(page).toHaveURL(serviceUrlPattern(Services.TopoMojo.UI));
 
     // 2. Press Ctrl+O keyboard shortcut
     await page.keyboard.press('Control+o');

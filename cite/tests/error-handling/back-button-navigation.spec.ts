@@ -4,13 +4,13 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Error Handling and Edge Cases', () => {
   test('Browser Back Button Navigation', async ({ citeAuthenticatedPage: page }) => {
 
     // 1. Navigate through multiple pages (home -> admin)
-    await expect(page).toHaveURL(/localhost:4721/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
 
     // Navigate to the Administration page
     const adminButton = page.getByRole('button', { name: 'Show Administration Page' });
@@ -24,7 +24,7 @@ test.describe('Error Handling and Edge Cases', () => {
     await page.goBack();
 
     // expect: User navigates back to previous page
-    await expect(page).toHaveURL(/localhost:4721\/$/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
 
     // expect: Page state is preserved or reloaded correctly
     // expect: No errors occur

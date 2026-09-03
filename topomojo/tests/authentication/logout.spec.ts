@@ -4,14 +4,14 @@
 // spec: topomojo/topomojo-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Authentication and Authorization', () => {
   test('Logout Functionality', async ({ topomojoAuthenticatedPage: page }) => {
 
     // 1. Log in with valid credentials (admin/admin) - handled by fixture
     // expect: User is successfully authenticated
-    await expect(page).toHaveURL(/localhost:4201/);
+    await expect(page).toHaveURL(serviceUrlPattern(Services.TopoMojo.UI));
 
     // 2. Click 'Logout' button in top navigation
     const logoutButton = page.locator('button:has-text("Logout"), button:has-text("Sign Out"), [class*="logout"], button:has(mat-icon:text("logout"))').first();

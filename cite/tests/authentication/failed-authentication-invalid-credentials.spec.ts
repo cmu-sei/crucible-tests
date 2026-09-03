@@ -5,7 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect } from '@playwright/test';
-import { Services } from '../../fixtures';
+import { Services, serviceUrlPattern } from '../../fixtures';
 
 // Override global storageState so this test starts from a fresh unauthenticated state.
 test.use({ storageState: { cookies: [], origins: [] } });
@@ -17,7 +17,7 @@ test.describe('Authentication and Authorization', () => {
     await page.goto(Services.Cite.UI);
 
     // expect: User is redirected to Keycloak login page
-    await expect(page).toHaveURL(/.*localhost:8443/, { timeout: 70000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 70000 });
 
     // 2. Enter invalid username 'wronguser' in the username field
     const usernameField = page.locator('#username');
@@ -42,6 +42,6 @@ test.describe('Authentication and Authorization', () => {
     await expect(errorMessage).toBeVisible({ timeout: 5000 });
 
     // expect: User remains on Keycloak login page
-    await expect(page).toHaveURL(/.*localhost:8443/, { timeout: 5000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 5000 });
   });
 });

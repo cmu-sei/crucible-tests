@@ -4,7 +4,7 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Performance and Optimization', () => {
   test('Initial Page Load Time', async ({ blueprintAuthenticatedPage: page }) => {
@@ -52,7 +52,7 @@ test.describe('Performance and Optimization', () => {
     expect(performanceMetrics.timeToInteractive).toBeLessThan(5000); // 5 seconds
     
     // expect: Application loads from scratch
-    await expect(page).toHaveURL(/.*localhost:4725.*/);
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI));
     
     // Verify main application interface is visible
     await expect(page.locator('text=Event Dashboard')).toBeVisible({ timeout: 5000 });

@@ -4,16 +4,16 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Search and Filtering', () => {
   test('Advanced Search with Multiple Criteria', async ({ blueprintAuthenticatedPage: page }) => {
 
     // 1. Navigate to the MSEL build/list page
-    await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
 
     // Navigate to /build which contains the MSEL list
-    await page.goto('http://localhost:4725/build');
+    await page.goto(`${Services.Blueprint.UI}/build`);
     await page.waitForLoadState('load');
 
     // Look for MSELs list - Blueprint uses Angular Material mat-table to display MSELs
@@ -35,12 +35,10 @@ test.describe('Search and Filtering', () => {
 
     if (statusFilterVisible) {
       await statusFilter.click();
-      await page.waitForTimeout(500);
 
       const statusOption = page.locator('mat-option').first();
       if (await statusOption.isVisible({ timeout: 2000 })) {
         await statusOption.click();
-        await page.waitForTimeout(500);
       }
     }
 
@@ -50,12 +48,10 @@ test.describe('Search and Filtering', () => {
 
     if (typeFilterVisible) {
       await typeFilter.click();
-      await page.waitForTimeout(500);
 
       const typeOption = page.locator('mat-option').first();
       if (await typeOption.isVisible({ timeout: 2000 })) {
         await typeOption.click();
-        await page.waitForTimeout(500);
       }
     }
 
@@ -65,12 +61,10 @@ test.describe('Search and Filtering', () => {
 
     if (searchInputVisible) {
       await searchInput.fill('MSEL');
-      await page.waitForTimeout(500);
     }
     
     // expect: Multiple filters can be combined
     // expect: Results match all selected criteria (AND logic)
-    await page.waitForTimeout(1000);
 
     const filteredItems = page.locator('mat-row');
     const filteredCount = await filteredItems.count();
@@ -82,22 +76,18 @@ test.describe('Search and Filtering', () => {
     // 3. Clear all filters by resetting search input and dropdowns
     if (searchInputVisible) {
       await searchInput.clear();
-      await page.waitForTimeout(500);
     }
 
     // Reset status filter if applied
     if (statusFilterVisible) {
       await statusFilter.click();
-      await page.waitForTimeout(300);
       // Select the first option (usually "All Statuses")
       const allOption = page.locator('mat-option').first();
       if (await allOption.isVisible({ timeout: 2000 })) {
         await allOption.click();
-        await page.waitForTimeout(500);
       }
     }
 
-    await page.waitForTimeout(1000);
 
     const restoredItems = page.locator('mat-row');
     const restoredCount = await restoredItems.count();

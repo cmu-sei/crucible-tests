@@ -4,14 +4,14 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Authentication and Authorization', () => {
   test('Session Persistence After Refresh', async ({ citeAuthenticatedPage: page }) => {
 
     // 1. Log in with valid credentials (admin/admin)
     // expect: User is successfully authenticated and viewing CITE home page
-    await expect(page).toHaveURL(/localhost:4721/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
 
     // 2. Refresh the browser page
     await page.reload();
@@ -19,7 +19,7 @@ test.describe('Authentication and Authorization', () => {
     // expect: User remains authenticated
     // expect: Home page loads without redirecting to Keycloak
     await page.waitForLoadState('domcontentloaded');
-    await expect(page).toHaveURL(/localhost:4721/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
 
     // expect: User session is maintained
     const userMenu = page.locator('[class*="user"], [class*="profile"], mat-toolbar').first();

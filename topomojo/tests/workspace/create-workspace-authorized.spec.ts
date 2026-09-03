@@ -4,14 +4,14 @@
 // spec: topomojo/topomojo-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Workspace Management', () => {
   test('Create Workspace - Authorized Creator', async ({ topomojoAuthenticatedPage: page }) => {
 
     // 1. Log in as user with creator role - handled by fixture (admin has creator role)
     // expect: User is on home page
-    await expect(page).toHaveURL(/localhost:4201/);
+    await expect(page).toHaveURL(serviceUrlPattern(Services.TopoMojo.UI));
 
     // Open sidebar if needed
     const sidebarToggle = page.locator('button[aria-label="Toggle sidebar"], button:has(mat-icon:text("menu"))').first();

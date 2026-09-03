@@ -4,14 +4,14 @@
 // spec: topomojo/topomojo-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Home Page and Navigation', () => {
   test('Home Page Display', async ({ topomojoAuthenticatedPage: page }) => {
 
     // 1. Log in and land on home page - handled by fixture
     // expect: Home page displays with TopoMojo branding
-    await expect(page).toHaveURL(/localhost:4201/);
+    await expect(page).toHaveURL(serviceUrlPattern(Services.TopoMojo.UI));
 
     // expect: Navigation bar is visible at top
     const navbar = page.locator('mat-toolbar, [class*="topbar"], nav, header, [role="banner"]').first();

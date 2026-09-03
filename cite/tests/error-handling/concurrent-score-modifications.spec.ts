@@ -5,8 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect } from '@playwright/test';
-import { Services, authenticateWithKeycloak } from '../../../shared-fixtures';
-
+import { Services, authenticateWithKeycloak, serviceUrlPattern } from '../../../shared-fixtures';
 test.describe('Error Handling and Edge Cases', () => {
   test('Concurrent Score Modifications', async ({ browser }) => {
 
@@ -21,7 +20,7 @@ test.describe('Error Handling and Edge Cases', () => {
 
     // 2. Navigate both sessions to the same page (admin)
     for (const p of [page1, page2]) {
-      await expect(p).toHaveURL(/localhost:4721/, { timeout: 10000 });
+      await expect(p).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
       const adminButton = p.getByRole('button', { name: 'Show Administration Page' });
       await expect(adminButton).toBeVisible({ timeout: 10000 });
       await adminButton.click();

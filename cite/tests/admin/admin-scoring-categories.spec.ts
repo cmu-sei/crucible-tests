@@ -5,7 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
-import { navigateToAdminSection, deleteScoringModelByName } from '../../test-helpers';
+import { navigateToAdminSection, deleteScoringModelByName, findAdminRowByName } from '../../test-helpers';
 
 test.describe('Administration - Scoring Models', () => {
 
@@ -34,7 +34,7 @@ test.describe('Administration - Scoring Models', () => {
     // 2. Re-navigate and expand the scoring model
     await navigateToAdminSection(page, 'Scoring Models');
 
-    const modelRow = page.locator('tbody tr').filter({ hasText: TEST_MODEL_NAME }).first();
+    const modelRow = await findAdminRowByName(page, TEST_MODEL_NAME);
     await expect(modelRow).toBeVisible({ timeout: 10000 });
     await modelRow.click();
     await page.waitForTimeout(2000);

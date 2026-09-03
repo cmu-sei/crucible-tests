@@ -4,15 +4,14 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Search and Filtering', () => {
   test('MSEL Filtering by Date Range', async ({ blueprintAuthenticatedPage: page }) => {
-    await page.goto('http://localhost:4725/build');
+    await page.goto(`${Services.Blueprint.UI}/build`);
 
     // 1. Navigate to MSELs list
-    await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 10000 });
-    await page.waitForLoadState('networkidle');
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
 
     // expect: MSELs list is displayed
     const mselList = page.locator(
@@ -74,14 +73,12 @@ test.describe('Search and Filtering', () => {
       // Set start date (use a date range that should include some MSELs)
       const startDate = '2025-01-01';
       await startDateInput.fill(startDate);
-      await page.waitForTimeout(500);
       
       // Set end date
       const endDateVisible = await endDateInput.isVisible({ timeout: 2000 }).catch(() => false);
       if (endDateVisible) {
         const endDate = '2026-12-31';
         await endDateInput.fill(endDate);
-        await page.waitForTimeout(500);
       }
       
       // Press Enter or click apply button if available
@@ -100,10 +97,8 @@ test.describe('Search and Filtering', () => {
         await startDateInput.press('Enter');
       }
       
-      await page.waitForTimeout(1500);
       
       // expect: List updates to show only MSELs within the selected date range
-      await page.waitForLoadState('networkidle');
       const filteredItems = page.locator(
         '[class*="msel-item"], ' +
         '[class*="msel-card"], ' +
@@ -144,7 +139,6 @@ test.describe('Search and Filtering', () => {
       
       if (await filterButton.isVisible({ timeout: 3000 })) {
         await filterButton.click();
-        await page.waitForTimeout(1000);
         
         // Try to find date inputs again after opening filter panel
         const dateInputAfterFilter = page.locator(
@@ -155,9 +149,7 @@ test.describe('Search and Filtering', () => {
         
         if (await dateInputAfterFilter.isVisible({ timeout: 2000 })) {
           await dateInputAfterFilter.fill('2025-01-01');
-          await page.waitForTimeout(500);
           await dateInputAfterFilter.press('Enter');
-          await page.waitForTimeout(1500);
         }
       }
       
@@ -165,6 +157,5 @@ test.describe('Search and Filtering', () => {
       await expect(mselList).toBeVisible();
     }
     
-    await page.waitForLoadState('networkidle');
   });
 });

@@ -4,13 +4,13 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Performance', () => {
   test('Memory Usage - Extended Session', async ({ citeAuthenticatedPage: page }) => {
 
     // 1. Log in and navigate through various pages and sections
-    await expect(page).toHaveURL(/localhost:4721/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
 
     // Get initial memory usage
     const initialMemory = await page.evaluate(() => {

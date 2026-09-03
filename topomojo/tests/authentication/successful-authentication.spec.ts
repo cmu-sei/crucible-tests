@@ -5,7 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect } from '@playwright/test';
-import { Services } from '../../fixtures';
+import { Services, serviceUrlPattern } from '../../fixtures';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -24,7 +24,7 @@ test.describe('Authentication and Authorization', () => {
     await loginButton.click();
 
     // expect: User is redirected to Keycloak login page at https://localhost:8443
-    await expect(page).toHaveURL(/.*localhost:8443.*realms\/crucible/, { timeout: 30000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 30000 });
 
     // expect: Keycloak login form is displayed with username and password fields
     const usernameField = page.locator('#username');
@@ -49,7 +49,7 @@ test.describe('Authentication and Authorization', () => {
     await page.click('#kc-login');
 
     // expect: User is authenticated and redirected back to TopoMojo UI at http://localhost:4201
-    await page.waitForURL(/localhost:4201/, { timeout: 30000 });
+    await page.waitForURL(serviceUrlPattern(Services.TopoMojo.UI), { timeout: 30000 });
 
     // Wait for OIDC callback to complete - URL may temporarily be /oidc?state=... while
     // Angular processes the token before redirecting to the home page

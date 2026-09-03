@@ -4,13 +4,13 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Home Page and Navigation', () => {
   test('Theme Toggle (Light/Dark Mode)', async ({ blueprintAuthenticatedPage: page }) => {
 
     // expect: Application loads with default theme
-    await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
     await page.waitForLoadState('domcontentloaded');
 
     // Get initial theme - theme is applied as "darkMode" class on document.body
@@ -30,13 +30,17 @@ test.describe('Home Page and Navigation', () => {
     await expect(themeToggle).toBeVisible({ timeout: 5000 });
     await themeToggle.click();
 
-    // expect: The application theme switches between light and dark mode
-    await page.waitForTimeout(500); // Allow theme transition
-
-    const newTheme = await page.evaluate(() => {
-      return document.body.className;
-    });
-    expect(newTheme).not.toBe(initialTheme);
+    // expect: The application theme switches between light and dark mode.
+    // Polled rather than slept on — the class swap is the proof the toggle applied.
+    const readBodyTheme = () => page.evaluate(() => document.body.className);
+    await expect
+      .poll(readBodyTheme, {
+        timeout: 15000,
+        intervals: [100, 200, 500],
+        message: 'the body theme class should change after toggling Dark Theme',
+      })
+      .not.toBe(initialTheme);
+    const newTheme = await readBodyTheme();
 
     // expect: Dark theme adds "darkMode" class to body
     // expect: Light theme has no theme class on body
@@ -73,12 +77,15 @@ test.describe('Home Page and Navigation', () => {
       await userMenuButton.click();
     }
     await themeToggle.click();
-    await page.waitForTimeout(500);
 
-    const revertedTheme = await page.evaluate(() => {
-      return document.body.className;
-    });
-    expect(revertedTheme).toBe(initialTheme);
+    // expect: toggling back restores the original theme.
+    await expect
+      .poll(readBodyTheme, {
+        timeout: 15000,
+        intervals: [100, 200, 500],
+        message: 'toggling Dark Theme back should restore the original theme class',
+      })
+      .toBe(initialTheme);
 
     // 3. Refresh the page
     await page.reload();

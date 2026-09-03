@@ -2,31 +2,65 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 // spec: specs/blueprint-test-plan.md
-// seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
+import {
+  getBlueprintToken,
+  createMsel,
+  deleteMsel,
+  navigateToMsel,
+} from '../../test-helpers';
 
 test.describe('MSEL Info Pages Management', () => {
+  let token: string;
+  let mselId: string;
+
+  test.beforeEach(async () => {
+    token = await getBlueprintToken();
+    const msel = await createMsel(token);
+    mselId = msel.id;
+  });
+
+  test.afterEach(async () => {
+    try {
+      if (mselId) await deleteMsel(token, mselId);
+    } catch (err) {
+      console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+    }
+  });
+
   test('MSEL Page Unsaved Changes Warning', async ({ blueprintAuthenticatedPage: page }) => {
-    // Navigate to a MSEL with pages
-    await page.goto(`${Services.Blueprint.UI}/build`);
-    await page.waitForLoadState('networkidle');
+    // Navigate to the seeded MSEL
+    await navigateToMsel(page, mselId);
 
-    const mselLink = page.getByRole('link', { name: /Project Lagoon TTX/ }).first();
-    await expect(mselLink).toBeVisible({ timeout: 10000 });
-    await mselLink.click();
-    await expect(page).toHaveURL(/.*\/build\?msel=.*/, { timeout: 10000 });
-    await page.waitForLoadState('networkidle');
+    // First create a page to edit
+    const addPageTab = page.getByRole('tab', { name: 'Add Page' });
+    await expect(addPageTab).toBeVisible({ timeout: 5000 });
+    await addPageTab.click();
 
-    // Navigate to an existing page tab — use first() since multiple may exist
-    const pageTab = page.getByRole('tab', { name: 'New Page', exact: true }).first();
-    await expect(pageTab).toBeVisible({ timeout: 5000 });
-    await pageTab.click();
-    await page.waitForLoadState('networkidle');
+    // Wait for the new page to be created and save it
+    const selectedTab = page.getByRole('tab', { selected: true });
+    await expect(selectedTab).toHaveText(/New Page/, { timeout: 5000 });
 
-    // Click edit to start editing
+    // Save the newly created page
+    const saveButtonInitial = page.getByRole('button', { name: /Save/ }).first();
+    const saveVisible = await saveButtonInitial.isVisible({ timeout: 2000 }).catch(() => false);
+    if (saveVisible) {
+      await saveButtonInitial.click();
+    }
+
+    // Wait for edit button to appear (proves save completed)
     const editButton = page.getByRole('button', { name: 'Edit Page' });
     await expect(editButton).toBeVisible({ timeout: 5000 });
+
+    // Click the page tab if needed
+    const pageTab = page.getByRole('tab').filter({ hasText: /New Page/ }).first();
+    const isSelected = await pageTab.getAttribute('aria-selected');
+    if (isSelected !== 'true') {
+      await pageTab.click();
+    }
+
+    // Click edit to start editing
     await editButton.click();
 
     // 1. Make edits in the rich text editor without saving
@@ -38,9 +72,8 @@ test.describe('MSEL Info Pages Management', () => {
     // 2. Try switching to Config tab without saving
     const configTab = page.getByRole('tab', { name: 'Config' });
     await configTab.click();
-    await page.waitForTimeout(500);
 
-    // expect: An "Unsaved Changes" dialog may appear
+    // expect: An "Unsaved Changes" dialog may appear, or config tab becomes visible
     const unsavedDialog = page.getByRole('dialog');
     const dialogVisible = await unsavedDialog.isVisible({ timeout: 2000 }).catch(() => false);
 

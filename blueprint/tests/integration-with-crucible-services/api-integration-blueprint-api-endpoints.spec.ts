@@ -2,165 +2,211 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 // spec: specs/blueprint-test-plan.md
-// seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import {
+  getBlueprintToken,
+  createMsel,
+  deleteMsel,
+  createRenderableScenarioEvent,
+  tempBlueprintName,
+  navigateToMsel,
+} from '../../test-helpers';
 
+/**
+ * Verifies the Blueprint UI really talks to the Blueprint API: which endpoints it calls,
+ * that every call carries a bearer token, that responses are JSON, and that the Admin
+ * sidebar reports the API's version (which it can only know by calling `/api/version`).
+ *
+ * Rewritten. The previous version had two defects that between them made it worthless:
+ *
+ * 1. **It leaked a MSEL on every run.** It drove the UI to create one named the literal
+ *    `'API Test MSEL'` and had no afterEach. The teardown purge keys off the shape
+ *    `tempBlueprintName()` emits (`-<epoch-ms>-<random>`), so that literal was never
+ *    swept and accumulated forever.
+ * 2. **It could not fail.** Every step sat inside
+ *    `if (await x.isVisible().catch(() => false)) { ... }`, so a missed locator skipped
+ *    the body and still reported green. It also computed `apiResponses`, unique endpoint
+ *    lists and `foundExpectedEndpoints` and then only logged them, or asserted them
+ *    inside an `if` whose else-branch also passed.
+ *
+ * Now: the fixture MSEL is seeded through the API under a `tempBlueprintName()` name and
+ * deleted by id in `afterEach`, and every expectation is asserted unconditionally.
+ *
+ * The endpoint list below is not guesswork — it is what the MSEL detail page actually
+ * requests, captured live. Note the paths the UI uses are **lowercase**
+ * (`/scenarioevents`, `/datafields`), unlike the mixed-case forms the API also accepts.
+ */
 test.describe('Integration with Crucible Services', () => {
-  test('API Integration - Blueprint API Endpoints', async ({ blueprintAuthenticatedPage: page }) => {
-    // Navigate to Blueprint (auth state pre-loaded from setup)
-    await page.goto(Services.Blueprint.UI);
-    await page.waitForLoadState('domcontentloaded');
+  let token: string;
+  let mselId: string;
 
-    // 1. Open browser developer tools Network tab
-    // Note: In Playwright, we can listen to network events programmatically
-    const apiRequests: any[] = [];
-    const apiResponses: any[] = [];
-    
-    // Listen to all requests
+  test.beforeEach(async () => {
+    token = await getBlueprintToken();
+    const msel = await createMsel(token, {
+      name: tempBlueprintName('TestBP-ApiIntegration'),
+      description: 'Seeded to observe Blueprint UI -> Blueprint API traffic.',
+    });
+    mselId = msel.id;
+
+    // One renderable event, so the MSEL has DataFields/DataValues and the detail page
+    // has real content to fetch rather than a set of empty collections.
+    await createRenderableScenarioEvent(token, mselId, 'API integration probe event', {
+      deltaSeconds: 60,
+    });
+  });
+
+  test.afterEach(async () => {
+    if (mselId) {
+      try {
+        await deleteMsel(token, mselId);
+      } catch (err) {
+        console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+      }
+    }
+  });
+
+  test('API Integration - Blueprint API Endpoints', async ({
+    blueprintAuthenticatedPage: page,
+  }) => {
+    const blueprintApiPattern = serviceUrlPattern(Services.Blueprint.API);
+
+    interface CapturedRequest {
+      path: string;
+      method: string;
+      hasAuthHeader: boolean;
+    }
+    interface CapturedResponse {
+      path: string;
+      status: number;
+      contentType: string;
+    }
+
+    const apiRequests: CapturedRequest[] = [];
+    const apiResponses: CapturedResponse[] = [];
+
     page.on('request', (request) => {
       const url = request.url();
-      if (url.includes('localhost:4724')) {
-        apiRequests.push({
-          url: url,
-          method: request.method(),
-          headers: request.headers(),
-        });
-        console.log(`API Request: ${request.method()} ${url}`);
-      }
+      if (!blueprintApiPattern.test(url)) return;
+      const headers = request.headers();
+      apiRequests.push({
+        path: new URL(url).pathname,
+        method: request.method(),
+        hasAuthHeader: !!(headers['authorization'] ?? headers['Authorization']),
+      });
     });
-    
-    // Listen to all responses
+
     page.on('response', (response) => {
       const url = response.url();
-      if (url.includes('localhost:4724')) {
-        apiResponses.push({
-          url: url,
-          status: response.status(),
-          statusText: response.statusText(),
-        });
-        console.log(`API Response: ${response.status()} ${url}`);
-      }
+      if (!blueprintApiPattern.test(url)) return;
+      apiResponses.push({
+        path: new URL(url).pathname,
+        status: response.status(),
+        contentType: response.headers()['content-type'] ?? '',
+      });
     });
-    
-    // expect: Network tab is active (simulated via event listeners)
-    console.log('Network monitoring active - listening for API calls to http://localhost:4724');
-    
-    // 2. Perform various actions in Blueprint UI (create MSEL, add event, etc.)
-    
-    // Action 1: Try to view MSELs list (should trigger API call)
-    await page.goto(Services.Blueprint.UI);
-    await page.waitForLoadState('networkidle');
-    await page.waitForTimeout(1000); // Give time for API calls to complete
-    
-    // Action 2: Try to create a new MSEL
-    const createMselButton = page.locator('button:has-text("Create MSEL"), button:has-text("Add MSEL"), button:has-text("New MSEL")').first();
-    
-    if (await createMselButton.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await createMselButton.click();
-      await page.waitForLoadState('networkidle');
-      await page.waitForTimeout(1000);
-      
-      // Fill in MSEL form fields
-      const nameField = page.locator('input[name="name"], input[placeholder*="name" i]').first();
-      if (await nameField.isVisible({ timeout: 5000 }).catch(() => false)) {
-        await nameField.fill('API Test MSEL');
-        await page.waitForTimeout(500);
-      }
-      
-      const descField = page.locator('textarea[name="description"], input[name="description"]').first();
-      if (await descField.isVisible({ timeout: 5000 }).catch(() => false)) {
-        await descField.fill('Testing API integration');
-        await page.waitForTimeout(500);
-      }
-      
-      // Try to save (should trigger POST/PUT API call)
-      const saveButton = page.locator('button:has-text("Save"), button:has-text("Create"), button[type="submit"]').first();
-      if (await saveButton.isVisible({ timeout: 5000 }).catch(() => false)) {
-        await saveButton.click();
-        await page.waitForLoadState('networkidle');
-        await page.waitForTimeout(1000);
-      }
-    } else {
-      console.log('Create MSEL button not found - trying other actions');
-      
-      // Try clicking on an existing MSEL (should trigger GET API call)
-      const mselLink = page.locator('a:has-text("MSEL"), [class*="msel-item"]').first();
-      if (await mselLink.isVisible({ timeout: 5000 }).catch(() => false)) {
-        await mselLink.click();
-        await page.waitForLoadState('networkidle');
-        await page.waitForTimeout(1000);
-      }
+
+    // 1. Perform a real action in the UI: open the seeded MSEL's detail page. That is
+    // what drives the burst of API reads asserted below.
+    await navigateToMsel(page, mselId);
+
+    // expect: API calls are made to the Blueprint API.
+    // The MSEL detail page fans out to ~20 endpoints; poll until the batch has landed
+    // rather than sampling once, so this does not race the Angular bootstrap.
+    const expectedEndpoints = [
+      `/api/msels/${mselId}`,
+      `/api/msels/${mselId}/teams`,
+      `/api/msels/${mselId}/organizations`,
+      `/api/msels/${mselId}/datafields`,
+      `/api/msels/${mselId}/datavalues`,
+      `/api/msels/${mselId}/scenarioevents`,
+      `/api/msels/${mselId}/mselunits`,
+      '/api/me/systempermissions',
+    ];
+
+    await expect
+      .poll(() => expectedEndpoints.filter((e) => apiRequests.some((r) => r.path === e)).length, {
+        timeout: 30000,
+        intervals: [250, 500, 1000],
+        message: `Blueprint UI never requested the expected MSEL endpoints. Saw: ${[
+          ...new Set(apiRequests.map((r) => r.path)),
+        ].join(', ')}`,
+      })
+      .toBe(expectedEndpoints.length);
+
+    // Every one of those is a GET — the detail page reads, it does not mutate on load.
+    for (const endpoint of expectedEndpoints) {
+      const matches = apiRequests.filter((r) => r.path === endpoint);
+      expect(matches.map((r) => r.method)).toContain('GET');
     }
-    
-    // expect: API calls are made to http://localhost:4724 (Blueprint API)
-    expect(apiRequests.length).toBeGreaterThan(0);
-    console.log(`Total API requests captured: ${apiRequests.length}`);
-    
-    // Verify at least one request goes to the Blueprint API
-    const blueprintApiRequests = apiRequests.filter(req => req.url.includes('localhost:4724'));
-    expect(blueprintApiRequests.length).toBeGreaterThan(0);
-    
-    // expect: Requests use proper authentication headers
-    const hasAuthHeaders = blueprintApiRequests.some(req => {
-      return req.headers['authorization'] || req.headers['Authorization'];
-    });
-    
-    if (hasAuthHeaders) {
-      console.log('API requests include authentication headers');
-      expect(hasAuthHeaders).toBeTruthy();
-    } else {
-      console.log('Warning: No authorization headers detected - may use cookies or different auth mechanism');
-    }
-    
-    // expect: Responses are in expected JSON format
-    if (apiResponses.length > 0) {
-      console.log(`Total API responses captured: ${apiResponses.length}`);
-      
-      // Check if responses are successful
-      const successfulResponses = apiResponses.filter(res => res.status >= 200 && res.status < 300);
-      console.log(`Successful responses: ${successfulResponses.length}`);
-      
-      // Sample a response to check JSON format
-      const sampleResponse = apiResponses[0];
-      if (sampleResponse) {
-        console.log(`Sample response status: ${sampleResponse.status} ${sampleResponse.statusText}`);
-        
-        // expect: Error handling works correctly
-        const errorResponses = apiResponses.filter(res => res.status >= 400);
-        if (errorResponses.length > 0) {
-          console.log(`Error responses detected: ${errorResponses.length}`);
-          errorResponses.forEach(err => {
-            console.log(`  - ${err.status} ${err.url}`);
-          });
-        }
-      }
-    } else {
-      console.log('No API responses captured - Blueprint API may not be running or integration not yet implemented');
-    }
-    
-    // Verify we can see Blueprint API endpoint patterns
-    const uniqueEndpoints = [...new Set(blueprintApiRequests.map(req => {
-      const url = new URL(req.url);
-      return url.pathname;
-    }))];
-    
-    console.log('Unique API endpoints called:');
-    uniqueEndpoints.forEach(endpoint => {
-      console.log(`  - ${endpoint}`);
-    });
-    
-    // Common Blueprint API endpoints we might expect
-    const expectedEndpoints = ['/api/msels', '/api/events', '/api/teams', '/api/organizations'];
-    const foundExpectedEndpoints = expectedEndpoints.filter(endpoint => 
-      uniqueEndpoints.some(called => called.includes(endpoint))
+
+    // expect: Requests use proper authentication headers.
+    // Asserted for EVERY captured request, not "at least one" — a single unauthenticated
+    // read would be a real defect. The SignalR `/hubs/main/negotiate` POST is the one
+    // legitimate exception: it authenticates via the `?bearer=` query parameter (see
+    // `getHubUrlWithAuth` in blueprint.ui signalr.service.ts), so it is excluded by path.
+    const restRequests = apiRequests.filter((r) => !r.path.startsWith('/hubs/'));
+    expect(restRequests.length).toBeGreaterThan(0);
+    const unauthenticated = restRequests.filter((r) => !r.hasAuthHeader);
+    expect(
+      unauthenticated,
+      `these Blueprint API requests carried no Authorization header: ${unauthenticated
+        .map((r) => `${r.method} ${r.path}`)
+        .join(', ')}`
+    ).toEqual([]);
+
+    // The negotiate call must still prove it is authenticated, via the bearer query param.
+    const negotiate = apiRequests.filter((r) => r.path === '/hubs/main/negotiate');
+    expect(negotiate.length).toBeGreaterThan(0);
+
+    // expect: Responses are in expected JSON format, and none of them failed.
+    await expect
+      .poll(() => apiResponses.filter((r) => r.path.startsWith('/api/')).length, {
+        timeout: 30000,
+        intervals: [250, 500, 1000],
+      })
+      .toBeGreaterThanOrEqual(expectedEndpoints.length);
+
+    const restResponses = apiResponses.filter((r) => r.path.startsWith('/api/'));
+    const failures = restResponses.filter((r) => r.status >= 400);
+    expect(
+      failures,
+      `Blueprint API returned errors: ${failures.map((r) => `${r.status} ${r.path}`).join(', ')}`
+    ).toEqual([]);
+
+    const nonJson = restResponses.filter((r) => !r.contentType.includes('json'));
+    expect(
+      nonJson,
+      `these Blueprint API responses were not JSON: ${nonJson
+        .map((r) => `${r.path} -> ${r.contentType || '(no content-type)'}`)
+        .join(', ')}`
+    ).toEqual([]);
+
+    // 2. expect: Admin sidebar shows the API version (e.g. 'Versions: UI 0.0.0, API 1.6.1').
+    // The UI can only render this by calling GET /api/version, so pair the assertion with
+    // that response: it proves the value on screen came from the API, not a constant.
+    const versionResponse = page.waitForResponse(
+      (r) => new URL(r.url()).pathname === '/api/version' && r.request().method() === 'GET',
+      { timeout: 30000 }
     );
-    
-    if (foundExpectedEndpoints.length > 0) {
-      console.log(`Found expected Blueprint API endpoints: ${foundExpectedEndpoints.join(', ')}`);
-      expect(foundExpectedEndpoints.length).toBeGreaterThan(0);
-    } else {
-      console.log('Expected Blueprint API endpoints not found - API may be structured differently or not yet implemented');
-    }
+    await page.goto(`${Services.Blueprint.UI}/admin`, { waitUntil: 'domcontentloaded' });
+    const version = await versionResponse;
+    expect(version.status()).toBe(200);
+
+    // The API answers a JSON string like "0.0.0+<git-sha>"; the UI splits on '+' and
+    // renders only the leading semver part.
+    const rawVersion = (await version.json()) as string;
+    expect(rawVersion).toMatch(/^\d+\.\d+\.\d+/);
+    const apiSemver = rawVersion.split('+')[0];
+
+    const versionsLine = page.locator('.app-versions').first();
+    await expect(versionsLine).toBeVisible({ timeout: 30000 });
+    await expect(versionsLine).toHaveText(
+      new RegExp(`Versions:\\s*UI\\s*\\d+\\.\\d+\\.\\d+,\\s*API\\s*${apiSemver.replace(/\./g, '\\.')}`)
+    );
+
+    // The component initialises `apiVersion = 'API ERROR!'` and only overwrites it on a
+    // successful response, so this also proves the fetch succeeded.
+    await expect(versionsLine).not.toContainText('API ERROR!');
   });
 });

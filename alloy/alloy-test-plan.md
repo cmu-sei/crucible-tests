@@ -139,6 +139,41 @@ Alloy is an advanced orchestration application within the Crucible cybersecurity
     - expect: Application navigates forward to Users section
     - expect: Users list is displayed
 
+#### 2.6. User Menu Theme Toggle
+
+**File:** `tests/home-page-and-navigation/user-menu-theme-toggle.spec.ts`
+
+**Steps:**
+  1. Log in and navigate to the home page
+    - expect: Application loads successfully
+  2. Click on the user menu button in the topbar (showing username)
+    - expect: User menu dropdown appears
+    - expect: Menu contains "Administration", "Logout", and "Dark Theme" toggle
+  3. Click on the "Dark Theme" toggle switch in the menu
+    - expect: The application theme switches to dark mode
+    - expect: All components properly render in dark theme
+    - expect: Menu remains open during theme switch
+  4. Click the toggle switch again
+    - expect: The application theme switches back to light mode
+    - expect: Theme change is smooth and immediate
+    - expect: Theme preference is saved
+
+#### 2.7. User Menu Administration Navigation
+
+**File:** `tests/home-page-and-navigation/user-menu-administration-navigation.spec.ts`
+
+**Steps:**
+  1. Log in as admin user and navigate to the home page
+    - expect: Home page loads successfully
+  2. Click on the user menu button in the topbar
+    - expect: User menu dropdown appears
+    - expect: "Administration" menu item is visible
+  3. Click on "Administration" menu item
+    - expect: User is navigated to the admin section
+    - expect: URL changes to /admin
+    - expect: Admin interface loads with sidebar visible
+    - expect: User menu closes after navigation
+
 ### 3. Event Templates Management
 
 **Seed:** `tests/seed.spec.ts`
@@ -314,6 +349,100 @@ Alloy is an advanced orchestration application within the Crucible cybersecurity
     - expect: The template is marked as unpublished
     - expect: A confirmation message is displayed
     - expect: The template is no longer visible to non-admin users
+
+#### 3.10. View Event Template History
+
+**File:** `tests/event-templates-management/view-event-template-history.spec.ts`
+
+**Steps:**
+  1. Navigate to home page and click on an event template
+    - expect: Event template detail view is displayed
+    - expect: Template name, description, and duration are shown
+    - expect: "Launch" button is visible
+  2. Locate and click the "History" button
+    - expect: History section expands
+    - expect: A table of historical events is displayed
+  3. Review the history table
+    - expect: Table shows columns: User, Status, Last Launch, Last End Status, Start Date, End Date, Last Status Date
+    - expect: Each row represents a past event created from this template
+    - expect: Event statuses are clearly displayed (e.g., "Ended", "Failed")
+    - expect: Dates are formatted in a readable format
+  4. Click the "History" button again
+    - expect: History section collapses
+    - expect: Table is hidden
+
+#### 3.11. Public Template Configuration
+
+**File:** `tests/event-templates-management/public-template-configuration.spec.ts`
+
+**Steps:**
+  1. Navigate to admin Event Templates section
+    - expect: Event templates list is visible
+  2. Click edit icon for an event template
+    - expect: Edit Event Template dialog appears
+  3. Locate the "Public" checkbox
+    - expect: Checkbox is visible with label "Public"
+    - expect: Tooltip or help text states "Makes this template available to ALL authenticated users"
+  4. Check the "Public" checkbox
+    - expect: Checkbox becomes checked
+  5. Click "Save" button
+    - expect: Template is updated successfully
+    - expect: A success notification is displayed
+  6. Log out and log in as a non-admin user
+    - expect: Successfully authenticated as regular user
+  7. Navigate to home page
+    - expect: The public template is now visible in "My Events" list
+    - expect: Non-admin user can see and launch the template
+  8. Log back in as admin and uncheck the "Public" checkbox
+    - expect: Template is updated successfully
+  9. Verify as non-admin user
+    - expect: The template is no longer visible to non-admin users
+
+#### 3.12. Use Dynamic Host Configuration
+
+**File:** `tests/event-templates-management/use-dynamic-host-configuration.spec.ts`
+
+**Steps:**
+  1. Navigate to admin Event Templates section
+    - expect: Event templates list is visible
+  2. Click edit icon for an event template
+    - expect: Edit Event Template dialog appears
+  3. Locate the "Use Dynamic Host" checkbox
+    - expect: Checkbox is visible with label "Use Dynamic Host"
+    - expect: Tooltip or help text states "Dynamically assigns host addresses for deployed infrastructure"
+  4. Check the "Use Dynamic Host" checkbox
+    - expect: Checkbox becomes checked
+  5. Click "Save" button
+    - expect: Template is updated successfully
+    - expect: A success notification is displayed
+    - expect: Updated template reflects the dynamic host setting
+  6. Create an event from this template
+    - expect: Event is created successfully
+    - expect: Infrastructure is deployed with dynamically assigned host addresses
+    - expect: Event launches successfully with dynamic addressing
+
+#### 3.13. Clone Event Template
+
+**File:** `tests/event-templates-management/clone-event-template.spec.ts`
+
+**Steps:**
+  1. Navigate to admin Event Templates section
+    - expect: Event templates list is visible with at least one template
+  2. Click edit icon for an event template
+    - expect: Edit Event Template dialog appears
+    - expect: Form is populated with template data
+  3. Locate and click the "Clone" button
+    - expect: The dialog closes
+    - expect: A new event template is created
+    - expect: New template name is generated (e.g., "Original Name - Copy" or similar)
+  4. Verify the cloned template in the list
+    - expect: A new template appears in the event templates list
+    - expect: Cloned template has the same description and duration as original
+    - expect: Cloned template has the same Player View, Caster Directory, and Steamfitter Scenario Template
+    - expect: Cloned template has a unique ID (different from original)
+  5. Edit the cloned template
+    - expect: Changes to the clone do not affect the original template
+    - expect: Clone and original remain independent
 
 ### 4. Events Management
 

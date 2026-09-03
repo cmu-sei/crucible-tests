@@ -4,17 +4,17 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Search and Filtering', () => {
   test('Global Search Functionality', async ({ blueprintAuthenticatedPage: page }) => {
 
     // Navigate to the MSEL management page where the search input lives
-    await page.goto('http://localhost:4725/build');
+    await page.goto(`${Services.Blueprint.UI}/build`);
     await page.waitForLoadState('domcontentloaded');
 
     // 1. Locate the global search box (on the /build MSEL list page)
-    await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
 
     // expect: Search box is visible
     const globalSearchBox = page.locator(
@@ -33,7 +33,6 @@ test.describe('Search and Filtering', () => {
     await globalSearchBox.fill(searchTerm);
     
     // Give some time for search results to appear
-    await page.waitForTimeout(1500);
     
     // expect: Search results appear in real-time or after submission
     const searchResults = page.locator(

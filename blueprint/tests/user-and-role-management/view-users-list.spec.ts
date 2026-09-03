@@ -18,11 +18,11 @@
 //   4. Verifies at least one user row exists with non-empty content
 //   5. Checks whether pagination controls are present (low user count means they likely won't be)
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('User and Role Management', () => {
   test('View Users List', async ({ blueprintAuthenticatedPage: page }) => {
-    await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
 
     // 2. Navigate to the admin section
     await page.goto(`${Services.Blueprint.UI}/admin`);
@@ -34,7 +34,9 @@ test.describe('User and Role Management', () => {
     await expect(usersItem).toBeVisible({ timeout: 15000 });
     await usersItem.click();
     await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(500);
+
+    // Wait for the table to appear as proof the section loaded
+    await page.locator('table').first().waitFor({ state: 'visible', timeout: 10000 });
 
     // expect: URL remains at /admin
     await expect(page).toHaveURL(/.*\/admin.*/, { timeout: 5000 });

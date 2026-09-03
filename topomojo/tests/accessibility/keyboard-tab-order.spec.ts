@@ -4,14 +4,14 @@
 // spec: topomojo/topomojo-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Accessibility', () => {
   test('Keyboard Navigation - Tab Order', async ({ topomojoAuthenticatedPage: page }) => {
 
     // 1. Navigate to home page - handled by fixture
     // expect: Page is loaded
-    await expect(page).toHaveURL(/localhost:4201/);
+    await expect(page).toHaveURL(serviceUrlPattern(Services.TopoMojo.UI));
 
     // 2. Press Tab key repeatedly
     await page.keyboard.press('Tab');

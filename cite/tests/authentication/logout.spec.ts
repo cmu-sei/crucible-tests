@@ -4,14 +4,14 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Authentication and Authorization', () => {
   test('Logout Functionality', async ({ citeAuthenticatedPage: page }) => {
 
     // 1. Log in with valid credentials (admin/admin)
     // expect: User is successfully authenticated
-    await expect(page).toHaveURL(/localhost:4721/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
 
     // 2. Click on user profile menu in top bar
     const userMenuButton = page.locator('[class*="user-menu"], [class*="profile"], button:has-text("admin"), [matMenuTriggerFor]').first();
@@ -27,14 +27,14 @@ test.describe('Authentication and Authorization', () => {
 
     // expect: User is logged out
     // expect: User is redirected to Keycloak or CITE home
-    await page.waitForURL(/localhost:8443|localhost:4721/, { timeout: 30000 });
+    await page.waitForURL(serviceUrlPattern(Services.Cite.UI), { timeout: 30000 });
 
     // expect: Authentication session is terminated
     // 4. Attempt to navigate to CITE UI again
     await page.goto(Services.Cite.UI);
 
     // expect: User is redirected to Keycloak login page
-    await expect(page).toHaveURL(/.*localhost:8443/, { timeout: 70000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 70000 });
 
     // expect: User must authenticate again
     const usernameField = page.locator('#username');

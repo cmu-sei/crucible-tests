@@ -10,9 +10,10 @@
 
 import https from 'https';
 import http from 'http';
+import { Services } from '../../../shared-fixtures';
 
-const GALLERY_API = 'http://localhost:4722/api';
-const KEYCLOAK_TOKEN_URL = 'https://localhost:8443/realms/crucible/protocol/openid-connect/token';
+const GALLERY_API = `${Services.Gallery.API}/api`;
+const KEYCLOAK_TOKEN_URL = `${Services.Keycloak}/realms/crucible/protocol/openid-connect/token`;
 
 /** Node https agent that ignores self-signed certificates (dev only) */
 const insecureAgent = new https.Agent({ rejectUnauthorized: false });

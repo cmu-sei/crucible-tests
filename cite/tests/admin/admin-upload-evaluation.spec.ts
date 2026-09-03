@@ -4,43 +4,48 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
-import { navigateToAdminSection, deleteEvaluationByName, createEvaluation } from '../../test-helpers';
+import { test, expect, Services, seedCompleteEvaluation, cleanupCompleteEvaluation } from '../../fixtures';
+import { navigateToAdminSection, waitForAdminListLoad, deleteEvaluationByName } from '../../test-helpers';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 
 test.describe('Administration - Evaluations', () => {
 
-  const TEST_EVAL_NAME = 'Test Evaluation For Upload';
-  const UPLOADED_EVAL_NAME = 'Uploaded Evaluation Automation';
+  const UPLOADED_EVAL_NAME = `Uploaded Eval ${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
   let tempFilePath: string;
+  let seedData: { scoringModelId: string; evaluationId: string; teamTypeId: string } | null = null;
+  let evalName = '';
 
   test('Upload Evaluation', async ({ citeAuthenticatedPage: page }) => {
 
-    // 1. First create and download an evaluation so we have a valid JSON file to upload
-    await createEvaluation(page, TEST_EVAL_NAME);
+    // 1. Seed an evaluation via API to get a valid download
+    evalName = `Upload Test ${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    seedData = await seedCompleteEvaluation(evalName, 0);
 
-    // 2. Navigate to the evaluations list and wait for the evaluation to appear
+    // 2. Navigate to the evaluations list and download the seeded evaluation
     await navigateToAdminSection(page, 'Evaluations');
-    await page.waitForTimeout(2000);
+    await waitForAdminListLoad(page, '/api/evaluations', true);
 
-    const evalRow = page.locator('tbody tr').filter({ hasText: TEST_EVAL_NAME }).first();
-    await expect(evalRow).toBeVisible({ timeout: 15000 });
+    // Search for the evaluation
+    const searchBox = page.locator('input[placeholder="Search"], input[type="search"], input[aria-label="Search"]').first();
+    await expect(searchBox).toBeVisible({ timeout: 5000 });
+    await searchBox.clear();
+    await searchBox.fill(evalName);
+    await page.waitForTimeout(1000);
 
-    // Click the row to enable per-row action buttons
-    await evalRow.click();
-    await page.waitForTimeout(500);
+    const evalRow = page.locator('tbody tr').filter({ hasText: evalName }).first();
+    await expect(evalRow).toBeVisible({ timeout: 10000 });
 
+    // 3. Download the evaluation
     const downloadButton = evalRow.locator(`button[title*="Download"]`);
     await expect(downloadButton).toBeVisible({ timeout: 5000 });
-    await expect(downloadButton).toBeEnabled({ timeout: 5000 });
 
     const downloadPromise = page.waitForEvent('download', { timeout: 15000 });
     await downloadButton.click();
     const download = await downloadPromise;
 
-    // 3. Save the downloaded file and modify its description for re-upload
+    // 4. Save the downloaded file and modify its description for re-upload
     const downloadPath = await download.path();
     expect(downloadPath).toBeTruthy();
 
@@ -50,36 +55,37 @@ test.describe('Administration - Evaluations', () => {
     // Modify the description field (C# uses PascalCase)
     evalData.Description = UPLOADED_EVAL_NAME;
 
-    tempFilePath = path.join(os.tmpdir(), 'test-upload-evaluation.json');
+    tempFilePath = path.join(os.tmpdir(), `test-upload-${Date.now()}.json`);
     fs.writeFileSync(tempFilePath, JSON.stringify(evalData));
 
-    // 4. Upload the modified evaluation JSON
-    await navigateToAdminSection(page, 'Evaluations');
-
+    // 5. Upload the modified evaluation JSON
     const uploadButton = page.getByRole('button', { name: 'Upload Evaluation' });
     await expect(uploadButton).toBeVisible({ timeout: 10000 });
-    await expect(uploadButton).toBeEnabled({ timeout: 10000 });
 
-    // Set the file directly on the hidden file input element. This is more reliable
-    // than going through the file chooser dialog, especially in Firefox where the
-    // programmatic click on a hidden input may not trigger Playwright's filechooser event.
+    // Set the file directly on the hidden file input element
     const fileInput = page.locator('input[type="file"][accept=".json"]');
     await fileInput.setInputFiles(tempFilePath);
 
-    // Wait for the upload to complete by checking that the evaluation appears in the list
-    await page.waitForTimeout(3000);
-
-    // 5. Verify the uploaded evaluation appears in the list
-    await navigateToAdminSection(page, 'Evaluations');
+    // Wait for the upload to complete
     await page.waitForTimeout(2000);
 
+    // 6. Verify the uploaded evaluation appears in the list
+    await searchBox.clear();
+    await searchBox.fill(UPLOADED_EVAL_NAME);
+    await page.waitForTimeout(1000);
+
     const uploadedRow = page.locator('tbody tr').filter({ hasText: UPLOADED_EVAL_NAME }).first();
-    await expect(uploadedRow).toBeVisible({ timeout: 15000 });
+    await expect(uploadedRow).toBeVisible({ timeout: 10000 });
   });
 
   test.afterEach(async ({ citeAuthenticatedPage: page }) => {
+    // Clean up the original seeded evaluation via API
+    if (seedData) {
+      await cleanupCompleteEvaluation(seedData);
+      seedData = null;
+    }
+    // Clean up the uploaded evaluation via UI
     await deleteEvaluationByName(page, UPLOADED_EVAL_NAME);
-    await deleteEvaluationByName(page, TEST_EVAL_NAME);
     if (tempFilePath && fs.existsSync(tempFilePath)) {
       fs.unlinkSync(tempFilePath);
     }

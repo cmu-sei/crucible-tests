@@ -4,167 +4,108 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import {
+  getBlueprintToken,
+  createMsel,
+  deleteMsel,
+  createOrganization,
+  deleteOrganization,
+  createRenderableScenarioEvent,
+  deleteScenarioEvent,
+  navigateToMselSection,
+  tempBlueprintName,
+} from '../../test-helpers';
 
 test.describe('Search and Filtering', () => {
-  test('Scenario Event Filtering by Organization', async ({ blueprintAuthenticatedPage: page }) => {
-    await page.goto('http://localhost:4725/build');
+  let token: string;
+  let mselId: string;
+  let orgId: string;
+  let eventId1: string;
+  let eventId2: string;
 
-    // 1. Navigate to a MSEL with multiple scenario events
-    await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 10000 });
-    await page.waitForLoadState('domcontentloaded');
+  test.beforeEach(async () => {
+    token = await getBlueprintToken();
+    const msel = await createMsel(token, {
+      name: tempBlueprintName('OrgFilterTest'),
+      description: 'MSEL for organization filtering test',
+    });
+    mselId = msel.id;
 
-    // First, find and click on a MSEL from the list
-    const mselList = page.locator(
-      '[class*="msel-item"], ' +
-      '[class*="msel-card"], ' +
-      'mat-row, ' +
-      '[class*="list-item"]'
-    );
+    // Create an organization for this MSEL
+    const org = await createOrganization(token, mselId, {
+      name: tempBlueprintName('TestOrg'),
+      shortName: 'TO',
+    });
+    orgId = org.id;
 
-    const mselCount = await mselList.count();
-    expect(mselCount).toBeGreaterThan(0);
+    // Create two scenario events
+    const event1 = await createRenderableScenarioEvent(token, mselId, 'First test event', { deltaSeconds: 0 });
+    eventId1 = event1.id;
 
-    // Click on the first MSEL to view its details
-    const firstMsel = mselList.first();
-    await firstMsel.locator('a').first().click();
-    await page.waitForLoadState('domcontentloaded', { timeout: 10000 });
+    const event2 = await createRenderableScenarioEvent(token, mselId, 'Second test event', { deltaSeconds: 60 });
+    eventId2 = event2.id;
+  });
 
-    // Navigate to the Scenario Events tab/nav item
-    const scenarioEventsNav = page.locator(
-      'a:has-text("Scenario Events"), ' +
-      'button:has-text("Scenario Events"), ' +
-      '[class*="nav"]:has-text("Scenario Events"), ' +
-      'mat-tab:has-text("Scenario Events")'
-    ).first();
-    if (await scenarioEventsNav.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await scenarioEventsNav.click();
-      await page.waitForLoadState('domcontentloaded');
+  test.afterEach(async () => {
+    try {
+      if (eventId1) await deleteScenarioEvent(token, eventId1);
+      if (eventId2) await deleteScenarioEvent(token, eventId2);
+      if (orgId) await deleteOrganization(token, orgId);
+      if (mselId) await deleteMsel(token, mselId);
+    } catch (err) {
+      console.warn(`Cleanup failed: ${err}`);
     }
+  });
+
+  test('Scenario Event Filtering by Organization', async ({ blueprintAuthenticatedPage: page }) => {
+    // 1. Navigate to the MSEL's Scenario Events section
+    await navigateToMselSection(page, mselId, 'Scenario Events');
 
     // expect: Scenario events are displayed
-    const eventsContainer = page.locator(
-      '[class*="events"], ' +
-      '[class*="scenario-events"], ' +
-      '[class*="timeline"], ' +
-      '[class*="event-list"], ' +
-      'app-scenario-event-list'
-    ).first();
+    const eventsContainer = page.locator('app-scenario-event-list, table').first();
+    await expect(eventsContainer).toBeVisible({ timeout: 15000 });
 
-    await expect(eventsContainer).toBeVisible({ timeout: 10000 });
+    // Wait for the events to render
+    const eventItems = page.locator('table tbody tr');
+    await expect(eventItems.first()).toBeVisible({ timeout: 10000 });
 
-    // Count initial events
-    const eventItems = page.locator(
-      '[class*="event-item"], ' +
-      '[class*="scenario-event"], ' +
-      'mat-row, ' +
-      '[class*="timeline-event"]'
-    );
-
+    // Count initial events (our two seeded events)
     const initialEventCount = await eventItems.count();
-    expect(initialEventCount).toBeGreaterThan(0);
+    expect(initialEventCount).toBeGreaterThanOrEqual(2);
 
-    // 2. Apply organization filter to show events from specific org
-    // Look for organization filter control
+    // 2. Look for organization filter control
     const organizationFilter = page.locator(
-      'select[name*="organization"], ' +
-      'select[name*="org"], ' +
-      '[class*="organization-filter"], ' +
-      '[class*="org-filter"], ' +
       'mat-select[placeholder*="Organization"], ' +
       '[aria-label*="Organization"]'
     ).first();
 
-    // expect: Filter shows available organizations
+    // If no filter is present, this test verifies the scenario events are at least visible
     const orgFilterVisible = await organizationFilter.isVisible({ timeout: 5000 }).catch(() => false);
 
     if (orgFilterVisible) {
       await organizationFilter.click();
-      await page.waitForTimeout(500);
 
       // Get available organization options
-      const orgOptions = page.locator(
-        'mat-option, ' +
-        'option:not([value=""]), ' +
-        '[role="option"], ' +
-        '[class*="option-item"]'
-      );
-
+      const orgOptions = page.locator('mat-option, [role="option"]');
       const orgOptionCount = await orgOptions.count();
       expect(orgOptionCount).toBeGreaterThan(0);
 
-      // Select the first organization
+      // Select the first organization option
       const firstOrgOption = orgOptions.first();
-      const orgName = await firstOrgOption.textContent();
       await firstOrgOption.click();
-      await page.waitForTimeout(1500);
 
-      // expect: Events list updates to show only events from/to selected organization
-      await page.waitForLoadState('domcontentloaded');
-      const filteredEvents = page.locator(
-        '[class*="event-item"], ' +
-        '[class*="scenario-event"], ' +
-        'mat-row, ' +
-        '[class*="timeline-event"]'
-      );
-
+      // expect: Events list updates after filtering
+      await expect(eventsContainer).toBeVisible({ timeout: 10000 });
+      const filteredEvents = page.locator('table tbody tr');
       const filteredEventCount = await filteredEvents.count();
       expect(filteredEventCount).toBeGreaterThanOrEqual(0);
       expect(filteredEventCount).toBeLessThanOrEqual(initialEventCount);
-
-      // Verify that filtered events contain the selected organization
-      if (filteredEventCount > 0) {
-        const firstFilteredEvent = filteredEvents.first();
-        const eventText = await firstFilteredEvent.textContent();
-
-        // The event should contain organization information
-        expect(eventText).toBeTruthy();
-
-        // Check if organization name appears in the event details
-        if (orgName) {
-          const orgMentioned = eventText?.includes(orgName.trim());
-          // Note: Organization might be in "from" or "to" field
-          expect(orgMentioned || true).toBeTruthy(); // Flexible check
-        }
-      }
     } else {
-      // Organization filter might be in a filter panel or menu
-      const filterButton = page.locator(
-        'button:has-text("Filter"), ' +
-        'button:has-text("Filters"), ' +
-        '[aria-label*="Filter"], ' +
-        'mat-icon:has-text("filter_list")'
-      ).first();
-
-      const filterButtonVisible = await filterButton.isVisible({ timeout: 3000 }).catch(() => false);
-
-      if (filterButtonVisible) {
-        await filterButton.click();
-        await page.waitForTimeout(1000);
-
-        // Look for organization filter in the opened panel
-        const orgFilterInPanel = page.locator(
-          'select[name*="organization"], ' +
-          'mat-select[placeholder*="Organization"], ' +
-          '[class*="organization-filter"]'
-        ).first();
-
-        if (await orgFilterInPanel.isVisible({ timeout: 2000 })) {
-          await orgFilterInPanel.click();
-          await page.waitForTimeout(500);
-
-          const orgOption = page.locator('mat-option, [role="option"]').first();
-          if (await orgOption.isVisible({ timeout: 2000 })) {
-            await orgOption.click();
-            await page.waitForTimeout(1500);
-          }
-        }
-      }
-
-      // Verify events are still visible even if filter is not available
+      // No organization filter present - verify events are still visible
       await expect(eventsContainer).toBeVisible();
+      const visibleEvents = page.locator('table tbody tr');
+      await expect(visibleEvents.first()).toBeVisible({ timeout: 5000 });
     }
-
-    await page.waitForLoadState('domcontentloaded');
   });
 });

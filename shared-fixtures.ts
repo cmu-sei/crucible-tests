@@ -1,12 +1,11 @@
 // Copyright 2026 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
-import { test as base, expect as baseExpect, Page } from '@playwright/test';
-import dotenv from 'dotenv';
-import path from 'path';
+import { test as base, expect as baseExpect, Page, Locator } from '@playwright/test';
+import { loadCrucibleEnv } from './load-env';
 
-// Load .env from the crucible-tests root
-dotenv.config({ path: path.resolve(__dirname, '.env') });
+// Load environment based on CRUCIBLE_TARGET (aspire | minikube). Defaults to .env.
+loadCrucibleEnv();
 
 /**
  * Shared fixtures for all Crucible applications
@@ -24,18 +23,18 @@ export const Services = {
   KeycloakRealm: process.env.KEYCLOAK_REALM_URL || 'https://localhost:8443/realms/crucible',
   Player: {
     UI: process.env.PLAYER_UI_URL || 'http://localhost:4301',
-    API: process.env.PLAYER_API_URL || 'http://localhost:4302',
+    API: process.env.PLAYER_API_URL || 'http://localhost:4300',
   },
   PlayerVM: {
     UI: process.env.PLAYERVM_UI_URL || 'http://localhost:4303',
-    API: process.env.PLAYERVM_API_URL || 'http://localhost:4304',
+    API: process.env.PLAYERVM_API_URL || 'http://localhost:4302',
   },
   Console: {
     UI: process.env.CONSOLE_UI_URL || 'http://localhost:4305',
   },
   Caster: {
     UI: process.env.CASTER_UI_URL || 'http://localhost:4310',
-    API: process.env.CASTER_API_URL || 'http://localhost:4311',
+    API: process.env.CASTER_API_URL || 'http://localhost:4309',
   },
   Alloy: {
     UI: process.env.ALLOY_UI_URL || 'http://localhost:4403',
@@ -63,12 +62,169 @@ export const Services = {
   },
   Gameboard: {
     UI: process.env.GAMEBOARD_UI_URL || 'http://localhost:4202',
-    API: process.env.GAMEBOARD_API_URL || 'http://localhost:4203',
+    API: process.env.GAMEBOARD_API_URL || 'http://localhost:5002',
   },
   Moodle: process.env.MOODLE_URL || 'http://localhost:8081',
   Lrsql: process.env.LRSQL_URL || 'http://localhost:9274',
   Misp: process.env.MISP_URL || 'https://localhost:8444',
 };
+
+/**
+ * Build the OIDC sessionStorage key the SPA uses to persist its token.
+ *
+ * The Angular `oidc-client-ts` library writes one entry per (authority,
+ * clientId) pair under the key:
+ *
+ *   oidc.user:<authority>:<clientId>
+ *
+ * where `<authority>` is the Keycloak realm URL. Using this helper keeps the
+ * key correct under both Aspire (`https://localhost:8443/realms/crucible`)
+ * and Minikube (`https://crucible/keycloak/realms/crucible`).
+ */
+export function oidcStorageKey(clientId: string): string {
+  const authority = Services.KeycloakRealm.replace(/\/$/, '');
+  return `oidc.user:${authority}:${clientId}`;
+}
+
+/**
+ * Wait until ANY of the supplied locators is visible and return which one won —
+ * a cancellation-safe replacement for `Promise.race([a.waitFor(), b.waitFor()])`.
+ *
+ * Why this exists: `Promise.race` over `locator.waitFor()` resolves as soon as the
+ * first wait settles, but it does NOT cancel the losers. Each losing `waitFor`
+ * keeps running until its own timeout (often 15–20s), burning wall-clock in the
+ * background and then throwing an unhandled rejection. When a test races "app
+ * shell vs. Keycloak login form" on every navigation, that orphaned wait was the
+ * single largest cost in the CITE suite (~15s × 62 admin navigations).
+ *
+ * This polls `isVisible()` (a cheap, instant, non-throwing check) on each candidate
+ * in turn, so there is nothing left running once one matches. The first candidate
+ * to be visible on a given tick wins; ties break by array order, so list the
+ * "expected/fast" outcome first.
+ *
+ * App-agnostic by design: callers pass their own labelled locators, so any app's
+ * fixture (CITE today; TopoMojo/Player/Gallery in future PRs) can use it to
+ * collapse a navigate→race→login dance without duplicating the orphan-prone race.
+ *
+ * @param page      - Playwright Page (used for its polling clock)
+ * @param candidates - Ordered list of `{ key, locator }`; `key` is returned on match
+ * @param options.timeout    - Max wait in ms (default 15000)
+ * @param options.pollIntervalMs - Poll cadence in ms (default 150)
+ * @returns the `key` of the first visible locator, or `null` if none appears in time
+ */
+export async function waitForFirstVisible<K extends string>(
+  page: Page,
+  candidates: Array<{ key: K; locator: Locator }>,
+  options: { timeout?: number; pollIntervalMs?: number } = {}
+): Promise<K | null> {
+  const timeout = options.timeout ?? 15000;
+  const pollIntervalMs = options.pollIntervalMs ?? 150;
+  const deadline = Date.now() + timeout;
+
+  // Loop until one candidate is visible or the deadline passes. `isVisible()`
+  // returns immediately (no implicit waiting) and never throws on a missing
+  // element, so a losing candidate costs nothing once another has won.
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    for (const { key, locator } of candidates) {
+      if (await locator.isVisible().catch(() => false)) {
+        return key;
+      }
+    }
+    if (Date.now() >= deadline) {
+      return null;
+    }
+    await page.waitForTimeout(pollIntervalMs);
+  }
+}
+
+/**
+ * Best-effort wait for a network response whose URL contains `urlSubstring`,
+ * without over-constraining on status and without the silent full-timeout cost of
+ * a bare `page.waitForResponse(...).catch(() => {})`.
+ *
+ * Two problems with the pattern this replaces:
+ *   await page.waitForResponse(r => r.url().includes(x) && r.status() === 200,
+ *                              { timeout: 15000 }).catch(() => {});
+ *   1. The `status() === 200` predicate means a 204/304/already-fired response
+ *      never matches, so the wait burns the FULL timeout every time and the
+ *      `.catch` hides it (180s on one CITE line alone).
+ *   2. A long timeout on a swallowed wait is pure dead time when it doesn't match.
+ *
+ * This matches on URL substring only (any status counts as "the call happened"),
+ * defaults to a short timeout, and resolves to a boolean instead of throwing —
+ * so callers can branch on it but a miss costs at most `timeout` ms, not 15s.
+ * App-agnostic: any app can use it to settle a list/detail load before asserting.
+ *
+ * @param page - Playwright Page
+ * @param urlSubstring - substring the response URL must contain (e.g. '/api/scoringmodels')
+ * @param options.timeout - max wait in ms (default 5000)
+ * @param options.predicate - optional extra filter on the response
+ * @returns true if a matching response arrived within the window, false otherwise
+ */
+export async function settleForResponse(
+  page: Page,
+  urlSubstring: string,
+  options: { timeout?: number; predicate?: (url: string) => boolean } = {}
+): Promise<boolean> {
+  const timeout = options.timeout ?? 5000;
+  return page
+    .waitForResponse(
+      (response) => {
+        const url = response.url();
+        return url.includes(urlSubstring) && (options.predicate ? options.predicate(url) : true);
+      },
+      { timeout }
+    )
+    .then(() => true)
+    .catch(() => false);
+}
+
+/**
+ * Build a `RegExp` that matches any URL beginning with `serviceUrl`.
+ *
+ * Tests historically wrote things like `expect(page).toHaveURL(/localhost:4301/)`
+ * to mean "we landed on the Player UI." That worked under the Aspire topology
+ * because each app had a unique `localhost:<port>`, but breaks under Minikube
+ * where every app shares `https://crucible/...` and is distinguished only by
+ * its path prefix. Use this helper so the same assertion adapts to either:
+ *
+ *   await expect(page).toHaveURL(serviceUrlPattern(Services.Player.UI));
+ *
+ * The pattern matches `<host><pathPrefix>` followed by either end-of-string
+ * or a path separator (`/`, `?`, `#`), so `Services.Player.UI` (Minikube
+ * value `https://crucible/player`) does not also match `/playerVm` or
+ * `/playground`.
+ */
+export function serviceUrlPattern(serviceUrl: string): RegExp {
+  const u = new URL(serviceUrl);
+  const prefix = u.host + u.pathname.replace(/\/$/, '');
+  // Escape regex metacharacters in host/path.
+  const escaped = prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(escaped + '(?:[/?#]|$)');
+}
+
+/**
+ * Returns true when `url` looks like a Keycloak page.
+ *
+ * Works for both deployment topologies:
+ *   - Aspire:   app and Keycloak are on different hosts (host comparison wins).
+ *   - Minikube: app and Keycloak share the host but Keycloak lives under a
+ *               path prefix (e.g. /keycloak), so we fall back to path checks.
+ */
+function isKeycloakUrl(url: URL | string): boolean {
+  const u = typeof url === 'string' ? new URL(url) : url;
+  const keycloak = new URL(Services.Keycloak);
+  if (u.host === keycloak.host && u.pathname.startsWith(keycloak.pathname.replace(/\/$/, '') || '/')) {
+    // Same host AND under Keycloak's path prefix.
+    if (keycloak.pathname && keycloak.pathname !== '/') return true;
+    // No path prefix (Aspire): fall through to other signals.
+  }
+  // Path-based fallbacks that hold regardless of topology.
+  if (u.pathname.includes('/realms/')) return true;
+  if (u.pathname.includes('/protocol/openid-connect/')) return true;
+  return false;
+}
 
 /**
  * Generic Keycloak authentication helper
@@ -95,9 +251,11 @@ export async function authenticateWithKeycloak(
     } catch {
       await page.click('input[type="submit"]');
     }
-    // Wait for redirect back to the app
+    // Wait for redirect back to the app. Under minikube the app and Keycloak
+    // share a host, so a host-only check returns true immediately — instead,
+    // wait for a URL that is NOT a Keycloak page.
     const appHost = new URL(appUrl).host;
-    await page.waitForURL((url) => url.host === appHost, { timeout: 30000 });
+    await page.waitForURL((url) => url.host === appHost && !isKeycloakUrl(url), { timeout: 30000 });
   };
 
   // Navigate to the app
@@ -113,9 +271,8 @@ export async function authenticateWithKeycloak(
   }
 
   // Check if we got redirected to Keycloak immediately
-  const keycloakHost = new URL(Services.Keycloak).host;
   const currentUrl = page.url();
-  const isOnKeycloak = currentUrl.includes(keycloakHost) || currentUrl.includes('/realms/crucible');
+  const isOnKeycloak = isKeycloakUrl(currentUrl);
 
   if (isOnKeycloak) {
     console.log(`Redirected to Keycloak at ${currentUrl}`);
@@ -133,7 +290,7 @@ export async function authenticateWithKeycloak(
     page.on('framenavigated', (frame) => {
       if (frame === page.mainFrame()) {
         const url = frame.url();
-        if (url.includes(keycloakHost) || url.includes('/realms/crucible')) {
+        if (isKeycloakUrl(url)) {
           console.log(`Detected redirect to Keycloak: ${url}`);
           redirectedToKeycloak = true;
         }
@@ -146,11 +303,22 @@ export async function authenticateWithKeycloak(
     const appContent = page.locator('app-root, [class*="topbar"], mat-toolbar, [class*="dashboard"], nav, header, [role="banner"], [role="navigation"]');
 
     try {
-      // Wait up to 3 minutes for one of these to appear (apps can take time to redirect to Keycloak)
-      const winner = await Promise.race([
-        keycloakField.waitFor({ state: 'visible', timeout: 180000 }).then(() => 'keycloak' as const),
-        appContent.first().waitFor({ state: 'visible', timeout: 180000 }).then(() => 'app' as const),
-      ]);
+      // Wait up to 3 minutes for one of these to appear (apps can take time to redirect to Keycloak).
+      // Use the cancellation-safe helper instead of `Promise.race` of two waitFor()s: the loser of a
+      // race is never cancelled and would keep running to its 3-minute timeout in the background.
+      const winner = await waitForFirstVisible(
+        page,
+        [
+          { key: 'keycloak', locator: keycloakField },
+          { key: 'app', locator: appContent.first() },
+        ],
+        { timeout: 180000 }
+      );
+
+      if (winner === null) {
+        // Fall through to the catch's diagnostics: neither appeared in the window.
+        throw new Error('Neither Keycloak login form nor app content became visible');
+      }
 
       if (winner === 'keycloak') {
         console.log(`Keycloak login form appeared`);
@@ -163,7 +331,7 @@ export async function authenticateWithKeycloak(
         // 1. A redirect to Keycloak to start (URL changes to include :8443 or /realms/crucible)
         // 2. The wait to timeout (meaning we're stable and authenticated)
         try {
-          await page.waitForURL((url) => url.toString().includes(':8443') || url.toString().includes('/realms/crucible'), {
+          await page.waitForURL((url) => isKeycloakUrl(url), {
             timeout: 15000
           });
           console.log(`OIDC initiated redirect to Keycloak after app content appeared`);

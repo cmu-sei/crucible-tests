@@ -4,13 +4,12 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Event Dashboard and Navigation', () => {
   test('Navigate to Build Events', async ({ blueprintAuthenticatedPage: page }) => {
     // 1. From Event Dashboard, click on 'Manage an Event' card
-    await expect(page).toHaveURL(/^http:\/\/localhost:4725/, { timeout: 30000 });
-    await page.waitForLoadState('networkidle');
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 30000 });
 
     const buildCard = page.locator(
       'text=Manage an Event, mat-card:has-text("Manage"), [class*="build-card"]'
@@ -27,7 +26,6 @@ test.describe('Event Dashboard and Navigation', () => {
 
     // expect: Navigation to /build occurs
     await expect(page).toHaveURL(/.*\/build.*/, { timeout: 10000 });
-    await page.waitForLoadState('networkidle');
 
     // expect: Page displays MSEL list
     const mselList = page.locator(

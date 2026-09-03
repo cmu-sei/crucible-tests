@@ -5,9 +5,13 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect } from '@playwright/test';
-import { authenticateBlueprintWithKeycloak } from '../../fixtures';
+import { authenticateBlueprintWithKeycloak, Services, serviceUrlPattern, oidcStorageKey } from '../../fixtures';
 
-const OIDC_STORAGE_KEY = 'oidc.user:https://localhost:8443/realms/crucible:blueprint.ui';
+const OIDC_STORAGE_KEY = oidcStorageKey('blueprint.ui');
+
+// Override global storageState so this test starts from a fresh unauthenticated state
+// and can manually log in to test token expiration behavior.
+test.use({ storageState: { cookies: [], origins: [] } });
 
 test.describe('Authentication and Authorization', () => {
   test('Access Token Expiration Redirect', async ({ page }) => {
@@ -15,7 +19,7 @@ test.describe('Authentication and Authorization', () => {
     await authenticateBlueprintWithKeycloak(page, 'admin', 'admin');
 
     // expect: Successfully authenticated
-    await expect(page).toHaveURL(/.*localhost:4725.*/, { timeout: 10000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
     const topbarText = page.locator('text=Event Dashboard');
     await expect(topbarText).toBeVisible();
 
@@ -56,7 +60,7 @@ test.describe('Authentication and Authorization', () => {
     await page.reload();
 
     // expect: The application detects no valid session and redirects to Keycloak login page
-    await expect(page).toHaveURL(/.*localhost:8443.*/, { timeout: 70000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 70000 });
 
     // expect: User must re-authenticate to continue
     const usernameField = page.locator('input[name="username"]');

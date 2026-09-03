@@ -5,7 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect } from '@playwright/test';
-import { Services } from '../../fixtures';
+import { Services, serviceUrlPattern } from '../../fixtures';
 
 // Override global storageState so this test starts from a fresh unauthenticated state.
 // The login flow test must not rely on pre-authentication or stored sessions.
@@ -19,7 +19,7 @@ test.describe('Authentication and Authorization', () => {
 
     // expect: The application redirects to the Keycloak authentication page at https://localhost:8443/realms/crucible
     // Note: Blueprint tries silent auth renewal first (iframe), which takes ~10s to fail before full redirect
-    await expect(page).toHaveURL(/.*localhost:8443.*realms\/crucible/, { timeout: 70000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 70000 });
 
     // 2. Enter username 'admin' in the username field
     const usernameField = page.locator('#username');
@@ -41,7 +41,7 @@ test.describe('Authentication and Authorization', () => {
 
     // expect: The application authenticates successfully
     // expect: The user is redirected back to http://localhost:4725
-    await page.waitForURL(/localhost:4725/, { timeout: 30000 });
+    await page.waitForURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 30000 });
 
     // expect: The main application interface loads
     await page.waitForLoadState('domcontentloaded');

@@ -4,13 +4,13 @@
 // spec: topomojo/topomojo-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Accessibility', () => {
   test('Color Contrast Compliance', async ({ topomojoAuthenticatedPage: page }) => {
 
     // 1. Run automated accessibility check on home page
-    await expect(page).toHaveURL(/localhost:4201/);
+    await expect(page).toHaveURL(serviceUrlPattern(Services.TopoMojo.UI));
 
     // Check that key text elements have sufficient contrast
     const textElements = page.locator('h1, h2, h3, p, span, a, button, label');

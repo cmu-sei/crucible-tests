@@ -4,14 +4,14 @@
 // spec: topomojo/topomojo-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
 test.describe('Error Handling and Edge Cases', () => {
   test('Network Failure Handling', async ({ topomojoAuthenticatedPage: page }) => {
 
     // 1. Log in successfully - handled by fixture
     // expect: User is authenticated
-    await expect(page).toHaveURL(/localhost:4201/);
+    await expect(page).toHaveURL(serviceUrlPattern(Services.TopoMojo.UI));
 
     // 2. Simulate network failure by blocking API requests
     await page.route('**/api/**', (route) => {
