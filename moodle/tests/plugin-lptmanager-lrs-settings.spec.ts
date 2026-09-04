@@ -10,8 +10,9 @@ import { test, expect, Services } from '../fixtures';
 // pagination, and checkpoint behavior are covered by the plugin's PHPUnit task tests;
 // the only browser-observable surface is the admin settings page (two new settings)
 // and the "Create learning plan templates" nav label whose duplicate lang key was
-// removed. These guard that the lang strings are wired (no [[...]] placeholders) and
-// that the settings render with their documented defaults.
+// removed. These assert the settings render with their documented defaults and bounds,
+// and that the createnavlink label resolves (a missing lang key would render a
+// [[...]] placeholder, which the text assertions below would catch).
 
 type LrsSetting = {
   // Moodle wraps each admin setting row in id="admin-<name without plugin prefix>".
@@ -54,18 +55,19 @@ test.describe('tool_lptmanager LRS sync settings', () => {
       const row = page.locator(`#${setting.rowId}`);
       await expect(row, `${setting.label} setting row should render`).toBeVisible();
 
-      // Lang string is wired (guards against a removed/duplicate key rendering [[...]]).
+      // Label and description text resolve (a missing/duplicate lang key would render
+      // a [[...]] placeholder instead, failing these assertions).
       await expect(row.locator('.form-label')).toContainText(setting.label);
-      await expect(row.locator('.form-label')).not.toContainText('[[');
       await expect(row.getByText(setting.descriptionFragment)).toBeVisible();
 
-      // Documented default, independent of any saved config value.
-      await expect(row.getByText(`Default: ${setting.defaultValue}`)).toBeVisible();
+      // Documented default: Moodle renders "Default: N" from settings.php regardless of
+      // any saved value. Exact match so "Default: 15" can't be satisfied by "Default: 150".
+      await expect(row.getByText(`Default: ${setting.defaultValue}`, { exact: true })).toBeVisible();
 
-      // Field is a plain integer text input.
+      // On an unmodified install the field renders that same default as its value.
       const input = row.locator('.form-setting input[type="text"], .form-setting input[type="number"]');
       await expect(input).toHaveCount(1);
-      await expect(input).toHaveValue(/^\d+$/);
+      await expect(input).toHaveValue(setting.defaultValue);
     }
   });
 
@@ -80,11 +82,10 @@ test.describe('tool_lptmanager LRS sync settings', () => {
     // create.php calls set_title($pagetitle) and echoes $OUTPUT->heading($pagetitle),
     // both from get_string('createnavlink'). The admin layout's page-header h1 is the
     // site name, so assert the document title and the in-content heading instead.
+    // If createnavlink were unresolved, both would read "[[createnavlink]]" and fail.
     await expect(page).toHaveTitle(/Create learning plan templates/);
     await expect(
       page.locator('#region-main').getByRole('heading', { name: 'Create learning plan templates' })
     ).toBeVisible();
-    // A missing createnavlink lang string would surface as the raw placeholder.
-    await expect(page.locator('body')).not.toContainText('[[createnavlink]]');
   });
 });
