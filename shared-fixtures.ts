@@ -212,7 +212,7 @@ export function serviceUrlPattern(serviceUrl: string): RegExp {
  *   - Minikube: app and Keycloak share the host but Keycloak lives under a
  *               path prefix (e.g. /keycloak), so we fall back to path checks.
  */
-function isKeycloakUrl(url: URL | string): boolean {
+export function isKeycloakUrl(url: URL | string): boolean {
   const u = typeof url === 'string' ? new URL(url) : url;
   const keycloak = new URL(Services.Keycloak);
   if (u.host === keycloak.host && u.pathname.startsWith(keycloak.pathname.replace(/\/$/, '') || '/')) {
