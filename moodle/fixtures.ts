@@ -50,17 +50,11 @@ export async function authenticateMoodleWithKeycloak(
 
 export type MoodleFixtures = {
   moodleAdminPage: Page;
-  moodleDemoUserPage: Page;
 };
 
 export const test = base.extend<MoodleFixtures>({
   moodleAdminPage: async ({ page }, use) => {
     await authenticateMoodleWithKeycloak(page, 'admin', 'admin');
-    await use(page);
-  },
-
-  moodleDemoUserPage: async ({ page }, use) => {
-    await authenticateMoodleWithKeycloak(page, 'demo-user', 'tartans@1');
     await use(page);
   },
 });
