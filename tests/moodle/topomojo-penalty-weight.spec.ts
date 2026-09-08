@@ -5,33 +5,40 @@ import { test, expect } from '@playwright/test';
 import { Services } from '../../shared-fixtures';
 
 /**
- * TopoMojo penalty / weight / question-behaviour verification.
+ * TopoMojo penalty / weight / question-behaviour verification (Moodle mod_topomojo path).
  *
- * These tests reproduce the manual Playwright verification performed on
- * 2026-06-09 against a live stack. They are kept `.skip()` because they
- * require environment state that this repo does not provision:
+ * These exercise the MOODLE grading path (challenge.php -> qbehaviour_mojomatch),
+ * where a question answered correctly after N prior wrong tries scores
+ * defaultmark * max(0, 1 - penalty * N), floored at 0. That behaviour ships in:
+ *   - moodle-qbehaviour_mojomatch#6  (mode-aware grading + per-try penalty)
+ *   - moodle-qtype_mojomatch#14      (test helper)
+ *   - moodle-mod_topomojo#81         (imports the challenge-JSON penalty)
+ *   - moodle-mod_topomojo#82         (exposes interactive/immediate/deferred in the
+ *                                     activity's "How questions behave" setting)
  *
- *   1. A LIVE GAMESPACE. mojomatch grades by pulling the correct answer from
- *      the deployed gamespace's cloned challenge (get_rightanswer_topomojo),
- *      so every attempt deploys real VMs on the hypervisor (~1 min, and can
- *      fail for infra reasons unrelated to grading). There is no preview path.
+ * Kept `.skip()` because they still require environment state this repo does not
+ * provision:
  *
- *   2. SEEDED ACTIVITY STATE. The grading behaviour depends on the activity's
- *      `preferredbehaviour` and `submissions` settings, and a question
- *      `penalty > 0`. The manual run seeded penalty 0.1 (matching the real
- *      challenge) and switched `preferredbehaviour` per test via SQL. A CI
- *      run needs an activity pre-configured per mode, or admin setup steps.
+ *   1. A LIVE GAMESPACE. mojomatch grades by pulling the correct answer from the
+ *      deployed gamespace's cloned challenge (get_rightanswer_topomojo), so every
+ *      attempt deploys real VMs on the hypervisor (~1 min, and can fail for infra
+ *      reasons unrelated to grading). There is no preview path. Unblocking this in
+ *      CI needs the mock-hypervisor approach (deploy a gamespace with no real VMs).
+ *
+ *   2. SEEDED ACTIVITY STATE. Needs a course with one TopoMojo activity per
+ *      behaviour mode, on a workspace whose challenge has penalty > 0. As of
+ *      mod_topomojo#82 the mode is a normal "How questions behave" activity
+ *      setting (no SQL hack) - but the course + activities still must be created.
  *
  * To enable: provision a course with one TopoMojo activity per behaviour mode
- * (interactive+submissions>=3, immediatefeedback, deferredfeedback), all on a
- * workspace whose challenge defines penalty 0.1 and STATIC answers (no ##transforms##),
- * then remove `.skip` and set ACTIVITY_IDS / answers below.
+ * (interactive + submissions >= 3, immediatefeedback, deferredfeedback) on a
+ * workspace whose challenge defines penalty > 0 and STATIC answers (no
+ * ##transforms##), then remove `.skip` and set ACTIVITY_IDS / answers below.
+ * The Proxmox setup script's "Penalty Test Workspace" (weights 50/50, Q1 penalty
+ * 0.15) is a ready-made single-variant target; note the default "Moodle Test
+ * Workspace - Variants" ships with penalty 0 and will NOT exercise the penalty.
  *
- * Reference workspace used for manual verification:
- *   11d9f0cb5ad64e27982a181e116f48b8  "Moodle Test Workspace - Variants"
- *   Variant 2 answers: Q1=cp, Q2=mv, Q3=test ; weight 1, penalty 0.1
- *
- * See /workspaces/crucible-development/TODO/topomojo-penalty-weight-verification.md
+ * Related: CRU-2864.
  */
 
 test.describe('TopoMojo penalty / weight / behaviour', () => {
