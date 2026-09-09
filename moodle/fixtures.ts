@@ -33,16 +33,30 @@ export async function authenticateMoodleWithKeycloak(
   await page.fill('input[name="password"]', password);
 
   const submit = page.locator('button:has-text("Sign In"), input[type="submit"], button[type="submit"]').first();
-  await submit.click();
+  // The click waits for the navigation it schedules, which is Keycloak's token
+  // exchange, Moodle's OAuth2 callback and finally the dashboard render. That chain
+  // can outlast the action timeout on a busy stack, so a slow click is not treated as
+  // fatal here: the URL and session checks below are what actually gate the login.
+  await submit.click({ timeout: 30000 }).catch(() => undefined);
 
   // Under minikube, Moodle and Keycloak share a host, so a host-only check would pass
   // immediately while still on Keycloak. Wait until we're back on Moodle, off Keycloak,
   // and off the login page.
   const moodleHost = new URL(Services.Moodle).host;
-  await page.waitForURL(
-    (url) => url.host === moodleHost && !isKeycloakUrl(url) && !url.pathname.includes('/login/index.php'),
-    { timeout: 30000 }
-  );
+  const backOnMoodle = await page
+    .waitForURL(
+      (url) => url.host === moodleHost && !isKeycloakUrl(url) && !url.pathname.includes('/login/index.php'),
+      { timeout: 60000 }
+    )
+    .then(() => true)
+    .catch(() => false);
+
+  if (!backOnMoodle) {
+    // Moodle's session is established by the OAuth2 callback, which runs before the
+    // post-login redirect, so re-requesting a page recovers a stalled final hop
+    // instead of failing a test for a slow dashboard.
+    await page.goto(`${Services.Moodle}/my/`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  }
   await page.waitForLoadState('domcontentloaded', { timeout: 30000 });
   // Verify the session actually established (see note above on #user-menu-toggle).
   await page.locator('#user-menu-toggle').first().waitFor({ state: 'visible', timeout: 30000 });

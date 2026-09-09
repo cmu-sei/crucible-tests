@@ -1295,3 +1295,171 @@ The Moodle application is a Learning Management System (LMS) integration within 
   3. In session 2, edit the same activity without refreshing
     - expect: Potential conflict warning appears OR last save wins
     - expect: Data integrity is maintained
+
+### 10. Group Quiz Activity (mod_groupquiz)
+
+`mod_groupquiz` is a collaborative quiz activity: an attempt belongs to a group, every
+member sees the group's saved responses, and any member may submit on the group's behalf.
+The activity requires a grouping, so every scenario below seeds a course, a group, a
+grouping containing that group, and the activity itself, then deletes the course (which
+removes its groups, groupings, activity, questions and attempts) and any seeded user.
+
+#### 10.1. Admin Settings - Question Types and User Picture
+
+**File:** `moodle/tests/plugin-groupquiz-settings.spec.ts`
+
+**Steps:**
+  1. Log in as admin and open Site administration > Plugins > Activity modules > Group Quiz
+    - expect: Page body id is `page-admin-setting-modsettinggroupquiz`
+    - expect: "Group Quiz" heading is shown
+  2. Inspect the "Enable question types" setting
+    - expect: Description explains the types enabled for group quiz instances
+    - expect: True/False is enabled by default
+  3. Inspect the "Show the user's picture" setting
+    - expect: Options are "No image" and "Small image", defaulting to "Small image"
+
+#### 10.2. Admin Settings - Review Options
+
+**File:** `moodle/tests/plugin-groupquiz-settings.spec.ts`
+
+**Steps:**
+  1. Open the Group Quiz settings page
+    - expect: "Review options" heading is shown
+  2. Inspect each review row (attempt, correctness, marks, specific feedback, general
+     feedback, right answer, overall feedback, manual comment)
+    - expect: Every row renders with default "Everything on"
+    - expect: Rows offer the four review windows (during the attempt, immediately after
+      the attempt, while the quiz is open, after the quiz is closed)
+
+#### 10.3. Admin Settings - Time Limit and Shuffle Defaults Are Unreachable
+
+**File:** `moodle/tests/plugin-groupquiz-settings.spec.ts`
+
+**Steps:**
+  1. Open the Group Quiz settings page
+    - expect: No "Time limit" setting row is present
+    - expect: No "Shuffle within questions" setting row is present
+    - Pending upstream: the plugin builds these settings on a second settings page that
+      is never registered with the admin tree, so they cannot be reached from Site
+      administration. The activity form still exposes both per instance.
+
+#### 10.4. Add Activity Form Defaults
+
+**File:** `moodle/tests/plugin-groupquiz-instructor.spec.ts`
+
+**Steps:**
+  1. Log in as admin, seed a course with a group and a grouping
+    - expect: Course, group and grouping are created
+  2. Open the add-activity form for Group Quiz in that course
+    - expect: Form sections include General, Timing, Grade, Group submission settings,
+      Question behaviour and Review options
+    - expect: Time limit is enabled and defaults to 1 x 3600 seconds
+    - expect: Grade method offers first attempt, last completed attempt, average of all
+      attempts and highest attempt, defaulting to the first attempt
+    - expect: Maximum grade is fixed at 100 and is not editable
+    - expect: The grouping list offers the course's groupings with no blank entry
+    - expect: Shuffle within questions defaults to No
+    - expect: Review windows are limited to "While the quiz is open" and "After the quiz
+      is closed", both fully enabled; during-attempt and immediately-after windows are
+      not offered
+
+#### 10.5. Grouping Is Required
+
+**File:** `moodle/tests/plugin-groupquiz-instructor.spec.ts`
+
+**Steps:**
+  1. Seed a course that has no groupings
+    - expect: Course is created
+  2. Open the add-activity form for Group Quiz and submit with only a name
+    - expect: Grouping list is empty
+    - expect: Grouping field reports "- You must supply a value here."
+    - expect: The form does not save
+
+#### 10.6. New Activity Has No Questions
+
+**File:** `moodle/tests/plugin-groupquiz-instructor.spec.ts`
+
+**Steps:**
+  1. Seed a course with a grouping and add a Group Quiz
+    - expect: Saving lands on the activity view page
+    - expect: View reports "There are no questions added to this quiz." with an "Edit
+      quiz" button
+    - expect: Instructor tabs are View quiz, Edit quiz and View responses
+  2. Open the Edit quiz tab
+    - expect: "Question List" panel reports "No questions have been added yet"
+    - expect: The embedded question bank offers "Create a new question"
+  3. Open the View responses tab
+    - expect: Report chooser offers Overview Report, Open Attempts and Closed Attempts
+    - expect: Report area reports "Nothing to display"
+
+#### 10.7. Add a Question and Preview the Attempt
+
+**File:** `moodle/tests/plugin-groupquiz-instructor.spec.ts`
+
+**Steps:**
+  1. Seed a course with a grouping, add a Group Quiz, and create a True/False question in
+     the activity's question bank
+    - expect: Question appears in the bank but not in the quiz
+  2. Select the question and add it to the quiz with 1.00 points
+    - expect: Points form asks for the question's point value
+    - expect: Question List shows the question with "Question Points: 1.0000000" and edit,
+      delete and preview controls
+  3. Return to the activity view and start a preview
+    - expect: Attempt view warns that each question must be saved before submitting
+    - expect: Instructions explain the collaborative save/submit flow
+    - expect: Countdown ("Time Left:") is running
+    - expect: The question renders with True and False options, a "Save question" control
+      and a "Submit Quiz" control
+  4. Leave the preview and return to the activity view
+    - expect: The activity offers "Continue last preview"
+
+#### 10.8. Remove a Question from the Quiz
+
+**File:** `moodle/tests/plugin-groupquiz-instructor.spec.ts`
+
+**Steps:**
+  1. Seed a course with a grouping, add a Group Quiz with one True/False question
+    - expect: Question List shows the question
+  2. Use the question's delete control
+    - expect: "Successfully deleted question" is reported
+    - expect: Question List reports "No questions have been added yet"
+    - expect: The question remains in the course question bank
+  3. Open the activity view
+    - expect: View reports "There are no questions added to this quiz."
+
+#### 10.9. Student Outside the Grouping Cannot Attempt
+
+**File:** `moodle/tests/plugin-groupquiz-attempt.spec.ts`
+
+**Steps:**
+  1. Seed a course with a group and grouping, a Group Quiz with one question, and a
+     student enrolled in the course but not added to the group
+    - expect: Seeding succeeds
+  2. Log in as the student and open the activity
+    - expect: "You must be assigned to a group to access this quiz." is shown
+    - expect: No Start control is offered
+
+#### 10.10. Group Attempt - Start, Save, Resume and Submit
+
+**File:** `moodle/tests/plugin-groupquiz-attempt.spec.ts`
+
+**Steps:**
+  1. Seed a course with a group and grouping, a Group Quiz with one True/False question,
+     and a student enrolled in the course and added to the group
+    - expect: Seeding succeeds
+  2. Log in as the student and open the activity
+    - expect: "Press Start to begin your group's quiz attempt." is shown
+    - expect: No activity tabs are rendered for a student
+  3. Start the attempt, answer the question and save it
+    - expect: Attempt view renders the question
+    - expect: The saved response is attributed to the student under "Last Response:"
+  4. Leave the attempt and reopen the activity
+    - expect: "Press Continue to join your group's active quiz attempt." is shown
+  5. Continue the attempt
+    - expect: The group's saved response is still shown
+  6. Submit the quiz
+    - expect: Review page shows "Overall Grade: 100.00"
+    - expect: The question is marked Correct with "Mark 1.00 out of 1.00" and the True
+      answer feedback
+  7. As admin, open the activity's Overview Report
+    - expect: The group's attempt is listed
