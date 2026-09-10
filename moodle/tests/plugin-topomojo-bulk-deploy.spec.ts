@@ -189,9 +189,14 @@ test.describe('mod_topomojo bulk deploy', () => {
       // the fix flips this expectation rather than quietly passing.
       expect(attempt.questionUsageId, 'bulk-deployed attempts carry no question usage').toBe(0);
 
-      // Pending upstream: the launchpoint URL is minted only by
-      // POST /api/gamespace, but create_attempt_for_user() reads it off the poll
-      // body, which never carries it. See plugin-topomojo-gamespace-contract.spec.ts.
+      // Pending upstream: the launchpoint URL is minted only by the register
+      // POST, but create_attempt_for_user() reads it off the poll body, which
+      // never carries it. The stored empty string is not a value to be fixed up
+      // at deploy time — the ticket in that URL expires in 180s, so it cannot be
+      // stored at all and has to be minted when the link is clicked. This
+      // assertion therefore stands even after the fix; what changes is that the
+      // launch paths stop reading the column. See
+      // plugin-topomojo-gamespace-contract.spec.ts.
       expect(attempt.launchpointUrl ?? '', 'bulk-deployed attempts store no launchpoint URL').toBe('');
     }
   });

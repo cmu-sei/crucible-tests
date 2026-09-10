@@ -112,12 +112,19 @@ test.describe('mod_topomojo gamespace API contract', () => {
     expect(polled.variant).toBe(registered.variant);
 
     // Pending upstream: launcher::create_attempt_for_user() reads
-    // $gamespace->launchpointUrl off this poll body, but only the POST handler
-    // mints a launchpoint URL (it caches a one-time ticket token and embeds it).
-    // The GET never sets the field, so every bulk-deployed attempt stores an
-    // empty launchpointurl and "Generate invite" falls back to a token-less /lp/
-    // link. The register response is the only source, exactly as it already is
-    // for the gamespace id. Asserted as-is so the fix flips this expectation.
+    // $gamespace->launchpointUrl off this poll body, but only the register POST
+    // mints one, on the in-flight response object. It is never persisted, so the
+    // GET always reports null and every bulk-deployed attempt stores an empty
+    // launchpointurl.
+    //
+    // Note the fix is NOT to carry the URL through from the register response:
+    // the ticket it embeds is cached with a 180s sliding expiration, so a URL
+    // written by a cron task is dead minutes later whichever response it came
+    // from. It has to be minted at click time by re-registering with the
+    // student's subjectId, which returns their existing gamespace with a fresh
+    // ticket. What this test pins is the contract that forces that — the POST is
+    // the only source of the field, and the poll the launcher actually reads is
+    // not. Asserted as-is so a mint-on-demand fix flips the second expectation.
     expect(registered.launchpointUrl, 'register response mints the launchpoint URL').toContain('?t=');
     expect(polled.launchpointUrl ?? null, 'poll response omits the launchpoint URL').toBeNull();
   });
