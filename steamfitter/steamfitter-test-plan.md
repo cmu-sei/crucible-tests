@@ -563,6 +563,30 @@ Steamfitter is a scenario execution service within the Crucible cybersecurity tr
     - expect: The button does not respond
     - expect: The scenario does not start
 
+#### 5.11. Scenario Inherits Task Definitions from Template
+
+**File:** `tests/steamfitter/scenarios-management/scenario-inherits-template-tasks.spec.ts`
+
+API-level, because 5.2 covers the UI path and its assertions stop at the scenario
+appearing in the list. What a scenario's tasks are worth, and what output they check for,
+is what a grading consumer reads back, so the copy has to be verified field by field
+rather than by row count.
+
+**Steps:**
+  1. Seed a scenario template with several tasks, each with a different
+     `expectedOutput`, `score`, `userExecutable` and `repeatable`
+    - expect: The tasks are created against the template
+  2. `POST /api/ScenarioTemplates/[templateId]/Scenarios`
+    - expect: The scenario is created and records `scenarioTemplateId`
+  3. `GET /api/scenarios/[scenarioId]/Tasks`
+    - expect: Every task on the template is present, and nothing else is
+    - expect: Each copy has `scenarioId` set and `scenarioTemplateId` null
+    - expect: `expectedOutput`, `score`, `userExecutable`, `repeatable` and
+      `triggerCondition` match the task it was copied from
+  4. `GET /api/scenarioTemplates/[templateId]/Tasks`
+    - expect: The template still holds its own tasks — creating a scenario copies task
+      definitions rather than re-parenting them, so the template stays reusable
+
 ### 6. Tasks Page for Users
 
 **Seed:** `tests/seed.spec.ts`

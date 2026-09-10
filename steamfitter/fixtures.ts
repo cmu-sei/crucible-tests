@@ -215,11 +215,16 @@ export async function deleteScenarioTemplatesByPrefix(
  * shape (`http_post` with a placeholder URL) that persists without needing a live VM
  * or agent — enough for the UI list/edit/delete flows to exercise. Tasks cascade-
  * delete with their parent template, so cleanup is by deleting the template.
+ *
+ * `overrides` is merged over that default shape, for tests that need specific field
+ * values rather than a placeholder — e.g. a distinct `score` and `expectedOutput` per
+ * task, so an assertion about which values were carried somewhere can actually fail.
  */
 export async function seedTask(
   scenarioTemplateId: string,
   name: string = `E2E Task ${Date.now()}`,
-  description: string = 'E2E seeded task'
+  description: string = 'E2E seeded task',
+  overrides: Record<string, unknown> = {}
 ): Promise<string> {
   const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
   try {
@@ -247,6 +252,7 @@ export async function seedTask(
         score: 0,
         userExecutable: false,
         repeatable: false,
+        ...overrides,
       },
     });
     if (!response.ok()) {
