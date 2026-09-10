@@ -1,7 +1,9 @@
 // Copyright 2026 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
-// spec: moodle/TODO-task-testing.md
+// Source-level regression guards, not a browser scenario, so there is no entry for
+// these in moodle/moodle-test-plan.md. Each test names the behaviour it pins and
+// fails if that behaviour is removed from mod_crucible.
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';

@@ -1648,3 +1648,150 @@ removes its groups, groupings, activity, questions and attempts) and any seeded 
       answer feedback
   7. As admin, open the activity's Overview Report
     - expect: The group's attempt is listed
+
+### 11. TopoMojo Activity (mod_topomojo)
+
+`mod_topomojo` deploys a TopoMojo lab per student. An instructor can deploy to many
+students at once from the activity's Manage Deployments page, which queues a job and an
+adhoc task; the task registers a gamespace per user through TopoMojo's API and writes an
+attempt for each. The plugin's own PHPUnit suite drives that path through a fake HTTP
+client returning canned JSON, so the scenarios below run against a live TopoMojo instead:
+each one registers real gamespaces holding real VMs, and every gamespace is released in
+teardown even when the assertions fail. Seeded participants, their enrolments, attempts,
+question usages and job rows are removed with them.
+
+The scenarios reuse an existing TopoMojo activity's course and workspace rather than
+hardcoding either, so they follow whatever the environment is pointed at.
+`MOODLE_TOPOMOJO_ACTIVITY_ID` selects the activity (default `21`).
+
+#### 11.1. Gamespace API Contract
+
+**File:** `moodle/tests/plugin-topomojo-gamespace-contract.spec.ts`
+
+**Steps:**
+  1. Register a gamespace directly through TopoMojo's API
+    - expect: Response carries a 32-hex id
+    - expect: Response carries `expirationTime`, which `strtotime()`-equivalent parsing
+      accepts and which lands within a minute of the workspace's duration from now —
+      this is the field `launcher::resolve_endtime()` prefers over `time() + duration`
+    - expect: Response carries a numeric, 0-based `variant`; the plugin stores
+      `variant + 1`, so a wrong value would grade the attempt against another variant
+    - expect: Response carries a launchpoint URL with a one-time ticket (`?t=`)
+  2. Poll the same gamespace
+    - expect: `expirationTime` and `variant` are unchanged
+    - expect: No launchpoint URL is reported
+    - Pending upstream: only the register POST mints the launchpoint URL, but the
+      launcher reads it off the poll body, so a bulk-deployed attempt stores an empty one
+
+#### 11.2. Bulk Deploy to Several Users
+
+**File:** `moodle/tests/plugin-topomojo-bulk-deploy.spec.ts`
+
+**Steps:**
+  1. Seed two participants enrolled in the activity's course, log in as admin and open the
+     activity's Manage Deployments page
+    - expect: Both users are listed with status "none"
+  2. Select both users
+    - expect: The deploy control reports "Deploy Selected (2)" and is enabled
+  3. Confirm the deploy dialog
+    - expect: Both rows move to status "pending"
+  4. Run the queued `\mod_topomojo\task\bulkdeploy_run` task and reload the page
+    - expect: One attempt exists per user
+    - expect: Both rows report "In Progress" and show the participant's name
+    - expect: Each row's gamespace cell shows the 32-hex gamespace id the launcher
+      recorded, not a placeholder
+    - expect: Each attempt's end time is in the future, so the `close_attempts` task will
+      not immediately reap it, and the row's end time cell is populated
+    - expect: Each attempt's stored variant is 1 or greater
+
+#### 11.3. A Bulk-Deployed Attempt Has No Questions
+
+**File:** `moodle/tests/plugin-topomojo-bulk-deploy.spec.ts`
+
+**Steps:**
+  1. Inspect the attempts the deploy created for an activity that has imported challenge
+     questions
+    - expect: Both attempts are in progress
+    - Pending upstream: `launcher::create_attempt_for_user()` inserts the attempt directly
+      rather than going through `topomojo::init_attempt()`, so no question usage is created
+      and the attempt has nothing to answer or grade
+    - Pending upstream: the stored launchpoint URL is empty, per 11.1
+  2. Open the Manage Deployments page
+    - expect: Neither row offers a View Attempt link, and the actions cell renders as "─" —
+      the instructor has nothing to review
+
+#### 11.4. Bulk-Deployed Attempt as the Student
+
+**File:** `moodle/tests/plugin-topomojo-bulk-deploy-student.spec.ts`
+
+A pre-existing Keycloak account is borrowed rather than seeded, because the login goes
+through the identity provider and a database-seeded Moodle user has no credentials there.
+Everything the deploy leaves on that account is removed in teardown; the account and its
+enrolment are left as they were.
+
+**Steps:**
+  1. Deploy the lab to the demo user and log in as them
+    - expect: The activity page renders without a Moodle error
+    - expect: The activity heading and the challenge link are shown
+  2. Open the challenge page
+    - expect: The page renders without a Moodle error — it reaches for the attempt's
+      question usage, which is null here, and used to fail outright
+    - Pending upstream: the page shows "There are no challenge questions to review." and a
+      Return button, because a null question usage makes it skip the challenge branch
+      entirely and treat the student as having no attempt; no response form is rendered, so
+      there is nothing to answer and nothing to submit
+  3. Return to the activity and use End Lab, confirming the dialog
+    - expect: The attempt is closed without a Moodle error — both closing and grading reach
+      for the null question usage
+    - Pending upstream: the attempt scores 0 and the gradebook records 0 out of the
+      activity's maximum, which the student had no way to avoid
+
+#### 11.5. Subject ID Length Limit
+
+**File:** `moodle/tests/plugin-topomojo-bulk-deploy-subject-id.spec.ts`
+
+`payload_builder::build()` sends the part of a user's email address before the `@` as the
+gamespace player's subject id, and TopoMojo stores that in a 36-character column.
+
+**Steps:**
+  1. Seed a participant whose email local part is exactly 36 characters and deploy to them
+    - expect: The deployment row records no error and a 32-hex gamespace id
+    - expect: An attempt is created
+  2. Seed a participant whose email local part is 37 characters and deploy to them
+    - expect: The deployment row is "failed" with an "HTTP 500" error and no gamespace, so
+      no VM is held
+    - expect: No attempt is created
+    - Pending upstream: nothing checks the length before the request, so TopoMojo rejects
+      it in its database layer and answers 500 with a body naming neither the field nor the
+      limit
+  3. Open the Manage Deployments page
+    - expect: The failed user's row reports status "failed" with "Failed" in its status cell
+      and "─" for its gamespace
+    - expect: The status cell offers a popover carrying the error
+    - Pending upstream: that error is TopoMojo's generic message, so the instructor is told
+      the deploy failed with a 500 and nothing about the address that caused it
+
+#### 11.6. Gradebook Item
+
+**File:** `moodle/tests/plugin-topomojo-gradebook-item.spec.ts`
+
+`topomojo_grade_item_update()` builds its `grade_update()` call from whatever record it is
+handed. A record assembled from partial form data can omit the course id, which makes
+`grade_update()` bail out silently so the activity never appears in the gradebook, or the
+grade, which downgrades the item to "None" and strips grading from the activity. Both are
+recovered from the stored record; these scenarios drive the real forms to prove it.
+
+**Steps:**
+  1. Add a TopoMojo activity through the activity form, choosing a workspace and entering a
+     maximum of 80
+    - expect: The activity is created with no validation errors
+    - expect: A gradebook item exists for it, named after the activity, of type Value with
+      a minimum of 0 and a maximum matching what was stored
+    - Pending upstream: `topomojo_add_instance()` assigns 100 unconditionally, so the
+      maximum entered on the add form is discarded
+  2. Open the course's Gradebook setup
+    - expect: The activity is listed as a column showing its stored maximum
+  3. Edit the activity and set its maximum to 80
+    - expect: The activity stores 80 — the edit path does honour the form value
+    - expect: The gradebook item survives the update, stays of type Value, and follows the
+      new maximum

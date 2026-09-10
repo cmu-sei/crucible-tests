@@ -1,7 +1,8 @@
 // Copyright 2026 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
-// spec: moodle/TODO-task-testing.md
+// Source-level regression guards, not a browser scenario, so there is no entry for
+// these in moodle/moodle-test-plan.md.
 //
 // Regression guards for block_crucible competency-framework scoping. Multiple
 // competency frameworks can be active at once (NICE, DCWF, MITRE ATT&CK) and can
