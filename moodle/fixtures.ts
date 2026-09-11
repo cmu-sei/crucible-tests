@@ -64,11 +64,25 @@ export async function authenticateMoodleWithKeycloak(
 
 export type MoodleFixtures = {
   moodleAdminPage: Page;
+  moodleDemoUserPage: Page;
 };
 
 export const test = base.extend<MoodleFixtures>({
   moodleAdminPage: async ({ page }, use) => {
     await authenticateMoodleWithKeycloak(page, 'admin', 'admin');
+    await use(page);
+  },
+
+  // A non-instructor session, for asserting that a learner does not get the
+  // instructor-only controls. Keycloak's own demo account is used rather than a
+  // disposable user because the login goes through the identity provider, and a
+  // DB-seeded Moodle user has no Keycloak credentials to log in with.
+  moodleDemoUserPage: async ({ page }, use) => {
+    await authenticateMoodleWithKeycloak(
+      page,
+      process.env.MOODLE_DEMO_USERNAME || 'demo-user',
+      process.env.MOODLE_DEMO_PASSWORD || 'tartans@1'
+    );
     await use(page);
   },
 });

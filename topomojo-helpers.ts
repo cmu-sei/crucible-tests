@@ -271,3 +271,109 @@ export async function listWorkspaces(
   }
   return r.data ?? [];
 }
+
+/**
+ * A gamespace as TopoMojo reports it. Only the fields mod_topomojo's bulk-deploy
+ * launcher reads are typed; the API returns considerably more.
+ */
+export interface TopoMojoGamespace {
+  id: string;
+  isActive?: boolean;
+  /** ISO 8601 with a fractional-second component, e.g. `2026-09-09T22:47:26.0021833+00:00`. */
+  expirationTime?: string | null;
+  /**
+   * Only ever populated by `POST /api/gamespace`, which mints a one-time ticket
+   * token and embeds it in the URL. The GET never sets it, so a poll response
+   * always reports null here.
+   */
+  launchpointUrl?: string | null;
+  /** 0-based. mod_topomojo stores `variant + 1`. */
+  variant?: number;
+  vms?: unknown[];
+  [key: string]: unknown;
+}
+
+export interface RegisterGamespaceOptions {
+  workspaceId: string;
+  /** 0 means "no limit was requested". Maps to the payload's `maxMinutes`. */
+  maxMinutes?: number;
+  maxAttempts?: number;
+  points?: number;
+  /** 0 asks TopoMojo to pick a variant at random. */
+  variant?: number;
+  subjectId?: string;
+  subjectName?: string;
+}
+
+/**
+ * Register and start a gamespace, mirroring the payload
+ * `mod_topomojo\local\bulkdeploy\payload_builder::build()` sends. Pair every
+ * call with `deleteGamespace` in test teardown — a live gamespace holds real VMs.
+ */
+export async function registerGamespace(
+  token: string,
+  opts: RegisterGamespaceOptions
+): Promise<TopoMojoGamespace> {
+  const subjectId = opts.subjectId ?? `e2e-${Date.now()}`;
+  const body = {
+    resourceId: opts.workspaceId,
+    startGamespace: true,
+    allowPreview: false,
+    allowReset: false,
+    maxAttempts: opts.maxAttempts ?? 0,
+    maxMinutes: opts.maxMinutes ?? 30,
+    points: opts.points ?? 100,
+    variant: opts.variant ?? 0,
+    players: [{ subjectId, subjectName: opts.subjectName ?? subjectId }],
+  };
+  const r = await tmCall<TopoMojoGamespace>(token, '/api/gamespace', { method: 'POST', body });
+  if (!r.ok || !r.data?.id) {
+    throw new Error(`registerGamespace(${opts.workspaceId}) failed (${r.status}): ${r.text}`);
+  }
+  return r.data;
+}
+
+/** Reads a gamespace back, the way the bulk-deploy wait phase polls it. */
+export async function getGamespace(token: string, gamespaceId: string): Promise<TopoMojoGamespace> {
+  const r = await tmCall<TopoMojoGamespace>(token, `/api/gamespace/${gamespaceId}`);
+  if (!r.ok || !r.data) {
+    throw new Error(`getGamespace(${gamespaceId}) failed (${r.status}): ${r.text}`);
+  }
+  return r.data;
+}
+
+/**
+ * Tears a gamespace down and releases its VMs. Tolerates 404 so teardown is
+ * safe to call unconditionally.
+ */
+export async function deleteGamespace(token: string, gamespaceId: string): Promise<void> {
+  const r = await tmCall(token, `/api/gamespace/${gamespaceId}`, { method: 'DELETE' });
+  if (!r.ok && r.status !== 404) {
+    console.warn(`deleteGamespace(${gamespaceId}) returned ${r.status}: ${r.text}`);
+  }
+}
+
+/**
+ * Polls until the gamespace reports itself active with at least one VM — the
+ * same readiness condition `launcher::wait_phase()` waits on.
+ */
+export async function waitForGamespaceReady(
+  token: string,
+  gamespaceId: string,
+  timeoutMs: number = 180_000,
+  intervalMs: number = 5_000
+): Promise<TopoMojoGamespace> {
+  const deadline = Date.now() + timeoutMs;
+  let last: TopoMojoGamespace | undefined;
+  while (Date.now() < deadline) {
+    last = await getGamespace(token, gamespaceId);
+    if (last.isActive && Array.isArray(last.vms) && last.vms.length > 0) {
+      return last;
+    }
+    await new Promise(resolve => setTimeout(resolve, intervalMs));
+  }
+  throw new Error(
+    `Gamespace ${gamespaceId} was not ready within ${timeoutMs}ms `
+    + `(last seen isActive=${last?.isActive}, vms=${Array.isArray(last?.vms) ? last?.vms.length : 'none'})`
+  );
+}

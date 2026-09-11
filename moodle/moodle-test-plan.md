@@ -2,7 +2,7 @@
 
 ## Application Overview
 
-The Moodle application is a Learning Management System (LMS) integration within the Crucible cybersecurity training platform. It provides course management, student enrollment, content delivery, assessment tools, and grading functionality. Running on port 8081, this Moodle instance may include custom plugins for integration with other Crucible services (Player, Gallery, etc.). This test plan covers authentication flows, course administration, student participation, content management, assessment and grading, user management, Crucible-specific integrations, and comprehensive error handling scenarios.
+The Moodle application is a Learning Management System (LMS) integration within the Crucible cybersecurity training platform. It provides course management, student enrollment, content delivery, assessment tools, and grading functionality. Running on port 8081, this Moodle instance includes custom plugins for integration with other Crucible services (Player, TopoMojo). This test plan covers authentication flows, course administration, student participation, content management, assessment and grading, user management, Crucible-specific integrations, and comprehensive error handling scenarios.
 
 ## Test Scenarios
 
@@ -983,41 +983,226 @@ The Moodle application is a Learning Management System (LMS) integration within 
     - expect: Statements contain correct actor, verb, and object data
     - expect: Moodle activities generate corresponding xAPI events
 
-#### 7.3. Course Linking with Player Views
+#### 7.3. TopoMojo Activity - Create and Configure
+
+**File:** `tests/moodle/integration/topomojo-activity-create.spec.ts`
+
+**Steps:**
+  1. Log in as teacher in Moodle
+    - expect: Teacher is authenticated
+  2. Navigate to a course and turn editing on
+    - expect: Add activity options appear
+  3. Click Add activity and select TopoMojo
+    - expect: TopoMojo activity settings form appears
+  4. Configure TopoMojo activity:
+    - Enter activity name
+    - Select TopoMojo Workspace from dropdown
+    - Select Variant mode (Random, Variant 1, Variant 2, etc.)
+    - Choose Question behaviour (Interactive, Deferred feedback, etc.)
+    - expect: All fields accept input
+  5. Save and display
+    - expect: TopoMojo activity page loads
+    - expect: Activity shows Launch Lab button
+    - expect: Questions are imported from TopoMojo workspace
+
+#### 7.4. TopoMojo Activity - Student Attempt Flow
+
+**File:** `tests/moodle/integration/topomojo-student-attempt.spec.ts`
+
+**Steps:**
+  1. Log in as student
+    - expect: Student is authenticated
+  2. Navigate to course with TopoMojo activity
+    - expect: TopoMojo activity link is visible
+  3. Click TopoMojo activity
+    - expect: Activity intro page loads
+    - expect: Launch Lab button is available
+  4. Click Launch Lab
+    - expect: Gamespace deployment starts
+    - expect: Challenge page loads with questions
+  5. Answer questions and click Check (if interactive mode)
+    - expect: Immediate feedback is shown
+    - expect: Penalty is applied for wrong answers
+    - expect: Current Score box updates
+  6. Click Submit Quiz
+    - expect: Attempt is finalized
+    - expect: Final grade is recorded
+    - expect: Review Attempt page shows all questions and scores
+
+#### 7.5. TopoMojo Activity - Question Import and Sync
+
+**File:** `tests/moodle/integration/topomojo-question-sync.spec.ts`
+
+**Steps:**
+  1. Log in as teacher
+    - expect: Teacher is authenticated
+  2. Access TopoMojo activity and click Questions tab
+    - expect: Questions imported from TopoMojo workspace are listed
+    - expect: Question text matches TopoMojo challenge
+    - expect: Weight (defaultmark) matches TopoMojo weight field
+    - expect: Penalty matches TopoMojo penalty field
+  3. Make changes to questions in TopoMojo challenge editor (external)
+    - expect: Changes do NOT sync to Moodle if attempts exist
+    - expect: Warning banner explains question freeze
+  4. Delete all attempts
+    - expect: Questions can be re-imported/synced
+    - expect: New attempts use updated questions
+
+#### 7.6. TopoMojo Activity - Penalty Calculation
+
+**File:** `tests/moodle/integration/topomojo-penalty-weight.spec.ts`
+
+**Steps:**
+  1. Create TopoMojo activity with interactive behavior
+    - expect: Activity configured with question penalty (e.g., 0.1 = 10%)
+  2. Start attempt as student
+    - expect: Questions load with Check buttons
+  3. For a 1-point question with 0.1 penalty:
+    - Submit wrong answer and click Check
+    - expect: Mark shows 0.00 out of 1.00
+    - Submit wrong answer again and click Check
+    - expect: Mark still shows 0.00 out of 1.00
+    - Submit correct answer and click Check
+    - expect: Mark shows 0.80 out of 1.00 (penalty applied: 1 - 0.1×2)
+  4. Verify Current Score box
+    - expect: Shows cumulative score with penalties applied
+  5. Submit quiz and check final grade
+    - expect: Final grade matches sum of penalized question scores
+
+#### 7.7. TopoMojo Activity - Exploration Mode
+
+**File:** `tests/moodle/integration/topomojo-exploration-mode.spec.ts`
+
+**Steps:**
+  1. Create TopoMojo activity with endlab=0 setting
+    - expect: Activity configured to keep gamespace active after quiz submission
+  2. Student completes attempt and submits quiz
+    - expect: Attempt state changes to finished
+    - expect: Gamespace remains active (isActive=true)
+  3. Student returns to activity
+    - expect: Questions are displayed in read-only mode
+    - expect: Score box shows final grade
+    - expect: End Lab button is available
+  4. Click End Lab
+    - expect: Gamespace is destroyed
+    - expect: Activity shows Launch Lab for new attempt (if allowed)
+
+#### 7.8. TopoMojo Activity - Multiple Variants
+
+**File:** `tests/moodle/integration/topomojo-variants.spec.ts`
+
+**Steps:**
+  1. Create TopoMojo activity with workspace containing multiple variants
+    - Set Variant mode to "Random"
+    - expect: Setting saved
+  2. Multiple students start attempts
+    - expect: Each student gets assigned a different variant
+    - expect: Questions differ based on variant
+  3. Teacher views Review Activity Attempts page
+    - expect: Variant column shows which variant each student received
+  4. Teacher changes Variant setting to specific variant (e.g., Variant 1)
+    - expect: All new attempts use only that variant
+
+#### 7.9. TopoMojo Activity - Scheduled Deployments
+
+**File:** `tests/moodle/integration/topomojo-scheduled-deployment.spec.ts`
+
+**Steps:**
+  1. Log in as teacher
+    - expect: Teacher is authenticated
+  2. Create TopoMojo activity with scheduled deployment settings
+    - Set "Open the lab" date/time in future
+    - Set "Close the lab" date/time after open time
+    - expect: Settings saved
+  3. As student, access activity before open time
+    - expect: Launch Lab button is disabled or message shows "Not yet available"
+    - expect: Deployment does not start
+  4. Advance time to open period (or wait)
+    - expect: Launch Lab button becomes available
+    - expect: Students can start attempts
+  5. Advance time past close time
+    - expect: New attempts are blocked
+    - expect: Message shows "Activity closed"
+
+#### 7.10. TopoMojo Activity - Bulk Deployment Management
+
+**File:** `tests/moodle/integration/topomojo-bulk-deployment.spec.ts`
+
+**Steps:**
+  1. Log in as teacher
+    - expect: Teacher is authenticated
+  2. Navigate to TopoMojo activity and click "Manage Deployments"
+    - expect: Deployment management page loads
+    - expect: List of active gamespaces for all students is shown
+  3. Select multiple active gamespaces
+    - expect: Bulk action options appear (End Selected, etc.)
+  4. Click "End Selected" to destroy multiple gamespaces
+    - expect: Confirmation dialog appears
+    - expect: Selected gamespaces are destroyed
+    - expect: Success message confirms action
+  5. Verify students' attempts are updated
+    - expect: Gamespaces no longer active
+    - expect: Students must Launch Lab again to continue
+
+#### 7.11. TopoMojo Activity - Adding Normal Moodle Questions
+
+**File:** `tests/moodle/integration/topomojo-add-moodle-questions.spec.ts`
+
+**Steps:**
+  1. Log in as teacher
+    - expect: Teacher is authenticated
+  2. Access TopoMojo activity and click Questions tab
+    - expect: Questions imported from TopoMojo workspace are listed
+  3. Click "Add" and select "a new question"
+    - expect: Question type chooser appears
+  4. Select standard Moodle question type (e.g., Multiple Choice)
+    - expect: Question editing form loads
+  5. Fill out question details and save
+    - expect: New Moodle question is added to activity
+    - expect: Question appears in list alongside TopoMojo questions
+  6. Student starts attempt
+    - expect: Both TopoMojo and Moodle questions appear
+    - expect: All questions are graded correctly
+    - expect: Final score includes both question types
+
+#### 7.12. TopoMojo Activity - Question Sync After Challenge Update
+
+**File:** `tests/moodle/integration/topomojo-question-resync.spec.ts`
+
+**Steps:**
+  1. Teacher creates TopoMojo activity
+    - expect: Questions imported from workspace
+  2. Student makes attempt
+    - expect: Attempt recorded with current questions
+  3. Teacher edits TopoMojo challenge in TopoMojo UI (external)
+    - Change question text, answer, or penalty
+    - expect: Changes saved in TopoMojo
+  4. Teacher returns to Moodle Questions tab
+    - expect: Warning banner shows questions are frozen due to attempts
+    - expect: Questions do NOT auto-sync
+  5. Teacher deletes all attempts
+    - expect: Attempts removed from Review page
+  6. Teacher clicks "Re-import Questions" or saves activity settings
+    - expect: Questions sync with updated TopoMojo challenge
+    - expect: New attempts use updated questions
+
+#### 7.13. Course Linking with Player Views
 
 **File:** `tests/moodle/integration/player-course-link.spec.ts`
 
 **Steps:**
   1. Log in as admin in Moodle
     - expect: Admin is authenticated
-  2. Check if custom Crucible plugins are installed (e.g., mod_crucible or similar)
-    - expect: Custom plugins appear in plugin list or activity chooser
-  3. Create or edit a course with Crucible-specific settings
-    - expect: Crucible integration fields/options are available
-  4. Link course to a Player View ID
+  2. Check if mod_crucible plugin is installed
+    - expect: Crucible activity appears in activity chooser
+  3. Create Crucible activity with Player View ID
     - expect: View ID field accepts input
     - expect: Link is saved
-  5. As student, access linked course
-    - expect: Course content shows integration with Player
-    - expect: Links to Player exercises work correctly
+  4. As student, access linked activity
+    - expect: Activity launches Player view
+    - expect: Integration works correctly
 
-#### 7.4. Gallery Content Integration
-
-**File:** `tests/moodle/integration/gallery-content.spec.ts`
-
-**Steps:**
-  1. Log in as teacher
-    - expect: Teacher is authenticated
-  2. Check for Gallery integration plugin or repository
-    - expect: Gallery repository appears in file picker or content sources
-  3. Add activity that sources content from Gallery
-    - expect: Gallery content browser is available
-    - expect: Content from Gallery at http://localhost:4723 can be browsed
-  4. Select and embed Gallery content in course
-    - expect: Content is embedded successfully
-    - expect: Students can access Gallery-sourced materials
-
-#### 7.5. Custom Moodle Plugin - Verify Installation
+#### 7.14. Custom Moodle Plugin - Verify Installation
 
 **File:** `tests/moodle/integration/custom-plugin-verify.spec.ts`
 
@@ -1463,3 +1648,153 @@ removes its groups, groupings, activity, questions and attempts) and any seeded 
       answer feedback
   7. As admin, open the activity's Overview Report
     - expect: The group's attempt is listed
+
+### 11. TopoMojo Activity (mod_topomojo)
+
+`mod_topomojo` deploys a TopoMojo lab per student. An instructor can deploy to many
+students at once from the activity's Manage Deployments page, which queues a job and an
+adhoc task; the task registers a gamespace per user through TopoMojo's API and writes an
+attempt for each. The plugin's own PHPUnit suite drives that path through a fake HTTP
+client returning canned JSON, so the scenarios below run against a live TopoMojo instead:
+each one registers real gamespaces holding real VMs, and every gamespace is released in
+teardown even when the assertions fail. Seeded participants, their enrolments, attempts,
+question usages and job rows are removed with them.
+
+The scenarios reuse an existing TopoMojo activity's course and workspace rather than
+hardcoding either, so they follow whatever the environment is pointed at.
+`MOODLE_TOPOMOJO_ACTIVITY_ID` selects the activity (default `21`).
+
+#### 11.1. Gamespace API Contract
+
+**File:** `moodle/tests/plugin-topomojo-gamespace-contract.spec.ts`
+
+**Steps:**
+  1. Register a gamespace directly through TopoMojo's API
+    - expect: Response carries a 32-hex id
+    - expect: Response carries `expirationTime`, which `strtotime()`-equivalent parsing
+      accepts and which lands within a minute of the workspace's duration from now —
+      this is the field `launcher::resolve_endtime()` prefers over `time() + duration`
+    - expect: Response carries a numeric, 0-based `variant`; the plugin stores
+      `variant + 1`, so a wrong value would grade the attempt against another variant
+    - expect: Response carries a launchpoint URL with a one-time ticket (`?t=`)
+  2. Poll the same gamespace
+    - expect: `expirationTime` and `variant` are unchanged
+    - expect: No launchpoint URL is reported
+    - Pending upstream: only the register POST mints the launchpoint URL, but the
+      launcher reads it off the poll body, so a bulk-deployed attempt stores an empty one
+
+#### 11.2. Bulk Deploy to Several Users
+
+**File:** `moodle/tests/plugin-topomojo-bulk-deploy.spec.ts`
+
+**Steps:**
+  1. Seed two participants enrolled in the activity's course, log in as admin and open the
+     activity's Manage Deployments page
+    - expect: Both users are listed with status "none"
+  2. Select both users
+    - expect: The deploy control reports "Deploy Selected (2)" and is enabled
+  3. Confirm the deploy dialog
+    - expect: Both rows move to status "pending"
+  4. Run the queued `\mod_topomojo\task\bulkdeploy_run` task and reload the page
+    - expect: One attempt exists per user
+    - expect: Both rows report "In Progress" and show the participant's name
+    - expect: Each row's gamespace cell shows the 32-hex gamespace id the launcher
+      recorded, not a placeholder
+    - expect: Each attempt's end time is in the future, so the `close_attempts` task will
+      not immediately reap it, and the row's end time cell is populated
+    - expect: Each attempt's stored variant is 1 or greater
+
+#### 11.3. A Bulk-Deployed Attempt Has Its Questions
+
+**File:** `moodle/tests/plugin-topomojo-bulk-deploy.spec.ts`
+
+**Steps:**
+  1. Inspect the attempts the deploy created for an activity that has imported challenge
+     questions
+    - expect: Both attempts are in progress
+    - expect: Each attempt has a question usage, and no two users share one
+    - expect: Each usage belongs to `mod_topomojo` and asks for the behaviour the activity
+      is set to
+    - expect: Each usage holds `mojomatch` slots worth more than zero marks, graded by
+      `qbehaviour_mojomatch` rather than the usage's preferred behaviour, and the attempt's
+      layout names those slots
+    - Pending upstream: the stored launchpoint URL is empty, per 11.1
+  2. Open the Manage Deployments page
+    - expect: Every row offers a View Attempt link pointing at that user's own attempt,
+      rather than the "─" an attempt without a question usage renders
+
+#### 11.4. Bulk-Deployed Attempt as the Student
+
+**File:** `moodle/tests/plugin-topomojo-bulk-deploy-student.spec.ts`
+
+A pre-existing Keycloak account is borrowed rather than seeded, because the login goes
+through the identity provider and a database-seeded Moodle user has no credentials there.
+Everything the deploy leaves on that account is removed in teardown; the account and its
+enrolment are left as they were.
+
+**Steps:**
+  1. Deploy the lab to the demo user and log in as them
+    - expect: The activity page renders without a Moodle error
+    - expect: The activity heading and the challenge link are shown
+  2. Open the challenge page
+    - expect: The page renders without a Moodle error — it reaches for the attempt's
+      question usage, which used to be null here and made it fail outright
+    - expect: The response form is rendered with one question per slot in the usage, the
+      first of them answerable, and no "There are no challenge questions to review." notice
+    - expect: The form submits the slots the attempt's layout names
+  3. Return to the activity and use End Lab, confirming the dialog
+    - expect: The attempt is closed without a Moodle error — both closing and grading reach
+      for the question usage
+    - expect: The attempt scores 0 and the gradebook records 0 out of the activity's
+      maximum, because the questions were left blank rather than absent — the usage the
+      grade was computed over still holds them
+
+#### 11.5. Subject ID Length Limit
+
+**File:** `moodle/tests/plugin-topomojo-bulk-deploy-subject-id.spec.ts`
+
+`payload_builder::build()` sends the part of a user's email address before the `@` as the
+gamespace player's subject id, and TopoMojo stores that in a 36-character column.
+
+**Steps:**
+  1. Seed a participant whose email local part is exactly 36 characters and deploy to them
+    - expect: The deployment row records no error and a 32-hex gamespace id
+    - expect: An attempt is created
+  2. Seed a participant whose email local part is 37 characters and deploy to them
+    - expect: The deployment row is "failed" with an "HTTP 500" error and no gamespace, so
+      no VM is held
+    - expect: No attempt is created
+    - Pending upstream: nothing checks the length before the request, so TopoMojo rejects
+      it in its database layer and answers 500 with a body naming neither the field nor the
+      limit
+  3. Open the Manage Deployments page
+    - expect: The failed user's row reports status "failed" with "Failed" in its status cell
+      and "─" for its gamespace
+    - expect: The status cell offers a popover carrying the error
+    - Pending upstream: that error is TopoMojo's generic message, so the instructor is told
+      the deploy failed with a 500 and nothing about the address that caused it
+
+#### 11.6. Gradebook Item
+
+**File:** `moodle/tests/plugin-topomojo-gradebook-item.spec.ts`
+
+`topomojo_grade_item_update()` builds its `grade_update()` call from whatever record it is
+handed. A record assembled from partial form data can omit the course id, which makes
+`grade_update()` bail out silently so the activity never appears in the gradebook, or the
+grade, which downgrades the item to "None" and strips grading from the activity. Both are
+recovered from the stored record; these scenarios drive the real forms to prove it.
+
+**Steps:**
+  1. Add a TopoMojo activity through the activity form, choosing a workspace and entering a
+     maximum of 80
+    - expect: The activity is created with no validation errors
+    - expect: A gradebook item exists for it, named after the activity, of type Value with
+      a minimum of 0 and a maximum matching what was stored
+    - Pending upstream: `topomojo_add_instance()` assigns 100 unconditionally, so the
+      maximum entered on the add form is discarded
+  2. Open the course's Gradebook setup
+    - expect: The activity is listed as a column showing its stored maximum
+  3. Edit the activity and set its maximum to 80
+    - expect: The activity stores 80 — the edit path does honour the form value
+    - expect: The gradebook item survives the update, stays of type Value, and follows the
+      new maximum
