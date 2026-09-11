@@ -7,12 +7,14 @@
  * What a student actually gets when they open a lab that was bulk-deployed to
  * them, and what it grades to.
  *
- * The activity has imported challenge questions, but a bulk-deployed attempt is
- * inserted without a question usage. Every page that reaches for that usage has to
- * cope with a null one — which is the crash this used to be — and what they cope
- * their way to is a student who is shown no questions and then graded zero for not
- * answering them. Both halves are asserted: that the pages render at all, and what
- * the student's grade ends up as.
+ * The activity has imported challenge questions, and the attempt the launcher wrote
+ * carries a question usage over them, so the student should get the same challenge a
+ * self-started lab does. That was not always so: the attempt used to be inserted
+ * without a usage, and every page that reached for one had to cope with null — which
+ * is the crash this path used to be, and then the dead end it survived to, where the
+ * student was shown no questions and graded zero for not answering them. Asserted
+ * here: that the pages render, that the questions are actually on them, and what the
+ * student's grade ends up as when they leave those questions blank.
  *
  * A pre-existing Keycloak account is borrowed rather than created, because the
  * login goes through the identity provider and a DB-seeded Moodle user has no
@@ -25,6 +27,7 @@ import { test, expect, Services } from '../fixtures';
 import {
   cleanupMoodleTopomojoDeployments,
   connectMoodleDatabase,
+  getMoodleQuestionUsage,
   getMoodleTopomojoActivity,
   getMoodleTopomojoAttempts,
   getMoodleTopomojoDeployments,
@@ -140,32 +143,36 @@ test.describe('mod_topomojo bulk-deployed attempt, as the student', () => {
     await expect(page.locator('.topomojo-challenge-link')).toBeVisible();
   });
 
-  test('the challenge page shows the no-challenge notice instead of failing', async ({
+  test('the challenge page shows the questions the activity has', async ({
     moodleDemoUserPage: page,
   }) => {
     await page.goto(`${Services.Moodle}/mod/topomojo/challenge.php?id=${topomojoActivityId}`, {
       waitUntil: 'domcontentloaded',
       timeout: 60000,
     });
-    // This is the crash: challenge.php reaches its default branch and asks the
-    // attempt for its question usage, which a bulk-deployed attempt does not have.
-    // The page has to survive a null one.
+    // challenge.php reaches its default branch and asks the attempt for its question
+    // usage. This used to be the crash, and then the null-safe dead end below it.
     await expectNoMoodleError(page);
 
-    // Pending upstream: what it survives to is a dead end. `$openAttempt->get_quba()`
-    // is null, so the whole challenge branch is skipped and the student is treated
-    // as having no attempt at all — they get the no-challenge notice and a way back,
-    // not the questions the activity has. Asserted as the current behaviour so a
-    // fix that backfills the question usage flips this expectation.
-    const notice = page.locator('#review_notavailable');
-    await expect(notice).toBeVisible();
-    await expect(notice).toHaveText('There are no challenge questions to review.');
-    await expect(page.getByRole('button', { name: 'Return' })).toBeVisible();
+    // `$openAttempt->get_quba()` is a real usage now, so the challenge branch runs
+    // and renders the response form rather than treating the student as having no
+    // attempt at all. The notice is what they used to get instead.
+    await expect(page.locator('#review_notavailable')).toHaveCount(0);
 
-    // No response form at all, so there is nothing to answer and nothing to submit
-    // from here: ending the lab on the activity page is the student's only exit.
-    await expect(page.locator('#topomojoview')).toHaveCount(0);
-    await expect(page.locator('.que')).toHaveCount(0);
+    const form = page.locator('#topomojoview');
+    await expect(form).toBeVisible();
+    const questions = page.locator('#topomojoview .que');
+    const attempts = await getMoodleTopomojoAttempts(activity.instanceId, [studentUserId]);
+    const usage = await getMoodleQuestionUsage(attempts[0].questionUsageId);
+    // Every slot in the usage is rendered, not just the first, and each is
+    // answerable: an input the student can actually type a flag into.
+    expect(usage.slots.length, 'the activity should have imported at least one question').toBeGreaterThan(0);
+    await expect(questions).toHaveCount(usage.slots.length);
+    await expect(questions.first().locator('input[type="text"], textarea').first()).toBeEditable();
+
+    // Submitting the answers is what closes the attempt, so the form has to carry
+    // the slots it is submitting for.
+    await expect(form.locator('input[name="slots"]')).toHaveValue(attempts[0].layout!);
   });
 
   test('ending the lab closes the attempt and grades it zero', async ({ moodleDemoUserPage: page }) => {
@@ -186,19 +193,20 @@ test.describe('mod_topomojo bulk-deployed attempt, as the student', () => {
     ]);
 
     // The stop branch closes the attempt and then grades it. Both steps reach for
-    // the question usage, which is null here, and grading a question-less attempt
-    // used to fatal on it.
+    // the question usage, and grading a question-less attempt used to fatal on it.
     await expectNoMoodleError(page);
 
     const after = await getMoodleTopomojoAttempts(activity.instanceId, [studentUserId]);
     expect(after).toHaveLength(1);
     expect(after[0].state, 'ending the lab should close the attempt').toBe('finished');
 
-    // Pending upstream: the attempt grades to 0 out of the activity's maximum
-    // because there were never any questions to answer. Closing and grading no
-    // longer crashes, but a student who was bulk-deployed to still ends up with a
-    // zero they had no way to avoid. Asserted so the fix changes this number.
+    // Zero, because the test above only looked at the questions and never answered
+    // one — not because there was nothing to answer. The distinction is the whole
+    // point of the fix, so it is pinned from the other side: the usage the grade was
+    // computed over still holds the activity's questions.
     expect(after[0].score).toBe(0);
+    const usage = await getMoodleQuestionUsage(after[0].questionUsageId);
+    expect(usage.slots.length, 'the graded attempt should have had questions to answer').toBeGreaterThan(0);
 
     const client = await connectMoodleDatabase();
     try {

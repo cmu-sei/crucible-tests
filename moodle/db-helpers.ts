@@ -219,6 +219,8 @@ export interface MoodleTopomojoActivity {
   /** 1-based in Moodle; 0 asks TopoMojo to pick at random. */
   variant: number;
   questionorder: string | null;
+  /** Question behaviour the activity asks for, e.g. `deferredfeedback`. */
+  preferredBehaviour: string;
 }
 
 /** Reads the activity record behind a TopoMojo course module. */
@@ -227,7 +229,8 @@ export async function getMoodleTopomojoActivity(cmid: string | number): Promise<
   try {
     const result = await client.query(
       `SELECT cm.id AS cmid, t.id AS instanceid, cm.course AS courseid, t.name,
-              t.workspaceid, t.grade, t.duration, t.variant, t.questionorder
+              t.workspaceid, t.grade, t.duration, t.variant, t.questionorder,
+              t.preferredbehaviour
          FROM mdl_course_modules cm
          JOIN mdl_modules m ON m.id = cm.module AND m.name = 'topomojo'
          JOIN mdl_topomojo t ON t.id = cm.instance
@@ -248,6 +251,7 @@ export async function getMoodleTopomojoActivity(cmid: string | number): Promise<
       duration: Number(row.duration),
       variant: Number(row.variant),
       questionorder: row.questionorder,
+      preferredBehaviour: row.preferredbehaviour,
     };
   } finally {
     await client.end();
@@ -375,6 +379,12 @@ export interface MoodleTopomojoAttempt {
   endtime: number;
   timestart: number;
   questionUsageId: number;
+  /**
+   * Comma-separated slot numbers of the question usage. Null means nothing ever
+   * built a usage for the attempt; an empty string means one was built over no
+   * questions.
+   */
+  layout: string | null;
   variant: number;
 }
 
@@ -388,7 +398,7 @@ export async function getMoodleTopomojoAttempts(
     const filtered = userIds && userIds.length > 0;
     const result = await client.query(
       `SELECT id, userid, state, score, eventid, launchpointurl, endtime,
-              timestart, questionusageid, variant
+              timestart, questionusageid, layout, variant
          FROM mdl_topomojo_attempts
         WHERE topomojoid = $1
           ${filtered ? 'AND userid = ANY($2::bigint[])' : ''}
@@ -405,8 +415,76 @@ export async function getMoodleTopomojoAttempts(
       endtime: Number(row.endtime),
       timestart: Number(row.timestart),
       questionUsageId: Number(row.questionusageid),
+      layout: row.layout,
       variant: Number(row.variant),
     }));
+  } finally {
+    await client.end();
+  }
+}
+
+export interface MoodleQuestionUsageSlot {
+  slot: number;
+  questionId: number;
+  /** Question type of the slot, `mojomatch` for an imported TopoMojo challenge question. */
+  questionType: string;
+  maxMark: number;
+  /**
+   * Behaviour the question engine resolved for this slot. Not necessarily the
+   * usage's preferred one: a question type may insist on its own, as mojomatch does.
+   */
+  behaviour: string;
+}
+
+export interface MoodleQuestionUsage {
+  id: number;
+  /** Owning component, `mod_topomojo` for an attempt on a TopoMojo activity. */
+  component: string;
+  /** Behaviour the usage asked for, taken from the activity's setting. */
+  preferredBehaviour: string;
+  slots: MoodleQuestionUsageSlot[];
+}
+
+/**
+ * Reads a question usage and its slots.
+ *
+ * A questionusageid on its own only proves a row in mdl_question_usages exists;
+ * the slots are what say the usage is over the activity's questions rather than
+ * empty, which is the difference between an answerable attempt and one that
+ * silently grades to nothing.
+ */
+export async function getMoodleQuestionUsage(questionUsageId: number): Promise<MoodleQuestionUsage> {
+  const client = await connectMoodleDatabase();
+  try {
+    const usage = await client.query(
+      `SELECT id, component, preferredbehaviour FROM mdl_question_usages WHERE id = $1`,
+      [questionUsageId]
+    );
+    if (usage.rowCount !== 1) {
+      throw new Error(`Could not find question usage ${questionUsageId}.`);
+    }
+
+    const slots = await client.query(
+      `SELECT qa.slot, qa.questionid, q.qtype, qa.maxmark, qa.behaviour
+         FROM mdl_question_attempts qa
+         JOIN mdl_question q ON q.id = qa.questionid
+        WHERE qa.questionusageid = $1
+        ORDER BY qa.slot`,
+      [questionUsageId]
+    );
+
+    return {
+      id: Number(usage.rows[0].id),
+      component: usage.rows[0].component,
+      preferredBehaviour: usage.rows[0].preferredbehaviour,
+      slots: slots.rows.map(row => ({
+        slot: Number(row.slot),
+        questionId: Number(row.questionid),
+        questionType: row.qtype,
+        maxMark: Number(row.maxmark),
+        behaviour: row.behaviour,
+      })),
+    };
   } finally {
     await client.end();
   }

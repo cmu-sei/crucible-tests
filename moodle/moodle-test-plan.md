@@ -1704,7 +1704,7 @@ hardcoding either, so they follow whatever the environment is pointed at.
       not immediately reap it, and the row's end time cell is populated
     - expect: Each attempt's stored variant is 1 or greater
 
-#### 11.3. A Bulk-Deployed Attempt Has No Questions
+#### 11.3. A Bulk-Deployed Attempt Has Its Questions
 
 **File:** `moodle/tests/plugin-topomojo-bulk-deploy.spec.ts`
 
@@ -1712,13 +1712,16 @@ hardcoding either, so they follow whatever the environment is pointed at.
   1. Inspect the attempts the deploy created for an activity that has imported challenge
      questions
     - expect: Both attempts are in progress
-    - Pending upstream: `launcher::create_attempt_for_user()` inserts the attempt directly
-      rather than going through `topomojo::init_attempt()`, so no question usage is created
-      and the attempt has nothing to answer or grade
+    - expect: Each attempt has a question usage, and no two users share one
+    - expect: Each usage belongs to `mod_topomojo` and asks for the behaviour the activity
+      is set to
+    - expect: Each usage holds `mojomatch` slots worth more than zero marks, graded by
+      `qbehaviour_mojomatch` rather than the usage's preferred behaviour, and the attempt's
+      layout names those slots
     - Pending upstream: the stored launchpoint URL is empty, per 11.1
   2. Open the Manage Deployments page
-    - expect: Neither row offers a View Attempt link, and the actions cell renders as "─" —
-      the instructor has nothing to review
+    - expect: Every row offers a View Attempt link pointing at that user's own attempt,
+      rather than the "─" an attempt without a question usage renders
 
 #### 11.4. Bulk-Deployed Attempt as the Student
 
@@ -1735,16 +1738,16 @@ enrolment are left as they were.
     - expect: The activity heading and the challenge link are shown
   2. Open the challenge page
     - expect: The page renders without a Moodle error — it reaches for the attempt's
-      question usage, which is null here, and used to fail outright
-    - Pending upstream: the page shows "There are no challenge questions to review." and a
-      Return button, because a null question usage makes it skip the challenge branch
-      entirely and treat the student as having no attempt; no response form is rendered, so
-      there is nothing to answer and nothing to submit
+      question usage, which used to be null here and made it fail outright
+    - expect: The response form is rendered with one question per slot in the usage, the
+      first of them answerable, and no "There are no challenge questions to review." notice
+    - expect: The form submits the slots the attempt's layout names
   3. Return to the activity and use End Lab, confirming the dialog
     - expect: The attempt is closed without a Moodle error — both closing and grading reach
-      for the null question usage
-    - Pending upstream: the attempt scores 0 and the gradebook records 0 out of the
-      activity's maximum, which the student had no way to avoid
+      for the question usage
+    - expect: The attempt scores 0 and the gradebook records 0 out of the activity's
+      maximum, because the questions were left blank rather than absent — the usage the
+      grade was computed over still holds them
 
 #### 11.5. Subject ID Length Limit
 

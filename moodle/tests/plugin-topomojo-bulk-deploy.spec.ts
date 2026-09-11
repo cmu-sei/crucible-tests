@@ -9,8 +9,9 @@
  *
  *  - Deploying to several users at once and rendering every resulting row on the
  *    management page, including the gamespace id and expiry the launcher wrote.
- *  - What the attempt a bulk deploy created actually looks like in the database,
- *    which is where the missing question usage shows up.
+ *  - What the attempt a bulk deploy created actually looks like in the database:
+ *    a real question usage over the deployed variant's questions, which is what
+ *    makes the attempt answerable and gradeable at all.
  *
  * Real gamespaces mean real VMs, so the deploy is kept to two users and every
  * gamespace is deleted in teardown even when the assertions fail.
@@ -20,6 +21,7 @@ import { Page } from '@playwright/test';
 import { test, expect, Services } from '../fixtures';
 import {
   cleanupMoodleTopomojoParticipants,
+  getMoodleQuestionUsage,
   getMoodleTopomojoActivity,
   getMoodleTopomojoAttempts,
   getMoodleTopomojoDeployments,
@@ -169,7 +171,7 @@ test.describe('mod_topomojo bulk deploy', () => {
     }
   });
 
-  test('a bulk-deployed attempt is created without a question usage', async () => {
+  test('a bulk-deployed attempt gets a question usage over the deployed variant', async () => {
     const attempts = await getMoodleTopomojoAttempts(
       activity.instanceId,
       participants.map(p => p.userId)
@@ -178,16 +180,39 @@ test.describe('mod_topomojo bulk deploy', () => {
 
     expect(activity.questionorder, 'this activity should have imported challenge questions').toBeTruthy();
 
+    const usageIds = new Set<number>();
+
     for (const attempt of attempts) {
       expect(attempt.state).toBe('inprogress');
 
-      // Pending upstream: launcher::create_attempt_for_user() bare-inserts the
-      // attempt rather than going through topomojo::init_attempt(), so no question
-      // usage is ever created and questionusageid stays at its column default of
-      // 0. The attempt therefore has no questions to answer or grade even though
-      // the activity has a question order. Asserted as the current behaviour so
-      // the fix flips this expectation rather than quietly passing.
-      expect(attempt.questionUsageId, 'bulk-deployed attempts carry no question usage').toBe(0);
+      // launcher::create_attempt_for_user() builds the attempt through
+      // topomojo_attempt, whose constructor creates the question usage. It used to
+      // insert the row by hand, which left questionusageid at its column default of
+      // 0 — and nothing creates one later, so the student was shown "There are no
+      // challenge questions to review" and graded 0 on an activity with questions.
+      expect(attempt.questionUsageId, 'a bulk-deployed attempt must have a question usage').toBeGreaterThan(0);
+
+      // Each user needs their own usage: a shared one would mean one student's
+      // answers grading another's attempt.
+      expect(usageIds.has(attempt.questionUsageId), 'question usages must not be shared between users').toBe(false);
+      usageIds.add(attempt.questionUsageId);
+
+      // A usage id alone only proves a row exists. The slots are what make the
+      // attempt answerable, and layout is what names them on the attempt.
+      const usage = await getMoodleQuestionUsage(attempt.questionUsageId);
+      expect(usage.component).toBe('mod_topomojo');
+      expect(usage.preferredBehaviour, 'the usage must ask for the activity behaviour').toBe(
+        activity.preferredBehaviour
+      );
+      expect(usage.slots.length, 'the usage should hold the activity\'s challenge questions').toBeGreaterThan(0);
+      expect(attempt.layout).toBe(usage.slots.map(s => s.slot).join(','));
+      for (const slot of usage.slots) {
+        expect(slot.questionType, 'challenge questions are imported as mojomatch').toBe('mojomatch');
+        // The qtype supplies its own behaviour, so this is not the usage's preferred
+        // one — deferred feedback would grade the flags with the wrong comparison.
+        expect(slot.behaviour, 'mojomatch questions must be graded by qbehaviour_mojomatch').toBe('mojomatch');
+        expect(slot.maxMark, 'a slot worth nothing cannot contribute to the grade').toBeGreaterThan(0);
+      }
 
       // Pending upstream: the launchpoint URL is minted only by the register
       // POST, but create_attempt_for_user() reads it off the poll body, which
@@ -201,20 +226,28 @@ test.describe('mod_topomojo bulk deploy', () => {
     }
   });
 
-  test('the management page offers no attempt review for a question-less attempt', async ({
+  test('the management page offers attempt review for every deployed user', async ({
     moodleAdminPage: page,
   }) => {
     await openManagePage(page);
 
+    const attempts = await getMoodleTopomojoAttempts(
+      activity.instanceId,
+      participants.map(p => p.userId)
+    );
+
     for (const participant of participants) {
       const row = page.locator(`${USERS_TABLE} tr[data-userid="${participant.userId}"]`);
+      const attempt = attempts.find(a => a.userId === participant.userId);
 
       // format_user_state() only links viewattempt.php when the attempt has a
-      // question usage, which is the visible consequence of the gap above: an
-      // instructor has nothing to review. Guards against the alternative failure
-      // mode of linking anyway and handing viewattempt.php a null usage.
-      await expect(row.locator('.cell-actions')).toHaveText('─');
-      await expect(row.locator('.cell-actions').getByRole('link', { name: /View Attempt/i })).toHaveCount(0);
+      // question usage, so this is the instructor-side consequence of the fix: the
+      // dash the cell used to hold is now a review link. It points at the user's own
+      // attempt, not whichever one the page happened to look up first.
+      const link = row.locator('.cell-actions').getByRole('link', { name: 'View Attempt' });
+      await expect(link).toHaveCount(1);
+      await expect(link).toHaveAttribute('href', new RegExp(`a=${attempt!.id}(&|$)`));
+      await expect(row.locator('.cell-actions')).not.toHaveText('─');
     }
   });
 });
