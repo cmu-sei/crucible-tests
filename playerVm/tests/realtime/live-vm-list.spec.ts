@@ -6,6 +6,7 @@
 
 import type { Page } from '@playwright/test';
 import { test, expect, Services } from '../../fixtures';
+import { watchHub } from '../../hub-watch';
 import {
   createVm,
   deleteVm,
@@ -79,70 +80,22 @@ test.describe('Live VM list updates', () => {
   };
 
   /**
-   * Watch the hub connection for `JoinView(viewId)` being invoked *and completed*, and
-   * report when it has been. Must be called before the navigation.
-   *
-   * This is not belt-and-braces, it is the thing that makes these tests deterministic.
-   * The list is drawn from an HTTP response, and `SignalRService` connects
-   * independently and a beat later — so a mutation fired the moment the row appears is
-   * routinely broadcast before this page is in the view's group, and a broadcast sent
-   * to a group nobody has joined is simply gone. (That is also true of a real session:
-   * a change made during the second it takes to connect is never seen. Nothing here
-   * can fix that, so the tests wait for the state a user spends the session in.)
-   *
-   * The invocation id comes off the frame rather than being assumed, and the wait is
-   * for the server's completion (`type: 3`), not just for the send: an invocation the
-   * hub rejects — wrong argument count, a view the caller cannot see — leaves the
-   * connection up and looks identical from the client.
-   */
-  const watchForViewJoin = (page: Page): (() => boolean) => {
-    let joined = false;
-    page.on('websocket', (ws) => {
-      // The other socket on this page is the Angular dev server's HMR channel.
-      if (!ws.url().includes('/hubs/vm')) {
-        return;
-      }
-      let invocationId: string | undefined;
-      // SignalR's JSON protocol separates messages with 0x1e, and a frame can carry
-      // more than one.
-      const messages = (payload: string | Buffer): any[] =>
-        String(payload)
-          .split('\u001e')
-          .filter((part) => part.length > 0)
-          .flatMap((part) => {
-            try {
-              return [JSON.parse(part)];
-            } catch {
-              return [];
-            }
-          });
-
-      ws.on('framesent', (frame) => {
-        for (const message of messages(frame.payload)) {
-          if (message.target === 'JoinView' && message.arguments?.includes(seeded.viewId)) {
-            invocationId = message.invocationId;
-          }
-        }
-      });
-      ws.on('framereceived', (frame) => {
-        for (const message of messages(frame.payload)) {
-          if (invocationId !== undefined && message.type === 3 && message.invocationId === invocationId) {
-            joined = true;
-          }
-        }
-      });
-    });
-    return () => joined;
-  };
-
-  /**
    * Open the view page, wait until it is both showing the seeded VM and subscribed to
    * the view's updates, and hand back the list and the fetch counter. Locators are
    * scoped to `app-vm-list`: the VM List tab has no `matTabContent`, so its content
    * stays in the DOM after a tab switch.
+   *
+   * Waiting for `JoinView` to *complete* is not belt-and-braces, it is what makes these
+   * tests deterministic. The list is drawn from an HTTP response, and `SignalRService`
+   * connects independently and a beat later — so a mutation fired the moment the row
+   * appears is routinely broadcast before this page is in the view's group, and a
+   * broadcast sent to a group nobody has joined is simply gone. (That is also true of a
+   * real session: a change made during the second it takes to connect is never seen.
+   * Nothing here can fix that, so the tests wait for the state a user spends the session
+   * in.)
    */
   const openVmList = async (page: Page) => {
-    const joined = watchForViewJoin(page);
+    const hub = watchHub(page, '/hubs/vm');
     const fetches = countVmListFetches(page);
     await page.goto(`${Services.PlayerVM.UI}/views/${seeded.viewId}`);
     const list = page.locator('app-vm-list');
@@ -156,14 +109,12 @@ test.describe('Live VM list updates', () => {
       'The VM list was drawn without a request this counter recognised — the URL it matches on has moved, and "no refetch" below would pass no matter what the page did'
     ).toBeGreaterThan(0);
 
-    await expect
-      .poll(joined, {
-        timeout: 60000,
-        intervals: [250, 500, 1000],
-        message:
-          'The page never completed JoinView for this view over `/hubs/vm`, so it is subscribed to nothing and no update below could arrive: either the connection failed (token, path) or the hub rejected the invocation',
-      })
-      .toBe(true);
+    await hub.expectCompleted('JoinView', {
+      match: (args) => args.includes(seeded.viewId),
+      why:
+        'Until it completes the page is subscribed to nothing, so no update below could arrive: either ' +
+        'the connection failed (token, path) or the hub rejected the invocation.',
+    });
 
     return { list, fetches, loaded };
   };

@@ -303,9 +303,9 @@ Four things shape the file:
 
 ## Real-time delivery (`tests/realtime/`)
 
-`VmHub` driven over a live connection from a browser, which nothing else in either
-repository does. Two files, and between them the only place in this suite that opens
-**two sessions as two different users**.
+`VmHub` and `ProgressHub` driven over a live connection from a browser, which nothing
+else in either repository does. Three files, and between them the only place in this
+suite that opens **two sessions as two different users**.
 
 The two halves that already exist stop just short of each other. `vm.api`'s
 `ContractTests`/event-handler tests drive the handlers into a recording hub context
@@ -317,7 +317,7 @@ the connection itself (`${basePath}/hubs/vm` and the bearer token it carries),
 group name assembled the same way on both ends, and the store update reaching the
 binding. All of it looks exactly like a list nobody has changed.
 
-Three things shape both files:
+Three things shape the two delivery files:
 
 - **The list is fetched once and never refetched.** `vm-list.component` calls
   `GetViewVms` behind a `hasLoadedVms` guard and nothing in `vm.ui` polls, so
@@ -405,13 +405,72 @@ context:
   re-sends the list with the departing user left out, which is the half a client
   keeping its own tally would get wrong.
 
+`hub-invocations.spec.ts`, the layer under the two files above: every invocation the
+two clients make, asserted against the server's **completion frame** rather than
+against anything on screen.
+
+The two delivery files cause four invocations between them — `JoinView`,
+`JoinViewUsers`, `JoinVm`, `SetActiveVirtualMachine` — and leave the rest with no
+readout at all. A `Leave*` succeeds by making broadcasts *stop*, so nothing on screen
+distinguishes "the group was left" from "the invocation was rejected and the connection
+stayed up"; both clients invoke without awaiting (`invoke('LeaveVm', vmId)`, promise
+dropped), so a renamed method or an added parameter breaks them in production with no
+error anywhere. SignalR dispatches on name *and* argument count, which is why the
+completion frame — matched per socket, since invocation ids restart at `0` on every
+connection — is the only readout that says the method existed under that name with that
+many arguments. `hub-watch.ts` does the reading; `live-vm-list.spec.ts` waits for
+`JoinView` through the same watcher.
+
+Two things shape it:
+
+- **`ngOnDestroy` is what invokes every `Leave*`, and a page unload does not run it.**
+  So the tests leave a route the way a session does, through the router: `pushState`
+  then Back then Forward, which produces the same same-document `popstate` the Back
+  button does. `page.goto` would reload the app and assert nothing.
+- **The DOM change that causes the invocation is asserted first** — the component gone,
+  the tab switched — because otherwise a router that never moved and a hub that never
+  answered fail identically, and the failure would be reported against the wrong
+  repository.
+
+One test per invocation, all sharing one seeded view since none of them changes what
+it contains:
+
+- **Leaving a view page leaves the view group** — `LeaveView`, from
+  `vm-main.component.ngOnDestroy`, navigating in-app to `/usage`.
+- **Switching away from User Follow leaves the view users group** —
+  `LeaveViewUsers`. The tab is a lazy `matTabContent`, so the switch destroys
+  `app-user-list`; its `@Input() set isActive` is what invokes both the join and the
+  leave.
+- **Leaving a console leaves that VM's presence channel** — `LeaveVm`, from
+  `console-page.component.ngOnDestroy`. Asserted on `app-console-page` rather than
+  `app-console`, which both Console UI pages contain.
+- **Following a user joins that user's group, and leaving it leaves** — `JoinUser`
+  (three arguments) and `LeaveUser` (two: the hub derives the team from the view). The
+  admin follows *themselves*, which the hub allows because its only check is that the
+  caller can see the team and the seeded Admin team is one they are in; a second
+  Keycloak account would prove nothing more about these two calls.
+- **A console losing focus unsets the active VM** — `UnsetActiveVirtualMachine`, the
+  one invocation with no arguments, dispatching `window:blur`. `window:focus` and a
+  completed `SetActiveVirtualMachine` come first, or there would be nothing to unset
+  and the assertion would pass on a hub doing no work.
+- **A console joins the progress hub for its VM** — `/hubs/progress` and `Join(vmId)`,
+  which nothing else in either suite connects to. `Join` takes a `string`, not a
+  `Guid`, so it is also the one hub method whose parameter type could change without a
+  client noticing; a rejected `Join` leaves the toolbar's task list permanently empty,
+  indistinguishable from a VM with nothing running on it.
+
 ### Not covered here
 
-- **`ProgressHub` over a connection.** `Progress` is sent from exactly two places —
+- **A real `Progress` message.** `Progress` is sent from exactly two places —
   `Vsphere/Services/TaskService` and `Proxmox/Services/ProxmoxTaskService`, both
   polling a hypervisor task — so there is no way to make a real progress bar move
-  without a hypervisor behind the VM API. `vm.api` asserts the group names from both
-  ends and does one in-process round trip; that is as far as it goes.
+  without a hypervisor behind the VM API. `hub-invocations.spec.ts` asserts the
+  connection and the `Join`; `vm.api` asserts the group names from both ends and does
+  one in-process round trip. Between them that is as far as it goes.
+- **`ProgressHub.Leave`.** Neither client invokes it — `NotificationService` keeps its
+  connection for the life of the page and lets the disconnect clean up — so there is
+  nothing to drive from a browser. A hub method no client calls is not drift, and
+  nothing in this suite asserts one exists.
 - **Only the vSphere/Unknown options bar has a connected-users readout.**
   `app-options-bar2`, the Proxmox one, renders none, so the second test above says
   nothing about a Proxmox console.
@@ -424,10 +483,31 @@ context:
 ## Client/server contracts
 
 `tests/contract/` is the exception to everything above: no browser, no
-Keycloak, nothing running. These specs read source — the contract files
-`vm.api` publishes under `contracts/`, and the client code in `vm.ui` and
-`console.ui` that is supposed to honour them. `../AGENTS.md` permits reading
-app source to verify a contract, and `contract-sources.ts` only ever reads.
+Keycloak. These specs read source — the C# of `vm.api`, and the client code in
+`vm.ui` and `console.ui` that is supposed to honour it. `../AGENTS.md` permits
+reading app source to verify a contract, and `api-sources.ts` and
+`contract-sources.ts` only ever read.
+
+**They used to read two JSON files, and those files are gone.** `vm.api` published
+`contracts/signalr-contract.json` and `contracts/openapi-surface.json` from its own
+test suite; both the tests and the files were deleted, which left every spec here
+skipping on a missing input — a whole directory reporting green having read nothing,
+which is precisely the failure mode it exists to prevent. Each side was repointed at
+something that cannot go stale:
+
+- **The SignalR surface is read out of the C# directly** (`api-sources.ts`): hub
+  methods and their parameter counts from each `Hub` subclass, broadcasts and their
+  arities from `Clients….SendAsync`, and hub paths from `MapHub<T>`. The reader is a
+  scanner, not a compiler, so it is written to *throw* rather than return a short
+  answer — a broadcast it cannot name is a handler nothing would validate — and
+  `contract-reader.spec.ts` drives every one of those refusals from a fixture.
+- **The OpenAPI document is fetched from the running API** —
+  `/swagger/v1/swagger.json`, the same document `npm run swagger:gen` is pointed at.
+  That is the stronger of the two inputs anyway, since a committed snapshot can be
+  stale in its own right, but it costs a running API: those five tests are gated on
+  one with `requirePrecondition`, not on a checkout. The reduction they compare
+  against (`openApiSurfaceFrom`) is pure, and `contract-reader.spec.ts` drives it from
+  a fixture so it is covered without a server.
 
 They exist because two of the three ways this UI talks to its API are agreed
 on at build time by repositories that never see each other, and a disagreement
@@ -444,18 +524,18 @@ produces no error anywhere:
   renamed in `vm.api` leaves the TypeScript interface with the old name and
   the field reads `undefined` in production.
 
-`vm.api` asserts its own side of both files — `ContractTests.cs` reflects over
-the hub classes and drives the real event handlers into a recording hub
-context; `OpenApiSurfaceTests.cs` pins the OpenAPI surface into
-`contracts/openapi-surface.json`. This suite asserts the client side of the
-same files, which is the comparison neither repository can make alone.
+`vm.api` asserts its own side of the SignalR contract — `ContractTests.cs`
+reflects over the hub classes and drives the real event handlers into a
+recording hub context. This suite asserts the client side, which is the
+comparison neither repository can make alone.
 
 A failure here is fixed in an application repository, not in this one: either
 a client is calling something the API does not have, or the checked-in client
 needs regenerating.
 
-Because they need no stack, they can be run on their own without `run-tests.sh`
-and its service checks:
+The SignalR half needs no stack, so it can be run on its own without
+`run-tests.sh` and its service checks (the OpenAPI half skips unless the API is
+up):
 
 ```bash
 npx playwright test playerVm/tests/contract --project=chromium
@@ -477,11 +557,14 @@ prevent, one level up.
 
 ### Tests
 
-`signalr-contract.spec.ts`, per hub and per client the contract lists:
+`signalr-contract.spec.ts`, per hub and per client. The hubs and their clients are
+a **constant table in the spec**, not something discovered from the surface it is
+checking: a describe generated from the input can generate none, and a suite that
+collected zero tests reports green.
 
 - **invokes only methods the API declares, with the arguments it declares.**
-- **listens only for messages the API sends** — or messages recorded under
-  `clientListenersWithNoSender`, which is where a handler with no sender is
+- **listens only for messages the API sends** — or messages recorded in
+  `LISTENERS_WITH_NO_SENDER`, which is where a handler with no sender is
   documented rather than tolerated silently.
 - **binds no more arguments than the API sends** — against the *smallest*
   arity a name is ever sent with. Binding fewer is legal and both clients do
@@ -490,15 +573,23 @@ prevent, one level up.
 - **every message it broadcasts is listened for by some client** — the
   direction `vm.api` cannot check, because from inside the API a send nobody
   receives looks exactly like a send.
-- **the unsent message `Complete` is still listened for** — keeps the recorded
-  anomaly honest, so the entry is deleted when it stops being true.
+- **the unsent message `Complete` is still listened for, and still unsent** —
+  keeps the recorded anomaly honest, so the entry is deleted when it stops
+  being true.
+- **the API maps exactly the hubs this spec knows clients for** — the table
+  above is only complete while this passes; a hub added to `vm.api` with no
+  entry here would otherwise be a hub nothing checks.
+- **the hub surface read from the API is not empty** — the guard on the reader
+  itself, since every comparison above passes vacuously against nothing.
 - **`modifiedProperties`** — every name `VmUpdated` can carry, and every key
-  it never names, is a property of the generated `Vm` interface. `vm.ui`
-  spends that list as `model[x] = vm[x]`, so a name that is not a key of the
-  serialized VM writes `undefined` over a value that was correct a moment ago.
+  it never names, is a property of the generated `Vm` interface. The names come
+  from the settable scalar properties of `Domain/Models/Vm.cs`, camelCased,
+  because that is what Entity Framework reports as modified; `vm.ui` spends the
+  list as `model[x] = vm[x]`, so a name that is not a key of the serialized VM
+  writes `undefined` over a value that was correct a moment ago.
 
-`openapi-surface.spec.ts`, comparing the pinned surface to the committed
-client:
+`openapi-surface.spec.ts`, comparing the document the API is serving to the
+committed client:
 
 - **the generated models are exactly the schemas the API describes.**
 - **every object schema has the properties its generated interface declares.**
@@ -509,9 +600,14 @@ client:
 - **every method on a generated service is an operation the API declares** —
   a method the API no longer has still compiles and fails as a 404, which
   reads as an outage rather than as a rename.
+- **the API serves an OpenAPI document with operations and schemas** — the
+  precondition the five above share, since an empty set makes all five pass.
+  The two that compare per schema also count what they compared and fail at
+  zero, which is what a swagger endpoint answering with the wrong document
+  looks like from here.
 
-`contract-reader.spec.ts`, the odd one out: `hubCalls` against fixture source
-rather than against an app repo.
+`contract-reader.spec.ts`, the odd one out: the readers themselves, against
+fixture source rather than against an app repo.
 
 Everything above is only as good as the scanner underneath it, and that scanner
 is hand-rolled — the suite has no TypeScript AST to hand. Its failure mode is
@@ -534,3 +630,49 @@ reader's own contract:
   sides of what `<` and `>` mean, which is why they are counted when splitting
   arguments and not when finding the end of a call.
 - **a hub call inside a comment or a string is not a hub call.**
+
+The same argument one language over, for the C# reader that replaced the deleted
+contract file. A short answer is the dangerous failure here, not a wrong one, so
+several of these assert that the reader *throws*:
+
+- **a hub declares the methods a client can invoke, and nothing else** — not the
+  constructor, not `static`, not an `override` (`OnDisconnectedAsync` is declared
+  on `Hub` and no client can invoke it), and not a signature inside a doc comment.
+- **a `CancellationToken` parameter is not an argument a client sends** — SignalR
+  binds it from the connection, and counting it makes every caller look one
+  argument short.
+- **a brace inside a string does not end the class body** — all three C# string
+  forms, because they fail differently: verbatim doubles its quotes, interpolated
+  holds braces. A `}` left in a string closes the class early and every method
+  after it disappears into a surface that looks smaller than it is.
+- **a raw string literal stops the reader rather than being misread** — `"""`
+  needs its own state; reading on without it inverts the quoting of everything
+  after, and the result is a method name read out of what used to be code.
+  `vm.api` has none today.
+- **only a send to `Clients` is a broadcast, and a trailing token is not an
+  argument** — `SendAsync` is also `HttpClient`'s method, and matching on the name
+  alone reported an outbound webhook as a hub message.
+- **a message named by a parameter is resolved through the calls that pass it** —
+  `VmBaseSignalRHandler.HandleCreateOrUpdate` takes the name as a `string method`,
+  and it is how both `VmCreated` and `VmUpdated` are sent.
+- **a message this reader cannot name throws rather than being dropped**, and **a
+  source naming two hubs throws rather than guessing** — attributing a send by
+  guessing moves a message to the wrong hub's contract, and both hubs' specs still
+  pass.
+- **the tracked properties of an entity are the settable scalars** — what EF
+  reports in `ModifiedProperties`. A computed getter cannot be modified and a
+  `virtual` navigation is tracked as a relationship, so neither can ever be sent;
+  a restricted setter (`{ get; private set; }`) is still tracked and counts.
+- **the hub paths clients must dial are read from `MapHub`.**
+
+And the OpenAPI reduction, kept apart from the fetch so it can be driven from a
+fixture — an operations map that came out empty passes every comparison built on
+it:
+
+- **every operation is keyed by method and route, and nothing else in a path item
+  is** — a path item also holds `parameters`, `summary`, `$ref`. An untagged
+  operation arrives with an empty tag list rather than not arriving, because it is
+  generated onto no service at all and that is the spec's business to report.
+- **a schema is read as an object, an enum, or neither** — enum values as strings
+  either way, since a union of string literals is what the generator emits; a
+  formatted scalar is neither, and becomes a type alias with nothing to drift.

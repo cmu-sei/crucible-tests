@@ -2,14 +2,21 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 /**
- * Reading the contract files `vm.api` publishes, and reading the client sources that are supposed to
- * honour them.
+ * Reading the client sources that are supposed to honour the VM API's contracts: the two Angular SignalR
+ * services, and the API client `vm.ui` generates and checks in.
  *
- * These are the only specs in this suite that assert against source rather than against a running
- * service, and the reason is that there is nothing running to assert against. A SignalR method name and
- * a generated TypeScript interface are agreed on at build time by two repositories that never see each
- * other; by the time a browser is involved the mismatch has already happened, and what it looks like is
- * a stale VM list or an `undefined` field, not an error anyone can catch. So this reads both sides.
+ * Mostly source rather than a running service, and the reason is that there is nothing running to assert
+ * against. A SignalR method name and a generated TypeScript interface are agreed on at build time by two
+ * repositories that never see each other; by the time a browser is involved the mismatch has already
+ * happened, and what it looks like is a stale VM list or an `undefined` field, not an error anyone can
+ * catch. So this reads both sides — the API's half lives in `api-sources.ts`.
+ *
+ * There is deliberately nothing here that reads a contract file. `vm.api` used to publish
+ * `contracts/signalr-contract.json` and `contracts/openapi-surface.json`, and both were removed from the
+ * application with the tests that generated them. A spec pointed at a file that will never exist again
+ * does not fail — it skips, or collects no tests at all, and reports green forever. So the API's SignalR
+ * surface is now derived from its C# (`api-sources.ts`) and its OpenAPI document is fetched from the
+ * running service ({@link fetchOpenApiDocument}).
  *
  * Nothing here writes to an application repository. `../AGENTS.md` allows reading app source to verify a
  * contract and nothing else, and these helpers only ever read.
@@ -17,6 +24,8 @@
 
 import fs from 'fs';
 import path from 'path';
+import { request as playwrightRequest } from '@playwright/test';
+import { Services } from '../shared-fixtures';
 
 /**
  * Where the Crucible application repositories are checked out. The default is the directory that holds
@@ -32,7 +41,7 @@ export const AppSources = {
   consoleUi: () => path.join(sourceRoot(), 'player', 'console.ui'),
 } as const;
 
-/** The directory an app name in a contract file refers to. */
+/** The directory an app name in a spec's client table refers to. */
 export function appDirectory(app: string): string {
   const directories: Record<string, () => string> = {
     'vm.api': AppSources.vmApi,
@@ -44,7 +53,7 @@ export function appDirectory(app: string): string {
 
   if (!directory) {
     throw new Error(
-      `No source directory is known for the app '${app}'. Contract files name apps as 'vm.ui', ` +
+      `No source directory is known for the app '${app}'. The contract specs name apps as 'vm.ui', ` +
         `'console.ui' or 'vm.api'.`
     );
   }
@@ -52,80 +61,117 @@ export function appDirectory(app: string): string {
   return directory();
 }
 
-export function contractsDirectory(): string {
-  return path.join(AppSources.vmApi(), 'contracts');
-}
-
-export function readJson<T>(file: string): T {
-  return JSON.parse(fs.readFileSync(file, 'utf8')) as T;
-}
-
 /** True when every path given exists, which is the precondition every spec here has. */
 export function allPresent(...paths: string[]): boolean {
   return paths.every((x) => fs.existsSync(x));
 }
 
-// --- The shape of contracts/signalr-contract.json -------------------------------------------------
+// --- The API's OpenAPI document -------------------------------------------------------------------
 
-export type ContractClient = { app: string; source: string };
-
-export type ContractInvocation = {
-  name: string;
-  arguments: number;
-  returns?: { collection: boolean; keys: string[] };
-  note?: string;
+/** As much of an OpenAPI document as a generated client is built out of. */
+export type OpenApiDocument = {
+  openapi?: string;
+  paths?: Record<string, Record<string, { operationId?: string; tags?: string[] }>>;
+  components?: { schemas?: Record<string, { properties?: Record<string, unknown>; enum?: unknown[] }> };
 };
 
-export type ContractBroadcast = {
-  name: string;
-  arguments: number[];
-  sentBy: string[];
-  note?: string;
-};
+export type SurfaceOperation = { operationId?: string; tags: string[] };
 
-export type ContractUnsentListener = { name: string; listenedForBy: string[]; note?: string };
-
-export type ContractHub = {
-  name: string;
-  path: string;
-  hubType: string;
-  clients: ContractClient[];
-  invocations: ContractInvocation[];
-  broadcasts: ContractBroadcast[];
-  clientListenersWithNoSender: ContractUnsentListener[];
-};
-
-export type SignalRContract = {
-  description: string;
-  hubs: ContractHub[];
-  modifiedProperties: {
-    description: string;
-    names: string[];
-    neverSent: { description: string; keys: string[] };
-  };
-};
-
-// --- The shape of contracts/openapi-surface.json --------------------------------------------------
-
-export type SurfaceOperation = {
-  operationId?: string;
-  tags?: string[];
-  parameters?: string[];
-  requestBody?: { required: boolean; content: Record<string, string> };
-  responses: Record<string, Record<string, string> | null>;
-};
-
-export type SurfaceSchema = {
-  type: string;
-  required?: string[];
-  properties?: Record<string, string>;
-};
+/** A schema as the generator sees it: an object with properties, an enum with values, or neither. */
+export type SurfaceSchema = { properties: string[] | null; values: string[] | null };
 
 export type OpenApiSurface = {
-  openapi: string;
+  /** Keyed `'GET /api/vms/{id}'`, which is how a failure names the operation that moved. */
   operations: Record<string, SurfaceOperation>;
   schemas: Record<string, SurfaceSchema>;
 };
+
+/** The HTTP methods an OpenAPI path item can hold. Anything else in there describes the path, not an operation. */
+const HTTP_METHODS = ['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace'];
+
+/**
+ * The parts of an OpenAPI document a generated client is made of: operation ids and tags, because they
+ * become method and service names, and schema properties and enum values, because they become interfaces
+ * and union types.
+ *
+ * Separated from the fetch so the shape of this transformation is testable without a running API —
+ * `contract-reader.spec.ts` drives it from a fixture document.
+ */
+export function openApiSurfaceFrom(document: OpenApiDocument): OpenApiSurface {
+  const operations: Record<string, SurfaceOperation> = {};
+
+  for (const [route, item] of Object.entries(document.paths ?? {})) {
+    for (const method of HTTP_METHODS) {
+      const operation = item?.[method];
+
+      if (operation) {
+        operations[`${method.toUpperCase()} ${route}`] = {
+          operationId: operation.operationId,
+          tags: operation.tags ?? [],
+        };
+      }
+    }
+  }
+
+  const schemas: Record<string, SurfaceSchema> = {};
+
+  for (const [name, schema] of Object.entries(document.components?.schemas ?? {})) {
+    schemas[name] = {
+      properties: schema?.properties ? Object.keys(schema.properties) : null,
+      // Read as strings because that is what the generator emits into a union type, whatever the
+      // document's declared type is.
+      values: schema?.enum ? schema.enum.map((x) => String(x)) : null,
+    };
+  }
+
+  return { operations, schemas };
+}
+
+/** Where the VM API serves the document `npm run swagger:gen` in `vm.ui` is pointed at. */
+export function openApiDocumentUrl(): string {
+  return `${Services.PlayerVM.API.replace(/\/$/, '')}/swagger/v1/swagger.json`;
+}
+
+/**
+ * The OpenAPI document the API is serving right now, or null when nothing is listening.
+ *
+ * The line between the two is whether the service answered at all, and it is drawn there on purpose. A
+ * refused connection is an environment fact — the API is not running — and the specs treat it as a
+ * precondition. A *reply* that is not a document is not: the service is up and no longer serving the thing
+ * `npm run swagger:gen` is pointed at, which is worth a failure rather than a skip, so this throws.
+ *
+ * Unauthenticated, because the swagger middleware sits outside the endpoint routing that
+ * `RequireAuthorization` applies to; a 401 would mean that changed, and it arrives here as a thrown error
+ * saying so rather than as apparent drift in the client.
+ */
+export async function fetchOpenApiDocument(): Promise<OpenApiDocument | null> {
+  const url = openApiDocumentUrl();
+  const context = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
+
+  try {
+    let response;
+
+    try {
+      response = await context.fetch(url);
+    } catch {
+      // Transport-level: refused, unresolved, timed out. Nothing answered, so there is nothing to
+      // compare the checked-in client against.
+      return null;
+    }
+
+    if (!response.ok()) {
+      throw new Error(
+        `${url} answered ${response.status()}, so the API is running but is not serving an OpenAPI ` +
+          'document at the path the client is generated from. That is a change in the API rather than ' +
+          'drift in the generated client.'
+      );
+    }
+
+    return (await response.json()) as OpenApiDocument;
+  } finally {
+    await context.dispose();
+  }
+}
 
 // --- Reading the client sources -------------------------------------------------------------------
 
@@ -143,7 +189,7 @@ export type HubCall = {
 };
 
 /**
- * Bracket pairs for `contents` — parentheses, square brackets and braces, and deliberately *not* `<`
+ * Bracket pairs for `bracketContents` — parentheses, square brackets and braces, and deliberately *not* `<`
  * and `>`. Finding the `)` that closes a `(` does not need angle brackets, and counting them there is
  * actively wrong: a comparison inside a call argument (`a > b`) closes a bracket that was never opened,
  * which silently truncates the argument range and miscounts the call's arity.
@@ -152,7 +198,7 @@ const CONTENTS_OPENING = '([{';
 const CONTENTS_CLOSING = ')]}';
 
 /**
- * Bracket pairs for `items` — angle brackets included, because a generic type in a parameter list
+ * Bracket pairs for `commaItems` — angle brackets included, because a generic type in a parameter list
  * (`Map<string, Vm>`) holds a comma that must not split an argument. Depth is clamped at zero there so
  * a stray comparison cannot suppress a real split.
  */
@@ -319,8 +365,13 @@ function mask(source: string): string {
   return out.join('');
 }
 
-/** The half-open range of what a bracket opening at `open` contains. */
-function contents(masked: string, open: number): [number, number] {
+/**
+ * The half-open range of what a bracket opening at `open` contains.
+ *
+ * Exported for `api-sources.ts`, which reads C#: bracket matching over a *masked* source is the same
+ * problem in either language, and a second copy of it is a second thing to get wrong.
+ */
+export function bracketContents(masked: string, open: number): [number, number] {
   let depth = 0;
 
   for (let i = open; i < masked.length; i++) {
@@ -334,8 +385,8 @@ function contents(masked: string, open: number): [number, number] {
   throw new Error(`Unbalanced '${masked[open]}' at offset ${open} while reading a hub call.`);
 }
 
-/** The half-open range of each top-level comma-separated item in `[from, to)`. */
-function items(masked: string, from: number, to: number): Array<[number, number]> {
+/** The half-open range of each top-level comma-separated item in `[from, to)`. Exported with {@link bracketContents}. */
+export function commaItems(masked: string, from: number, to: number): Array<[number, number]> {
   const found: Array<[number, number]> = [];
   let depth = 0;
   let start = from;
@@ -377,7 +428,7 @@ export function hubCalls(source: string): HubCall[] {
   for (const match of masked.matchAll(/\.(on|invoke|send)\s*(?:<[^<>()]*>\s*)?\(/g)) {
     const kind = match[1] === 'on' ? 'on' : 'invoke';
     const open = match.index + match[0].length - 1;
-    const [from, to] = contents(masked, open);
+    const [from, to] = bracketContents(masked, open);
 
     // The name comes out of the original, because the mask blanked the quotes' contents.
     const name = /^\s*['"`]([A-Za-z][A-Za-z0-9_]*)['"`]/.exec(source.slice(from, to))?.[1];
@@ -392,7 +443,7 @@ export function hubCalls(source: string): HubCall[] {
     found.push({
       kind,
       name,
-      count: kind === 'on' ? handlerArity(masked, from, to, name) : items(masked, from, to).length - 1,
+      count: kind === 'on' ? handlerArity(masked, from, to, name) : commaItems(masked, from, to).length - 1,
     });
   }
 
@@ -431,16 +482,16 @@ function handlerArity(masked: string, from: number, to: number, name: string): n
     return before.trim().length > 0 ? 1 : 0;
   }
 
-  const [start, end] = contents(masked, afterName + paren);
+  const [start, end] = bracketContents(masked, afterName + paren);
 
-  return items(masked, start, end).length;
+  return commaItems(masked, start, end).length;
 }
 
 /** Every hub path a client dials, taken from its `withUrl` calls. */
 export function hubPaths(source: string): string[] {
   return [...mask(source).matchAll(/withUrl\s*\(/g)].map((match) => {
     const open = match.index + match[0].length - 1;
-    const [from, to] = contents(mask(source), open);
+    const [from, to] = bracketContents(mask(source), open);
     const url = source.slice(from, to);
 
     return /(\/hubs\/[A-Za-z0-9_-]+)/.exec(url)?.[1] ?? url.trim();

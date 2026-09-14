@@ -102,6 +102,38 @@ export async function getPlayerToken(
   }
 }
 
+/**
+ * The user id a token was issued for — its `sub` claim.
+ *
+ * Player and the VM API both identify a user by `sub`, so this is the id that appears in a team
+ * membership, in a `VmUser` row and in a `JoinUser` invocation. Reading it off the token is the only way
+ * to get it without a name: `GET /api/users` returns everyone, and matching the caller by display name
+ * picks the wrong row the moment a realm has two people called Administrator.
+ *
+ * The signature is not verified, because nothing here is trusting the token — it is being read back after
+ * Keycloak issued it to us seconds earlier.
+ */
+export function tokenUserId(token: string): string {
+  const payload = token.split('.')[1];
+
+  if (!payload) {
+    throw new Error('The token has no payload segment, so it is not a JWT and carries no user id.');
+  }
+
+  // Base64url, and JWTs drop the padding.
+  const json = Buffer.from(payload.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
+  const claims = JSON.parse(json) as { sub?: unknown };
+
+  if (typeof claims.sub !== 'string' || claims.sub.length === 0) {
+    throw new Error(
+      'The token has no `sub` claim. Every Crucible service keys a user on it, so a token without ' +
+        'one would not authenticate either — check the scopes the seeding client requests.'
+    );
+  }
+
+  return claims.sub;
+}
+
 function authHeaders(token: string): Record<string, string> {
   return {
     Authorization: `Bearer ${token}`,
