@@ -6,6 +6,7 @@
 import { APIRequestContext, expect, request as playwrightRequest, test } from '@playwright/test';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
 import {
+  clearPlayerViewDefaultTeam,
   createPlayerViewWithDefaultTeam,
   createPlayerViewWithoutDefaultTeam,
   deletePlayerView,
@@ -18,9 +19,11 @@ import {
  * Alloy has to guess which team to put the launching user on - it takes the first team that does
  * not look administrative, and fails the launch outright if there is no such team.
  *
- * Two halves are covered here, because either alone would be misleading:
+ * Three things are covered here, because any one alone would be misleading:
  *  - the dropdown refuses to offer such a view, and says why;
- *  - the API refuses to save one, so the rule cannot be bypassed by a direct call.
+ *  - the API refuses to save one, so the rule cannot be bypassed by a direct call;
+ *  - a template saved before its view went bad cannot be saved again until the view is changed,
+ *    so the API's rejection is never a surprise.
  */
 
 const NAME_PREFIX = 'AlloyDefaultTeam';
@@ -82,9 +85,9 @@ test.describe('Event Templates Management - Player view default team', () => {
     badView = await createPlayerViewWithoutDefaultTeam(token, `${NAME_PREFIX} Bad ${stamp}`);
   });
 
-  // Cleanup is entirely through the API: the UI case cancels out of the dialog without saving,
-  // so no template is ever created from the browser, and a page-driven purge would need an
-  // authenticated session the API-only case does not have.
+  // Cleanup is entirely through the API. Every template these tests create is tracked by id at
+  // the point of creation, and a page-driven purge would need an authenticated session the
+  // API-only case does not have.
   test.afterEach(async () => {
     for (const id of createdTemplateIds.splice(0)) {
       await alloyApi(token, `/api/eventTemplates/${id}`, { method: 'DELETE' });
@@ -192,5 +195,78 @@ test.describe('Event Templates Management - Player view default team', () => {
     expect(reread.ok).toBeTruthy();
     expect(reread.data.viewId).toBe(goodView.id);
     expect(reread.data.description).not.toBe('Should not be saved.');
+  });
+
+  /**
+   * The dropdown rules above only stop a template being pointed at a bad view in the first place.
+   * A template saved while its view was valid becomes invalid the moment someone removes the
+   * default team in Player - nothing in Alloy changes. That template must not be quietly savable,
+   * because every save re-validates the view and the API would reject it.
+   */
+  test('An existing template whose view lost its default team cannot be saved until the view is changed', async ({
+    page,
+  }) => {
+    const templateName = `${NAME_PREFIX} Legacy ${Date.now()}`;
+
+    // 1. Save a template against the good view, then break the view behind Alloy's back.
+    const created = await alloyApi<{ id: string }>(token, '/api/eventTemplates', {
+      method: 'POST',
+      body: templateBody(templateName, goodView.id),
+    });
+    expect(created.status, created.text).toBe(201);
+    createdTemplateIds.push(created.data.id);
+
+    await clearPlayerViewDefaultTeam(token, goodView.id);
+
+    // 2. Open it for editing.
+    await authenticateWithKeycloak(page, Services.Alloy.UI);
+    await page.goto(`${Services.Alloy.UI}/admin`);
+    await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
+
+    await page.getByRole('textbox', { name: 'Search' }).fill(templateName);
+    const editButton = page.getByRole('button', { name: `Edit: ${templateName}` });
+    await expect(editButton).toBeVisible({ timeout: 15000 });
+    await editButton.click();
+
+    const dialog = page.getByRole('dialog', { name: 'Edit Event Template' });
+    await expect(dialog).toBeVisible();
+
+    // expect: the field still names the view it references, so the message has a subject.
+    const combobox = dialog.getByRole('combobox', { name: 'Player View Template' });
+    await expect(combobox).toHaveValue(goodView.name);
+
+    // expect: the problem and the fix are stated inline, and Save is disabled.
+    const fieldError = dialog.locator('mat-error');
+    await expect(fieldError).toBeVisible();
+    await expect(fieldError).toContainText('no default team');
+
+    const save = dialog.getByRole('button', { name: 'Save' });
+    await expect(save).toBeDisabled();
+
+    // expect: Clone is disabled too - it copies viewId straight into a create, which the API
+    // would reject for the same reason.
+    await expect(dialog.getByRole('button', { name: 'Clone' })).toBeDisabled();
+
+    // 3. Choosing a different view releases the block. "None" is a valid choice: a template
+    //    with no view is never validated.
+    await combobox.click();
+    await combobox.fill('');
+    const noneOption = page.getByRole('option', { name: 'None' });
+    await expect(noneOption).toBeVisible({ timeout: 10000 });
+    await noneOption.click();
+
+    await expect(fieldError).not.toBeVisible();
+    await expect(save).toBeEnabled();
+
+    // expect: and the save now goes through, clearing the view on the stored template.
+    await save.click();
+    await expect(dialog).not.toBeVisible({ timeout: 20000 });
+
+    const reloaded = await alloyApi<{ viewId: string | null }>(
+      token,
+      `/api/eventTemplates/${created.data.id}`
+    );
+    expect(reloaded.ok).toBeTruthy();
+    expect(reloaded.data.viewId ?? null).toBeNull();
   });
 });

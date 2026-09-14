@@ -352,6 +352,36 @@ export async function createPlayerViewWithDefaultTeam(
   return view;
 }
 
+/**
+ * Take the default team back off a view that already has one. This is how a saved event template
+ * ends up referencing an invalid view: nothing changes in Alloy, the view changes underneath it.
+ * Reads the view first and echoes its fields back, because Player's PUT is a whole-view replace -
+ * sending only `defaultTeamId: null` would blank the name and description too.
+ */
+export async function clearPlayerViewDefaultTeam(token: string, viewId: string): Promise<void> {
+  const current = await playerApi(token, `/api/views/${viewId}`);
+  if (!current.ok) {
+    throw new Error(`Failed to read Player view ${viewId} (${current.status}): ${current.text}`);
+  }
+
+  const result = await playerApi(token, `/api/views/${viewId}`, {
+    method: 'PUT',
+    body: {
+      name: current.data.name,
+      description: current.data.description,
+      status: current.data.status,
+      isTemplate: current.data.isTemplate,
+      defaultTeamId: null,
+    },
+  });
+
+  if (!result.ok) {
+    throw new Error(
+      `Failed to clear the default team on Player view ${viewId} (${result.status}): ${result.text}`
+    );
+  }
+}
+
 export async function deletePlayerView(token: string, viewId: string): Promise<void> {
   const result = await playerApi(token, `/api/views/${viewId}`, { method: 'DELETE' });
 

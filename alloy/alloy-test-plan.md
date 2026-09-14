@@ -480,6 +480,15 @@ no default team at all.
     - expect: 201 in both cases; a template with no view remains valid
   9. `PUT /api/eventTemplates/{id}` moving a valid template onto the view with no default team
     - expect: 400, and the stored template is unchanged
+  10. Save a template against the good view, then remove that view's default team in Player and
+      open the template for editing — the state every template saved before this rule is in
+    - expect: The Player View field still names the view the template references
+    - expect: An inline error names the problem and the fix
+    - expect: Save is disabled
+    - expect: Clone is disabled too, since it copies the `viewId` straight into a create
+  11. Change the Player View to "None" and save
+    - expect: The error clears and Save is enabled — a template with no view is never validated
+    - expect: The save succeeds and the stored template's `viewId` is null
 
 ### 4. Events Management
 
