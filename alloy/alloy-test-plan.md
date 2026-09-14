@@ -208,7 +208,7 @@ Alloy is an advanced orchestration application within the Crucible cybersecurity
     - expect: The duration field accepts numeric input
   6. Select a Player View from the dropdown (if available)
     - expect: The View dropdown shows available Player views
-    - expect: A view can be selected
+    - expect: Only views that have a default team can be selected (see 3.14)
   7. Select a Caster Directory from the dropdown (if available)
     - expect: The Directory dropdown shows available Caster directories
     - expect: A directory can be selected
@@ -444,6 +444,43 @@ Alloy is an advanced orchestration application within the Crucible cybersecurity
     - expect: Changes to the clone do not affect the original template
     - expect: Clone and original remain independent
 
+#### 3.14. Player View Without a Default Team
+
+**File:** `tests/event-templates-management/view-without-default-team.spec.ts`
+
+An event template may only reference a Player view that has a default team. Without one, Alloy
+has to guess which team to place the launching user on — it takes the first team that does not
+look administrative, and fails the launch outright when there is no such team. The rule is
+stated in the dropdown and enforced by the API.
+
+**Setup:** two Player views seeded through the Player API, both with an Admin team so they
+reach the dropdown: one with an extra participant team set as the view's default team, one with
+no default team at all.
+
+**Steps:**
+  1. Open the "Create New Event Template" dialog and open the Player View dropdown
+    - expect: Both seeded views are listed
+  2. Inspect the view that has no default team
+    - expect: The option is disabled
+    - expect: The option text says "no default team", so the reason is not carried by the
+      greyed-out styling alone (the tooltip is unreachable without a mouse)
+  3. Inspect the view that has a default team
+    - expect: The option is enabled and carries no marker
+  4. Click the disabled option
+    - expect: It is not selected and the field keeps its previous value
+  5. Click the enabled option
+    - expect: It is selected and the field shows the view name
+  6. `POST /api/eventTemplates` with the `viewId` of the view that has no default team
+    - expect: 400, with the reason in `ProblemDetails.title`
+    - expect: `GET /api/eventTemplates` shows nothing was created
+  7. `POST /api/eventTemplates` with a `viewId` that does not exist
+    - expect: 400 with a "could not verify" message — being unable to confirm a default team is
+      not the same as there being one
+  8. `POST /api/eventTemplates` with the good `viewId`, and again with no `viewId` at all
+    - expect: 201 in both cases; a template with no view remains valid
+  9. `PUT /api/eventTemplates/{id}` moving a valid template onto the view with no default team
+    - expect: 400, and the stored template is unchanged
+
 ### 4. Events Management
 
 **Seed:** `tests/seed.spec.ts`
@@ -667,6 +704,31 @@ Alloy is an advanced orchestration application within the Crucible cybersecurity
     - expect: The enlist page loads
     - expect: User can join the event using the share code
     - expect: User is added to the event membership
+
+#### 4.14. Admin Enlist Endpoint
+
+**File:** `tests/events-management/admin-enlist-endpoint.spec.ts`
+
+`POST /api/events/{id}/enlist/{userId}` is how an integration (Moodle, for example) puts a named
+user into a running event on their behalf. Placing that user on a Player team is part of the job,
+so a failure to do it has to be reported rather than swallowed.
+
+**Steps:**
+  1. Call the endpoint as a user without `ManageEvents`
+    - expect: 403
+  2. Enlist a user into a healthy Active event
+    - expect: 201, with the event returned
+    - expect: An Alloy event membership and an event template membership exist for that user
+    - expect: An Alloy user name already on record is not overwritten by a second enlist
+  3. Enlist the same user again
+    - expect: 201 — repeat enlists are idempotent, not an error
+  4. Enlist into an Active event whose Player view has no team a participant can be added to
+    - expect: 409, with the summary in `ProblemDetails.title`
+    - expect: No event membership and no event template membership were created — the enlist
+      fails as a unit rather than leaving the user in Alloy but on no Player team
+  5. Visit `/enlist/{shareCode}` for that same event as another user
+    - expect: The page stops loading and shows the error, rather than showing
+      "Adding you to the event" indefinitely
 
 ### 5. Event Template Memberships
 

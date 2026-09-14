@@ -12,6 +12,7 @@ import {
   tempUsername,
 } from '../../../keycloak-admin';
 import { Services } from '../../../shared-fixtures';
+import { createPlayerViewWithoutDefaultTeam, deletePlayerView, SeededPlayerView } from '../../test-helpers';
 
 const EVENT_MEMBER_ROLE_ID = 'f870d8ee-7332-4f7f-8ee0-63bd07cfd7e4';
 
@@ -94,13 +95,15 @@ async function createEventTemplate(token: string): Promise<CreatedEventTemplate>
 
 async function createActiveEvent(
   token: string,
-  eventTemplateId: string
+  eventTemplateId: string,
+  viewId?: string
 ): Promise<CreatedEvent> {
   const name = `AdminEnlist Event ${Date.now()} ${Math.floor(Math.random() * 1_000_000)}`;
   const result = await apiCall<CreatedEvent>(token, '/api/events', {
     method: 'POST',
     body: {
       eventTemplateId,
+      viewId,
       name,
       description: 'Automated admin enlist endpoint test. Will be deleted after the test.',
       status: 'Active',
@@ -273,6 +276,80 @@ test.describe('Alloy admin enlist endpoint', () => {
       if (eventTemplate) {
         await deleteEventTemplateMemberships(token, eventTemplate.id, student.id);
         await apiCall(token, `/api/eventTemplates/${eventTemplate.id}`, { method: 'DELETE' });
+      }
+      await apiCall(token, `/api/users/${student.id}`, { method: 'DELETE' });
+      await deleteKeycloakUser(keycloakAdminToken, student.id);
+    }
+  });
+
+  /**
+   * The 201 assertions above do not prove the Player team add works - the event they use has no
+   * viewId, so that step is skipped entirely. This case gives the event a real Player view that
+   * has no team a participant can be added to, which is exactly the misconfiguration the enlist
+   * path used to swallow and report as a 201.
+   */
+  test('reports a failure to place the user on a Player team instead of returning 201', async () => {
+    const keycloakAdminToken = await getKeycloakAdminToken();
+    const token = await getAlloyAdminToken();
+    const username = tempUsername('alloy-enlist-noteam');
+    const student = await createKeycloakUser(keycloakAdminToken, {
+      username,
+      password: 'pw',
+      firstName: 'No',
+      lastName: 'Team',
+    });
+    let eventTemplate: CreatedEventTemplate | undefined;
+    let event: CreatedEvent | undefined;
+    let view: SeededPlayerView | undefined;
+
+    try {
+      // Only an administrative Admin team, so Alloy's participant-team search finds nothing.
+      view = await createPlayerViewWithoutDefaultTeam(
+        token,
+        `AdminEnlist NoTeam View ${Date.now()}`
+      );
+      // The viewId goes on the event, not the template: a template pointing at this view is
+      // rejected outright, and the enlist path reads the event's own viewId.
+      eventTemplate = await createEventTemplate(token);
+      event = await createActiveEvent(token, eventTemplate.id, view.id);
+
+      const enlistResult = await apiCall<{ title?: string }>(
+        token,
+        `/api/events/${event.id}/enlist/${student.id}`,
+        {
+          method: 'POST',
+          body: { userName: 'No Team' },
+        }
+      );
+
+      expect(enlistResult.status, enlistResult.text).toBe(409);
+      expect(enlistResult.data?.title).toContain('add the user to the virtual environment');
+
+      // expect: the enlist failed as a unit - no Alloy membership was left behind.
+      const eventMemberships = await apiCall<Array<{ userId?: string }>>(
+        token,
+        `/api/events/${event.id}/memberships`
+      );
+      expect(eventMemberships.ok).toBeTruthy();
+      expect(eventMemberships.data.some((m) => m.userId === student.id)).toBeFalsy();
+
+      const eventTemplateMemberships = await apiCall<Array<{ userId?: string }>>(
+        token,
+        `/api/eventTemplates/${eventTemplate.id}/memberships`
+      );
+      expect(eventTemplateMemberships.ok).toBeTruthy();
+      expect(eventTemplateMemberships.data.some((m) => m.userId === student.id)).toBeFalsy();
+    } finally {
+      if (event) {
+        await deleteEventMemberships(token, event.id, student.id);
+        await apiCall(token, `/api/events/${event.id}`, { method: 'DELETE' });
+      }
+      if (eventTemplate) {
+        await deleteEventTemplateMemberships(token, eventTemplate.id, student.id);
+        await apiCall(token, `/api/eventTemplates/${eventTemplate.id}`, { method: 'DELETE' });
+      }
+      if (view) {
+        await deletePlayerView(token, view.id);
       }
       await apiCall(token, `/api/users/${student.id}`, { method: 'DELETE' });
       await deleteKeycloakUser(keycloakAdminToken, student.id);

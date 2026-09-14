@@ -1,8 +1,9 @@
 // Copyright 2026 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
-import { Locator, Page, expect } from '@playwright/test';
+import { APIRequestContext, Locator, Page, request as playwrightRequest, expect } from '@playwright/test';
 import { Services } from '../shared-fixtures';
+import { getUserToken } from '../keycloak-admin';
 
 async function closeOpenDialogs(page: Page): Promise<void> {
   for (let i = 0; i < 3; i++) {
@@ -238,5 +239,123 @@ export async function cleanupEndedEvents(page: Page): Promise<void> {
     }
   } catch (error) {
     console.log('Error cleaning up events:', (error as Error).message);
+  }
+}
+
+/**
+ * A token for the Alloy admin that is also accepted by the Player API. The `player` scope is
+ * part of alloy.ui's OIDC scope list, so one token serves both APIs - and, importantly, it
+ * carries the same `sub` as the browser session `authenticateWithKeycloak` establishes. That
+ * matters because Alloy's Player View dropdown is filled from
+ * `GET player/api/users/{sub}/views`, which returns only views the user is a member of.
+ */
+export async function getAlloyPlayerToken(): Promise<string> {
+  return getUserToken(
+    'admin',
+    'admin',
+    'alloy.ui',
+    'openid profile player player-vm alloy caster steamfitter'
+  );
+}
+
+export interface SeededPlayerView {
+  id: string;
+  name: string;
+}
+
+async function playerApi(
+  token: string,
+  path: string,
+  options: { method?: 'GET' | 'POST' | 'PUT' | 'DELETE'; body?: any } = {}
+): Promise<{ ok: boolean; status: number; data: any; text: string }> {
+  const base = Services.Player.API.replace(/\/$/, '');
+  const ctx: APIRequestContext = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
+  try {
+    const response = await ctx.fetch(`${base}${path}`, {
+      method: options.method ?? 'GET',
+      headers: { Authorization: `Bearer ${token}` },
+      data: options.body,
+    });
+    const text = await response.text();
+    let data: any;
+    try {
+      data = text ? JSON.parse(text) : undefined;
+    } catch {
+      data = undefined;
+    }
+    return { ok: response.ok(), status: response.status(), data, text };
+  } finally {
+    await ctx.dispose();
+  }
+}
+
+/**
+ * A Player view whose only team is the "Admin" team created with it. That team's role holds
+ * Manage permissions, so it is skipped by Alloy's participant-team search - which makes this
+ * view both "has no default team" (for the event template rules) and "has no team a
+ * participant can be added to" (for the enlist path).
+ */
+export async function createPlayerViewWithoutDefaultTeam(
+  token: string,
+  name: string
+): Promise<SeededPlayerView> {
+  const result = await playerApi(token, '/api/views', {
+    method: 'POST',
+    body: {
+      name,
+      description: 'Seeded by an Alloy default-team test; deleted on teardown.',
+      status: 'Active',
+      isTemplate: true,
+      // Gives the caller a ViewMembership, without which the view never reaches Alloy's dropdown.
+      createAdminTeam: true,
+    },
+  });
+
+  if (!result.ok) {
+    throw new Error(`Failed to create Player view "${name}" (${result.status}): ${result.text}`);
+  }
+
+  return { id: result.data.id, name };
+}
+
+/**
+ * The same, plus a plain participant team that is then set as the view's default team.
+ */
+export async function createPlayerViewWithDefaultTeam(
+  token: string,
+  name: string
+): Promise<SeededPlayerView> {
+  const view = await createPlayerViewWithoutDefaultTeam(token, name);
+
+  const team = await playerApi(token, `/api/views/${view.id}/teams`, {
+    method: 'POST',
+    body: { name: 'Participants' },
+  });
+  if (!team.ok) {
+    throw new Error(`Failed to create a team on Player view ${view.id} (${team.status}): ${team.text}`);
+  }
+
+  const updated = await playerApi(token, `/api/views/${view.id}`, {
+    method: 'PUT',
+    body: {
+      name,
+      description: 'Seeded by an Alloy default-team test; deleted on teardown.',
+      status: 'Active',
+      isTemplate: true,
+      defaultTeamId: team.data.id,
+    },
+  });
+  if (!updated.ok) {
+    throw new Error(`Failed to set the default team on Player view ${view.id} (${updated.status}): ${updated.text}`);
+  }
+
+  return view;
+}
+
+export async function deletePlayerView(token: string, viewId: string): Promise<void> {
+  const result = await playerApi(token, `/api/views/${viewId}`, { method: 'DELETE' });
+
+  if (!result.ok && result.status !== 404) {
+    console.warn(`Failed to delete seeded Player view ${viewId} (${result.status}): ${result.text}`);
   }
 }
