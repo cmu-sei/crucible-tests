@@ -10,11 +10,13 @@
  * because a seeder broke or a service was down. Same for a bare `test.skip()` /
  * `test.fixme()`, which is non-coverage with no reason attached at all.
  *
- * Two things are still allowed, because both are visible in the test report and
- * both name themselves:
+ * Three things are still allowed, because all of them are visible in the test
+ * report and none of them can turn a broken scenario green:
  *
  *   test.skip('Some scenario', async () => { ... })   // a skipped declaration
  *   test.skip(true, 'Pending upstream: <what is pending>')
+ *   test.skip(({ browserName }) => browserName !== 'chromium', '<why one project>')
+ *
  *
  * And where a conditional gate is genuinely right — an optional service the
  * deployment may not run — use `requirePrecondition(condition, reason)` from
@@ -220,10 +222,22 @@ function firstArgument(code, openParenIndex) {
   return code.slice(openParenIndex + 1).trim();
 }
 
+/** `({ browserName }) => <expression>`, capturing the expression. */
+const PROJECT_GATE = /^\(?\s*\{\s*browserName\s*,?\s*\}\s*\)?\s*=>\s*([\s\S]+)$/;
+
+function isProjectGate(argument) {
+  const match = PROJECT_GATE.exec(argument);
+  if (!match) return false;
+
+  const remainder = match[1].replaceAll('browserName', '').replace(/(['"`])\s*\1/g, '');
+  return /^[\s!=<>&|?()]*$/.test(remainder);
+}
+
 function classify(argument) {
   if (argument === '') return 'bare';
   if (/^['"`]/.test(argument)) return 'declaration';
   if (argument === 'true' || argument === 'false') return 'literal';
+  if (isProjectGate(argument)) return 'project';
   return 'conditional';
 }
 
@@ -249,7 +263,7 @@ for (const file of collectTsFiles(ROOT)) {
       if (openParen === -1 || code.slice(at + call.length, openParen).trim() !== '') continue;
 
       const kind = classify(firstArgument(code, openParen));
-      if (kind === 'declaration' || kind === 'literal') continue;
+      if (kind === 'declaration' || kind === 'literal' || kind === 'project') continue;
 
       const line = source.slice(0, at).split('\n').length;
       const previousLine = source.split('\n')[line - 2] ?? '';
@@ -285,6 +299,8 @@ console.error(
     "requirePrecondition(condition, reason) from shared-fixtures.ts — it skips locally\n" +
     'and fails under CI. A deliberate, permanent skip should be a skipped declaration\n' +
     "(test.skip('title', fn)) or test.skip(true, 'Pending upstream: ...').\n" +
+    'To hold an expensive spec to one browser project, gate on browserName alone:\n' +
+    "test.skip(({ browserName }) => browserName !== 'chromium', '<why one project>').\n" +
     `Last resort: a \`// ${ALLOW_MARKER}: <why>\` comment on the preceding line.`
 );
 process.exit(1);

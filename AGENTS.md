@@ -136,6 +136,7 @@ These live at the root (not inside any app dir) because multiple apps use them. 
 - **Every test must clean up the data it seeds** — see "Test data hygiene" below.
 - Long-running waits should use the fixture-level timeouts already configured — don't override `actionTimeout`/`navigationTimeout` per call without a reason.
 - When re-enabling a `test.skip(...)`, read the comment above it first — some skips are waiting on a service-side fix and should stay skipped until it lands.
+- A conditional `test.skip(...)` fails `npm run check:skips` — a skip that a runtime condition decides is how a broken scenario reports green. The two ways to gate a test anyway: `requirePrecondition`/`requireAppSources` for something the deployment owns, or, to hold a spec that drives real VMs to a single browser project, `test.skip(({ browserName }) => browserName !== 'chromium', '<why one project>')`. The project gate is allowed only when the condition mentions `browserName` and string literals and nothing else — the moment an env var or a probe result joins it, it is a precondition and the check says so.
 - **Never adjust a test to work around an app bug just to make it pass.** If you believe
   you've found a legitimate defect in an app's API or UI, document it — see "App bug
   reporting" below — and either assert the actual (buggy) behavior with a comment
