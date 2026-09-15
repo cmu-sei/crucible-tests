@@ -2,7 +2,7 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 import { createHash } from 'crypto';
-import { test as base, Page, Locator, request as pwRequest, APIRequestContext, TestInfo } from '@playwright/test';
+import { test as base, Page, Locator, TestInfo } from '@playwright/test';
 import fs from 'fs';
 import {
   Services,
@@ -12,6 +12,14 @@ import {
   waitForFirstVisible,
 } from '../shared-fixtures';
 import { authSessionStatePath, authStatePath } from '../auth-paths';
+import {
+  addUserToTeam,
+  createTeam,
+  createView,
+  deleteView,
+  getUsers,
+  getViewTeams,
+} from '../player-helpers';
 
 export async function authenticatePlayerWithKeycloak(
   page: Page,
@@ -24,11 +32,6 @@ export async function authenticatePlayerWithKeycloak(
 export type PlayerFixtures = {
   playerAuthenticatedPage: Page;
 };
-
-interface PlayerView {
-  id: string;
-  name: string;
-}
 
 const primaryViewBaseName = 'Project Lagoon TTX - Admin';
 const steamfitterViewBaseName = 'Steamfitter View';
@@ -99,11 +102,6 @@ export async function findAdminViewButton(page: Page, viewName: string): Promise
   return viewButton;
 }
 
-const playerHeaders = (token: string) => ({
-  Authorization: `Bearer ${token}`,
-  'Content-Type': 'application/json',
-});
-
 function tokenFromStorageEntries(entries: Array<[string, string]>): string | null {
   for (const [, value] of entries) {
     try {
@@ -146,120 +144,56 @@ async function getPlayerApiToken(page: Page, savedSessionState: Array<[string, s
   return token ?? savedToken!;
 }
 
-async function createPlayerView(
-  apiContext: APIRequestContext,
-  token: string,
-  name: string
-): Promise<PlayerView> {
-  const response = await apiContext.post(`${Services.Player.API}/api/views`, {
-    headers: playerHeaders(token),
-    data: {
-      name,
-      description: `E2E fixture data for ${name}`,
-      status: 'Active',
-      isTemplate: false,
-      createAdminTeam: true,
-    },
-  });
-
-  if (!response.ok()) {
-    throw new Error(`Failed to create Player view "${name}": ${response.status()} ${await response.text()}`);
-  }
-
-  return await response.json();
-}
-
-async function deletePlayerView(
-  apiContext: APIRequestContext,
-  token: string,
-  viewId: string
-): Promise<void> {
-  const response = await apiContext.delete(`${Services.Player.API}/api/views/${viewId}`, {
-    headers: playerHeaders(token),
-  });
-
-  if (!response.ok() && response.status() !== 404) {
-    const responseBody = await response.text().catch(() => '');
-    console.warn(
-      `Player fixture cleanup failed for view ${viewId}: ${response.status()}${
-        responseBody ? `\n${responseBody}` : ''
-      }`
-    );
-  }
-}
-
+/**
+ * Seed the views the Player specs expect to find in the UI: the primary view
+ * (with a second team beyond the Admin one the API creates, so team-switching has
+ * something to switch to) and the view the Steamfitter-facing specs look for.
+ *
+ * The view/team/user calls all come from `../player-helpers`, which owns them for
+ * the whole suite. The token is the *browser's* OIDC access token rather than a
+ * fresh password-grant one, so the seeded views are owned by exactly the user the
+ * test is signed in as — that is what makes them visible on the page under test.
+ *
+ * Returns a cleanup that removes the views newest-first. On a partial failure it
+ * removes whatever was created before rethrowing, so a broken seed leaks nothing.
+ */
 async function seedLegacyPlayerData(token: string, testInfo: TestInfo): Promise<() => Promise<void>> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
   const viewIds: string[] = [];
   const primaryViewName = buildSeededViewName(primaryViewBaseName, testInfo);
   const steamfitterViewName = buildSeededViewName(steamfitterViewBaseName, testInfo);
 
+  const cleanup = async () => {
+    for (const viewId of viewIds.splice(0).reverse()) {
+      await deleteView(token, viewId);
+    }
+  };
+
   try {
-    const primary = await createPlayerView(apiContext, token, primaryViewName);
+    const primary = await createView(token, primaryViewName, `E2E fixture data for ${primaryViewName}`);
     viewIds.push(primary.id);
 
-    const teamsResponse = await apiContext.get(`${Services.Player.API}/api/views/${primary.id}/teams`, {
-      headers: playerHeaders(token),
-    });
-    if (!teamsResponse.ok()) {
-      throw new Error(`Failed to get Player fixture teams: ${teamsResponse.status()} ${await teamsResponse.text()}`);
-    }
-    const teams: Array<{ id: string }> = await teamsResponse.json();
-    const adminTeam = teams[0];
-    if (!adminTeam) {
+    if (!(await getViewTeams(token, primary.id))[0]) {
       throw new Error(`Player fixture view ${primary.id} did not create an Admin team`);
     }
 
-    const extraTeamResponse = await apiContext.post(`${Services.Player.API}/api/views/${primary.id}/teams`, {
-      headers: playerHeaders(token),
-      data: { name: 'Exercise Control' },
-    });
-    if (!extraTeamResponse.ok()) {
-      throw new Error(`Failed to create Player fixture team: ${extraTeamResponse.status()} ${await extraTeamResponse.text()}`);
-    }
-    const extraTeam: { id: string } = await extraTeamResponse.json();
+    const extraTeam = await createTeam(token, primary.id, 'Exercise Control');
 
-    const usersResponse = await apiContext.get(`${Services.Player.API}/api/users`, {
-      headers: playerHeaders(token),
-    });
-    if (!usersResponse.ok()) {
-      throw new Error(`Failed to get Player fixture user: ${usersResponse.status()} ${await usersResponse.text()}`);
-    }
-    const users: Array<{ id: string; name: string }> = await usersResponse.json();
-    const admin = users.find(user => user.name === 'Admin User');
+    const admin = (await getUsers(token)).find(user => user.name === 'Admin User');
     if (!admin) {
       throw new Error('Player fixture could not find the Admin User');
     }
-    const addAdminResponse = await apiContext.post(
-      `${Services.Player.API}/api/teams/${extraTeam.id}/users/${admin.id}`,
-      { headers: playerHeaders(token) }
+    await addUserToTeam(token, extraTeam.id, admin.id);
+
+    const steamfitterView = await createView(
+      token,
+      steamfitterViewName,
+      `E2E fixture data for ${steamfitterViewName}`
     );
-    if (!addAdminResponse.ok()) {
-      throw new Error(`Failed to add Admin User to Player fixture team: ${addAdminResponse.status()} ${await addAdminResponse.text()}`);
-    }
+    viewIds.push(steamfitterView.id);
 
-    for (const name of [steamfitterViewName]) {
-      const view = await createPlayerView(apiContext, token, name);
-      viewIds.push(view.id);
-    }
-
-    return async () => {
-      try {
-        for (const viewId of viewIds.reverse()) {
-          await deletePlayerView(apiContext, token, viewId);
-        }
-      } finally {
-        await apiContext.dispose();
-      }
-    };
+    return cleanup;
   } catch (error) {
-    try {
-      for (const viewId of viewIds.reverse()) {
-        await deletePlayerView(apiContext, token, viewId);
-      }
-    } finally {
-      await apiContext.dispose();
-    }
+    await cleanup();
     throw error;
   }
 }

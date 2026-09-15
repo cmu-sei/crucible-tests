@@ -50,11 +50,13 @@ test.describe('Launch and Join Event Workflows', () => {
     const flipped = await page.evaluate(() => {
       const host = document.querySelector('app-launch') as any;
       if (!host) return { ok: false, reason: 'app-launch host element not found' };
-      const ctx = window.ng?.getComponent?.(host);
+      // `window.ng` is Angular's dev-mode debug API, which is not in lib.dom.
+      const ng = (window as any).ng;
+      const ctx = ng?.getComponent?.(host);
       if (!ctx) return { ok: false, reason: 'Angular debug context unavailable' };
       ctx.showChoices = false;
       ctx.launchStatus = 'Launching';
-      window.ng.applyChanges(ctx);
+      ng.applyChanges(ctx);
       return { ok: true };
     });
     expect(flipped.ok, `could not drive the launch component: ${flipped.reason ?? ''}`).toBe(true);
