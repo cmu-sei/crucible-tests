@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('Administration - Application Templates', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Administration - Application Templates`, () => {
   test('View Template URL', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     const alloyViewUrl = `${Services.Alloy.UI.replace(/\/$/, '')}/views/{viewId}`;
     const playerVmMapUrl = `${Services.PlayerVM.UI.replace(/\/$/, '')}/views/{viewId}/map?{theme}`;
 
@@ -27,4 +29,5 @@ test.describe('Administration - Application Templates', () => {
     await expect(page.getByRole('button', { name: alloyViewUrl, exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: playerVmMapUrl, exact: true })).toBeVisible();
   });
-});
+  });
+}

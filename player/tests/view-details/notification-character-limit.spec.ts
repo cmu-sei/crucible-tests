@@ -11,10 +11,14 @@ import {
   seededPrimaryViewName,
   findPlayerHomeViewLink,
   clickWithoutOverlayInterference,
+  PLAYER_THEMES,
+  applyPlayerTheme,
 } from '../../fixtures';
 
-test.describe('View Details', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › View Details`, () => {
   test('Notification Character Limit', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     const primaryViewName = seededPrimaryViewName();
 
     // 1. Log in and navigate to a view, then open the Notifications panel
@@ -36,4 +40,5 @@ test.describe('View Details', () => {
     // expect: The character counter shows '225 / 225'
     await expect(page.getByText('225 / 225')).toBeVisible();
   });
-});
+  });
+}

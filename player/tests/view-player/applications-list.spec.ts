@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink } from '../../fixtures';
+import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('View Player Interface', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › View Player Interface`, () => {
   test('View Player Sidebar - Applications List', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     const primaryViewName = seededPrimaryViewName();
 
     // 1. Navigate to view player page
@@ -24,4 +26,5 @@ test.describe('View Player Interface', () => {
     await expect(page.getByRole('link', { name: 'Player' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Collapse to Icons Only' })).toBeVisible();
   });
-});
+  });
+}

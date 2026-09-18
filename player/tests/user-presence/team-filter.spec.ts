@@ -11,10 +11,14 @@ import {
   seededPrimaryViewName,
   findPlayerHomeViewLink,
   clickWithoutOverlayInterference,
+  PLAYER_THEMES,
+  applyPlayerTheme,
 } from '../../fixtures';
 
-test.describe('User Presence', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › User Presence`, () => {
   test('User Presence - Team Filter', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     const primaryViewName = seededPrimaryViewName();
 
     // 1. Navigate to user presence page in a view with multiple teams
@@ -48,4 +52,5 @@ test.describe('User Presence', () => {
     // Close dialog
     await dialog.getByRole('button', { name: 'Close' }).click();
   });
-});
+  });
+}

@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink } from '../../fixtures';
+import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('View Details', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › View Details`, () => {
   test('View Basic Information', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     const primaryViewName = seededPrimaryViewName();
 
     // 1. Log in and navigate to a view
@@ -35,4 +37,5 @@ test.describe('View Details', () => {
     // expect: Notifications button is visible
     await expect(page.getByRole('button', { name: 'Notifications' })).toBeVisible();
   });
-});
+  });
+}

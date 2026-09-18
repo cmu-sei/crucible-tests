@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('Error Handling and Edge Cases', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Error Handling and Edge Cases`, () => {
   test('File Upload - Invalid File Type', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     // 1. Navigate to file upload interface (e.g., import view)
     await page.getByRole('button', { name: 'Menu' }).click();
     await page.getByRole('menuitem', { name: 'Administration' }).click();
@@ -24,4 +26,5 @@ test.describe('Error Handling and Edge Cases', () => {
     // Note: We verify the import button is present and enabled
     await expect(importButton).toBeEnabled();
   });
-});
+  });
+}

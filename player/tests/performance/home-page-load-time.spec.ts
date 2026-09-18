@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('Performance', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Performance`, () => {
   test('Page Load Performance - Home Page', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     // 1. Measure time from navigation to home page until page is fully loaded
     const startTime = Date.now();
 
@@ -24,4 +26,5 @@ test.describe('Performance', () => {
     // expect: No blocking resources delay rendering
     await expect(page.getByRole('button', { name: 'Menu' })).toBeVisible();
   });
-});
+  });
+}

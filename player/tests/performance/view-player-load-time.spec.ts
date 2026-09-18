@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink } from '../../fixtures';
+import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('Performance', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Performance`, () => {
   test('Page Load Performance - View Player', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     const primaryViewName = seededPrimaryViewName();
 
     // 1. Measure time from navigation to view player until page is interactive
@@ -26,4 +28,5 @@ test.describe('Performance', () => {
     // expect: Applications list renders promptly
     expect(loadTime).toBeLessThan(5000);
   });
-});
+  });
+}

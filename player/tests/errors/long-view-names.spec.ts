@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink } from '../../fixtures';
+import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('Error Handling and Edge Cases', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Error Handling and Edge Cases`, () => {
   test('Long View Names Display', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     const primaryViewName = seededPrimaryViewName();
 
     // 1. Log in and view a list containing views
@@ -26,4 +28,5 @@ test.describe('Error Handling and Edge Cases', () => {
     const viewRow = page.getByRole('row').filter({ hasText: primaryViewName });
     await expect(viewRow.getByRole('cell').nth(1)).toContainText('E2E fixture data');
   });
-});
+  });
+}

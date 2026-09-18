@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, seededPrimaryViewName, seededSteamfitterViewName, typeIntoSearch } from '../../fixtures';
+import { test, expect, Services, seededPrimaryViewName, seededSteamfitterViewName, typeIntoSearch, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('Administration - Views', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Administration - Views`, () => {
   test('Search Views in Admin', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     const primaryViewName = seededPrimaryViewName();
     const steamfitterViewName = seededSteamfitterViewName();
 
@@ -48,4 +50,5 @@ test.describe('Administration - Views', () => {
     await expect(searchField).toHaveValue('Steamfitter');
     await expect(page.getByRole('button', { name: steamfitterViewName, exact: true })).toBeVisible();
   });
-});
+  });
+}

@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink, typeIntoSearch } from '../../fixtures';
+import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink, typeIntoSearch, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('Error Handling and Edge Cases', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Error Handling and Edge Cases`, () => {
   test('SQL Injection Protection - Search Fields', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     const primaryViewName = seededPrimaryViewName();
 
     // 1. Navigate to a search field (e.g., view list search)
@@ -34,4 +36,5 @@ test.describe('Error Handling and Edge Cases', () => {
     await searchField.clear();
     await findPlayerHomeViewLink(page, primaryViewName);
   });
-});
+  });
+}

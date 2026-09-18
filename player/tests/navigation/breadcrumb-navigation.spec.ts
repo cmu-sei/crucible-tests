@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern, seededPrimaryViewName, findAdminViewButton } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, seededPrimaryViewName, findAdminViewButton, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('Navigation', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Navigation`, () => {
   test('Breadcrumb Navigation', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     const primaryViewName = seededPrimaryViewName();
 
     // 1. Navigate to a nested page (e.g., admin view edit)
@@ -34,4 +36,5 @@ test.describe('Navigation', () => {
     await expect(page).toHaveURL(serviceUrlPattern(Services.Player.UI), { timeout: 10000 });
     await expect(page.getByText('My Views')).toBeVisible();
   });
-});
+  });
+}

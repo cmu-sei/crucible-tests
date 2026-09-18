@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink } from '../../fixtures';
+import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('File Browser', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › File Browser`, () => {
   test('File Browser Access', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     const primaryViewName = seededPrimaryViewName();
 
     // 1. Navigate to file browser route /view/:id/files
@@ -23,4 +25,5 @@ test.describe('File Browser', () => {
     // The file browser page should render without errors
     await expect(page.locator('body')).toBeVisible();
   });
-});
+  });
+}

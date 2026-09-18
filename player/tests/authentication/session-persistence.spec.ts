@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('Authentication', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Authentication`, () => {
   test('Session Persistence After Refresh', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     // 1. Log in with valid credentials (admin/admin)
     // expect: User is successfully authenticated and viewing Player home page
     await expect(page).toHaveURL(serviceUrlPattern(Services.Player.UI), { timeout: 10000 });
@@ -24,4 +26,5 @@ test.describe('Authentication', () => {
     await expect(page.getByText('My Views')).toBeVisible();
     await expect(page.getByText('Admin User').first()).toBeVisible();
   });
-});
+  });
+}

@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('Administration - Views', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Administration - Views`, () => {
   test('Export View', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     // 1. Navigate to admin views section
     await page.getByRole('button', { name: 'Menu' }).click();
     await page.getByRole('menuitem', { name: 'Administration' }).click();
@@ -45,4 +47,5 @@ test.describe('Administration - Views', () => {
     const download = await downloadPromise;
     expect(download.suggestedFilename()).toBeTruthy();
   });
-});
+  });
+}

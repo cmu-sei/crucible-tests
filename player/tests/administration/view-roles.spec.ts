@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('Administration - Roles and Permissions', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Administration - Roles and Permissions`, () => {
   test('View Roles', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     // 1. Log in as admin and navigate to Administration
     await page.getByRole('button', { name: 'Menu' }).click();
     await page.getByRole('menuitem', { name: 'Administration' }).click();
@@ -32,4 +34,5 @@ test.describe('Administration - Roles and Permissions', () => {
     await expect(page.getByRole('table')).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Permissions' })).toBeVisible();
   });
-});
+  });
+}

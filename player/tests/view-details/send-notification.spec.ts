@@ -10,10 +10,14 @@ import {
   seededPrimaryViewName,
   findPlayerHomeViewLink,
   clickWithoutOverlayInterference,
+  PLAYER_THEMES,
+  applyPlayerTheme,
 } from '../../fixtures';
 
-test.describe('View Details', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › View Details`, () => {
   test('Send System Notification', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     const primaryViewName = seededPrimaryViewName();
 
     // 1. Log in and navigate to a view
@@ -64,4 +68,5 @@ test.describe('View Details', () => {
     await expect(confirmationDialog).toBeHidden();
     await expect(notificationInput).toHaveValue('');
   });
-});
+  });
+}

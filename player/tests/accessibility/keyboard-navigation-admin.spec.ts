@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('Responsive Design and Accessibility', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Responsive Design and Accessibility`, () => {
   test('Keyboard Navigation - Administration', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     // 1. Log in as admin and navigate to Administration
     await page.getByRole('button', { name: 'Menu' }).click();
     await page.getByRole('menuitem', { name: 'Administration' }).click();
@@ -37,4 +39,5 @@ test.describe('Responsive Design and Accessibility', () => {
     await page.keyboard.press('Enter');
     await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
   });
-});
+  });
+}

@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('Administration - Subscriptions', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Administration - Subscriptions`, () => {
   test('Sort Subscriptions', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     // 1. Log in as admin and navigate to Administration > Subscriptions
     await page.getByRole('button', { name: 'Menu' }).click();
     await page.getByRole('menuitem', { name: 'Administration' }).click();
@@ -36,4 +38,5 @@ test.describe('Administration - Subscriptions', () => {
     await expect.poll(() => getSortState(eventTypesHeader)).toBe(nextSortState(initialEventTypesState));
     await expect.poll(() => getSortState(nameHeader)).toBe('none');
   });
-});
+  });
+}

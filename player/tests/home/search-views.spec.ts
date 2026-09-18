@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, seededPrimaryViewName, seededSteamfitterViewName, typeIntoSearch } from '../../fixtures';
+import { test, expect, Services, seededPrimaryViewName, seededSteamfitterViewName, typeIntoSearch, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('Home Page - My Views', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Home Page - My Views`, () => {
   test('Search Views', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     const primaryViewName = seededPrimaryViewName();
     const steamfitterViewName = seededSteamfitterViewName();
 
@@ -37,4 +39,5 @@ test.describe('Home Page - My Views', () => {
     await typeIntoSearch(searchField, 'Steamfitter');
     await expect(page.getByRole('link', { name: steamfitterViewName, exact: true })).toBeVisible();
   });
-});
+  });
+}

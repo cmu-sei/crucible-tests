@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('Responsive Design and Accessibility', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Responsive Design and Accessibility`, () => {
   test('Keyboard Navigation - Enter Key Submission', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     // 1. Navigate to a form (e.g., create view dialog)
     const createButton = page.locator('button:has(.mdi-plus-circle)');
     await createButton.click();
@@ -35,4 +37,5 @@ test.describe('Responsive Design and Accessibility', () => {
     // If not, press Escape to cancel
     await page.keyboard.press('Escape');
   });
-});
+  });
+}

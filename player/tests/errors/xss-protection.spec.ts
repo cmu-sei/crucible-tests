@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('Error Handling and Edge Cases', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Error Handling and Edge Cases`, () => {
   test('XSS Protection - Script Injection in Forms', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     // 1. Navigate to a form (e.g., create view)
     await expect(page.getByText('My Views')).toBeVisible();
     const createButton = page.locator('button:has(mat-icon[fonticon="mdi-plus-circle"])');
@@ -37,4 +39,5 @@ test.describe('Error Handling and Edge Cases', () => {
     // Verify page is still functional
     await expect(page.getByText('My Views')).toBeVisible();
   });
-});
+  });
+}

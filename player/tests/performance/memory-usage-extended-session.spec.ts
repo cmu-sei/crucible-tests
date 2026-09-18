@@ -10,10 +10,14 @@ import {
   Services,
   seededPrimaryViewName,
   findPlayerHomeViewLink,
+  PLAYER_THEMES,
+  applyPlayerTheme,
 } from '../../fixtures';
 
-test.describe('Performance', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Performance`, () => {
   test('Memory Usage - Extended Session', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     const primaryViewName = seededPrimaryViewName();
 
     // 1. Log in and navigate through various pages for extended period
@@ -53,4 +57,5 @@ test.describe('Performance', () => {
     await expect(page.getByRole('button', { name: 'Menu' })).toBeVisible();
     await expect(page.getByRole('table')).toBeVisible();
   });
-});
+  });
+}

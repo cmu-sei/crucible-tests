@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, typeIntoSearch } from '../../fixtures';
+import { test, expect, Services, typeIntoSearch, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('Administration - Views', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Administration - Views`, () => {
   test('Delete View', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     const viewName = `Delete Test View ${Date.now()}`;
 
     // Setup: Create a temporary view for deletion
@@ -67,4 +69,5 @@ test.describe('Administration - Views', () => {
     await expect(page.getByRole('heading', { name: 'Views' })).toBeVisible();
     await expect(page.getByRole('button', { name: viewName, exact: true })).not.toBeVisible();
   });
-});
+  });
+}

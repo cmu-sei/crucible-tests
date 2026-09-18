@@ -13,6 +13,76 @@ import {
 } from '../shared-fixtures';
 import { authSessionStatePath, authStatePath } from '../auth-paths';
 
+/**
+ * Themes every Player functional spec is parameterized over. Each spec runs once
+ * per entry so every screen is exercised in both light and dark mode.
+ */
+export const PLAYER_THEMES = ['light', 'dark'] as const;
+export type PlayerTheme = (typeof PLAYER_THEMES)[number];
+
+/** True when the Player UI is currently rendering in dark mode. */
+export async function playerIsDarkTheme(page: Page): Promise<boolean> {
+  return page.evaluate(() => document.body.classList.contains('darkMode'));
+}
+
+/**
+ * Put the Player UI into the requested theme via the top-bar "Menu" button's
+ * "Dark Theme" switch, then wait until <body> reflects the change.
+ *
+ * Player persists the selected theme through @cmusei/crucible-common's auth store
+ * (localStorage), so a theme set here survives the client-side navigations a test
+ * performs afterward — it only needs applying once, right after authentication.
+ * A fresh browser context defaults to light, so requesting 'light' is a no-op.
+ *
+ * Mirrors Alloy's applyAlloyTheme: we drive the real UI control (not the
+ * `?theme=` query param, which only applies on a fresh app bootstrap) and
+ * confirm the switch took effect via the body class with a MutationObserver
+ * rather than a fixed wait.
+ */
+export async function applyPlayerTheme(page: Page, theme: PlayerTheme): Promise<void> {
+  const wantDark = theme === 'dark';
+  if ((await playerIsDarkTheme(page)) === wantDark) {
+    return;
+  }
+
+  await page.getByRole('button', { name: 'Menu' }).click();
+  const toggle = page.getByRole('switch', { name: 'Dark Theme' });
+  await toggle.waitFor({ state: 'visible', timeout: 10000 });
+  await toggle.click();
+  await page.keyboard.press('Escape');
+
+  // Wait for the user-menu overlay to fully tear down before returning. A test
+  // that opens the menu next would otherwise race a lingering CDK backdrop that
+  // silently intercepts its clicks.
+  await page
+    .locator('.cdk-overlay-backdrop')
+    .waitFor({ state: 'detached', timeout: 5000 })
+    .catch(() => {});
+  await page
+    .locator('.mat-mdc-menu-panel')
+    .waitFor({ state: 'detached', timeout: 5000 })
+    .catch(() => {});
+
+  await page.locator('body').evaluate(
+    (body, expected) =>
+      new Promise<void>((resolve, reject) => {
+        if (body.classList.contains('darkMode') === expected) return resolve();
+        const observer = new MutationObserver(() => {
+          if (body.classList.contains('darkMode') === expected) {
+            observer.disconnect();
+            resolve();
+          }
+        });
+        observer.observe(body, { attributes: true, attributeFilter: ['class'] });
+        setTimeout(() => {
+          observer.disconnect();
+          reject(new Error(`Player theme did not become ${expected ? 'dark' : 'light'}`));
+        }, 10000);
+      }),
+    wantDark
+  );
+}
+
 export async function authenticatePlayerWithKeycloak(
   page: Page,
   username: string = 'admin',

@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern, seededPrimaryViewName, findPlayerHomeViewLink } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, seededPrimaryViewName, findPlayerHomeViewLink, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('View Details', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › View Details`, () => {
   test('Return to Home from View', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     const primaryViewName = seededPrimaryViewName();
 
     // 1. Log in and navigate to a view
@@ -26,4 +28,5 @@ test.describe('View Details', () => {
     // expect: The 'My Views' list is displayed
     await expect(page.getByText('My Views')).toBeVisible();
   });
-});
+  });
+}

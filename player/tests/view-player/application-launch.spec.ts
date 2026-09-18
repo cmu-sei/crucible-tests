@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink } from '../../fixtures';
+import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('View Player Interface', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › View Player Interface`, () => {
   test('Application Selection and Launch', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     const primaryViewName = seededPrimaryViewName();
 
     // 1. Navigate to view player page with applications
@@ -27,4 +29,5 @@ test.describe('View Player Interface', () => {
     // Verify the iframe exists (application loaded in content area)
     await expect(page.locator('iframe')).toBeVisible({ timeout: 10000 });
   });
-});
+  });
+}

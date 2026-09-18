@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('Responsive Design and Accessibility', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Responsive Design and Accessibility`, () => {
   test('Focus Management - Modal Dialogs', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     // 1. Open a modal dialog (e.g., create view)
     const createButton = page.locator('button:has(.mdi-plus-circle)');
     await createButton.click();
@@ -40,4 +42,5 @@ test.describe('Responsive Design and Accessibility', () => {
     // The page should be functional after modal close
     await expect(page.getByText('My Views')).toBeVisible();
   });
-});
+  });
+}

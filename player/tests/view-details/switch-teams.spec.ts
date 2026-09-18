@@ -11,10 +11,14 @@ import {
   seededPrimaryViewName,
   findPlayerHomeViewLink,
   clickWithoutOverlayInterference,
+  PLAYER_THEMES,
+  applyPlayerTheme,
 } from '../../fixtures';
 
-test.describe('View Details', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › View Details`, () => {
   test('Switch Teams', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     const primaryViewName = seededPrimaryViewName();
 
     // 1. Log in and navigate to a view that has multiple teams
@@ -50,4 +54,5 @@ test.describe('View Details', () => {
     // expect: The view content updates to reflect the selected team's context
     await expect(page).toHaveURL(/\/view\//, { timeout: 10000 });
   });
-});
+  });
+}

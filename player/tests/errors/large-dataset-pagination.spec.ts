@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('Error Handling and Edge Cases', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Error Handling and Edge Cases`, () => {
   test('Large Data Set Handling - Pagination', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     // 1. Navigate to a list with items (e.g., admin users list with pagination)
     await page.getByRole('button', { name: 'Menu' }).click();
     await page.getByRole('menuitem', { name: 'Administration' }).click();
@@ -27,4 +29,5 @@ test.describe('Error Handling and Edge Cases', () => {
     const nextButton = page.getByRole('button', { name: 'Next page' });
     await expect(nextButton).toBeVisible();
   });
-});
+  });
+}

@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('Error Handling and Edge Cases', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Error Handling and Edge Cases`, () => {
   test('Server Error (500) Handling', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     // 1. Log in successfully
     // expect: User is authenticated
     await expect(page.getByText('My Views')).toBeVisible();
@@ -27,4 +29,5 @@ test.describe('Error Handling and Edge Cases', () => {
     // Restore routes
     await page.unrouteAll();
   });
-});
+  });
+}

@@ -11,10 +11,14 @@ import {
   seededPrimaryViewName,
   findPlayerHomeViewLink,
   clickWithoutOverlayInterference,
+  PLAYER_THEMES,
+  applyPlayerTheme,
 } from '../../fixtures';
 
-test.describe('User Presence', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › User Presence`, () => {
   test('User Presence - Online Status', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     const primaryViewName = seededPrimaryViewName();
 
     // 1. Navigate to a view and check user presence via Users dialog
@@ -41,4 +45,5 @@ test.describe('User Presence', () => {
     // Close dialog
     await dialog.getByRole('button', { name: 'Close' }).click();
   });
-});
+  });
+}

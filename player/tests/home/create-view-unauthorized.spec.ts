@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('Home Page - My Views', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Home Page - My Views`, () => {
   test('Create New View - Unauthorized User', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     // 1. Log in as user without 'CreateViews' permission
     // Note: In the test environment, admin user has all permissions
     // This test verifies the UI behavior for the current user
@@ -26,4 +28,5 @@ test.describe('Home Page - My Views', () => {
     // requires a test user without CreateViews permission
     await expect(createButton).toBeVisible();
   });
-});
+  });
+}

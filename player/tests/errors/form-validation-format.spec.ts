@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('Error Handling and Edge Cases', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Error Handling and Edge Cases`, () => {
   test('Form Validation - Invalid Input Format', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     const alloyViewUrl = `${Services.Alloy.UI.replace(/\/$/, '')}/views/{viewId}`;
 
     // 1. Navigate to a form with formatted fields (e.g., Application Template URL)
@@ -29,4 +31,5 @@ test.describe('Error Handling and Edge Cases', () => {
     // Verify the template section is properly rendered with URL fields
     await expect(page.getByRole('columnheader', { name: 'Url' })).toBeVisible();
   });
-});
+  });
+}

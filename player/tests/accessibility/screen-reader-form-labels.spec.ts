@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('Responsive Design and Accessibility', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Responsive Design and Accessibility`, () => {
   test('Screen Reader - Form Labels', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     // 1. Navigate to a form
     // Open the create view dialog
     const createButton = page.locator('button:has(.mdi-plus-circle)');
@@ -36,4 +38,5 @@ test.describe('Responsive Design and Accessibility', () => {
     // Search field should have a label
     await expect(page.getByRole('textbox', { name: 'Search' })).toBeVisible();
   });
-});
+  });
+}

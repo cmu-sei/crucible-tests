@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('Home Page - My Views', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Home Page - My Views`, () => {
   test('Create New View - Authorized User', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     // 1. Log in as user with 'CreateViews' permission
     // expect: User is on home page
     await expect(page.getByText('My Views')).toBeVisible();
@@ -36,4 +38,5 @@ test.describe('Home Page - My Views', () => {
     await dialog.getByRole('button', { name: 'Cancel' }).click();
     await expect(dialog).not.toBeVisible();
   });
-});
+  });
+}

@@ -12,10 +12,14 @@ import {
   findPlayerHomeViewLink,
   typeIntoSearch,
   clickWithoutOverlayInterference,
+  PLAYER_THEMES,
+  applyPlayerTheme,
 } from '../../fixtures';
 
-test.describe('View Details', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › View Details`, () => {
   test('Search Users', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     const primaryViewName = seededPrimaryViewName();
 
     // 1. Log in and navigate to a view, then open the Users dialog
@@ -47,4 +51,5 @@ test.describe('View Details', () => {
     // Close dialog
     await dialog.getByRole('button', { name: 'Close' }).click();
   });
-});
+  });
+}

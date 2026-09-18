@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, typeIntoSearch } from '../../fixtures';
+import { test, expect, Services, typeIntoSearch, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('Administration - Users', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Administration - Users`, () => {
   test('Search Users', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     // 1. Log in as admin and navigate to Administration > Users
     await page.getByRole('button', { name: 'Menu' }).click();
     await page.getByRole('menuitem', { name: 'Administration' }).click();
@@ -23,4 +25,5 @@ test.describe('Administration - Users', () => {
     // expect: The users list filters to show only matching users
     await expect(page.getByRole('cell', { name: 'Admin User' }).first()).toBeVisible();
   });
-});
+  });
+}

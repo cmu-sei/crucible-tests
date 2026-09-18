@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('Error Handling and Edge Cases', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Error Handling and Edge Cases`, () => {
   test('Permission Denied on Admin Access', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     // 1. Log in as a non-admin user
     // Note: Using admin user since that's the only available test user
     // expect: User is authenticated
@@ -21,4 +23,5 @@ test.describe('Error Handling and Edge Cases', () => {
     // Verify the page responds without crashing
     await expect(page.locator('body')).toBeVisible();
   });
-});
+  });
+}

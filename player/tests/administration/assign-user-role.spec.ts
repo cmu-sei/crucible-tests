@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('Administration - Users', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Administration - Users`, () => {
   test('Assign Role to User', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     // 1. Log in as admin and navigate to Administration > Users
     await page.getByRole('button', { name: 'Menu' }).click();
     await page.getByRole('menuitem', { name: 'Administration' }).click();
@@ -25,4 +27,5 @@ test.describe('Administration - Users', () => {
     // Available roles should be listed (e.g., None, Administrator, Content Developer)
     await expect(page.getByRole('option', { name: 'Administrator' })).toBeVisible({ timeout: 5000 });
   });
-});
+  });
+}

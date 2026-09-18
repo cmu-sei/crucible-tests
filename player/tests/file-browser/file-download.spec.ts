@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink } from '../../fixtures';
+import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('File Browser', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › File Browser`, () => {
   test('File Download', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     const primaryViewName = seededPrimaryViewName();
 
     // 1. Navigate to file browser and select a file
@@ -26,4 +28,5 @@ test.describe('File Browser', () => {
     // expect: File is downloaded successfully
     // Note: File download testing depends on available files in the view
   });
-});
+  });
+}

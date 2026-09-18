@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, seededPrimaryViewName, findAdminViewButton } from '../../fixtures';
+import { test, expect, Services, seededPrimaryViewName, findAdminViewButton, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('Administration - Views', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Administration - Views`, () => {
   test('Edit View Details', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     const primaryViewName = seededPrimaryViewName();
 
     // 1. Log in as admin and navigate to Administration > Views
@@ -51,4 +53,5 @@ test.describe('Administration - Views', () => {
     // expect: Updated information is reflected in views list
     await expect(page.getByRole('heading', { name: 'Views' })).toBeVisible();
   });
-});
+  });
+}

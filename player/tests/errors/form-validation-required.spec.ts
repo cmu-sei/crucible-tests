@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('Error Handling and Edge Cases', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Error Handling and Edge Cases`, () => {
   test('Form Validation - Required Fields', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     // 1. Navigate to a form (e.g., create view dialog)
     await expect(page.getByText('My Views')).toBeVisible();
     const createButton = page.locator('button:has(mat-icon[fonticon="mdi-plus-circle"])');
@@ -34,4 +36,5 @@ test.describe('Error Handling and Edge Cases', () => {
     // Cancel the dialog
     await dialog.getByRole('button', { name: 'Cancel' }).click();
   });
-});
+  });
+}

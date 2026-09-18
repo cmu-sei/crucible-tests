@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, seededPrimaryViewName, seededSteamfitterViewName } from '../../fixtures';
+import { test, expect, Services, seededPrimaryViewName, seededSteamfitterViewName, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('Home Page - My Views', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Home Page - My Views`, () => {
   test('Sort Views by Name', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     const primaryViewName = seededPrimaryViewName();
     const steamfitterViewName = seededSteamfitterViewName();
 
@@ -53,4 +55,5 @@ test.describe('Home Page - My Views', () => {
     const restoredAscendingOrder = await getRelativeOrder();
     expect(restoredAscendingOrder).toBe(ascendingOrder);
   });
-});
+  });
+}

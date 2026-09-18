@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('Administration - Views', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Administration - Views`, () => {
   test('Access Administration Section', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     // 1. Log in as admin user
     // expect: User is on the home page
     await expect(page.getByText('My Views')).toBeVisible();
@@ -27,4 +29,5 @@ test.describe('Administration - Views', () => {
     await expect(page.getByRole('button', { name: 'Roles Roles' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Subscriptions Subscriptions' })).toBeVisible();
   });
-});
+  });
+}

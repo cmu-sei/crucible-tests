@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('Administration - Application Templates', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Administration - Application Templates`, () => {
   test('Paginate Application Templates', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     // 1. Log in as admin and navigate to Administration > Application Templates
     await page.getByRole('button', { name: 'Menu' }).click();
     await page.getByRole('menuitem', { name: 'Administration' }).click();
@@ -29,4 +31,5 @@ test.describe('Administration - Application Templates', () => {
     await expect(page.getByRole('button', { name: 'Next page' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Last page' })).toBeVisible();
   });
-});
+  });
+}

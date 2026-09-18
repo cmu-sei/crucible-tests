@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, seededPrimaryViewName, findPlayerHomeViewLink } from '../../fixtures';
+import { test, expect, seededPrimaryViewName, findPlayerHomeViewLink, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('Responsive Design and Accessibility', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Responsive Design and Accessibility`, () => {
   test('Keyboard Navigation - Home Page', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     const primaryViewName = seededPrimaryViewName();
 
     // 1. Log in and navigate to home page
@@ -35,4 +37,5 @@ test.describe('Responsive Design and Accessibility', () => {
     // expect: The view opens as if clicked with a mouse
     await expect(page).toHaveURL(/\/view\//, { timeout: 10000 });
   });
-});
+  });
+}

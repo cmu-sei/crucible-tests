@@ -4,10 +4,12 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink } from '../../fixtures';
+import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink, PLAYER_THEMES, applyPlayerTheme } from '../../fixtures';
 
-test.describe('Home Page - My Views', () => {
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Home Page - My Views`, () => {
   test('Navigate to View', async ({ playerAuthenticatedPage: page }) => {
+    await applyPlayerTheme(page, theme);
     const primaryViewName = seededPrimaryViewName();
 
     // 1. Log in as admin user
@@ -28,4 +30,5 @@ test.describe('Home Page - My Views', () => {
     await expect(page.getByRole('button', { name: 'Select a Team' })).toBeVisible();
     await expect(page.getByText('Team:')).toBeVisible();
   });
-});
+  });
+}
