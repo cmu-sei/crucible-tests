@@ -3,7 +3,7 @@
 
 // spec: specs/blueprint-test-plan.md
 
-import { test, expect } from '../../fixtures';
+import { test, expect, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import {
   getBlueprintToken,
   createMsel,
@@ -31,91 +31,94 @@ import {
  * Pulling, Deployed, Archived. Note "Active" is NOT a member — PUTting it yields a 400
  * JSON-conversion error, which is correct API behaviour rather than a defect.
  */
-test.describe('MSEL Management', () => {
-  let token: string;
-  let mselId: string;
+for (const theme of BLUEPRINT_THEMES) {
+    test.describe(`${theme} theme › MSEL Management`, () => {
+    let token: string;
+    let mselId: string;
 
-  test.beforeEach(async () => {
-    token = await getBlueprintToken();
-    const created = await createMsel(token, {
-      name: tempBlueprintName('TestBP-Status'),
-      description: 'Test MSEL for status lifecycle',
-      status: 'Pending',
-    });
-    mselId = created.id;
-  });
-
-  test.afterEach(async () => {
-    try {
-      if (mselId) await deleteMsel(token, mselId);
-    } catch (err) {
-      console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
-    }
-  });
-
-  test('MSEL Status Lifecycle', async ({ blueprintAuthenticatedPage: page }) => {
-    await navigateToMsel(page, mselId);
-
-    const statusDropdown = page.getByRole('combobox', { name: /MSEL Status/i });
-    const saveButton = page.getByRole('button', { name: /Save Changes/i });
-
-    await expect(statusDropdown).toBeVisible({ timeout: 15000 });
-    await expect(statusDropdown).toContainText('Pending');
-    await expect(saveButton).toBeDisabled();
-
-    // The lifecycle statuses the UI offers must match the API enum.
-    await statusDropdown.click();
-    for (const status of ['Pending', 'Entered', 'Approved', 'Complete', 'Deployed', 'Archived']) {
-      await expect(page.getByRole('option', { name: status, exact: true })).toBeVisible({
-        timeout: 10000,
+    test.beforeEach(async () => {
+      token = await getBlueprintToken();
+      const created = await createMsel(token, {
+        name: tempBlueprintName('TestBP-Status'),
+        description: 'Test MSEL for status lifecycle',
+        status: 'Pending',
       });
-    }
-
-    await page.getByRole('option', { name: 'Entered', exact: true }).click();
-    await expect(statusDropdown).toContainText('Entered');
-    // Selecting only dirties the form; the write has not happened yet.
-    await expect(saveButton).toBeEnabled();
-    expect((await getMsel(token, mselId)).status).toBe('Pending');
-
-    // Pair the save with its PUT so the write is known-complete before we re-navigate.
-    const savePromise = page.waitForResponse(
-      (r) =>
-        r.url().includes(`/api/msels/${mselId}`) &&
-        r.request().method() === 'PUT' &&
-        r.status() === 200,
-      { timeout: 15000 }
-    );
-    await saveButton.click();
-    await savePromise;
-
-    await expect(saveButton).toBeDisabled();
-    expect((await getMsel(token, mselId)).status).toBe('Entered');
-
-    // Re-navigating must show the saved value — this is what the original test wanted to
-    // prove, and it holds once the change is actually saved.
-    await navigateToMsel(page, mselId);
-    await expect(page.getByRole('combobox', { name: /MSEL Status/i })).toContainText('Entered', {
-      timeout: 15000,
+      mselId = created.id;
     });
 
-    // Advance one more step to show the lifecycle moves forward, not just one field write.
-    const dropdownAgain = page.getByRole('combobox', { name: /MSEL Status/i });
-    const saveAgain = page.getByRole('button', { name: /Save Changes/i });
+    test.afterEach(async () => {
+      try {
+        if (mselId) await deleteMsel(token, mselId);
+      } catch (err) {
+        console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+      }
+    });
 
-    await dropdownAgain.click();
-    await page.getByRole('option', { name: 'Approved', exact: true }).click();
-    await expect(saveAgain).toBeEnabled();
+    test('MSEL Status Lifecycle', async ({ blueprintAuthenticatedPage: page }) => {
+    await applyBlueprintTheme(page, theme);
+      await navigateToMsel(page, mselId);
 
-    const approvePromise = page.waitForResponse(
-      (r) =>
-        r.url().includes(`/api/msels/${mselId}`) &&
-        r.request().method() === 'PUT' &&
-        r.status() === 200,
-      { timeout: 15000 }
-    );
-    await saveAgain.click();
-    await approvePromise;
+      const statusDropdown = page.getByRole('combobox', { name: /MSEL Status/i });
+      const saveButton = page.getByRole('button', { name: /Save Changes/i });
 
-    expect((await getMsel(token, mselId)).status).toBe('Approved');
-  });
-});
+      await expect(statusDropdown).toBeVisible({ timeout: 15000 });
+      await expect(statusDropdown).toContainText('Pending');
+      await expect(saveButton).toBeDisabled();
+
+      // The lifecycle statuses the UI offers must match the API enum.
+      await statusDropdown.click();
+      for (const status of ['Pending', 'Entered', 'Approved', 'Complete', 'Deployed', 'Archived']) {
+        await expect(page.getByRole('option', { name: status, exact: true })).toBeVisible({
+          timeout: 10000,
+        });
+      }
+
+      await page.getByRole('option', { name: 'Entered', exact: true }).click();
+      await expect(statusDropdown).toContainText('Entered');
+      // Selecting only dirties the form; the write has not happened yet.
+      await expect(saveButton).toBeEnabled();
+      expect((await getMsel(token, mselId)).status).toBe('Pending');
+
+      // Pair the save with its PUT so the write is known-complete before we re-navigate.
+      const savePromise = page.waitForResponse(
+        (r) =>
+          r.url().includes(`/api/msels/${mselId}`) &&
+          r.request().method() === 'PUT' &&
+          r.status() === 200,
+        { timeout: 15000 }
+      );
+      await saveButton.click();
+      await savePromise;
+
+      await expect(saveButton).toBeDisabled();
+      expect((await getMsel(token, mselId)).status).toBe('Entered');
+
+      // Re-navigating must show the saved value — this is what the original test wanted to
+      // prove, and it holds once the change is actually saved.
+      await navigateToMsel(page, mselId);
+      await expect(page.getByRole('combobox', { name: /MSEL Status/i })).toContainText('Entered', {
+        timeout: 15000,
+      });
+
+      // Advance one more step to show the lifecycle moves forward, not just one field write.
+      const dropdownAgain = page.getByRole('combobox', { name: /MSEL Status/i });
+      const saveAgain = page.getByRole('button', { name: /Save Changes/i });
+
+      await dropdownAgain.click();
+      await page.getByRole('option', { name: 'Approved', exact: true }).click();
+      await expect(saveAgain).toBeEnabled();
+
+      const approvePromise = page.waitForResponse(
+        (r) =>
+          r.url().includes(`/api/msels/${mselId}`) &&
+          r.request().method() === 'PUT' &&
+          r.status() === 200,
+        { timeout: 15000 }
+      );
+      await saveAgain.click();
+      await approvePromise;
+
+      expect((await getMsel(token, mselId)).status).toBe('Approved');
+    });
+    });
+}

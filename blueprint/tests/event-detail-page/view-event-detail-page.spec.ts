@@ -4,7 +4,7 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import {
   getBlueprintToken,
   createMsel,
@@ -12,48 +12,51 @@ import {
   createScenarioEvent,
 } from '../../test-helpers';
 
-test.describe('Event Detail Page', () => {
-  let token: string;
-  let mselId: string;
-  let eventId: string;
+for (const theme of BLUEPRINT_THEMES) {
+    test.describe(`${theme} theme › Event Detail Page`, () => {
+    let token: string;
+    let mselId: string;
+    let eventId: string;
 
-  test.beforeEach(async () => {
-    // Seed: create a MSEL with a scenario event for the detail page
-    token = await getBlueprintToken();
-    const msel = await createMsel(token);
-    mselId = msel.id;
+    test.beforeEach(async () => {
+      // Seed: create a MSEL with a scenario event for the detail page
+      token = await getBlueprintToken();
+      const msel = await createMsel(token);
+      mselId = msel.id;
 
-    const event = await createScenarioEvent(token, mselId, {
-      description: 'Test event for detail page',
-      deltaSeconds: 300,
-    });
-    eventId = event.id;
-  });
-
-  test.afterEach(async () => {
-    // Cleanup: delete the MSEL (cascade deletes its events)
-    try {
-      if (mselId) await deleteMsel(token, mselId);
-    } catch (err) {
-      console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
-    }
-  });
-
-  test('View Event Detail Page', async ({ blueprintAuthenticatedPage: page }) => {
-    // Navigate directly to /eventdetail with the mselId and scenarioEventId
-    await page.goto(`${Services.Blueprint.UI}/eventdetail?msel=${mselId}&scenarioEvent=${eventId}`, {
-      waitUntil: 'domcontentloaded',
+      const event = await createScenarioEvent(token, mselId, {
+        description: 'Test event for detail page',
+        deltaSeconds: 300,
+      });
+      eventId = event.id;
     });
 
-    // expect: The Event Detail page loads at the /eventdetail route
-    await expect(page).toHaveURL(/.*\/eventdetail.*/, { timeout: 10000 });
+    test.afterEach(async () => {
+      // Cleanup: delete the MSEL (cascade deletes its events)
+      try {
+        if (mselId) await deleteMsel(token, mselId);
+      } catch (err) {
+        console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+      }
+    });
 
-    // expect: A Blueprint topbar is displayed
-    const topbar = page.locator('mat-toolbar').first();
-    await expect(topbar).toBeVisible({ timeout: 5000 });
+    test('View Event Detail Page', async ({ blueprintAuthenticatedPage: page }) => {
+    await applyBlueprintTheme(page, theme);
+      // Navigate directly to /eventdetail with the mselId and scenarioEventId
+      await page.goto(`${Services.Blueprint.UI}/eventdetail?msel=${mselId}&scenarioEvent=${eventId}`, {
+        waitUntil: 'domcontentloaded',
+      });
 
-    // expect: Page contains event-related content
-    const pageContent = page.locator('body');
-    await expect(pageContent).toBeVisible();
-  });
-});
+      // expect: The Event Detail page loads at the /eventdetail route
+      await expect(page).toHaveURL(/.*\/eventdetail.*/, { timeout: 10000 });
+
+      // expect: A Blueprint topbar is displayed
+      const topbar = page.locator('mat-toolbar').first();
+      await expect(topbar).toBeVisible({ timeout: 5000 });
+
+      // expect: Page contains event-related content
+      const pageContent = page.locator('body');
+      await expect(pageContent).toBeVisible();
+    });
+    });
+}

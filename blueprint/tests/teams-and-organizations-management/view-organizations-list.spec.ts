@@ -3,7 +3,7 @@
 
 // spec: specs/blueprint-test-plan.md
 
-import { test, expect } from '../../fixtures';
+import { test, expect, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import {
   getBlueprintToken,
   createMsel,
@@ -13,49 +13,52 @@ import {
   navigateToMselSection,
 } from '../../test-helpers';
 
-test.describe('Teams and Organizations Management', () => {
-  let token: string;
-  let mselId: string;
-  let mselName: string;
-  let orgId: string;
+for (const theme of BLUEPRINT_THEMES) {
+    test.describe(`${theme} theme › Teams and Organizations Management`, () => {
+    let token: string;
+    let mselId: string;
+    let mselName: string;
+    let orgId: string;
 
-  test.beforeEach(async () => {
-    // Seed: create a MSEL with an organization
-    token = await getBlueprintToken();
-    const msel = await createMsel(token);
-    mselId = msel.id;
-    mselName = msel.name;
+    test.beforeEach(async () => {
+      // Seed: create a MSEL with an organization
+      token = await getBlueprintToken();
+      const msel = await createMsel(token);
+      mselId = msel.id;
+      mselName = msel.name;
 
-    const org = await createOrganization(token, mselId, { name: 'Test Organization Omega' });
-    orgId = org.id;
-  });
+      const org = await createOrganization(token, mselId, { name: 'Test Organization Omega' });
+      orgId = org.id;
+    });
 
-  test.afterEach(async () => {
-    // Cleanup: delete the organization and MSEL
-    try {
-      if (orgId) await deleteOrganization(token, orgId);
-    } catch (err) {
-      console.warn(`Cleanup failed for organization ${orgId}: ${err}`);
-    }
-    try {
-      if (mselId) await deleteMsel(token, mselId);
-    } catch (err) {
-      console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
-    }
-  });
+    test.afterEach(async () => {
+      // Cleanup: delete the organization and MSEL
+      try {
+        if (orgId) await deleteOrganization(token, orgId);
+      } catch (err) {
+        console.warn(`Cleanup failed for organization ${orgId}: ${err}`);
+      }
+      try {
+        if (mselId) await deleteMsel(token, mselId);
+      } catch (err) {
+        console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+      }
+    });
 
-  test('View Organizations List', async ({ blueprintAuthenticatedPage: page }) => {
-    // Navigate to the MSEL Organizations section
-    await navigateToMselSection(page, mselId, 'Organizations');
+    test('View Organizations List', async ({ blueprintAuthenticatedPage: page }) => {
+    await applyBlueprintTheme(page, theme);
+      // Navigate to the MSEL Organizations section
+      await navigateToMselSection(page, mselId, 'Organizations');
 
-    // expect: Organizations list is displayed
-    const orgsList = page.locator('mat-table, [role="table"]').first();
-    await expect(orgsList).toBeVisible({ timeout: 10000 });
+      // expect: Organizations list is displayed
+      const orgsList = page.locator('mat-table, [role="table"]').first();
+      await expect(orgsList).toBeVisible({ timeout: 10000 });
 
-    // expect: The seeded organization is present
-    const orgRow = page.getByRole('row').filter({ hasText: 'Test Organization Omega' });
-    await expect(orgRow).toBeVisible({ timeout: 5000 });
+      // expect: The seeded organization is present
+      const orgRow = page.getByRole('row').filter({ hasText: 'Test Organization Omega' });
+      await expect(orgRow).toBeVisible({ timeout: 5000 });
 
-    console.log(`Organizations list displayed with seeded organization: Test Organization Omega`);
-  });
-});
+      console.log(`Organizations list displayed with seeded organization: Test Organization Omega`);
+    });
+    });
+}

@@ -3,7 +3,7 @@
 
 // spec: specs/blueprint-test-plan.md
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import {
   getBlueprintToken,
   createMsel,
@@ -37,70 +37,72 @@ import {
  * Posting it as `file` yields a 500 from a null `form.ToUpload` inside
  * `createMselFromXlsxFile` — a confusing failure, but the client's fault, not a Blueprint bug.
  */
-test.describe('Export and Import', () => {
-  let token: string;
-  let mselId: string;
-  let mselName: string;
+for (const theme of BLUEPRINT_THEMES) {
+    test.describe(`${theme} theme › Export and Import`, () => {
+    let token: string;
+    let mselId: string;
+    let mselName: string;
 
-  test.beforeEach(async () => {
-    token = await getBlueprintToken();
-    mselName = tempBlueprintName('TestBP-UploadTarget');
-    const msel = await createMsel(token, {
-      name: mselName,
-      description: 'Seeded as xlsx replace target',
+    test.beforeEach(async () => {
+      token = await getBlueprintToken();
+      mselName = tempBlueprintName('TestBP-UploadTarget');
+      const msel = await createMsel(token, {
+        name: mselName,
+        description: 'Seeded as xlsx replace target',
+      });
+      mselId = msel.id;
+
+      await createRenderableScenarioEvent(token, mselId, 'Pre-replace event', { deltaSeconds: 120 });
     });
-    mselId = msel.id;
 
-    await createRenderableScenarioEvent(token, mselId, 'Pre-replace event', { deltaSeconds: 120 });
-  });
-
-  test.afterEach(async () => {
-    try {
-      if (mselId) await deleteMsel(token, mselId);
-    } catch (err) {
-      console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
-    }
-  });
-
-  test('Upload XLSX to Existing MSEL', async () => {
-    const authHeader = { Authorization: `Bearer ${token}` };
-    const eventsBefore = (await listScenarioEvents(token, mselId)).length;
-    expect(eventsBefore).toBeGreaterThan(0);
-
-    // 1. Export the MSEL, so the workbook we upload is structurally valid by construction.
-    const downloadRes = await fetch(`${Services.Blueprint.API}/api/msels/${mselId}/xlsx`, {
-      headers: authHeader,
+    test.afterEach(async () => {
+      try {
+        if (mselId) await deleteMsel(token, mselId);
+      } catch (err) {
+        console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+      }
     });
-    expect(downloadRes.ok, `xlsx download failed with ${downloadRes.status}`).toBe(true);
 
-    const workbook = Buffer.from(await downloadRes.arrayBuffer());
-    expect(workbook.length).toBeGreaterThan(0);
-    // xlsx is a zip archive: the local-file-header magic must be "PK".
-    expect(workbook.subarray(0, 2).toString('latin1')).toBe('PK');
+    test('Upload XLSX to Existing MSEL', async () => {
+      const authHeader = { Authorization: `Bearer ${token}` };
+      const eventsBefore = (await listScenarioEvents(token, mselId)).length;
+      expect(eventsBefore).toBeGreaterThan(0);
 
-    // 2. Replace the MSEL from that workbook. The field name must be `ToUpload`.
-    const form = new FormData();
-    form.append(
-      'ToUpload',
-      new Blob([workbook], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      }),
-      `${mselName}.xlsx`
-    );
+      // 1. Export the MSEL, so the workbook we upload is structurally valid by construction.
+      const downloadRes = await fetch(`${Services.Blueprint.API}/api/msels/${mselId}/xlsx`, {
+        headers: authHeader,
+      });
+      expect(downloadRes.ok, `xlsx download failed with ${downloadRes.status}`).toBe(true);
 
-    const replaceRes = await fetch(`${Services.Blueprint.API}/api/msels/${mselId}/xlsx`, {
-      method: 'PUT',
-      headers: authHeader,
-      body: form,
+      const workbook = Buffer.from(await downloadRes.arrayBuffer());
+      expect(workbook.length).toBeGreaterThan(0);
+      // xlsx is a zip archive: the local-file-header magic must be "PK".
+      expect(workbook.subarray(0, 2).toString('latin1')).toBe('PK');
+
+      // 2. Replace the MSEL from that workbook. The field name must be `ToUpload`.
+      const form = new FormData();
+      form.append(
+        'ToUpload',
+        new Blob([workbook], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        }),
+        `${mselName}.xlsx`
+      );
+
+      const replaceRes = await fetch(`${Services.Blueprint.API}/api/msels/${mselId}/xlsx`, {
+        method: 'PUT',
+        headers: authHeader,
+        body: form,
+      });
+      expect(
+        replaceRes.ok,
+        `xlsx replace failed with ${replaceRes.status}: ${await replaceRes.text()}`
+      ).toBe(true);
+
+      // 3. The MSEL survived the replace with its identity and content intact.
+      const after = await getMsel(token, mselId);
+      expect(after.name).toBe(mselName);
+      expect((await listScenarioEvents(token, mselId)).length).toBeGreaterThanOrEqual(eventsBefore);
     });
-    expect(
-      replaceRes.ok,
-      `xlsx replace failed with ${replaceRes.status}: ${await replaceRes.text()}`
-    ).toBe(true);
-
-    // 3. The MSEL survived the replace with its identity and content intact.
-    const after = await getMsel(token, mselId);
-    expect(after.name).toBe(mselName);
-    expect((await listScenarioEvents(token, mselId)).length).toBeGreaterThanOrEqual(eventsBefore);
-  });
-});
+    });
+}

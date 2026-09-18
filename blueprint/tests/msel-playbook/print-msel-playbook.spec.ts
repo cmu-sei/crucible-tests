@@ -3,7 +3,7 @@
 
 // spec: specs/blueprint-test-plan.md
 
-import { test, expect } from '../../fixtures';
+import { test, expect, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import {
   getBlueprintToken,
   createMsel,
@@ -29,80 +29,83 @@ import {
  * The stub records into `sessionStorage`, which persists across the reload within the same
  * tab. It also suppresses the real print dialog, which would otherwise block the run.
  */
-test.describe('MSEL Playbook', () => {
-  let token: string;
-  let mselId: string;
-  let eventId: string;
+for (const theme of BLUEPRINT_THEMES) {
+    test.describe(`${theme} theme › MSEL Playbook`, () => {
+    let token: string;
+    let mselId: string;
+    let eventId: string;
 
-  test.beforeEach(async () => {
-    token = await getBlueprintToken();
-    const msel = await createMsel(token);
-    mselId = msel.id;
+    test.beforeEach(async () => {
+      token = await getBlueprintToken();
+      const msel = await createMsel(token);
+      mselId = msel.id;
 
-    // The playbook needs at least one scenario event to have anything to print.
-    // Use the renderable variant: the playbook renders an event's DataValues, and a MSEL
-    // created via POST /api/msels has no DataFields, so a bare createScenarioEvent yields a
-    // row with nothing in it. (`description`/`moveNumber` are not API fields — see
-    // createScenarioEvent's doc comment.)
-    const event = await createRenderableScenarioEvent(
-      token,
-      mselId,
-      'Test scenario event for playbook',
-      { deltaSeconds: 0 }
-    );
-    eventId = event.id;
-  });
-
-  test.afterEach(async () => {
-    try {
-      if (eventId) await deleteScenarioEvent(token, eventId);
-    } catch (err) {
-      console.warn(`Cleanup failed for event ${eventId}: ${err}`);
-    }
-    try {
-      if (mselId) await deleteMsel(token, mselId);
-    } catch (err) {
-      console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
-    }
-  });
-
-  test('Print MSEL Playbook', async ({ blueprintAuthenticatedPage: page }) => {
-    // Stub window.print before any app code runs. sessionStorage survives the
-    // location.reload() the print handlers trigger; a plain window property would not.
-    await page.addInitScript(() => {
-      window.print = () => {
-        const count = Number(sessionStorage.getItem('__printCount') ?? '0') + 1;
-        sessionStorage.setItem('__printCount', String(count));
-      };
+      // The playbook needs at least one scenario event to have anything to print.
+      // Use the renderable variant: the playbook renders an event's DataValues, and a MSEL
+      // created via POST /api/msels has no DataFields, so a bare createScenarioEvent yields a
+      // row with nothing in it. (`description`/`moveNumber` are not API fields — see
+      // createScenarioEvent's doc comment.)
+      const event = await createRenderableScenarioEvent(
+        token,
+        mselId,
+        'Test scenario event for playbook',
+        { deltaSeconds: 0 }
+      );
+      eventId = event.id;
     });
 
-    await navigateToMselSection(page, mselId, 'MSEL Playbook');
+    test.afterEach(async () => {
+      try {
+        if (eventId) await deleteScenarioEvent(token, eventId);
+      } catch (err) {
+        console.warn(`Cleanup failed for event ${eventId}: ${err}`);
+      }
+      try {
+        if (mselId) await deleteMsel(token, mselId);
+      } catch (err) {
+        console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+      }
+    });
 
-    const printCount = () =>
-      page.evaluate(() => Number(sessionStorage.getItem('__printCount') ?? '0'));
+    test('Print MSEL Playbook', async ({ blueprintAuthenticatedPage: page }) => {
+    await applyBlueprintTheme(page, theme);
+      // Stub window.print before any app code runs. sessionStorage survives the
+      // location.reload() the print handlers trigger; a plain window property would not.
+      await page.addInitScript(() => {
+        window.print = () => {
+          const count = Number(sessionStorage.getItem('__printCount') ?? '0') + 1;
+          sessionStorage.setItem('__printCount', String(count));
+        };
+      });
 
-    const printCurrentPageButton = page.getByRole('button', { name: 'Print Current Page' });
-    const printAllEventsButton = page.getByRole('button', { name: 'Print All Events' });
+      await navigateToMselSection(page, mselId, 'MSEL Playbook');
 
-    await expect(printCurrentPageButton).toBeVisible({ timeout: 15000 });
-    await expect(printAllEventsButton).toBeVisible({ timeout: 10000 });
+      const printCount = () =>
+        page.evaluate(() => Number(sessionStorage.getItem('__printCount') ?? '0'));
 
-    // Nothing has printed yet.
-    expect(await printCount()).toBe(0);
+      const printCurrentPageButton = page.getByRole('button', { name: 'Print Current Page' });
+      const printAllEventsButton = page.getByRole('button', { name: 'Print All Events' });
 
-    // --- Print Current Page ---
-    await printCurrentPageButton.click();
+      await expect(printCurrentPageButton).toBeVisible({ timeout: 15000 });
+      await expect(printAllEventsButton).toBeVisible({ timeout: 10000 });
 
-    // The handler reloads the page; wait for the playbook to come back rather than sleeping,
-    // then read the counter that survived it.
-    await expect(printCurrentPageButton).toBeVisible({ timeout: 15000 });
-    await expect.poll(printCount, { timeout: 15000 }).toBe(1);
+      // Nothing has printed yet.
+      expect(await printCount()).toBe(0);
 
-    // --- Print All Events ---
-    // This handler expands pageSize to every event, prints, then restores and reloads.
-    await printAllEventsButton.click();
+      // --- Print Current Page ---
+      await printCurrentPageButton.click();
 
-    await expect(printAllEventsButton).toBeVisible({ timeout: 15000 });
-    await expect.poll(printCount, { timeout: 15000 }).toBe(2);
-  });
-});
+      // The handler reloads the page; wait for the playbook to come back rather than sleeping,
+      // then read the counter that survived it.
+      await expect(printCurrentPageButton).toBeVisible({ timeout: 15000 });
+      await expect.poll(printCount, { timeout: 15000 }).toBe(1);
+
+      // --- Print All Events ---
+      // This handler expands pageSize to every event, prints, then restores and reloads.
+      await printAllEventsButton.click();
+
+      await expect(printAllEventsButton).toBeVisible({ timeout: 15000 });
+      await expect.poll(printCount, { timeout: 15000 }).toBe(2);
+    });
+    });
+}

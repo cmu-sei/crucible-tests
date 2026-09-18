@@ -3,7 +3,7 @@
 
 // spec: specs/blueprint-test-plan.md
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import {
   getBlueprintToken,
   createMsel,
@@ -33,48 +33,51 @@ import {
  * leaves `msel.id` undefined, which must produce the denial panel. Visiting it with a
  * seeded Deployed MSEL as admin (who holds EditMsels) must produce the End Event control.
  */
-test.describe('Launch and Join Event Workflows', () => {
-  test('Manage Event Access Control', async ({ blueprintAuthenticatedPage: page }) => {
-    // ── Branch 1: no MSEL in context → access denied ────────────────────────────
-    await page.goto(`${Services.Blueprint.UI}/manage`, { waitUntil: 'domcontentloaded' });
+for (const theme of BLUEPRINT_THEMES) {
+    test.describe(`${theme} theme › Launch and Join Event Workflows`, () => {
+    test('Manage Event Access Control', async ({ blueprintAuthenticatedPage: page }) => {
+    await applyBlueprintTheme(page, theme);
+      // ── Branch 1: no MSEL in context → access denied ────────────────────────────
+      await page.goto(`${Services.Blueprint.UI}/manage`, { waitUntil: 'domcontentloaded' });
 
-    const denialPanel = page.locator('.nothing-to-see-here');
-    await expect(denialPanel).toBeVisible({ timeout: 20000 });
+      const denialPanel = page.locator('.nothing-to-see-here');
+      await expect(denialPanel).toBeVisible({ timeout: 20000 });
 
-    await expect(page.getByRole('heading', { name: 'You have nothing to manage.' })).toBeVisible();
-    await expect(
-      page.getByText(/If you believe you should have permissions to manage this event, contact your administrator\./i)
-    ).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'You have nothing to manage.' })).toBeVisible();
+      await expect(
+        page.getByText(/If you believe you should have permissions to manage this event, contact your administrator\./i)
+      ).toBeVisible();
 
-    // No management control may leak into the denied state.
-    await expect(page.getByRole('button', { name: 'End Event' })).toHaveCount(0);
+      // No management control may leak into the denied state.
+      await expect(page.getByRole('button', { name: 'End Event' })).toHaveCount(0);
 
-    // ── Branch 2: a Deployed MSEL the admin can edit → controls render ──────────
-    const token = await getBlueprintToken();
-    const mselName = tempBlueprintName('TestBP-Manage');
-    const msel = await createMsel(token, {
-      name: mselName,
-      description: 'Seeded Deployed MSEL for the manage-page permitted branch.',
-      // The manage view only renders controls for a Deployed MSEL; any other status
-      // redirects away via post_logout_redirect_uri.
-      status: 'Deployed',
-    });
-
-    try {
-      await page.goto(`${Services.Blueprint.UI}/manage?msel=${msel.id}`, {
-        waitUntil: 'domcontentloaded',
+      // ── Branch 2: a Deployed MSEL the admin can edit → controls render ──────────
+      const token = await getBlueprintToken();
+      const mselName = tempBlueprintName('TestBP-Manage');
+      const msel = await createMsel(token, {
+        name: mselName,
+        description: 'Seeded Deployed MSEL for the manage-page permitted branch.',
+        // The manage view only renders controls for a Deployed MSEL; any other status
+        // redirects away via post_logout_redirect_uri.
+        status: 'Deployed',
       });
 
-      // The End Event button is the management control gated behind the permission check.
-      await expect(page.getByRole('button', { name: 'End Event' })).toBeVisible({ timeout: 20000 });
+      try {
+        await page.goto(`${Services.Blueprint.UI}/manage?msel=${msel.id}`, {
+          waitUntil: 'domcontentloaded',
+        });
 
-      // The MSEL under management is identified by name, proving the right one loaded.
-      await expect(page.getByText(mselName, { exact: true })).toBeVisible({ timeout: 15000 });
+        // The End Event button is the management control gated behind the permission check.
+        await expect(page.getByRole('button', { name: 'End Event' })).toBeVisible({ timeout: 20000 });
 
-      // The denial panel must be gone in the permitted branch.
-      await expect(denialPanel).toHaveCount(0);
-    } finally {
-      await deleteMsel(token, msel.id);
-    }
-  });
-});
+        // The MSEL under management is identified by name, proving the right one loaded.
+        await expect(page.getByText(mselName, { exact: true })).toBeVisible({ timeout: 15000 });
+
+        // The denial panel must be gone in the permitted branch.
+        await expect(denialPanel).toHaveCount(0);
+      } finally {
+        await deleteMsel(token, msel.id);
+      }
+    });
+    });
+}

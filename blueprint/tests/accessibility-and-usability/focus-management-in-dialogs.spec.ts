@@ -3,7 +3,7 @@
 
 // spec: specs/blueprint-test-plan.md
 
-import { test, expect } from '../../fixtures';
+import { test, expect, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import {
   getBlueprintToken,
   createMsel,
@@ -44,93 +44,96 @@ import {
  *    closed on Cancel. The previous spec asserted `expect(dialogStillVisible).toBe(false)`
  *    after Escape, which contradicts the intended behaviour.
  */
-test.describe('Accessibility and Usability', () => {
-  let token: string;
-  let mselId: string;
+for (const theme of BLUEPRINT_THEMES) {
+    test.describe(`${theme} theme › Accessibility and Usability`, () => {
+    let token: string;
+    let mselId: string;
 
-  test.beforeEach(async () => {
-    token = await getBlueprintToken();
-    const msel = await createMsel(token, { name: tempBlueprintName('TestBP-DialogFocus') });
-    mselId = msel.id;
-  });
+    test.beforeEach(async () => {
+      token = await getBlueprintToken();
+      const msel = await createMsel(token, { name: tempBlueprintName('TestBP-DialogFocus') });
+      mselId = msel.id;
+    });
 
-  test.afterEach(async () => {
-    try {
-      if (mselId) await deleteMsel(token, mselId);
-    } catch (err) {
-      console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
-    }
-  });
+    test.afterEach(async () => {
+      try {
+        if (mselId) await deleteMsel(token, mselId);
+      } catch (err) {
+        console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+      }
+    });
 
-  test('Focus Management in Dialogs', async ({ blueprintAuthenticatedPage: page }) => {
-    await navigateToMselSection(page, mselId, 'Teams');
-    await expect(page.locator('table').first()).toBeVisible({ timeout: 15000 });
+    test('Focus Management in Dialogs', async ({ blueprintAuthenticatedPage: page }) => {
+    await applyBlueprintTheme(page, theme);
+      await navigateToMselSection(page, mselId, 'Teams');
+      await expect(page.locator('table').first()).toBeVisible({ timeout: 15000 });
 
-    // 1. Open the dialog through its real trigger.
-    const addTeamButton = page.getByRole('button', { name: 'Add a team' });
-    await expect(addTeamButton).toBeVisible({ timeout: 10000 });
-    await addTeamButton.click();
+      // 1. Open the dialog through its real trigger.
+      const addTeamButton = page.getByRole('button', { name: 'Add a team' });
+      await expect(addTeamButton).toBeVisible({ timeout: 10000 });
+      await addTeamButton.click();
 
-    const newTeamMenuItem = page.getByRole('menuitem', { name: 'New Team' });
-    await expect(newTeamMenuItem).toBeVisible({ timeout: 10000 });
-    await newTeamMenuItem.click();
+      const newTeamMenuItem = page.getByRole('menuitem', { name: 'New Team' });
+      await expect(newTeamMenuItem).toBeVisible({ timeout: 10000 });
+      await newTeamMenuItem.click();
 
-    const dialog = page.locator('mat-dialog-container').first();
-    await expect(dialog).toBeVisible({ timeout: 10000 });
+      const dialog = page.locator('mat-dialog-container').first();
+      await expect(dialog).toBeVisible({ timeout: 10000 });
 
-    // The menu overlay outlives the dialog's appearance; focus only lands inside the dialog
-    // after it detaches. See note 1 above.
-    await page.locator('.mat-mdc-menu-panel').waitFor({ state: 'detached', timeout: 10000 });
+      // The menu overlay outlives the dialog's appearance; focus only lands inside the dialog
+      // after it detaches. See note 1 above.
+      await page.locator('.mat-mdc-menu-panel').waitFor({ state: 'detached', timeout: 10000 });
 
-    // expect: focus has moved into the dialog.
-    const focusIsInDialog = () =>
-      page.evaluate(() => {
-        const el = document.activeElement;
-        return Array.from(document.querySelectorAll('mat-dialog-container')).some(
-          (d) => el instanceof Node && d.contains(el)
-        );
-      });
+      // expect: focus has moved into the dialog.
+      const focusIsInDialog = () =>
+        page.evaluate(() => {
+          const el = document.activeElement;
+          return Array.from(document.querySelectorAll('mat-dialog-container')).some(
+            (d) => el instanceof Node && d.contains(el)
+          );
+        });
 
-    await expect
-      .poll(focusIsInDialog, { timeout: 10000, message: 'focus should move into the dialog' })
-      .toBe(true);
+      await expect
+        .poll(focusIsInDialog, { timeout: 10000, message: 'focus should move into the dialog' })
+        .toBe(true);
 
-    // 2. expect: focus is trapped — it stays inside the dialog across a full cycle of the
-    //    dialog's own focusable controls, and then some.
-    const focusable = dialog.locator(
-      'button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])'
-    );
-    const focusableCount = await focusable.count();
-    expect(focusableCount).toBeGreaterThan(0);
+      // 2. expect: focus is trapped — it stays inside the dialog across a full cycle of the
+      //    dialog's own focusable controls, and then some.
+      const focusable = dialog.locator(
+        'button:not([disabled]), input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      const focusableCount = await focusable.count();
+      expect(focusableCount).toBeGreaterThan(0);
 
-    for (let i = 0; i < focusableCount + 2; i++) {
-      await page.keyboard.press('Tab');
-      expect(await focusIsInDialog(), `focus left the dialog after Tab #${i + 1}`).toBe(true);
-    }
+      for (let i = 0; i < focusableCount + 2; i++) {
+        await page.keyboard.press('Tab');
+        expect(await focusIsInDialog(), `focus left the dialog after Tab #${i + 1}`).toBe(true);
+      }
 
-    // expect: trapping holds in the backward direction too.
-    for (let i = 0; i < 3; i++) {
-      await page.keyboard.press('Shift+Tab');
-      expect(await focusIsInDialog(), `focus left the dialog after Shift+Tab #${i + 1}`).toBe(true);
-    }
+      // expect: trapping holds in the backward direction too.
+      for (let i = 0; i < 3; i++) {
+        await page.keyboard.press('Shift+Tab');
+        expect(await focusIsInDialog(), `focus left the dialog after Shift+Tab #${i + 1}`).toBe(true);
+      }
 
-    // 3. expect: Escape does NOT close this dialog — it guards unsaved work. See note 2.
-    await page.keyboard.press('Escape');
-    await expect(dialog).toBeVisible({ timeout: 5000 });
-    expect(await focusIsInDialog()).toBe(true);
+      // 3. expect: Escape does NOT close this dialog — it guards unsaved work. See note 2.
+      await page.keyboard.press('Escape');
+      await expect(dialog).toBeVisible({ timeout: 5000 });
+      expect(await focusIsInDialog()).toBe(true);
 
-    // 4. expect: Cancel closes it, which is the deliberate way out.
-    const cancelButton = dialog.getByRole('button', { name: 'Cancel' });
-    await expect(cancelButton).toBeVisible({ timeout: 5000 });
-    await cancelButton.click();
-    await expect(dialog).not.toBeVisible({ timeout: 10000 });
+      // 4. expect: Cancel closes it, which is the deliberate way out.
+      const cancelButton = dialog.getByRole('button', { name: 'Cancel' });
+      await expect(cancelButton).toBeVisible({ timeout: 5000 });
+      await cancelButton.click();
+      await expect(dialog).not.toBeVisible({ timeout: 10000 });
 
-    // 5. expect: with the dialog gone, focus is no longer held inside a dialog and the page
-    //    is interactive again — the trigger can be operated a second time.
-    expect(await focusIsInDialog()).toBe(false);
-    await expect(addTeamButton).toBeVisible({ timeout: 10000 });
-    await addTeamButton.click();
-    await expect(page.getByRole('menuitem', { name: 'New Team' })).toBeVisible({ timeout: 10000 });
-    await page.keyboard.press('Escape'); // close the menu; no dialog is open, nothing to guard
-  });
-});
+      // 5. expect: with the dialog gone, focus is no longer held inside a dialog and the page
+      //    is interactive again — the trigger can be operated a second time.
+      expect(await focusIsInDialog()).toBe(false);
+      await expect(addTeamButton).toBeVisible({ timeout: 10000 });
+      await addTeamButton.click();
+      await expect(page.getByRole('menuitem', { name: 'New Team' })).toBeVisible({ timeout: 10000 });
+      await page.keyboard.press('Escape'); // close the menu; no dialog is open, nothing to guard
+    });
+    });
+}

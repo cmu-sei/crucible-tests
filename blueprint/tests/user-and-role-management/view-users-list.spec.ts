@@ -18,53 +18,56 @@
 //   4. Verifies at least one user row exists with non-empty content
 //   5. Checks whether pagination controls are present (low user count means they likely won't be)
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 
-test.describe('User and Role Management', () => {
-  test('View Users List', async ({ blueprintAuthenticatedPage: page }) => {
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
+for (const theme of BLUEPRINT_THEMES) {
+    test.describe(`${theme} theme › User and Role Management`, () => {
+    test('View Users List', async ({ blueprintAuthenticatedPage: page }) => {
+    await applyBlueprintTheme(page, theme);
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
 
-    // 2. Navigate to the admin section
-    await page.goto(`${Services.Blueprint.UI}/admin`);
-    await page.waitForLoadState('domcontentloaded');
+      // 2. Navigate to the admin section
+      await page.goto(`${Services.Blueprint.UI}/admin`);
+      await page.waitForLoadState('domcontentloaded');
 
-    // 3. Click "Users" in the admin sidebar
-    // Note: URL stays at /admin — there is no /admin/users route
-    const usersItem = page.locator('.appitems-container mat-list-item').filter({ hasText: 'Users' }).first();
-    await expect(usersItem).toBeVisible({ timeout: 15000 });
-    await usersItem.click();
-    await page.waitForLoadState('domcontentloaded');
+      // 3. Click "Users" in the admin sidebar
+      // Note: URL stays at /admin — there is no /admin/users route
+      const usersItem = page.locator('.appitems-container mat-list-item').filter({ hasText: 'Users' }).first();
+      await expect(usersItem).toBeVisible({ timeout: 15000 });
+      await usersItem.click();
+      await page.waitForLoadState('domcontentloaded');
 
-    // Wait for the table to appear as proof the section loaded
-    await page.locator('table').first().waitFor({ state: 'visible', timeout: 10000 });
+      // Wait for the table to appear as proof the section loaded
+      await page.locator('table').first().waitFor({ state: 'visible', timeout: 10000 });
 
-    // expect: URL remains at /admin
-    await expect(page).toHaveURL(/.*\/admin.*/, { timeout: 5000 });
+      // expect: URL remains at /admin
+      await expect(page).toHaveURL(/.*\/admin.*/, { timeout: 5000 });
 
-    // expect: Users table is visible
-    const usersTable = page.locator('table');
-    await expect(usersTable).toBeVisible({ timeout: 10000 });
+      // expect: Users table is visible
+      const usersTable = page.locator('table');
+      await expect(usersTable).toBeVisible({ timeout: 10000 });
 
-    // expect: Table has expected column headers — ID, Name, Role
-    await expect(page.getByRole('columnheader', { name: 'ID' })).toBeVisible({ timeout: 5000 });
-    await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible({ timeout: 5000 });
-    await expect(page.getByRole('columnheader', { name: 'Role' })).toBeVisible({ timeout: 5000 });
+      // expect: Table has expected column headers — ID, Name, Role
+      await expect(page.getByRole('columnheader', { name: 'ID' })).toBeVisible({ timeout: 5000 });
+      await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible({ timeout: 5000 });
+      await expect(page.getByRole('columnheader', { name: 'Role' })).toBeVisible({ timeout: 5000 });
 
-    // expect: At least one user row is visible with non-empty content
-    const userRows = page.locator('table tbody tr');
-    await expect(userRows.first()).toBeVisible({ timeout: 5000 });
+      // expect: At least one user row is visible with non-empty content
+      const userRows = page.locator('table tbody tr');
+      await expect(userRows.first()).toBeVisible({ timeout: 5000 });
 
-    const firstRow = userRows.first();
-    const idCell = firstRow.locator('td').nth(0);
-    const nameCell = firstRow.locator('td').nth(1);
+      const firstRow = userRows.first();
+      const idCell = firstRow.locator('td').nth(0);
+      const nameCell = firstRow.locator('td').nth(1);
 
-    await expect(idCell).not.toBeEmpty({ timeout: 5000 });
-    await expect(nameCell).not.toBeEmpty({ timeout: 5000 });
+      await expect(idCell).not.toBeEmpty({ timeout: 5000 });
+      await expect(nameCell).not.toBeEmpty({ timeout: 5000 });
 
-    // expect: Pagination is not required (low user count), but if present it should be visible
-    const paginationExists = await page.locator('mat-paginator').isVisible({ timeout: 2000 }).catch(() => false);
-    if (paginationExists) {
-      await expect(page.locator('mat-paginator')).toBeVisible();
-    }
-  });
-});
+      // expect: Pagination is not required (low user count), but if present it should be visible
+      const paginationExists = await page.locator('mat-paginator').isVisible({ timeout: 2000 }).catch(() => false);
+      if (paginationExists) {
+        await expect(page.locator('mat-paginator')).toBeVisible();
+      }
+    });
+    });
+}

@@ -3,7 +3,7 @@
 
 // spec: specs/blueprint-test-plan.md
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import { getBlueprintToken, deleteUnit, tempBlueprintName } from '../../test-helpers';
 
 /**
@@ -26,101 +26,103 @@ import { getBlueprintToken, deleteUnit, tempBlueprintName } from '../../test-hel
  *
  * Teardown deletes the unit through the API, so a mid-test failure cannot leak a global unit.
  */
-test.describe('Admin - Units Management', () => {
-  let token: string;
-  let unitName: string;
-  let unitShortName: string;
-  let createdUnitId: string | undefined;
+for (const theme of BLUEPRINT_THEMES) {
+    test.describe(`${theme} theme › Admin - Units Management`, () => {
+    let token: string;
+    let unitName: string;
+    let unitShortName: string;
+    let createdUnitId: string | undefined;
 
-  test.beforeEach(async () => {
-    token = await getBlueprintToken();
-    unitName = tempBlueprintName('TestBP-Unit');
-    unitShortName = `T${String(Math.abs(hashCode(unitName)) % 10000).padStart(4, '0')}`;
-    createdUnitId = undefined;
-  });
+    test.beforeEach(async () => {
+      token = await getBlueprintToken();
+      unitName = tempBlueprintName('TestBP-Unit');
+      unitShortName = `T${String(Math.abs(hashCode(unitName)) % 10000).padStart(4, '0')}`;
+      createdUnitId = undefined;
+    });
 
-  test.afterEach(async () => {
-    try {
-      if (createdUnitId) {
-        await deleteUnit(token, createdUnitId);
-        return;
+    test.afterEach(async () => {
+      try {
+        if (createdUnitId) {
+          await deleteUnit(token, createdUnitId);
+          return;
+        }
+        // The UI may have created the unit before the test failed — find it by name and remove it.
+        const res = await fetch(`${Services.Blueprint.API}/api/units`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const units = (await res.json()) as Array<{ id: string; name: string }>;
+          for (const unit of units.filter((u) => u.name === unitName)) {
+            await deleteUnit(token, unit.id);
+          }
+        }
+      } catch (err) {
+        console.warn(`Cleanup failed for unit "${unitName}": ${err}`);
       }
-      // The UI may have created the unit before the test failed — find it by name and remove it.
-      const res = await fetch(`${Services.Blueprint.API}/api/units`, {
+    });
+
+    test('Create New Unit', async ({ blueprintAuthenticatedPage: page }) => {
+    await applyBlueprintTheme(page, theme);
+      await page.goto(`${Services.Blueprint.UI}/admin`, { waitUntil: 'domcontentloaded' });
+
+      const unitsNav = page.getByText('Units', { exact: true }).first();
+      await expect(unitsNav).toBeVisible({ timeout: 15000 });
+      await unitsNav.click();
+
+      // 1. Create the unit, pairing Save with the POST it triggers.
+      const addButton = page.getByRole('button', { name: /Add Unit/i });
+      await expect(addButton).toBeVisible({ timeout: 10000 });
+      await addButton.click();
+
+      const dialog = page.getByRole('dialog').first();
+      await expect(dialog).toBeVisible({ timeout: 10000 });
+
+      const shortNameField = dialog
+        .locator('input[formControlName*="shortName"], input[placeholder*="Short Name"]')
+        .first();
+      await expect(shortNameField).toBeVisible({ timeout: 10000 });
+      await shortNameField.fill(unitShortName);
+
+      const nameField = dialog.getByRole('textbox', { name: 'Name', exact: true });
+      await expect(nameField).toBeVisible({ timeout: 10000 });
+      await nameField.fill(unitName);
+
+      const createResponse = page.waitForResponse(
+        (r) => /\/api\/units\b/i.test(r.url()) && r.request().method() === 'POST',
+        { timeout: 15000 }
+      );
+      await dialog.getByRole('button', { name: /^Save$/i }).first().click();
+      const created = await createResponse;
+      expect(created.ok()).toBe(true);
+      createdUnitId = (await created.json()).id;
+
+      // expect: the new unit is listed.
+      await expect(page.getByRole('row').filter({ hasText: unitName }).first()).toBeVisible({
+        timeout: 15000,
+      });
+
+      // Verify the creation persisted server-side, not just in the rendered list.
+      const check = await fetch(`${Services.Blueprint.API}/api/units/${createdUnitId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) {
-        const units = (await res.json()) as Array<{ id: string; name: string }>;
-        for (const unit of units.filter((u) => u.name === unitName)) {
-          await deleteUnit(token, unit.id);
-        }
-      }
-    } catch (err) {
-      console.warn(`Cleanup failed for unit "${unitName}": ${err}`);
+      expect(check.ok, `GET /api/units/${createdUnitId} returned ${check.status}`).toBe(true);
+      const persisted = await check.json();
+      expect(persisted.name).toBe(unitName);
+      expect(persisted.shortName).toBe(unitShortName);
+
+      // Scope note: adding/removing unit members is deliberately NOT covered here — this spec
+      // is "Create New Unit". Member management has its own passing spec,
+      // `view-and-manage-unit-users.spec.ts`, which exercises the same
+      // `POST /api/unitusers` path against a unit it seeds itself.
+    });
+  });
+
+  /** Deterministic hash so the generated short name stays within Blueprint's length limit. */
+  function hashCode(value: string): number {
+    let hash = 0;
+    for (let i = 0; i < value.length; i++) {
+      hash = (hash << 5) - hash + value.charCodeAt(i);
+      hash |= 0;
     }
-  });
-
-  test('Create New Unit', async ({ blueprintAuthenticatedPage: page }) => {
-    await page.goto(`${Services.Blueprint.UI}/admin`, { waitUntil: 'domcontentloaded' });
-
-    const unitsNav = page.getByText('Units', { exact: true }).first();
-    await expect(unitsNav).toBeVisible({ timeout: 15000 });
-    await unitsNav.click();
-
-    // 1. Create the unit, pairing Save with the POST it triggers.
-    const addButton = page.getByRole('button', { name: /Add Unit/i });
-    await expect(addButton).toBeVisible({ timeout: 10000 });
-    await addButton.click();
-
-    const dialog = page.getByRole('dialog').first();
-    await expect(dialog).toBeVisible({ timeout: 10000 });
-
-    const shortNameField = dialog
-      .locator('input[formControlName*="shortName"], input[placeholder*="Short Name"]')
-      .first();
-    await expect(shortNameField).toBeVisible({ timeout: 10000 });
-    await shortNameField.fill(unitShortName);
-
-    const nameField = dialog.getByRole('textbox', { name: 'Name', exact: true });
-    await expect(nameField).toBeVisible({ timeout: 10000 });
-    await nameField.fill(unitName);
-
-    const createResponse = page.waitForResponse(
-      (r) => /\/api\/units\b/i.test(r.url()) && r.request().method() === 'POST',
-      { timeout: 15000 }
-    );
-    await dialog.getByRole('button', { name: /^Save$/i }).first().click();
-    const created = await createResponse;
-    expect(created.ok()).toBe(true);
-    createdUnitId = (await created.json()).id;
-
-    // expect: the new unit is listed.
-    await expect(page.getByRole('row').filter({ hasText: unitName }).first()).toBeVisible({
-      timeout: 15000,
-    });
-
-    // Verify the creation persisted server-side, not just in the rendered list.
-    const check = await fetch(`${Services.Blueprint.API}/api/units/${createdUnitId}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    expect(check.ok, `GET /api/units/${createdUnitId} returned ${check.status}`).toBe(true);
-    const persisted = await check.json();
-    expect(persisted.name).toBe(unitName);
-    expect(persisted.shortName).toBe(unitShortName);
-
-    // Scope note: adding/removing unit members is deliberately NOT covered here — this spec
-    // is "Create New Unit". Member management has its own passing spec,
-    // `view-and-manage-unit-users.spec.ts`, which exercises the same
-    // `POST /api/unitusers` path against a unit it seeds itself.
-  });
-});
-
-/** Deterministic hash so the generated short name stays within Blueprint's length limit. */
-function hashCode(value: string): number {
-  let hash = 0;
-  for (let i = 0; i < value.length; i++) {
-    hash = (hash << 5) - hash + value.charCodeAt(i);
-    hash |= 0;
+    return hash;
   }
-  return hash;
-}

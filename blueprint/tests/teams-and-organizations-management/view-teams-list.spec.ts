@@ -3,7 +3,7 @@
 
 // spec: specs/blueprint-test-plan.md
 
-import { test, expect } from '../../fixtures';
+import { test, expect, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import {
   getBlueprintToken,
   createMsel,
@@ -13,49 +13,52 @@ import {
   navigateToMselSection,
 } from '../../test-helpers';
 
-test.describe('Teams and Organizations Management', () => {
-  let token: string;
-  let mselId: string;
-  let mselName: string;
-  let teamId: string;
+for (const theme of BLUEPRINT_THEMES) {
+    test.describe(`${theme} theme › Teams and Organizations Management`, () => {
+    let token: string;
+    let mselId: string;
+    let mselName: string;
+    let teamId: string;
 
-  test.beforeEach(async () => {
-    // Seed: create a MSEL with a team
-    token = await getBlueprintToken();
-    const msel = await createMsel(token, { name: undefined }); // auto-generated unique name
-    mselId = msel.id;
-    mselName = msel.name;
+    test.beforeEach(async () => {
+      // Seed: create a MSEL with a team
+      token = await getBlueprintToken();
+      const msel = await createMsel(token, { name: undefined }); // auto-generated unique name
+      mselId = msel.id;
+      mselName = msel.name;
 
-    const team = await createTeam(token, mselId, { name: 'Test Team Alpha' });
-    teamId = team.id;
-  });
+      const team = await createTeam(token, mselId, { name: 'Test Team Alpha' });
+      teamId = team.id;
+    });
 
-  test.afterEach(async () => {
-    // Cleanup: delete the team and MSEL
-    try {
-      if (teamId) await deleteTeam(token, teamId);
-    } catch (err) {
-      console.warn(`Cleanup failed for team ${teamId}: ${err}`);
-    }
-    try {
-      if (mselId) await deleteMsel(token, mselId);
-    } catch (err) {
-      console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
-    }
-  });
+    test.afterEach(async () => {
+      // Cleanup: delete the team and MSEL
+      try {
+        if (teamId) await deleteTeam(token, teamId);
+      } catch (err) {
+        console.warn(`Cleanup failed for team ${teamId}: ${err}`);
+      }
+      try {
+        if (mselId) await deleteMsel(token, mselId);
+      } catch (err) {
+        console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+      }
+    });
 
-  test('View Teams List', async ({ blueprintAuthenticatedPage: page }) => {
-    // Navigate to the MSEL Teams section
-    await navigateToMselSection(page, mselId, 'Teams');
+    test('View Teams List', async ({ blueprintAuthenticatedPage: page }) => {
+    await applyBlueprintTheme(page, theme);
+      // Navigate to the MSEL Teams section
+      await navigateToMselSection(page, mselId, 'Teams');
 
-    // expect: Teams table is visible
-    const teamsTable = page.getByRole('table').first();
-    await expect(teamsTable).toBeVisible({ timeout: 10000 });
+      // expect: Teams table is visible
+      const teamsTable = page.getByRole('table').first();
+      await expect(teamsTable).toBeVisible({ timeout: 10000 });
 
-    // expect: The seeded team is present
-    const teamRow = page.getByRole('row').filter({ hasText: 'Test Team Alpha' });
-    await expect(teamRow).toBeVisible({ timeout: 5000 });
+      // expect: The seeded team is present
+      const teamRow = page.getByRole('row').filter({ hasText: 'Test Team Alpha' });
+      await expect(teamRow).toBeVisible({ timeout: 5000 });
 
-    console.log(`Teams list displayed with seeded team: Test Team Alpha`);
-  });
-});
+      console.log(`Teams list displayed with seeded team: Test Team Alpha`);
+    });
+    });
+}

@@ -3,7 +3,7 @@
 
 // spec: specs/blueprint-test-plan.md
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -31,101 +31,104 @@ import {
  * the seeded name exists. The source and every imported copy are deleted through the API in
  * teardown, so nothing leaks even if the body fails midway.
  */
-test.describe('Export and Import', () => {
-  let token: string;
-  let sourceMselId: string;
-  let sourceMselName: string;
-  let downloadPath: string | undefined;
+for (const theme of BLUEPRINT_THEMES) {
+    test.describe(`${theme} theme › Export and Import`, () => {
+    let token: string;
+    let sourceMselId: string;
+    let sourceMselName: string;
+    let downloadPath: string | undefined;
 
-  test.beforeEach(async () => {
-    token = await getBlueprintToken();
-    sourceMselName = tempBlueprintName('TestBP-Roundtrip');
-    const msel = await createMsel(token, {
-      name: sourceMselName,
-      description: 'Seeded as import fixture',
+    test.beforeEach(async () => {
+      token = await getBlueprintToken();
+      sourceMselName = tempBlueprintName('TestBP-Roundtrip');
+      const msel = await createMsel(token, {
+        name: sourceMselName,
+        description: 'Seeded as import fixture',
+      });
+      sourceMselId = msel.id;
+
+      await createRenderableScenarioEvent(token, sourceMselId, 'Round-trip event', {
+        deltaSeconds: 300,
+      });
+      downloadPath = undefined;
     });
-    sourceMselId = msel.id;
 
-    await createRenderableScenarioEvent(token, sourceMselId, 'Round-trip event', {
-      deltaSeconds: 300,
+    test.afterEach(async () => {
+      // Remove the source MSEL and anything the import created. Imported copies carry a name
+      // derived from the source, so matching on the seeded name catches them all.
+      try {
+        const res = await fetch(`${Services.Blueprint.API}/api/msels`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const msels = (await res.json()) as Array<{ id: string; name: string }>;
+          for (const msel of msels.filter((m) => m.name?.includes(sourceMselName))) {
+            await deleteMsel(token, msel.id);
+          }
+        }
+        if (sourceMselId) await deleteMsel(token, sourceMselId);
+      } catch (err) {
+        console.warn(`Cleanup failed for round-trip MSELs of "${sourceMselName}": ${err}`);
+      }
+
+      if (downloadPath && fs.existsSync(downloadPath)) {
+        fs.unlinkSync(downloadPath);
+      }
     });
-    downloadPath = undefined;
-  });
 
-  test.afterEach(async () => {
-    // Remove the source MSEL and anything the import created. Imported copies carry a name
-    // derived from the source, so matching on the seeded name catches them all.
-    try {
-      const res = await fetch(`${Services.Blueprint.API}/api/msels`, {
+    test('Import MSEL from Excel', async ({ blueprintAuthenticatedPage: page }) => {
+    await applyBlueprintTheme(page, theme);
+      await page.goto(`${Services.Blueprint.UI}/build`, { waitUntil: 'domcontentloaded' });
+      await expect(page.getByRole('table').first()).toBeVisible({ timeout: 15000 });
+
+      // This spec opens two different mat-menus in sequence (Download, then Upload), so each open
+      // has to start from a settled overlay — see `downloadMselFile`, which does that for the
+      // Download menu and retries the pick.
+      const menuPanel = page.locator('.mat-mdc-menu-panel');
+
+      // 1. Export the seeded MSEL to use as the import fixture.
+      const sourceRow = await findMselRowByName(page, sourceMselName);
+      await expect(sourceRow).toBeVisible();
+
+      const download = await downloadMselFile(page, sourceRow, /Download xlsx file/i);
+
+      // saveAs works when the browser runs remotely, unlike relying on path().
+      downloadPath = path.join(os.tmpdir(), `msel-import-${sourceMselName}.xlsx`);
+      await download.saveAs(downloadPath);
+      expect(fs.statSync(downloadPath).size).toBeGreaterThan(0);
+
+      // 2. Import it back, pairing the upload with the POST it triggers.
+      await expect(menuPanel).toHaveCount(0);
+      const uploadButton = page.getByRole('button', { name: /Upload a new MSEL from a file/i });
+      await expect(uploadButton).toBeVisible({ timeout: 10000 });
+      await uploadButton.click();
+
+      const uploadXlsxMenuItem = page.getByRole('menuitem', { name: /Upload xlsx file/i });
+      await expect(uploadXlsxMenuItem).toBeVisible({ timeout: 10000 });
+
+      const fileChooserPromise = page.waitForEvent('filechooser');
+      const importResponse = page.waitForResponse(
+        (r) => /\/api\/msels/i.test(r.url()) && r.request().method() === 'POST',
+        { timeout: 60000 }
+      );
+      await uploadXlsxMenuItem.click();
+      (await fileChooserPromise).setFiles(downloadPath);
+
+      expect((await importResponse).ok()).toBe(true);
+
+      // 3. A NEW MSEL derived from the seeded one now exists. Asserted via the API so a stale
+      //    row from an earlier run cannot satisfy it.
+      const listRes = await fetch(`${Services.Blueprint.API}/api/msels`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) {
-        const msels = (await res.json()) as Array<{ id: string; name: string }>;
-        for (const msel of msels.filter((m) => m.name?.includes(sourceMselName))) {
-          await deleteMsel(token, msel.id);
-        }
-      }
-      if (sourceMselId) await deleteMsel(token, sourceMselId);
-    } catch (err) {
-      console.warn(`Cleanup failed for round-trip MSELs of "${sourceMselName}": ${err}`);
-    }
+      expect(listRes.ok).toBe(true);
+      const msels = (await listRes.json()) as Array<{ id: string; name: string }>;
 
-    if (downloadPath && fs.existsSync(downloadPath)) {
-      fs.unlinkSync(downloadPath);
-    }
-  });
-
-  test('Import MSEL from Excel', async ({ blueprintAuthenticatedPage: page }) => {
-    await page.goto(`${Services.Blueprint.UI}/build`, { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('table').first()).toBeVisible({ timeout: 15000 });
-
-    // This spec opens two different mat-menus in sequence (Download, then Upload), so each open
-    // has to start from a settled overlay — see `downloadMselFile`, which does that for the
-    // Download menu and retries the pick.
-    const menuPanel = page.locator('.mat-mdc-menu-panel');
-
-    // 1. Export the seeded MSEL to use as the import fixture.
-    const sourceRow = await findMselRowByName(page, sourceMselName);
-    await expect(sourceRow).toBeVisible();
-
-    const download = await downloadMselFile(page, sourceRow, /Download xlsx file/i);
-
-    // saveAs works when the browser runs remotely, unlike relying on path().
-    downloadPath = path.join(os.tmpdir(), `msel-import-${sourceMselName}.xlsx`);
-    await download.saveAs(downloadPath);
-    expect(fs.statSync(downloadPath).size).toBeGreaterThan(0);
-
-    // 2. Import it back, pairing the upload with the POST it triggers.
-    await expect(menuPanel).toHaveCount(0);
-    const uploadButton = page.getByRole('button', { name: /Upload a new MSEL from a file/i });
-    await expect(uploadButton).toBeVisible({ timeout: 10000 });
-    await uploadButton.click();
-
-    const uploadXlsxMenuItem = page.getByRole('menuitem', { name: /Upload xlsx file/i });
-    await expect(uploadXlsxMenuItem).toBeVisible({ timeout: 10000 });
-
-    const fileChooserPromise = page.waitForEvent('filechooser');
-    const importResponse = page.waitForResponse(
-      (r) => /\/api\/msels/i.test(r.url()) && r.request().method() === 'POST',
-      { timeout: 60000 }
-    );
-    await uploadXlsxMenuItem.click();
-    (await fileChooserPromise).setFiles(downloadPath);
-
-    expect((await importResponse).ok()).toBe(true);
-
-    // 3. A NEW MSEL derived from the seeded one now exists. Asserted via the API so a stale
-    //    row from an earlier run cannot satisfy it.
-    const listRes = await fetch(`${Services.Blueprint.API}/api/msels`, {
-      headers: { Authorization: `Bearer ${token}` },
+      const derived = msels.filter((m) => m.name?.includes(sourceMselName));
+      expect(
+        derived.length,
+        `expected an imported copy alongside the source MSEL "${sourceMselName}"`
+      ).toBeGreaterThan(1);
     });
-    expect(listRes.ok).toBe(true);
-    const msels = (await listRes.json()) as Array<{ id: string; name: string }>;
-
-    const derived = msels.filter((m) => m.name?.includes(sourceMselName));
-    expect(
-      derived.length,
-      `expected an imported copy alongside the source MSEL "${sourceMselName}"`
-    ).toBeGreaterThan(1);
-  });
-});
+    });
+}

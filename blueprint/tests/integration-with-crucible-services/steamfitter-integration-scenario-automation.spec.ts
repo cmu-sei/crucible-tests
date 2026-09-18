@@ -3,7 +3,7 @@
 
 // spec: specs/blueprint-test-plan.md
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import {
   getBlueprintToken,
   createMsel,
@@ -27,66 +27,68 @@ import {
  * checkboxes render that state. The MSEL is deleted in `afterEach` so it runs even
  * when the body throws.
  */
-test.describe('Integration with Crucible Services', () => {
-  let token: string;
-  let mselId: string;
+for (const theme of BLUEPRINT_THEMES) {
+    test.describe(`${theme} theme › Integration with Crucible Services`, () => {
+    let token: string;
+    let mselId: string;
 
-  test.beforeEach(async () => {
-    token = await getBlueprintToken();
-    const msel = await createMsel(token, {
-      name: tempBlueprintName('TestBP-Steamfitter'),
-      description: 'Seeded to verify integration checkboxes render MSEL flags.',
-    });
-    mselId = msel.id;
-
-    // Enable every integration so each checkbox has a known, asserted state.
-    await updateMsel(token, mselId, {
-      useSteamfitter: true,
-      usePlayer: true,
-      useGallery: true,
-      useCite: true,
-    });
-  });
-
-  test.afterEach(async () => {
-    if (mselId) {
-      try {
-        await deleteMsel(token, mselId);
-      } catch (err) {
-        console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
-      }
-    }
-  });
-
-  test('Steamfitter Integration - Scenario Automation', async ({
-    blueprintAuthenticatedPage: page,
-  }) => {
-    await page.goto(`${Services.Blueprint.UI}/build?msel=${mselId}`, {
-      waitUntil: 'domcontentloaded',
-    });
-
-    // The section list only renders once the MSEL has loaded, so it is the readiness signal.
-    const infoSection = page.locator('mat-list-item').filter({ hasText: 'Info' }).first();
-    await expect(infoSection).toBeVisible({ timeout: 30000 });
-
-    // Every integration was enabled during seeding, so each box must be present AND checked.
-    // Asserting the checked state (not just visibility) is what ties the UI to the MSEL's flags.
-    for (const name of ['Steamfitter', 'Player', 'Gallery', 'CITE']) {
-      const checkbox = page.getByRole('checkbox', { name });
-      await expect(checkbox, `"${name}" integration checkbox should be visible`).toBeVisible({
-        timeout: 15000,
+    test.beforeEach(async () => {
+      token = await getBlueprintToken();
+      const msel = await createMsel(token, {
+        name: tempBlueprintName('TestBP-Steamfitter'),
+        description: 'Seeded to verify integration checkboxes render MSEL flags.',
       });
-      await expect(
-        checkbox,
-        `"${name}" should be checked because the seeded MSEL enables it`
-      ).toBeChecked();
-    }
+      mselId = msel.id;
 
-    // The Scenario Events section is where Steamfitter tasks get triggered from.
-    const scenarioEvents = page
-      .locator('mat-list-item')
-      .filter({ hasText: 'Scenario Events' })
-      .first();
-    await expect(scenarioEvents).toBeVisible({ timeout: 15000 });
-  });
-});
+      // Enable every integration so each checkbox has a known, asserted state.
+      await updateMsel(token, mselId, {
+        useSteamfitter: true,
+        usePlayer: true,
+        useGallery: true,
+        useCite: true,
+      });
+    });
+
+    test.afterEach(async () => {
+      if (mselId) {
+        try {
+          await deleteMsel(token, mselId);
+        } catch (err) {
+          console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+        }
+      }
+    });
+
+    test('Steamfitter Integration - Scenario Automation', async ({
+      blueprintAuthenticatedPage: page,
+    }) => {
+      await page.goto(`${Services.Blueprint.UI}/build?msel=${mselId}`, {
+        waitUntil: 'domcontentloaded',
+      });
+
+      // The section list only renders once the MSEL has loaded, so it is the readiness signal.
+      const infoSection = page.locator('mat-list-item').filter({ hasText: 'Info' }).first();
+      await expect(infoSection).toBeVisible({ timeout: 30000 });
+
+      // Every integration was enabled during seeding, so each box must be present AND checked.
+      // Asserting the checked state (not just visibility) is what ties the UI to the MSEL's flags.
+      for (const name of ['Steamfitter', 'Player', 'Gallery', 'CITE']) {
+        const checkbox = page.getByRole('checkbox', { name });
+        await expect(checkbox, `"${name}" integration checkbox should be visible`).toBeVisible({
+          timeout: 15000,
+        });
+        await expect(
+          checkbox,
+          `"${name}" should be checked because the seeded MSEL enables it`
+        ).toBeChecked();
+      }
+
+      // The Scenario Events section is where Steamfitter tasks get triggered from.
+      const scenarioEvents = page
+        .locator('mat-list-item')
+        .filter({ hasText: 'Scenario Events' })
+        .first();
+      await expect(scenarioEvents).toBeVisible({ timeout: 15000 });
+    });
+    });
+}

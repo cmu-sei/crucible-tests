@@ -3,7 +3,7 @@
 
 // spec: specs/blueprint-test-plan.md
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import {
   getBlueprintToken,
   createMsel,
@@ -33,89 +33,91 @@ import {
  * Note the spec name says CSV, but Blueprint's import/export for this surface is xlsx and json
  * only — there is no CSV path (see `msel-list.component.html`).
  */
-test.describe('Export and Import', () => {
-  let token: string;
-  let mselId: string;
-  let mselName: string;
-  const eventText = 'Imported scenario event';
+for (const theme of BLUEPRINT_THEMES) {
+    test.describe(`${theme} theme › Export and Import`, () => {
+    let token: string;
+    let mselId: string;
+    let mselName: string;
+    const eventText = 'Imported scenario event';
 
-  test.beforeEach(async () => {
-    token = await getBlueprintToken();
-    mselName = tempBlueprintName('TestBP-EventImport');
-    const msel = await createMsel(token, {
-      name: mselName,
-      description: 'Seeded for scenario-event import',
+    test.beforeEach(async () => {
+      token = await getBlueprintToken();
+      mselName = tempBlueprintName('TestBP-EventImport');
+      const msel = await createMsel(token, {
+        name: mselName,
+        description: 'Seeded for scenario-event import',
+      });
+      mselId = msel.id;
+
+      // Two events at distinct offsets, so ordering and count are both meaningful.
+      await createRenderableScenarioEvent(token, mselId, eventText, { deltaSeconds: 300 });
+      await createRenderableScenarioEvent(token, mselId, 'Second imported event', {
+        deltaSeconds: 900,
+      });
     });
-    mselId = msel.id;
 
-    // Two events at distinct offsets, so ordering and count are both meaningful.
-    await createRenderableScenarioEvent(token, mselId, eventText, { deltaSeconds: 300 });
-    await createRenderableScenarioEvent(token, mselId, 'Second imported event', {
-      deltaSeconds: 900,
+    test.afterEach(async () => {
+      try {
+        if (mselId) await deleteMsel(token, mselId);
+      } catch (err) {
+        console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+      }
     });
-  });
 
-  test.afterEach(async () => {
-    try {
-      if (mselId) await deleteMsel(token, mselId);
-    } catch (err) {
-      console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
-    }
-  });
+    test('Import Scenario Events from Excel into existing MSEL', async () => {
+      const authHeader = { Authorization: `Bearer ${token}` };
 
-  test('Import Scenario Events from Excel into existing MSEL', async () => {
-    const authHeader = { Authorization: `Bearer ${token}` };
+      const before = await listScenarioEvents(token, mselId);
+      expect(before.length).toBe(2);
 
-    const before = await listScenarioEvents(token, mselId);
-    expect(before.length).toBe(2);
+      // 1. Export the MSEL — this workbook carries the scenario events.
+      const downloadRes = await fetch(`${Services.Blueprint.API}/api/msels/${mselId}/xlsx`, {
+        headers: authHeader,
+      });
+      expect(downloadRes.ok, `xlsx download failed with ${downloadRes.status}`).toBe(true);
 
-    // 1. Export the MSEL — this workbook carries the scenario events.
-    const downloadRes = await fetch(`${Services.Blueprint.API}/api/msels/${mselId}/xlsx`, {
-      headers: authHeader,
-    });
-    expect(downloadRes.ok, `xlsx download failed with ${downloadRes.status}`).toBe(true);
+      const workbook = Buffer.from(await downloadRes.arrayBuffer());
+      expect(workbook.subarray(0, 2).toString('latin1')).toBe('PK');
 
-    const workbook = Buffer.from(await downloadRes.arrayBuffer());
-    expect(workbook.subarray(0, 2).toString('latin1')).toBe('PK');
-
-    // 2. Import it back into the same MSEL.
-    const form = new FormData();
-    form.append(
-      'ToUpload',
-      new Blob([workbook], {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      }),
-      `${mselName}.xlsx`
-    );
-
-    const importRes = await fetch(`${Services.Blueprint.API}/api/msels/${mselId}/xlsx`, {
-      method: 'PUT',
-      headers: authHeader,
-      body: form,
-    });
-    expect(
-      importRes.ok,
-      `scenario-event import failed with ${importRes.status}: ${await importRes.text()}`
-    ).toBe(true);
-
-    // 3. The events survived: same count, same offsets, and the text is still present.
-    // `deltaSeconds` needs coercing — the API's `JsonIntegerConverter` writes every int as a
-    // JSON string, so these arrive as "300"/"900".
-    const after = await listScenarioEvents(token, mselId);
-    expect(after.length).toBe(before.length);
-    expect(
-      after.map((e: any) => Number(e.deltaSeconds)).sort((a: number, b: number) => a - b)
-    ).toEqual([300, 900]);
-
-    // Data values are only populated on the single-event endpoint, so read the
-    // events individually to confirm the imported text round-tripped rather than being dropped.
-    const allValues: string[] = [];
-    for (const event of after) {
-      const full = await getScenarioEvent(token, event.id);
-      allValues.push(
-        ...(full.dataValues ?? []).map((dv: any) => dv.value).filter(Boolean)
+      // 2. Import it back into the same MSEL.
+      const form = new FormData();
+      form.append(
+        'ToUpload',
+        new Blob([workbook], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        }),
+        `${mselName}.xlsx`
       );
-    }
-    expect(allValues).toContain(eventText);
-  });
-});
+
+      const importRes = await fetch(`${Services.Blueprint.API}/api/msels/${mselId}/xlsx`, {
+        method: 'PUT',
+        headers: authHeader,
+        body: form,
+      });
+      expect(
+        importRes.ok,
+        `scenario-event import failed with ${importRes.status}: ${await importRes.text()}`
+      ).toBe(true);
+
+      // 3. The events survived: same count, same offsets, and the text is still present.
+      // `deltaSeconds` needs coercing — the API's `JsonIntegerConverter` writes every int as a
+      // JSON string, so these arrive as "300"/"900".
+      const after = await listScenarioEvents(token, mselId);
+      expect(after.length).toBe(before.length);
+      expect(
+        after.map((e: any) => Number(e.deltaSeconds)).sort((a: number, b: number) => a - b)
+      ).toEqual([300, 900]);
+
+      // Data values are only populated on the single-event endpoint, so read the
+      // events individually to confirm the imported text round-tripped rather than being dropped.
+      const allValues: string[] = [];
+      for (const event of after) {
+        const full = await getScenarioEvent(token, event.id);
+        allValues.push(
+          ...(full.dataValues ?? []).map((dv: any) => dv.value).filter(Boolean)
+        );
+      }
+      expect(allValues).toContain(eventText);
+    });
+    });
+}

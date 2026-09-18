@@ -3,7 +3,7 @@
 
 // spec: specs/blueprint-test-plan.md
 
-import { test, expect, Services, serviceUrlPattern, openBlueprintUserMenu } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, openBlueprintUserMenu, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 
 /**
  * Reaching the admin section from the home page, and the integration-conditional sections.
@@ -26,56 +26,59 @@ import { test, expect, Services, serviceUrlPattern, openBlueprintUserMenu } from
  *     (admin-container.component.html:244-245).
  *   - `waitForLoadState('networkidle')` is replaced by asserting on rendered state.
  */
-test.describe('Home Page and Navigation', () => {
-  test('Navigation to Admin Section', async ({ blueprintAuthenticatedPage: page }) => {
-    // expect: authenticated on the home page.
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 30000 });
-    await expect(page.getByText('Event Dashboard').first()).toBeVisible({ timeout: 30000 });
+for (const theme of BLUEPRINT_THEMES) {
+    test.describe(`${theme} theme › Home Page and Navigation`, () => {
+    test('Navigation to Admin Section', async ({ blueprintAuthenticatedPage: page }) => {
+    await applyBlueprintTheme(page, theme);
+      // expect: authenticated on the home page.
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 30000 });
+      await expect(page.getByText('Event Dashboard').first()).toBeVisible({ timeout: 30000 });
 
-    // 1. Open the topbar user menu and click Administration. The item is gated on
-    // `canViewAdmin`, set from an async permissions load on an OnPush component, so it can
-    // be missing from an already-open panel forever — openBlueprintUserMenu reopens until
-    // the lazy menu content is rebuilt with the item present.
-    const userMenuTrigger = page.locator('button.menu-trigger').first();
-    await expect(userMenuTrigger).toBeVisible({ timeout: 30000 });
-    await openBlueprintUserMenu(page, userMenuTrigger);
+      // 1. Open the topbar user menu and click Administration. The item is gated on
+      // `canViewAdmin`, set from an async permissions load on an OnPush component, so it can
+      // be missing from an already-open panel forever — openBlueprintUserMenu reopens until
+      // the lazy menu content is rebuilt with the item present.
+      const userMenuTrigger = page.locator('button.menu-trigger').first();
+      await expect(userMenuTrigger).toBeVisible({ timeout: 30000 });
+      await openBlueprintUserMenu(page, userMenuTrigger);
 
-    await page.getByRole('menuitem', { name: 'Administration' }).click();
+      await page.getByRole('menuitem', { name: 'Administration' }).click();
 
-    // expect: the admin interface loads.
-    await expect(page).toHaveURL(/\/admin/, { timeout: 30000 });
-    await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible({
-      timeout: 30000,
+      // expect: the admin interface loads.
+      await expect(page).toHaveURL(/\/admin/, { timeout: 30000 });
+      await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible({
+        timeout: 30000,
+      });
+
+      const sidebar = page.locator('.appitems-container').first();
+      await expect(sidebar).toBeVisible({ timeout: 30000 });
+
+      // expect: every admin section is listed — including the three the previous version checked
+      // and then discarded.
+      const sectionNames = [
+        'Units',
+        'Data Fields',
+        'Inject Types',
+        'Catalogs',
+        'Organizations',
+        'Gallery Cards',
+        'CITE Actions',
+        'CITE Duties',
+        'Users',
+        'Roles',
+        'Groups',
+      ];
+      for (const name of sectionNames) {
+        await expect(
+          sidebar.getByText(name, { exact: true }).first(),
+          `admin sidebar should list "${name}"`
+        ).toBeVisible({ timeout: 15000 });
+      }
+
+      // expect: the version display is present and populated.
+      const versions = page.locator('.app-versions').first();
+      await expect(versions).toBeVisible({ timeout: 15000 });
+      await expect(versions).toHaveText(/Versions:\s*UI\s*\S+,\s*API\s*\S+/i);
     });
-
-    const sidebar = page.locator('.appitems-container').first();
-    await expect(sidebar).toBeVisible({ timeout: 30000 });
-
-    // expect: every admin section is listed — including the three the previous version checked
-    // and then discarded.
-    const sectionNames = [
-      'Units',
-      'Data Fields',
-      'Inject Types',
-      'Catalogs',
-      'Organizations',
-      'Gallery Cards',
-      'CITE Actions',
-      'CITE Duties',
-      'Users',
-      'Roles',
-      'Groups',
-    ];
-    for (const name of sectionNames) {
-      await expect(
-        sidebar.getByText(name, { exact: true }).first(),
-        `admin sidebar should list "${name}"`
-      ).toBeVisible({ timeout: 15000 });
-    }
-
-    // expect: the version display is present and populated.
-    const versions = page.locator('.app-versions').first();
-    await expect(versions).toBeVisible({ timeout: 15000 });
-    await expect(versions).toHaveText(/Versions:\s*UI\s*\S+,\s*API\s*\S+/i);
-  });
-});
+    });
+}

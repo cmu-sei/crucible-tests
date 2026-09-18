@@ -28,7 +28,7 @@
 // it, the dashboard shows "Join an Event" / "Access In-Progress Events", clicking it routes
 // to /join, and /join lists the MSEL by name with a "Join <name>" button.
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import {
   getBlueprintToken,
   getCurrentBlueprintUserId,
@@ -38,97 +38,100 @@ import {
   tempBlueprintName,
 } from '../../test-helpers';
 
-test.describe('Event Dashboard and Navigation', () => {
-  let token: string;
-  let mselId: string;
-  let mselName: string;
+for (const theme of BLUEPRINT_THEMES) {
+    test.describe(`${theme} theme › Event Dashboard and Navigation`, () => {
+    let token: string;
+    let mselId: string;
+    let mselName: string;
 
-  test.beforeEach(async () => {
-    token = await getBlueprintToken();
-    const userId = await getCurrentBlueprintUserId(token);
-    const seeded = await seedJoinableMsel(token, userId, {
-      name: tempBlueprintName('TestBP-NavJoin'),
+    test.beforeEach(async () => {
+      token = await getBlueprintToken();
+      const userId = await getCurrentBlueprintUserId(token);
+      const seeded = await seedJoinableMsel(token, userId, {
+        name: tempBlueprintName('TestBP-NavJoin'),
+      });
+      mselId = seeded.mselId;
+      mselName = seeded.mselName;
+
+      // Precondition, asserted rather than assumed: the join surface really is populated.
+      // If this list were empty the Join card would legitimately be absent and every
+      // assertion below would be testing the wrong thing.
+      const joinList = await listMyJoinMsels(token);
+      expect(
+        joinList.map((m: any) => m.id),
+        "seeded MSEL must be on the current user's join list"
+      ).toContain(mselId);
     });
-    mselId = seeded.mselId;
-    mselName = seeded.mselName;
 
-    // Precondition, asserted rather than assumed: the join surface really is populated.
-    // If this list were empty the Join card would legitimately be absent and every
-    // assertion below would be testing the wrong thing.
-    const joinList = await listMyJoinMsels(token);
-    expect(
-      joinList.map((m: any) => m.id),
-      "seeded MSEL must be on the current user's join list"
-    ).toContain(mselId);
-  });
+    test.afterEach(async () => {
+      // `deleteMsel` cascades the MSEL's teams, which takes the TeamUser row with them.
+      if (mselId) await deleteMsel(token, mselId);
+    });
 
-  test.afterEach(async () => {
-    // `deleteMsel` cascades the MSEL's teams, which takes the TeamUser row with them.
-    if (mselId) await deleteMsel(token, mselId);
-  });
+    test('Navigate to Join Events', async ({ blueprintAuthenticatedPage: page }) => {
+    await applyBlueprintTheme(page, theme);
+      // 1. From Event Dashboard, click on 'Join an Event' card.
+      //
+      // The fixture already navigated to the dashboard, but it may have done so before the
+      // MSEL was seeded in a retried run, so reload to guarantee the card list is current.
+      await page.goto(Services.Blueprint.UI, { waitUntil: 'domcontentloaded' });
 
-  test('Navigate to Join Events', async ({ blueprintAuthenticatedPage: page }) => {
-    // 1. From Event Dashboard, click on 'Join an Event' card.
-    //
-    // The fixture already navigated to the dashboard, but it may have done so before the
-    // MSEL was seeded in a retried run, so reload to guarantee the card list is current.
-    await page.goto(Services.Blueprint.UI, { waitUntil: 'domcontentloaded' });
+      // `.card-container` wraps the dashboard cards; the Join card carries
+      // role="button" + (click)="gotoUrl('join')".
+      const joinCard = page
+        .locator('.card-container mat-card')
+        .filter({ hasText: 'Join an Event' });
+      await expect(joinCard).toBeVisible({ timeout: 30000 });
+      await expect(joinCard).toHaveCount(1);
+      await expect(joinCard.locator('mat-card-subtitle')).toHaveText(
+        'Access In-Progress Events'
+      );
 
-    // `.card-container` wraps the dashboard cards; the Join card carries
-    // role="button" + (click)="gotoUrl('join')".
-    const joinCard = page
-      .locator('.card-container mat-card')
-      .filter({ hasText: 'Join an Event' });
-    await expect(joinCard).toBeVisible({ timeout: 30000 });
-    await expect(joinCard).toHaveCount(1);
-    await expect(joinCard.locator('mat-card-subtitle')).toHaveText(
-      'Access In-Progress Events'
-    );
+      await joinCard.click();
 
-    await joinCard.click();
+      // expect: Navigation to /join occurs.
+      await expect(page).toHaveURL(/\/join(?:[/?#]|$)/, { timeout: 20000 });
 
-    // expect: Navigation to /join occurs.
-    await expect(page).toHaveURL(/\/join(?:[/?#]|$)/, { timeout: 20000 });
+      // expect: Page displays list of available MSELs to join.
+      //
+      // Asserted by the seeded MSEL's UNIQUE name, not by "some mat-card exists" — the old
+      // spec's `mat-card, [class*="msel-list"], ... table tbody tr` would have matched the
+      // topbar's own chrome or an unrelated row and passed without the MSEL being listed.
+      const mselCard = page.locator('.card-container mat-card').filter({ hasText: mselName });
+      await expect(mselCard).toBeVisible({ timeout: 30000 });
+      await expect(mselCard).toHaveCount(1);
+      await expect(mselCard.locator('mat-card-title')).toHaveText(mselName);
 
-    // expect: Page displays list of available MSELs to join.
-    //
-    // Asserted by the seeded MSEL's UNIQUE name, not by "some mat-card exists" — the old
-    // spec's `mat-card, [class*="msel-list"], ... table tbody tr` would have matched the
-    // topbar's own chrome or an unrelated row and passed without the MSEL being listed.
-    const mselCard = page.locator('.card-container mat-card').filter({ hasText: mselName });
-    await expect(mselCard).toBeVisible({ timeout: 30000 });
-    await expect(mselCard).toHaveCount(1);
-    await expect(mselCard.locator('mat-card-title')).toHaveText(mselName);
+      // The card's join affordance is present and identifies the MSEL.
+      //
+      // Located by `title="Join {{ msel.name }}"`, NOT by accessible name: this button has
+      // visible text ("Join"), and visible text wins over `title` when the accessible name is
+      // computed. So `getByRole('button', { name: 'Join <mselName>' })` matches nothing here —
+      // the "icon buttons carry title, and getByRole still finds them" rule only holds for
+      // buttons with no text content of their own.
+      const joinButton = mselCard.getByTitle(`Join ${mselName}`);
+      await expect(joinButton).toBeVisible();
+      await expect(joinButton).toHaveText('Join');
 
-    // The card's join affordance is present and identifies the MSEL.
-    //
-    // Located by `title="Join {{ msel.name }}"`, NOT by accessible name: this button has
-    // visible text ("Join"), and visible text wins over `title` when the accessible name is
-    // computed. So `getByRole('button', { name: 'Join <mselName>' })` matches nothing here —
-    // the "icon buttons carry title, and getByRole still finds them" rule only holds for
-    // buttons with no text content of their own.
-    const joinButton = mselCard.getByTitle(`Join ${mselName}`);
-    await expect(joinButton).toBeVisible();
-    await expect(joinButton).toHaveText('Join');
+      // expect: Topbar still displays with navigation back to dashboard.
+      const topbar = page.locator('app-topbar mat-toolbar');
+      await expect(topbar).toBeVisible();
+      await expect(page.locator('app-topbar .view-text')).toHaveText('Join Event');
 
-    // expect: Topbar still displays with navigation back to dashboard.
-    const topbar = page.locator('app-topbar mat-toolbar');
-    await expect(topbar).toBeVisible();
-    await expect(page.locator('app-topbar .view-text')).toHaveText('Join Event');
+      // "navigation back to dashboard" is a real affordance, so exercise it rather than just
+      // asserting a toolbar exists: the topbar's Blueprint icon is a `routerLink="/"` anchor.
+      const homeLink = page.locator('app-topbar a[mat-icon-button]').first();
+      await expect(homeLink).toHaveAttribute('href', '/');
+      await homeLink.click();
 
-    // "navigation back to dashboard" is a real affordance, so exercise it rather than just
-    // asserting a toolbar exists: the topbar's Blueprint icon is a `routerLink="/"` anchor.
-    const homeLink = page.locator('app-topbar a[mat-icon-button]').first();
-    await expect(homeLink).toHaveAttribute('href', '/');
-    await homeLink.click();
-
-    await expect(page).toHaveURL(
-      new RegExp(`^${Services.Blueprint.UI.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/?$`),
-      { timeout: 20000 }
-    );
-    // Back on the dashboard, the Join card is showing again — proving the round trip.
-    await expect(
-      page.locator('.card-container mat-card').filter({ hasText: 'Join an Event' })
-    ).toBeVisible({ timeout: 30000 });
-  });
-});
+      await expect(page).toHaveURL(
+        new RegExp(`^${Services.Blueprint.UI.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/?$`),
+        { timeout: 20000 }
+      );
+      // Back on the dashboard, the Join card is showing again — proving the round trip.
+      await expect(
+        page.locator('.card-container mat-card').filter({ hasText: 'Join an Event' })
+      ).toBeVisible({ timeout: 30000 });
+    });
+    });
+}

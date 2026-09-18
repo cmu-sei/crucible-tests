@@ -3,7 +3,7 @@
 
 // spec: specs/blueprint-test-plan.md
 
-import { test, expect } from '../../fixtures';
+import { test, expect, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import {
   getBlueprintToken,
   createMsel,
@@ -42,58 +42,61 @@ import {
  * `[disabled]="... || (msel.useGallery && galleryToDo()) || ..."`
  * (`msel-info.component.html:129`), so it must be disabled in this state.
  */
-test.describe('Integration with Crucible Services', () => {
-  let token: string;
-  let mselId: string;
+for (const theme of BLUEPRINT_THEMES) {
+    test.describe(`${theme} theme › Integration with Crucible Services`, () => {
+    let token: string;
+    let mselId: string;
 
-  test.beforeEach(async () => {
-    token = await getBlueprintToken();
-    const msel = await createMsel(token, { name: tempBlueprintName('TestBP-GalleryValid') });
-    mselId = msel.id;
+    test.beforeEach(async () => {
+      token = await getBlueprintToken();
+      const msel = await createMsel(token, { name: tempBlueprintName('TestBP-GalleryValid') });
+      mselId = msel.id;
 
-    // Enable Gallery. The Config tab saves explicitly, so seeding the flag via the API keeps
-    // this spec about the validation rather than about the save mechanism.
-    await updateMsel(token, mselId, { useGallery: true });
-  });
+      // Enable Gallery. The Config tab saves explicitly, so seeding the flag via the API keeps
+      // this spec about the validation rather than about the save mechanism.
+      await updateMsel(token, mselId, { useGallery: true });
+    });
 
-  test.afterEach(async () => {
-    try {
-      if (mselId) await deleteMsel(token, mselId);
-    } catch (err) {
-      console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
-    }
-  });
+    test.afterEach(async () => {
+      try {
+        if (mselId) await deleteMsel(token, mselId);
+      } catch (err) {
+        console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+      }
+    });
 
-  test('Gallery Integration Validation', async ({ blueprintAuthenticatedPage: page }) => {
-    // 1. Confirm the precondition the warning depends on, so a future API change that stops
-    //    populating these parameters fails here instead of silently voiding the assertion.
-    const seeded = await getMsel(token, mselId);
-    expect(seeded.useGallery).toBe(true);
-    expect(seeded.galleryExhibitId ?? null).toBeNull();
-    expect(Array.isArray(seeded.galleryArticleParameters)).toBe(true);
-    expect(seeded.galleryArticleParameters.length).toBeGreaterThan(0);
+    test('Gallery Integration Validation', async ({ blueprintAuthenticatedPage: page }) => {
+    await applyBlueprintTheme(page, theme);
+      // 1. Confirm the precondition the warning depends on, so a future API change that stops
+      //    populating these parameters fails here instead of silently voiding the assertion.
+      const seeded = await getMsel(token, mselId);
+      expect(seeded.useGallery).toBe(true);
+      expect(seeded.galleryExhibitId ?? null).toBeNull();
+      expect(Array.isArray(seeded.galleryArticleParameters)).toBe(true);
+      expect(seeded.galleryArticleParameters.length).toBeGreaterThan(0);
 
-    // 2. Open the seeded MSEL's Config tab.
-    await navigateToMsel(page, mselId);
+      // 2. Open the seeded MSEL's Config tab.
+      await navigateToMsel(page, mselId);
 
-    const configTab = page.getByRole('tab', { name: 'Config' });
-    await expect(configTab).toBeVisible({ timeout: 10000 });
-    await expect(configTab).toHaveAttribute('aria-selected', 'true');
+      const configTab = page.getByRole('tab', { name: 'Config' });
+      await expect(configTab).toBeVisible({ timeout: 10000 });
+      await expect(configTab).toHaveAttribute('aria-selected', 'true');
 
-    // expect: Gallery shows as enabled, since that is what was seeded.
-    const galleryCheckbox = page.locator('mat-checkbox').filter({ hasText: 'Gallery' }).first();
-    await expect(galleryCheckbox).toBeVisible({ timeout: 10000 });
-    await expect(galleryCheckbox.locator('input[type="checkbox"]')).toBeChecked();
+      // expect: Gallery shows as enabled, since that is what was seeded.
+      const galleryCheckbox = page.locator('mat-checkbox').filter({ hasText: 'Gallery' }).first();
+      await expect(galleryCheckbox).toBeVisible({ timeout: 10000 });
+      await expect(galleryCheckbox.locator('input[type="checkbox"]')).toBeChecked();
 
-    // 3. expect: the unassigned-parameter warning is rendered. This MSEL has no DataFields,
-    //    so all 12 Gallery article parameters are unassigned.
-    await expect(
-      page.getByText(/There are unassigned Gallery Article Parameters in Data Fields/i)
-    ).toBeVisible({ timeout: 10000 });
+      // 3. expect: the unassigned-parameter warning is rendered. This MSEL has no DataFields,
+      //    so all 12 Gallery article parameters are unassigned.
+      await expect(
+        page.getByText(/There are unassigned Gallery Article Parameters in Data Fields/i)
+      ).toBeVisible({ timeout: 10000 });
 
-    // 4. expect: Push Integrations is blocked while parameters remain unassigned.
-    const pushButton = page.getByRole('button', { name: 'Push Integrations' });
-    await expect(pushButton).toBeVisible({ timeout: 10000 });
-    await expect(pushButton).toBeDisabled();
-  });
-});
+      // 4. expect: Push Integrations is blocked while parameters remain unassigned.
+      const pushButton = page.getByRole('button', { name: 'Push Integrations' });
+      await expect(pushButton).toBeVisible({ timeout: 10000 });
+      await expect(pushButton).toBeDisabled();
+    });
+    });
+}
