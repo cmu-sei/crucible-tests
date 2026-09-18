@@ -6,29 +6,33 @@
 
 import { test, expect } from '@playwright/test';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
+import { ALLOY_THEMES, applyAlloyTheme } from '../../test-helpers';
 
-test.describe('Integration Points', () => {
-  test('Steamfitter Integration - Scenario Template Selection', async ({ page }) => {
-    // 1. Navigate to create or edit event template form
-    await authenticateWithKeycloak(page, Services.Alloy.UI);
-    await page.goto(`${Services.Alloy.UI}/admin`);
-    await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
+for (const theme of ALLOY_THEMES) {
+  test.describe(`${theme} theme › Integration Points`, () => {
+    test('Steamfitter Integration - Scenario Template Selection', async ({ page }) => {
+      // 1. Navigate to create or edit event template form
+      await authenticateWithKeycloak(page, Services.Alloy.UI);
+      await applyAlloyTheme(page, theme);
+      await page.goto(`${Services.Alloy.UI}/admin`);
+      await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
 
-    // "Add Event Template" opens the "Create New Event Template" form directly
-    // (Alloy.ui PR #711), which has the same fields as the edit dialog.
-    const dialog = page.getByRole('dialog', { name: 'Create New Event Template' });
-    await page.getByRole('button', { name: 'Add Event Template' }).click();
+      // "Add Event Template" opens the "Create New Event Template" form directly
+      // (Alloy.ui PR #711), which has the same fields as the edit dialog.
+      const dialog = page.getByRole('dialog', { name: 'Create New Event Template' });
+      await page.getByRole('button', { name: 'Add Event Template' }).click();
 
-    // expect: Form is displayed
-    await expect(dialog).toBeVisible();
+      // expect: Form is displayed
+      await expect(dialog).toBeVisible();
 
-    // 2. Check the Steamfitter Scenario Template dropdown
-    const steamfitterCombobox = dialog.getByRole('combobox', { name: 'Steamfitter Scenario Template' });
+      // 2. Check the Steamfitter Scenario Template dropdown
+      const steamfitterCombobox = dialog.getByRole('combobox', { name: 'Steamfitter Scenario Template' });
 
-    // expect: Dropdown is visible
-    await expect(steamfitterCombobox).toBeVisible();
+      // expect: Dropdown is visible
+      await expect(steamfitterCombobox).toBeVisible();
 
-    // Close the dialog (nothing is created until Save)
-    await dialog.getByRole('button', { name: 'Cancel' }).first().click();
+      // Close the dialog (nothing is created until Save)
+      await dialog.getByRole('button', { name: 'Cancel' }).first().click();
+    });
   });
-});
+}
