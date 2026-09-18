@@ -6,14 +6,15 @@
 
 import { test, expect } from '../../fixtures';
 import { deleteGroupsByPrefix } from '../../fixtures';
-import { navigateToAdminSection } from '../../test-helpers';
+import { navigateToAdminSection, STEAMFITTER_THEMES, applySteamfitterTheme } from '../../test-helpers';
 
 /**
  * A new group is created from the Groups section via the "Add New Group" button, which
  * opens a NameDialog ("Create New Group?"). This spec creates a uniquely-named group
  * through the UI, then confirms its row appears in the table. Cleanup is by API prefix.
  */
-test.describe('Group Management in Admin', () => {
+for (const theme of STEAMFITTER_THEMES) {
+  test.describe(`${theme} theme › Group Management in Admin`, () => {
   const GROUP_NAME = `E2E Create Group ${Date.now()}`;
 
   test.afterEach(async () => {
@@ -21,6 +22,7 @@ test.describe('Group Management in Admin', () => {
   });
 
   test('Create a new group', async ({ steamfitterAuthenticatedPage: page }) => {
+    await applySteamfitterTheme(page, theme);
     await navigateToAdminSection(page, 'Groups');
 
     const table = page.locator('table');
@@ -45,4 +47,5 @@ test.describe('Group Management in Admin', () => {
       timeout: 10000,
     });
   });
-});
+  });
+}

@@ -6,14 +6,15 @@
 
 import { test, expect } from '../../fixtures';
 import { seedGroup, deleteGroupsByPrefix } from '../../fixtures';
-import { navigateToAdminSection } from '../../test-helpers';
+import { navigateToAdminSection, STEAMFITTER_THEMES, applySteamfitterTheme } from '../../test-helpers';
 
 /**
  * The admin Groups section renders a searchable table of groups (each row expandable to
  * a membership editor). This spec seeds a group, opens the section, and confirms the
  * table plus its Search box are present and the seeded group can be surfaced.
  */
-test.describe('Group Management in Admin', () => {
+for (const theme of STEAMFITTER_THEMES) {
+  test.describe(`${theme} theme › Group Management in Admin`, () => {
   const GROUP_NAME = `E2E View Group ${Date.now()}`;
 
   test.beforeEach(async () => {
@@ -25,6 +26,7 @@ test.describe('Group Management in Admin', () => {
   });
 
   test('View groups list', async ({ steamfitterAuthenticatedPage: page }) => {
+    await applySteamfitterTheme(page, theme);
     await navigateToAdminSection(page, 'Groups');
 
     const table = page.locator('table');
@@ -39,4 +41,5 @@ test.describe('Group Management in Admin', () => {
       timeout: 5000,
     });
   });
-});
+  });
+}

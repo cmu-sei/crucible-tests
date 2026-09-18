@@ -6,7 +6,7 @@
 
 import { test, expect } from '../../fixtures';
 import { deleteSystemRolesByPrefix } from '../../fixtures';
-import { navigateToAdminSection } from '../../test-helpers';
+import { navigateToAdminSection, STEAMFITTER_THEMES, applySteamfitterTheme } from '../../test-helpers';
 
 /**
  * A custom system role is created from the System Roles grid via the "Add New Role"
@@ -14,7 +14,8 @@ import { navigateToAdminSection } from '../../test-helpers';
  * spec creates a uniquely-named role and confirms a matching column header appears.
  * Cleanup is by API prefix (built-in immutable roles are skipped by the helper).
  */
-test.describe('Role Management in Admin', () => {
+for (const theme of STEAMFITTER_THEMES) {
+  test.describe(`${theme} theme › Role Management in Admin`, () => {
   const ROLE_NAME = `E2E Create Role ${Date.now()}`;
 
   test.afterEach(async () => {
@@ -22,6 +23,7 @@ test.describe('Role Management in Admin', () => {
   });
 
   test('Create a custom system role', async ({ steamfitterAuthenticatedPage: page }) => {
+    await applySteamfitterTheme(page, theme);
     await navigateToAdminSection(page, 'Roles');
 
     const rolesTab = page.getByRole('tab', { name: 'Roles', exact: true });
@@ -44,4 +46,5 @@ test.describe('Role Management in Admin', () => {
       page.getByRole('columnheader', { name: ROLE_NAME })
     ).toBeVisible({ timeout: 10000 });
   });
-});
+  });
+}

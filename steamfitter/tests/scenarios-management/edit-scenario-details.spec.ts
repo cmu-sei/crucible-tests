@@ -17,6 +17,8 @@ import {
   findHomeRowByText,
   openRowContextMenu,
   clickContextMenuItem,
+  STEAMFITTER_THEMES,
+  applySteamfitterTheme,
 } from '../../test-helpers';
 
 /**
@@ -32,7 +34,8 @@ import {
  *                  shows "Select a view!" and its edit dialog keeps Save disabled.
  * The seeded view is created once for this file and removed in afterAll.
  */
-test.describe('Scenarios Management', () => {
+for (const theme of STEAMFITTER_THEMES) {
+  test.describe(`${theme} theme › Scenarios Management`, () => {
   const ORIGINAL_NAME = `E2E Edit Scenario ${Date.now()}`;
   const UPDATED_NAME = `E2E Edit Scenario Updated ${Date.now()}`;
 
@@ -60,6 +63,7 @@ test.describe('Scenarios Management', () => {
   });
 
   test('Edit scenario details', async ({ steamfitterAuthenticatedPage: page }) => {
+    await applySteamfitterTheme(page, theme);
     // Seed a scenario, binding the view when Player is available so the UI Save path
     // is reachable.
     await seedScenario(ORIGINAL_NAME, 'Scenario to be edited', {
@@ -119,4 +123,5 @@ test.describe('Scenarios Management', () => {
       page.locator('tbody tr.element-row').filter({ hasText: ORIGINAL_NAME })
     ).toHaveCount(0);
   });
-});
+  });
+}

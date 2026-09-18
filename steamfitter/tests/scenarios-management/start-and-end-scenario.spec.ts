@@ -19,6 +19,8 @@ import {
   clickContextMenuItem,
   respondToConfirmDialog,
   setScenarioStatusFilter,
+  STEAMFITTER_THEMES,
+  applySteamfitterTheme,
 } from '../../test-helpers';
 
 /**
@@ -27,7 +29,8 @@ import {
  * whole spec is skipped when it isn't reachable (there is no meaningful view-less
  * fallback for "start the scenario"). The seeded view is removed in afterAll.
  */
-test.describe('Scenarios Management', () => {
+for (const theme of STEAMFITTER_THEMES) {
+  test.describe(`${theme} theme › Scenarios Management`, () => {
   const SCENARIO_NAME = `E2E Lifecycle Scenario ${Date.now()}`;
 
   let playerAvailable = false;
@@ -52,6 +55,7 @@ test.describe('Scenarios Management', () => {
   });
 
   test('Start then end a scenario', async ({ steamfitterAuthenticatedPage: page }) => {
+    await applySteamfitterTheme(page, theme);
     test.skip(!playerAvailable, 'Player API unavailable — scenario start/end requires a view.');
 
     // Seed a ready, view-bound scenario so Start is available.
@@ -105,4 +109,5 @@ test.describe('Scenarios Management', () => {
     await expect(row).toContainText('ended', { timeout: 10000 });
     await expect(row).toContainText(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}/);
   });
-});
+  });
+}

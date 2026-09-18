@@ -6,9 +6,10 @@
 
 import { test, expect, Services } from '../../fixtures';
 import { deleteScenarioTemplatesByPrefix } from '../../fixtures';
-import { navigateToHomeSection, findHomeRowByText } from '../../test-helpers';
+import { navigateToHomeSection, findHomeRowByText, STEAMFITTER_THEMES, applySteamfitterTheme } from '../../test-helpers';
 
-test.describe('Scenario Templates Management', () => {
+for (const theme of STEAMFITTER_THEMES) {
+  test.describe(`${theme} theme › Scenario Templates Management`, () => {
   // Unique per run so parallel/retried runs never collide, and the name-prefix
   // cleanup below only ever removes rows this suite created.
   const TEMPLATE_NAME = `E2E Scenario Template ${Date.now()}`;
@@ -23,6 +24,7 @@ test.describe('Scenario Templates Management', () => {
   });
 
   test('Create a new scenario template', async ({ steamfitterAuthenticatedPage: page }) => {
+    await applySteamfitterTheme(page, theme);
     // 1. Open the Scenario Templates section on the home page
     await navigateToHomeSection(page, 'Scenario Templates');
 
@@ -77,4 +79,5 @@ test.describe('Scenario Templates Management', () => {
     await expect(row).toContainText(TEMPLATE_DESCRIPTION);
     await expect(row).toContainText(TEMPLATE_DURATION);
   });
-});
+  });
+}

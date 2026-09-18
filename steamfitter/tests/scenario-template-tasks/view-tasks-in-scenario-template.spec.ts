@@ -11,6 +11,8 @@ import {
   findHomeRowByText,
   expandScenarioTemplateRow,
   findTaskNode,
+  STEAMFITTER_THEMES,
+  applySteamfitterTheme,
 } from '../../test-helpers';
 
 /**
@@ -19,7 +21,8 @@ import {
  * task via the API and verifies the task appears in the tree when the row is expanded.
  * Deleting the template cascades its tasks, so cleanup is by template name prefix.
  */
-test.describe('Scenario Template Tasks', () => {
+for (const theme of STEAMFITTER_THEMES) {
+  test.describe(`${theme} theme › Scenario Template Tasks`, () => {
   const TEMPLATE_NAME = `E2E Task View Template ${Date.now()}`;
   const TASK_NAME = `E2E View Task ${Date.now()}`;
 
@@ -37,6 +40,7 @@ test.describe('Scenario Template Tasks', () => {
   test('View tasks within a scenario template', async ({
     steamfitterAuthenticatedPage: page,
   }) => {
+    await applySteamfitterTheme(page, theme);
     // 1. Open the Scenario Templates section and locate the seeded template.
     await navigateToHomeSection(page, 'Scenario Templates');
     const row = await findHomeRowByText(page, TEMPLATE_NAME);
@@ -49,4 +53,5 @@ test.describe('Scenario Template Tasks', () => {
     const taskNode = findTaskNode(page, TASK_NAME);
     await expect(taskNode).toBeVisible({ timeout: 10000 });
   });
-});
+  });
+}

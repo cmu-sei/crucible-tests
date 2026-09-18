@@ -5,7 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect } from '../../fixtures';
-import { navigateToAdminSection } from '../../test-helpers';
+import { navigateToAdminSection, STEAMFITTER_THEMES, applySteamfitterTheme } from '../../test-helpers';
 
 /**
  * The admin Roles section is a `mat-tab-group`; its first tab ("Roles") holds the
@@ -13,8 +13,10 @@ import { navigateToAdminSection } from '../../test-helpers';
  * spec opens the section, confirms the Roles tab and grid render, and that a built-in
  * role column ("Administrator") is present.
  */
-test.describe('Role Management in Admin', () => {
+for (const theme of STEAMFITTER_THEMES) {
+  test.describe(`${theme} theme › Role Management in Admin`, () => {
   test('View system roles', async ({ steamfitterAuthenticatedPage: page }) => {
+    await applySteamfitterTheme(page, theme);
     await navigateToAdminSection(page, 'Roles');
 
     const rolesTab = page.getByRole('tab', { name: 'Roles', exact: true });
@@ -29,4 +31,5 @@ test.describe('Role Management in Admin', () => {
       page.getByRole('columnheader', { name: 'Administrator' })
     ).toBeVisible({ timeout: 10000 });
   });
-});
+  });
+}

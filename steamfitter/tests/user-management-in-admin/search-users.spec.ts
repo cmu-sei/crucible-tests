@@ -6,7 +6,7 @@
 
 import { test, expect } from '../../fixtures';
 import { seedUser, deleteUsersByPrefix } from '../../fixtures';
-import { navigateToAdminSection } from '../../test-helpers';
+import { navigateToAdminSection, STEAMFITTER_THEMES, applySteamfitterTheme } from '../../test-helpers';
 
 /**
  * The Users list filters client-side as you type into its Search box. This spec seeds
@@ -14,7 +14,8 @@ import { navigateToAdminSection } from '../../test-helpers';
  * so searching is how we reliably surface a specific user), then clears the search and
  * confirms the list repopulates.
  */
-test.describe('User Management in Admin', () => {
+for (const theme of STEAMFITTER_THEMES) {
+  test.describe(`${theme} theme › User Management in Admin`, () => {
   const USER_NAME = `E2E Search User ${Date.now()}`;
 
   test.beforeEach(async () => {
@@ -26,6 +27,7 @@ test.describe('User Management in Admin', () => {
   });
 
   test('Search users', async ({ steamfitterAuthenticatedPage: page }) => {
+    await applySteamfitterTheme(page, theme);
     await navigateToAdminSection(page, 'Users');
 
     const searchField = page.getByRole('textbox', { name: 'Search' });
@@ -42,4 +44,5 @@ test.describe('User Management in Admin', () => {
       timeout: 5000,
     });
   });
-});
+  });
+}

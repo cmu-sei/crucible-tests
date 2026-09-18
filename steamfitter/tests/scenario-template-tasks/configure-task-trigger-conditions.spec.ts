@@ -14,6 +14,8 @@ import {
   openTaskMenu,
   clickContextMenuItem,
   fillTaskDialog,
+  STEAMFITTER_THEMES,
+  applySteamfitterTheme,
 } from '../../test-helpers';
 
 /**
@@ -25,7 +27,8 @@ import {
  * re-open the Edit dialog to confirm it. Cleanup is by parent-template prefix (tasks
  * cascade-delete).
  */
-test.describe('Scenario Template Tasks', () => {
+for (const theme of STEAMFITTER_THEMES) {
+  test.describe(`${theme} theme › Scenario Template Tasks`, () => {
   const TEMPLATE_NAME = `E2E Task Trigger Template ${Date.now()}`;
   const TASK_NAME = `E2E Trigger Task ${Date.now()}`;
 
@@ -41,6 +44,7 @@ test.describe('Scenario Template Tasks', () => {
   });
 
   test('Configure task trigger conditions', async ({ steamfitterAuthenticatedPage: page }) => {
+    await applySteamfitterTheme(page, theme);
     // 1. Expand the template and open the task's Edit dialog.
     await navigateToHomeSection(page, 'Scenario Templates');
     const row = await findHomeRowByText(page, TEMPLATE_NAME);
@@ -76,4 +80,5 @@ test.describe('Scenario Template Tasks', () => {
     await dialog.getByRole('button', { name: 'Cancel' }).click();
     await expect(dialog).not.toBeVisible({ timeout: 10000 });
   });
-});
+  });
+}

@@ -5,15 +5,17 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect } from '../../fixtures';
-import { navigateToAdminSection } from '../../test-helpers';
+import { navigateToAdminSection, STEAMFITTER_THEMES, applySteamfitterTheme } from '../../test-helpers';
 
 /**
  * The admin Users section renders a single flat table (id / Name / Role) with a
  * Search box; there is no per-user detail view (the role is assigned inline). This
  * spec just confirms the section loads with its table and search control.
  */
-test.describe('User Management in Admin', () => {
+for (const theme of STEAMFITTER_THEMES) {
+  test.describe(`${theme} theme › User Management in Admin`, () => {
   test('View users list', async ({ steamfitterAuthenticatedPage: page }) => {
+    await applySteamfitterTheme(page, theme);
     await navigateToAdminSection(page, 'Users');
 
     const table = page.locator('table');
@@ -27,4 +29,5 @@ test.describe('User Management in Admin', () => {
       timeout: 10000,
     });
   });
-});
+  });
+}

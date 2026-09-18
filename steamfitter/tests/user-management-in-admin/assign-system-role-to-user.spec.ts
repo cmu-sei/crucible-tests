@@ -6,7 +6,7 @@
 
 import { test, expect } from '../../fixtures';
 import { seedUser, deleteUsersByPrefix } from '../../fixtures';
-import { navigateToAdminSection } from '../../test-helpers';
+import { navigateToAdminSection, STEAMFITTER_THEMES, applySteamfitterTheme } from '../../test-helpers';
 
 /**
  * A system role is assigned to a user inline, via the `mat-select` in that user's Role
@@ -15,7 +15,8 @@ import { navigateToAdminSection } from '../../test-helpers';
  * built-in "Content Developer" role, waits on the PUT, and confirms the select now
  * shows that role after a reload.
  */
-test.describe('User Management in Admin', () => {
+for (const theme of STEAMFITTER_THEMES) {
+  test.describe(`${theme} theme › User Management in Admin`, () => {
   const USER_NAME = `E2E Role User ${Date.now()}`;
   const ROLE_NAME = 'Content Developer';
 
@@ -28,6 +29,7 @@ test.describe('User Management in Admin', () => {
   });
 
   test('Assign a system role to a user', async ({ steamfitterAuthenticatedPage: page }) => {
+    await applySteamfitterTheme(page, theme);
     await navigateToAdminSection(page, 'Users');
 
     // 1. Search to isolate the seeded user's row.
@@ -56,4 +58,5 @@ test.describe('User Management in Admin', () => {
     const reloadedRow = page.locator('tbody tr').filter({ hasText: USER_NAME }).first();
     await expect(reloadedRow.getByRole('combobox')).toContainText(ROLE_NAME, { timeout: 10000 });
   });
-});
+  });
+}

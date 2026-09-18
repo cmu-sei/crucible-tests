@@ -19,6 +19,7 @@ import {
   deleteScenariosByPrefix,
   deleteScenarioTemplatesByPrefix,
 } from '../../fixtures';
+import { STEAMFITTER_THEMES } from '../../test-helpers';
 
 const NAME_PREFIX = 'E2E Inherit Tasks';
 const TEMPLATE_NAME = `${NAME_PREFIX} Template ${Date.now()}`;
@@ -105,7 +106,8 @@ function sortedNames(tasks: SteamfitterTask[]): string[] {
   return tasks.map((task) => task.name).sort();
 }
 
-test.describe('Scenarios Management', () => {
+for (const theme of STEAMFITTER_THEMES) {
+  test.describe(`${theme} theme › Scenarios Management`, () => {
   let templateId: string;
 
   test.beforeEach(async () => {
@@ -195,4 +197,5 @@ test.describe('Scenarios Management', () => {
       expect(task.scenarioId ?? null).toBeNull();
     }
   });
-});
+  });
+}

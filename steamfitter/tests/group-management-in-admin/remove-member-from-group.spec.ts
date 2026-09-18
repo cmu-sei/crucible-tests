@@ -12,7 +12,7 @@ import {
   deleteUsersByPrefix,
   deleteGroupsByPrefix,
 } from '../../fixtures';
-import { navigateToAdminSection } from '../../test-helpers';
+import { navigateToAdminSection, STEAMFITTER_THEMES, applySteamfitterTheme } from '../../test-helpers';
 
 /**
  * Removing a group member is immediate (no confirm dialog): clicking Remove in the
@@ -20,7 +20,8 @@ import { navigateToAdminSection } from '../../test-helpers';
  * list. This spec seeds a group with a member (via API), expands the group, removes the
  * member, and confirms it disappears from Group Members.
  */
-test.describe('Group Management in Admin', () => {
+for (const theme of STEAMFITTER_THEMES) {
+  test.describe(`${theme} theme › Group Management in Admin`, () => {
   const GROUP_NAME = `E2E Remove Group ${Date.now()}`;
   const USER_NAME = `E2E Remove User ${Date.now()}`;
   let groupId: string;
@@ -38,6 +39,7 @@ test.describe('Group Management in Admin', () => {
   });
 
   test('Remove a member from a group', async ({ steamfitterAuthenticatedPage: page }) => {
+    await applySteamfitterTheme(page, theme);
     await navigateToAdminSection(page, 'Groups');
 
     // Isolate and expand the seeded group's row.
@@ -74,4 +76,5 @@ test.describe('Group Management in Admin', () => {
       membersList.getByRole('button', { name: `Remove ${USER_NAME}` })
     ).toHaveCount(0, { timeout: 10000 });
   });
-});
+  });
+}

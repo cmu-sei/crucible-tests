@@ -5,11 +5,14 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect } from '../../fixtures';
+import { STEAMFITTER_THEMES, applySteamfitterTheme } from '../../test-helpers';
 
-test.describe('Home Page and Navigation', () => {
+for (const theme of STEAMFITTER_THEMES) {
+  test.describe(`${theme} theme › Home Page and Navigation`, () => {
   test('Home page loads with topbar, section menu, and default section', async ({
     steamfitterAuthenticatedPage: page,
   }) => {
+    await applySteamfitterTheme(page, theme);
     // expect: The document title is 'Steamfitter'
     await expect(page).toHaveTitle('Steamfitter', { timeout: 10000 });
 
@@ -55,4 +58,5 @@ test.describe('Home Page and Navigation', () => {
     // expect: The Search box is available for filtering the list
     await expect(page.getByRole('textbox', { name: 'Search' })).toBeVisible();
   });
-});
+  });
+}

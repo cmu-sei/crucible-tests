@@ -6,7 +6,7 @@
 
 import { test, expect } from '../../fixtures';
 import { seedSystemRole, deleteSystemRolesByPrefix } from '../../fixtures';
-import { navigateToAdminSection } from '../../test-helpers';
+import { navigateToAdminSection, STEAMFITTER_THEMES, applySteamfitterTheme } from '../../test-helpers';
 
 /**
  * A custom (mutable) system role can be deleted from its column header via the "Delete
@@ -14,7 +14,8 @@ import { navigateToAdminSection } from '../../test-helpers';
  * immutable and expose no such button. This spec seeds a custom role, deletes it through
  * the UI, and confirms its column header is gone. API-prefix cleanup is a backstop.
  */
-test.describe('Role Management in Admin', () => {
+for (const theme of STEAMFITTER_THEMES) {
+  test.describe(`${theme} theme › Role Management in Admin`, () => {
   const ROLE_NAME = `E2E Delete Role ${Date.now()}`;
 
   test.beforeEach(async () => {
@@ -26,6 +27,7 @@ test.describe('Role Management in Admin', () => {
   });
 
   test('Delete a custom system role', async ({ steamfitterAuthenticatedPage: page }) => {
+    await applySteamfitterTheme(page, theme);
     await navigateToAdminSection(page, 'Roles');
 
     const rolesTab = page.getByRole('tab', { name: 'Roles', exact: true });
@@ -55,4 +57,5 @@ test.describe('Role Management in Admin', () => {
       page.getByRole('columnheader', { name: ROLE_NAME })
     ).toHaveCount(0, { timeout: 10000 });
   });
-});
+  });
+}

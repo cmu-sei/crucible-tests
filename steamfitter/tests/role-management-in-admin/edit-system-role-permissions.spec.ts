@@ -6,7 +6,7 @@
 
 import { test, expect } from '../../fixtures';
 import { seedSystemRole, getSystemRoles, deleteSystemRolesByPrefix } from '../../fixtures';
-import { navigateToAdminSection } from '../../test-helpers';
+import { navigateToAdminSection, STEAMFITTER_THEMES, applySteamfitterTheme } from '../../test-helpers';
 
 /**
  * Toggling a permission checkbox in the System Roles grid PUTs the role with its updated
@@ -15,7 +15,8 @@ import { navigateToAdminSection } from '../../test-helpers';
  * column, waits on the PUT, and confirms via the API that the role now holds all
  * permissions.
  */
-test.describe('Role Management in Admin', () => {
+for (const theme of STEAMFITTER_THEMES) {
+  test.describe(`${theme} theme › Role Management in Admin`, () => {
   const ROLE_NAME = `E2E Perm Role ${Date.now()}`;
   let roleId: string;
 
@@ -28,6 +29,7 @@ test.describe('Role Management in Admin', () => {
   });
 
   test('Edit system role permissions', async ({ steamfitterAuthenticatedPage: page }) => {
+    await applySteamfitterTheme(page, theme);
     await navigateToAdminSection(page, 'Roles');
 
     const rolesTab = page.getByRole('tab', { name: 'Roles', exact: true });
@@ -66,4 +68,5 @@ test.describe('Role Management in Admin', () => {
     expect(updated, 'seeded role should still exist').toBeTruthy();
     expect(updated!.allPermissions, 'role should now hold all permissions').toBe(true);
   });
-});
+  });
+}

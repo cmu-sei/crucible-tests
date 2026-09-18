@@ -6,7 +6,7 @@
 
 import { test, expect } from '../../fixtures';
 import { getSystemRoles } from '../../fixtures';
-import { navigateToAdminSection } from '../../test-helpers';
+import { navigateToAdminSection, STEAMFITTER_THEMES, applySteamfitterTheme } from '../../test-helpers';
 
 /**
  * The System Roles grid lists every permission as a row (with an "All" row on top) and
@@ -14,8 +14,10 @@ import { navigateToAdminSection } from '../../test-helpers';
  * confirms the permission rows render and that the Administrator role — which holds all
  * permissions per the API — shows its "All" checkbox checked.
  */
-test.describe('Role Management in Admin', () => {
+for (const theme of STEAMFITTER_THEMES) {
+  test.describe(`${theme} theme › Role Management in Admin`, () => {
   test('View system role permissions', async ({ steamfitterAuthenticatedPage: page }) => {
+    await applySteamfitterTheme(page, theme);
     // The API is the source of truth for which role has allPermissions.
     const roles = await getSystemRoles();
     const adminRole = roles.find((r) => r.name === 'Administrator');
@@ -42,4 +44,5 @@ test.describe('Role Management in Admin', () => {
       timeout: 10000,
     });
   });
-});
+  });
+}

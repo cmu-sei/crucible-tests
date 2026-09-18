@@ -14,6 +14,8 @@ import {
   openTaskMenu,
   clickContextMenuItem,
   fillTaskDialog,
+  STEAMFITTER_THEMES,
+  applySteamfitterTheme,
 } from '../../test-helpers';
 
 /**
@@ -22,7 +24,8 @@ import {
  * task should appear under its new name and no longer under the old one. The task is
  * removed when its parent template is deleted, so cleanup is by template name prefix.
  */
-test.describe('Scenario Template Tasks', () => {
+for (const theme of STEAMFITTER_THEMES) {
+  test.describe(`${theme} theme › Scenario Template Tasks`, () => {
   const TEMPLATE_NAME = `E2E Task Edit Template ${Date.now()}`;
   const ORIGINAL_TASK_NAME = `E2E Edit Task ${Date.now()}`;
   const UPDATED_TASK_NAME = `E2E Edit Task Updated ${Date.now()}`;
@@ -39,6 +42,7 @@ test.describe('Scenario Template Tasks', () => {
   });
 
   test('Edit a task in a scenario template', async ({ steamfitterAuthenticatedPage: page }) => {
+    await applySteamfitterTheme(page, theme);
     // 1. Open the Scenario Templates section and expand the seeded template.
     await navigateToHomeSection(page, 'Scenario Templates');
     const row = await findHomeRowByText(page, TEMPLATE_NAME);
@@ -61,4 +65,5 @@ test.describe('Scenario Template Tasks', () => {
       page.locator('mat-tree-node').filter({ hasText: ORIGINAL_TASK_NAME })
     ).toHaveCount(0);
   });
-});
+  });
+}

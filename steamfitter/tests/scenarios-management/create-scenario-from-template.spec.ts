@@ -16,9 +16,12 @@ import {
   openRowContextMenu,
   clickContextMenuItem,
   respondToConfirmDialog,
+  STEAMFITTER_THEMES,
+  applySteamfitterTheme,
 } from '../../test-helpers';
 
-test.describe('Scenarios Management', () => {
+for (const theme of STEAMFITTER_THEMES) {
+  test.describe(`${theme} theme › Scenarios Management`, () => {
   // The scenario created from the template inherits the template's name, so a
   // single prefix cleans up both.
   const TEMPLATE_NAME = `E2E Create Scenario Template ${Date.now()}`;
@@ -34,6 +37,7 @@ test.describe('Scenarios Management', () => {
   });
 
   test('Create a scenario from a template', async ({ steamfitterAuthenticatedPage: page }) => {
+    await applySteamfitterTheme(page, theme);
     // 1. Open the Scenario Templates section and locate the seeded template.
     await navigateToHomeSection(page, 'Scenario Templates');
     const templateRow = await findHomeRowByText(page, TEMPLATE_NAME);
@@ -61,4 +65,5 @@ test.describe('Scenarios Management', () => {
     const scenarioRow = await findHomeRowByText(page, TEMPLATE_NAME);
     await expect(scenarioRow).toBeVisible({ timeout: 10000 });
   });
-});
+  });
+}

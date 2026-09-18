@@ -14,6 +14,8 @@ import {
   openTaskMenu,
   clickContextMenuItem,
   fillTaskDialog,
+  STEAMFITTER_THEMES,
+  applySteamfitterTheme,
 } from '../../test-helpers';
 
 /**
@@ -22,7 +24,8 @@ import {
  * verifies it in the read-only detail panel (which renders "Expected Output: <value>").
  * Cleanup is by parent-template prefix (tasks cascade-delete).
  */
-test.describe('Scenario Template Tasks', () => {
+for (const theme of STEAMFITTER_THEMES) {
+  test.describe(`${theme} theme › Scenario Template Tasks`, () => {
   const TEMPLATE_NAME = `E2E Task Output Template ${Date.now()}`;
   const TASK_NAME = `E2E Output Task ${Date.now()}`;
   const EXPECTED_OUTPUT = 'success';
@@ -39,6 +42,7 @@ test.describe('Scenario Template Tasks', () => {
   });
 
   test('Configure task expected output', async ({ steamfitterAuthenticatedPage: page }) => {
+    await applySteamfitterTheme(page, theme);
     // 1. Expand the template and open the task's Edit dialog.
     await navigateToHomeSection(page, 'Scenario Templates');
     const row = await findHomeRowByText(page, TEMPLATE_NAME);
@@ -56,4 +60,5 @@ test.describe('Scenario Template Tasks', () => {
     const detail = findTaskNode(page, TASK_NAME);
     await expect(detail).toContainText(`Expected Output: ${EXPECTED_OUTPUT}`);
   });
-});
+  });
+}

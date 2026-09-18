@@ -12,9 +12,12 @@ import {
   openRowContextMenu,
   clickContextMenuItem,
   respondToConfirmDialog,
+  STEAMFITTER_THEMES,
+  applySteamfitterTheme,
 } from '../../test-helpers';
 
-test.describe('Scenario Templates Management', () => {
+for (const theme of STEAMFITTER_THEMES) {
+  test.describe(`${theme} theme › Scenario Templates Management`, () => {
   const TEMPLATE_NAME = `E2E Delete Template ${Date.now()}`;
 
   test.beforeEach(async () => {
@@ -28,6 +31,7 @@ test.describe('Scenario Templates Management', () => {
   });
 
   test('Delete a scenario template', async ({ steamfitterAuthenticatedPage: page }) => {
+    await applySteamfitterTheme(page, theme);
     // 1. Open the Scenario Templates section and locate the seeded row.
     await navigateToHomeSection(page, 'Scenario Templates');
     const row = await findHomeRowByText(page, TEMPLATE_NAME);
@@ -55,4 +59,5 @@ test.describe('Scenario Templates Management', () => {
       page.locator('tbody tr.element-row').filter({ hasText: TEMPLATE_NAME })
     ).toHaveCount(0, { timeout: 10000 });
   });
-});
+  });
+}

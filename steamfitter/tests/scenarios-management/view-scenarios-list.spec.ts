@@ -6,9 +6,10 @@
 
 import { test, expect } from '../../fixtures';
 import { seedScenario, deleteScenariosByPrefix } from '../../fixtures';
-import { navigateToHomeSection, findHomeRowByText } from '../../test-helpers';
+import { navigateToHomeSection, findHomeRowByText, STEAMFITTER_THEMES, applySteamfitterTheme } from '../../test-helpers';
 
-test.describe('Scenarios Management', () => {
+for (const theme of STEAMFITTER_THEMES) {
+  test.describe(`${theme} theme › Scenarios Management`, () => {
   const SCENARIO_NAME = `E2E View Scenario ${Date.now()}`;
   const SCENARIO_DESCRIPTION = 'Seeded so the scenarios list has a known row.';
 
@@ -21,6 +22,7 @@ test.describe('Scenarios Management', () => {
   });
 
   test('View scenarios list', async ({ steamfitterAuthenticatedPage: page }) => {
+    await applySteamfitterTheme(page, theme);
     // 1. Open the Scenarios section on the home page.
     await navigateToHomeSection(page, 'Scenarios');
 
@@ -33,4 +35,5 @@ test.describe('Scenarios Management', () => {
     const row = await findHomeRowByText(page, SCENARIO_NAME);
     await expect(row).toBeVisible({ timeout: 10000 });
   });
-});
+  });
+}

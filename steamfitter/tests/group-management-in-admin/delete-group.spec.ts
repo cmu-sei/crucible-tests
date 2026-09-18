@@ -6,14 +6,15 @@
 
 import { test, expect } from '../../fixtures';
 import { seedGroup, deleteGroupsByPrefix } from '../../fixtures';
-import { navigateToAdminSection, respondToConfirmDialog } from '../../test-helpers';
+import { navigateToAdminSection, respondToConfirmDialog, STEAMFITTER_THEMES, applySteamfitterTheme } from '../../test-helpers';
 
 /**
  * A group is deleted from its row via the "Delete <name>" button, which raises a
  * confirm dialog. This spec seeds a group, deletes it through the UI, and confirms its
  * row is gone. The API-prefix cleanup is a backstop in case the UI delete fails.
  */
-test.describe('Group Management in Admin', () => {
+for (const theme of STEAMFITTER_THEMES) {
+  test.describe(`${theme} theme › Group Management in Admin`, () => {
   const GROUP_NAME = `E2E Delete Group ${Date.now()}`;
 
   test.beforeEach(async () => {
@@ -25,6 +26,7 @@ test.describe('Group Management in Admin', () => {
   });
 
   test('Delete a group', async ({ steamfitterAuthenticatedPage: page }) => {
+    await applySteamfitterTheme(page, theme);
     await navigateToAdminSection(page, 'Groups');
 
     // Isolate the seeded group's row.
@@ -51,4 +53,5 @@ test.describe('Group Management in Admin', () => {
       page.locator('tbody tr').filter({ hasText: GROUP_NAME })
     ).toHaveCount(0, { timeout: 10000 });
   });
-});
+  });
+}

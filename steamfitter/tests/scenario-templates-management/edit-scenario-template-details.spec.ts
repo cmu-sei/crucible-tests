@@ -12,9 +12,12 @@ import {
   openRowContextMenu,
   clickContextMenuItem,
   fillScenarioTemplateDialog,
+  STEAMFITTER_THEMES,
+  applySteamfitterTheme,
 } from '../../test-helpers';
 
-test.describe('Scenario Templates Management', () => {
+for (const theme of STEAMFITTER_THEMES) {
+  test.describe(`${theme} theme › Scenario Templates Management`, () => {
   const ORIGINAL_NAME = `E2E Edit Template ${Date.now()}`;
   const UPDATED_NAME = `E2E Edit Template Updated ${Date.now()}`;
   const UPDATED_DESCRIPTION = 'Description updated by an automated end-to-end test.';
@@ -31,6 +34,7 @@ test.describe('Scenario Templates Management', () => {
   });
 
   test('Edit scenario template details', async ({ steamfitterAuthenticatedPage: page }) => {
+    await applySteamfitterTheme(page, theme);
     // 1. Open the Scenario Templates section and locate the seeded row.
     await navigateToHomeSection(page, 'Scenario Templates');
     const row = await findHomeRowByText(page, ORIGINAL_NAME);
@@ -61,4 +65,5 @@ test.describe('Scenario Templates Management', () => {
       page.locator('tbody tr.element-row').filter({ hasText: ORIGINAL_NAME })
     ).toHaveCount(0);
   });
-});
+  });
+}

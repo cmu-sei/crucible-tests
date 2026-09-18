@@ -12,6 +12,8 @@ import {
   expandScenarioTemplateRow,
   findTaskNode,
   fillTaskDialog,
+  STEAMFITTER_THEMES,
+  applySteamfitterTheme,
 } from '../../test-helpers';
 
 /**
@@ -20,7 +22,8 @@ import {
  * Name, so a name is enough to persist a new task (POST /api/tasks). The task is
  * removed when its parent template is deleted, so cleanup is by template name prefix.
  */
-test.describe('Scenario Template Tasks', () => {
+for (const theme of STEAMFITTER_THEMES) {
+  test.describe(`${theme} theme › Scenario Template Tasks`, () => {
   const TEMPLATE_NAME = `E2E Task Add Template ${Date.now()}`;
   const TASK_NAME = `E2E Added Task ${Date.now()}`;
 
@@ -33,6 +36,7 @@ test.describe('Scenario Template Tasks', () => {
   });
 
   test('Add a task to a scenario template', async ({ steamfitterAuthenticatedPage: page }) => {
+    await applySteamfitterTheme(page, theme);
     // 1. Open the Scenario Templates section and expand the seeded template.
     await navigateToHomeSection(page, 'Scenario Templates');
     const row = await findHomeRowByText(page, TEMPLATE_NAME);
@@ -50,4 +54,5 @@ test.describe('Scenario Template Tasks', () => {
     const taskNode = findTaskNode(page, TASK_NAME);
     await expect(taskNode).toBeVisible({ timeout: 10000 });
   });
-});
+  });
+}

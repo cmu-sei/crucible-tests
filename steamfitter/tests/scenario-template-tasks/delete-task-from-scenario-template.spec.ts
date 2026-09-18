@@ -14,6 +14,8 @@ import {
   openTaskMenu,
   clickContextMenuItem,
   respondToConfirmDialog,
+  STEAMFITTER_THEMES,
+  applySteamfitterTheme,
 } from '../../test-helpers';
 
 /**
@@ -23,7 +25,8 @@ import {
  * for the task itself once the delete under test succeeds), so it is by template name
  * prefix.
  */
-test.describe('Scenario Template Tasks', () => {
+for (const theme of STEAMFITTER_THEMES) {
+  test.describe(`${theme} theme › Scenario Template Tasks`, () => {
   const TEMPLATE_NAME = `E2E Task Delete Template ${Date.now()}`;
   const TASK_NAME = `E2E Delete Task ${Date.now()}`;
 
@@ -41,6 +44,7 @@ test.describe('Scenario Template Tasks', () => {
   test('Delete a task from a scenario template', async ({
     steamfitterAuthenticatedPage: page,
   }) => {
+    await applySteamfitterTheme(page, theme);
     // 1. Open the Scenario Templates section and expand the seeded template.
     await navigateToHomeSection(page, 'Scenario Templates');
     const row = await findHomeRowByText(page, TEMPLATE_NAME);
@@ -69,4 +73,5 @@ test.describe('Scenario Template Tasks', () => {
       page.locator('mat-tree-node').filter({ hasText: TASK_NAME })
     ).toHaveCount(0, { timeout: 10000 });
   });
-});
+  });
+}

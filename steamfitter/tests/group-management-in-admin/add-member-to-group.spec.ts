@@ -11,7 +11,7 @@ import {
   deleteUsersByPrefix,
   deleteGroupsByPrefix,
 } from '../../fixtures';
-import { navigateToAdminSection } from '../../test-helpers';
+import { navigateToAdminSection, STEAMFITTER_THEMES, applySteamfitterTheme } from '../../test-helpers';
 
 /**
  * A group's members are edited inline: expanding a group row reveals a "Users"
@@ -19,7 +19,8 @@ import { navigateToAdminSection } from '../../test-helpers';
  * membership and moves the user into the members list. This spec seeds a group and a
  * user, expands the group, adds the user, and confirms it lands in Group Members.
  */
-test.describe('Group Management in Admin', () => {
+for (const theme of STEAMFITTER_THEMES) {
+  test.describe(`${theme} theme › Group Management in Admin`, () => {
   const GROUP_NAME = `E2E Member Group ${Date.now()}`;
   const USER_NAME = `E2E Member User ${Date.now()}`;
 
@@ -34,6 +35,7 @@ test.describe('Group Management in Admin', () => {
   });
 
   test('Add a member to a group', async ({ steamfitterAuthenticatedPage: page }) => {
+    await applySteamfitterTheme(page, theme);
     await navigateToAdminSection(page, 'Groups');
 
     // Isolate and expand the seeded group's row.
@@ -70,4 +72,5 @@ test.describe('Group Management in Admin', () => {
       membersList.locator('tbody tr').filter({ hasText: USER_NAME }).first()
     ).toBeVisible({ timeout: 10000 });
   });
-});
+  });
+}
