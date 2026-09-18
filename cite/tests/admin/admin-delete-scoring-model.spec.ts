@@ -5,13 +5,17 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
-import { navigateToAdminSection, deleteScoringModelByName, findAdminRowByName } from '../../test-helpers';
+import { navigateToAdminSection, deleteScoringModelByName, findAdminRowByName, CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Administration - Scoring Models', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Administration - Scoring Models`, () => {
 
   const TEST_MODEL_NAME = 'Test Model For Delete';
 
   test('Delete Scoring Model', async ({ citeAuthenticatedPage: page }) => {
+
+    await applyCiteTheme(page, theme);
 
     // Create a test scoring model first
     await navigateToAdminSection(page, 'Scoring Models');
@@ -51,6 +55,10 @@ test.describe('Administration - Scoring Models', () => {
   });
 
   test.afterEach(async ({ citeAuthenticatedPage: page }) => {
+
+    await applyCiteTheme(page, theme);
+
     await deleteScoringModelByName(page, TEST_MODEL_NAME);
   });
-});
+  });
+}

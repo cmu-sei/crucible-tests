@@ -5,9 +5,13 @@
 // seed: tests/seed.setup.ts
 
 import { test, expect, Services } from '../../fixtures';
+import { CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Accessibility', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Accessibility`, () => {
   test('Screen Reader Compatibility - Form Labels', async ({ citeAuthenticatedPage: page }) => {
+    await applyCiteTheme(page, theme);
 
     // 1. Navigate to the home page and check form inputs
     await page.waitForLoadState('networkidle');
@@ -105,4 +109,5 @@ test.describe('Accessibility', () => {
 
     expect(inputCount).toBeGreaterThan(0); // Ensure we actually found and checked some inputs
   });
-});
+  });
+}

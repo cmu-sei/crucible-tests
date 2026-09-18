@@ -5,9 +5,13 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
+import { CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Performance', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Performance`, () => {
   test('API Response Time - Evaluation List', async ({ citeAuthenticatedPage: page }) => {
+    await applyCiteTheme(page, theme);
 
     // 1. Monitor network requests when loading evaluation list
     const apiTimes: number[] = [];
@@ -31,4 +35,5 @@ test.describe('Performance', () => {
 
     // expect: No unnecessary API calls are made
   });
-});
+  });
+}

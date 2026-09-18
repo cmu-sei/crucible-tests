@@ -5,9 +5,13 @@
 // seed: tests/seed.setup.ts
 
 import { test, expect, Services } from '../../fixtures';
+import { CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Accessibility', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Accessibility`, () => {
   test('Keyboard Navigation - Tab Order', async ({ citeAuthenticatedPage: page }) => {
+    await applyCiteTheme(page, theme);
 
     // 1. Navigate to home page - already authenticated via fixture
     // Wait for the page to be fully loaded and interactive
@@ -56,4 +60,5 @@ test.describe('Accessibility', () => {
     // This validates that keyboard navigation is working and elements are reachable
     expect(foundInteractiveElements).toBeGreaterThanOrEqual(5);
   });
-});
+  });
+}

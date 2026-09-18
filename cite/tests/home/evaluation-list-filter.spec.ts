@@ -5,11 +5,16 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, serviceUrlPattern, seedCompleteEvaluation, cleanupCompleteEvaluation } from '../../fixtures';
-import { navigateToAdminSection } from '../../test-helpers';
+import { navigateToAdminSection, CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Home Page and Evaluation List', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Home Page and Evaluation List`, () => {
 
   test('Evaluation List Search/Filter', async ({ citeAuthenticatedPage: page }) => {
+
+    await applyCiteTheme(page, theme);
+
     // 1. Seed multiple evaluations via API to ensure they exist
     const timestamp = Date.now();
     const evalName1 = `E2E Filter Alpha ${timestamp}`;
@@ -104,4 +109,5 @@ test.describe('Home Page and Evaluation List', () => {
     await cleanupCompleteEvaluation(seededData1);
     await cleanupCompleteEvaluation(seededData2);
   });
-});
+  });
+}

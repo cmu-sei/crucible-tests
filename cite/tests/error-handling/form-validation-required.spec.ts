@@ -5,9 +5,13 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
+import { CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Error Handling and Edge Cases', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Error Handling and Edge Cases`, () => {
   test('Form Validation - Required Fields', async ({ citeAuthenticatedPage: page }) => {
+    await applyCiteTheme(page, theme);
 
     // 1. Navigate to admin page (defaults to Evaluations section)
     await page.goto(`${Services.Cite.UI}/admin`);
@@ -35,4 +39,5 @@ test.describe('Error Handling and Edge Cases', () => {
       await errorMessage.isVisible({ timeout: 3000 }).catch(() => false);
     }
   });
-});
+  });
+}

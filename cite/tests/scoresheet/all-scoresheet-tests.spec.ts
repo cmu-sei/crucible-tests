@@ -8,7 +8,7 @@
 // avoiding parallel execution issues where multiple tests compete for the same "Admin User" visibility.
 
 import { test, expect, Services, serviceUrlPattern, ensureScoringModelExists, getCiteApiToken, purgeStaleEvaluations, settleForResponse } from '../../fixtures';
-import { navigateToAdminSection, deleteEvaluationByName, deleteTeamTypeByName } from '../../test-helpers';
+import { navigateToAdminSection, deleteEvaluationByName, deleteTeamTypeByName, CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 import { request as pwRequest, type Locator } from '@playwright/test';
 
 async function waitForVisible(locator: Locator, timeout: number): Promise<boolean> {
@@ -385,7 +385,9 @@ async function navigateToEvaluationScoresheet(
 // Configure tests to run serially to avoid parallel execution conflicts
 test.describe.configure({ mode: 'serial' });
 
-test.describe('Scoresheet Interface', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Scoresheet Interface`, () => {
 
   // Keep the evaluations list small/deterministic — the admin suite may have flooded it.
   test.beforeAll(async () => {
@@ -393,6 +395,9 @@ test.describe('Scoresheet Interface', () => {
   });
 
   test('Scoresheet Initial Load', async ({ citeAuthenticatedPage: page }) => {
+
+    await applyCiteTheme(page, theme);
+
     const TT = 'E2E SS-IL Team Type';
     const EV = 'E2E SS-IL Evaluation';
 
@@ -420,6 +425,9 @@ test.describe('Scoresheet Interface', () => {
   });
 
   test('View User Submission', async ({ citeAuthenticatedPage: page }) => {
+
+    await applyCiteTheme(page, theme);
+
     const TT = 'E2E SS-VU Team Type';
     const EV = 'E2E SS-VU Evaluation';
 
@@ -442,6 +450,9 @@ test.describe('Scoresheet Interface', () => {
   });
 
   test('View Team Submission', async ({ citeAuthenticatedPage: page }) => {
+
+    await applyCiteTheme(page, theme);
+
     const TT = 'E2E SS-VT Team Type';
     const EV = 'E2E SS-VT Evaluation';
 
@@ -464,6 +475,9 @@ test.describe('Scoresheet Interface', () => {
   });
 
   test('View Team Average Submission', async ({ citeAuthenticatedPage: page }) => {
+
+    await applyCiteTheme(page, theme);
+
     const TT = 'E2E SS-TA Team Type';
     const EV = 'E2E SS-TA Evaluation';
 
@@ -488,6 +502,9 @@ test.describe('Scoresheet Interface', () => {
   });
 
   test('View Group Average Submission', async ({ citeAuthenticatedPage: page }) => {
+
+    await applyCiteTheme(page, theme);
+
     const TT = 'E2E SS-GA Team Type';
     const EV = 'E2E SS-GA Evaluation';
 
@@ -512,6 +529,9 @@ test.describe('Scoresheet Interface', () => {
   });
 
   test('View Official Submission', async ({ citeAuthenticatedPage: page }) => {
+
+    await applyCiteTheme(page, theme);
+
     const TT = 'E2E SS-VO Team Type';
     const EV = 'E2E SS-VO Evaluation';
 
@@ -536,6 +556,9 @@ test.describe('Scoresheet Interface', () => {
   });
 
   test('Modify Score with CanSubmit Permission', async ({ citeAuthenticatedPage: page }) => {
+
+    await applyCiteTheme(page, theme);
+
     const TT = 'E2E SS-MS Team Type';
     const EV = 'E2E SS-MS Evaluation';
 
@@ -578,6 +601,9 @@ test.describe('Scoresheet Interface', () => {
   });
 
   test('Modify Score without CanSubmit Permission', async ({ citeAuthenticatedPage: page }) => {
+
+    await applyCiteTheme(page, theme);
+
     const TT = 'E2E SS-MU Team Type';
     const EV = 'E2E SS-MU Evaluation';
 
@@ -606,6 +632,9 @@ test.describe('Scoresheet Interface', () => {
   });
 
   test('Add Comment to Score', async ({ citeAuthenticatedPage: page }) => {
+
+    await applyCiteTheme(page, theme);
+
     const TT = 'E2E SS-AC Team Type';
     const EV = 'E2E SS-AC Evaluation';
 
@@ -638,6 +667,9 @@ test.describe('Scoresheet Interface', () => {
   });
 
   test('View Score Summary', async ({ citeAuthenticatedPage: page }) => {
+
+    await applyCiteTheme(page, theme);
+
     const TT = 'E2E SS-VS Team Type';
     const EV = 'E2E SS-VS Evaluation';
 
@@ -660,4 +692,5 @@ test.describe('Scoresheet Interface', () => {
     await deleteEvaluationByName(page, EV);
     await deleteTeamTypeByName(page, TT);
   });
-});
+  });
+}

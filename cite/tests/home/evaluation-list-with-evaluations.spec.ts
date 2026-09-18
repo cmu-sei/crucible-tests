@@ -5,11 +5,17 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, serviceUrlPattern, seedCompleteEvaluation, cleanupCompleteEvaluation } from '../../fixtures';
+import { CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Home Page and Evaluation List', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Home Page and Evaluation List`, () => {
   let evaluationIds: { evaluationId: string; scoringModelId: string; teamTypeId: string; } | null = null;
 
   test('Evaluation List Display - With Evaluations', async ({ citeAuthenticatedPage: page }) => {
+
+    await applyCiteTheme(page, theme);
+
     // 1. Seed a complete evaluation with team and membership via API
     const seededData = await seedCompleteEvaluation(`E2E Display Test Evaluation ${Date.now()}`);
     evaluationIds = {
@@ -48,4 +54,5 @@ test.describe('Home Page and Evaluation List', () => {
       evaluationIds = null;
     }
   });
-});
+  });
+}

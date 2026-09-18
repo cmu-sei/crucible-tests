@@ -5,9 +5,13 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Performance', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Performance`, () => {
   test('Page Load Performance - Evaluation Dashboard', async ({ citeAuthenticatedPage: page }) => {
+    await applyCiteTheme(page, theme);
 
     // Navigate to home first
     await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
@@ -27,4 +31,5 @@ test.describe('Performance', () => {
     // expect: Dashboard loads within acceptable time
     expect(loadTime).toBeLessThan(10000);
   });
-});
+  });
+}

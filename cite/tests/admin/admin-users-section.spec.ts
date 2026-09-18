@@ -5,10 +5,13 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
-import { navigateToAdminSection } from '../../test-helpers';
+import { navigateToAdminSection, CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Administration - Users', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Administration - Users`, () => {
   test('Users Section', async ({ citeAuthenticatedPage: page }) => {
+    await applyCiteTheme(page, theme);
 
     await navigateToAdminSection(page, 'Users');
 
@@ -18,4 +21,5 @@ test.describe('Administration - Users', () => {
     const searchField = page.getByRole('textbox', { name: 'Search' });
     await expect(searchField).toBeVisible({ timeout: 5000 });
   });
-});
+  });
+}

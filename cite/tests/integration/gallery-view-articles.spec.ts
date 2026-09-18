@@ -5,7 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, serviceUrlPattern, oidcStorageKey, ensureScoringModelExists, purgeStaleEvaluations, settleForResponse } from '../../fixtures';
-import { deleteEvaluationByName, navigateToAdminSection } from '../../test-helpers';
+import { deleteEvaluationByName, navigateToAdminSection, CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 import {
   getKeycloakToken,
   createGalleryCollection,
@@ -240,7 +240,9 @@ async function navigateToEvaluationDashboard(page: import('@playwright/test').Pa
 // Run tests serially - they share Gallery API and Keycloak infrastructure
 test.describe.configure({ mode: 'serial' });
 
-test.describe('Integration with Gallery', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Integration with Gallery`, () => {
 
   // Keep the evaluations list small/deterministic — the admin suite may have flooded it.
   test.beforeAll(async () => {
@@ -248,6 +250,9 @@ test.describe('Integration with Gallery', () => {
   });
 
   test('Gallery Integration - View Articles', async ({ citeAuthenticatedPage: page }) => {
+
+    await applyCiteTheme(page, theme);
+
     const TEST_EVAL_NAME = 'E2E Gallery View Articles';
     let cleanup: { token: string; collectionId: string; exhibitId: string } | undefined;
 
@@ -282,6 +287,9 @@ test.describe('Integration with Gallery', () => {
   });
 
   test('Gallery Integration - Unread Articles Notification', async ({ citeAuthenticatedPage: page }) => {
+
+    await applyCiteTheme(page, theme);
+
     const TEST_EVAL_NAME = 'E2E Gallery Unread Articles';
     let cleanup: { token: string; collectionId: string; exhibitId: string } | undefined;
 
@@ -320,4 +328,5 @@ test.describe('Integration with Gallery', () => {
       }
     }
   });
-});
+  });
+}

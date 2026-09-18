@@ -5,9 +5,13 @@
 // seed: tests/seed.setup.ts
 
 import { test, expect, Services } from '../../fixtures';
+import { CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Accessibility', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Accessibility`, () => {
   test('Focus Management - Modal Dialogs', async ({ citeAuthenticatedPage: page }) => {
+    await applyCiteTheme(page, theme);
 
     // Navigate to the home page
     await page.waitForLoadState('networkidle');
@@ -100,4 +104,5 @@ test.describe('Accessibility', () => {
 
     console.log('Focus management test completed successfully');
   });
-});
+  });
+}

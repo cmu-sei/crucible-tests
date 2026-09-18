@@ -5,9 +5,13 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Home Page and Evaluation List', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Home Page and Evaluation List`, () => {
   test('Evaluation List Display - Empty State', async ({ citeAuthenticatedPage: page }) => {
+    await applyCiteTheme(page, theme);
 
     // 1. Navigate to home page
     await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
@@ -48,4 +52,5 @@ test.describe('Home Page and Evaluation List', () => {
       await expect(rows.first().or(page.locator('text=No evaluations, text=No results'))).toBeVisible({ timeout: 5000 });
     }
   });
-});
+  });
+}

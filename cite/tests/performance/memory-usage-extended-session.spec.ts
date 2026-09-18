@@ -5,9 +5,13 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Performance', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Performance`, () => {
   test('Memory Usage - Extended Session', async ({ citeAuthenticatedPage: page }) => {
+    await applyCiteTheme(page, theme);
 
     // 1. Log in and navigate through various pages and sections
     await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
@@ -51,4 +55,5 @@ test.describe('Performance', () => {
 
     // expect: Application performance does not degrade over time
   });
-});
+  });
+}

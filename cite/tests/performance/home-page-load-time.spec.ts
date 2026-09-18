@@ -5,9 +5,13 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
+import { CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Performance', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Performance`, () => {
   test('Page Load Performance - Home Page', async ({ citeAuthenticatedPage: page }) => {
+    await applyCiteTheme(page, theme);
 
     // 1. Measure time from navigation to home page until page is fully loaded
     const startTime = Date.now();
@@ -26,4 +30,5 @@ test.describe('Performance', () => {
 
     // expect: No blocking resources delay rendering
   });
-});
+  });
+}

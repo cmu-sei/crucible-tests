@@ -5,10 +5,13 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
-import { navigateToAdminSection } from '../../test-helpers';
+import { navigateToAdminSection, CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Administration - Scoring Models', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Administration - Scoring Models`, () => {
   test('Scoring Models Section', async ({ citeAuthenticatedPage: page }) => {
+    await applyCiteTheme(page, theme);
 
     // 1. Navigate to Scoring Models admin section
     await navigateToAdminSection(page, 'Scoring Models');
@@ -30,4 +33,5 @@ test.describe('Administration - Scoring Models', () => {
     const addButton = page.getByRole('button', { name: 'Add Scoring Model' });
     await expect(addButton).toBeVisible({ timeout: 5000 });
   });
-});
+  });
+}

@@ -5,10 +5,13 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
-import { navigateToAdminSection } from '../../test-helpers';
+import { navigateToAdminSection, CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Administration - Submissions', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Administration - Submissions`, () => {
   test('Submissions Section', async ({ citeAuthenticatedPage: page }) => {
+    await applyCiteTheme(page, theme);
 
     await navigateToAdminSection(page, 'Submissions');
 
@@ -21,4 +24,5 @@ test.describe('Administration - Submissions', () => {
     const typesFilter = page.getByRole('combobox', { name: 'Types' });
     await expect(typesFilter).toBeVisible({ timeout: 5000 });
   });
-});
+  });
+}

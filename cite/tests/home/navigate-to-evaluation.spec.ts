@@ -5,10 +5,16 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, serviceUrlPattern, seedCompleteEvaluation, cleanupCompleteEvaluation } from '../../fixtures';
+import { CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Home Page and Evaluation List', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Home Page and Evaluation List`, () => {
 
   test('Navigate to Evaluation from List', async ({ citeAuthenticatedPage: page }) => {
+
+    await applyCiteTheme(page, theme);
+
     // 1. Seed a complete evaluation via API with admin as member
     const timestamp = Date.now();
     const evalName = `E2E Navigate Test ${timestamp}`;
@@ -40,4 +46,5 @@ test.describe('Home Page and Evaluation List', () => {
     // Cleanup
     await cleanupCompleteEvaluation(seededData);
   });
-});
+  });
+}

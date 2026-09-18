@@ -5,15 +5,19 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, seedTeamType, apiDeleteTeamType } from '../../fixtures';
-import { navigateToAdminSection, waitForAdminListLoad } from '../../test-helpers';
+import { navigateToAdminSection, waitForAdminListLoad, CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Administration - Team Types', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Administration - Team Types`, () => {
 
   let teamTypeName = '';
   let teamTypeId = '';
   const EDITED_TEAM_TYPE = `Edited TT ${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
   test('Edit Team Type', async ({ citeAuthenticatedPage: page }) => {
+
+    await applyCiteTheme(page, theme);
 
     // 1. Seed a team type via API
     teamTypeName = `Edit TT ${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
@@ -75,4 +79,5 @@ test.describe('Administration - Team Types', () => {
       teamTypeId = '';
     }
   });
-});
+  });
+}

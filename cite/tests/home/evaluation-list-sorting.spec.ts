@@ -5,12 +5,18 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, serviceUrlPattern, seedCompleteEvaluation, cleanupCompleteEvaluation } from '../../fixtures';
+import { CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Home Page and Evaluation List', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Home Page and Evaluation List`, () => {
   let evaluation1Ids: { evaluationId: string; scoringModelId: string; teamTypeId: string; } | null = null;
   let evaluation2Ids: { evaluationId: string; scoringModelId: string; teamTypeId: string; } | null = null;
 
   test('Evaluation List Sorting', async ({ citeAuthenticatedPage: page }) => {
+
+    await applyCiteTheme(page, theme);
+
     const timestamp = Date.now();
 
     // 1. Create two evaluations via API with team memberships
@@ -64,4 +70,5 @@ test.describe('Home Page and Evaluation List', () => {
       evaluation2Ids = null;
     }
   });
-});
+  });
+}

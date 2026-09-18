@@ -5,9 +5,11 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, seedScoringModel, apiDeleteScoringModel, settleForResponse } from '../../fixtures';
-import { navigateToAdminSection, deleteEvaluationByName } from '../../test-helpers';
+import { navigateToAdminSection, deleteEvaluationByName, CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Administration - Evaluations', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Administration - Evaluations`, () => {
   let scoringModelId: string | null = null;
 
   test.beforeEach(async () => {
@@ -16,6 +18,8 @@ test.describe('Administration - Evaluations', () => {
   });
 
   test('Create Evaluation', async ({ citeAuthenticatedPage: page }) => {
+
+    await applyCiteTheme(page, theme);
 
     // 1. Navigate to admin evaluations section
     await navigateToAdminSection(page, 'Evaluations');
@@ -77,6 +81,9 @@ test.describe('Administration - Evaluations', () => {
   });
 
   test.afterEach(async ({ citeAuthenticatedPage: page }) => {
+
+    await applyCiteTheme(page, theme);
+
     // Cleanup: Delete test evaluations
     await deleteEvaluationByName(page, 'Test Evaluation Automation');
 
@@ -86,4 +93,5 @@ test.describe('Administration - Evaluations', () => {
       scoringModelId = null;
     }
   });
-});
+  });
+}

@@ -5,14 +5,18 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, seedCompleteEvaluation, cleanupCompleteEvaluation } from '../../fixtures';
-import { navigateToAdminSection, waitForAdminListLoad } from '../../test-helpers';
+import { navigateToAdminSection, waitForAdminListLoad, CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Administration - Evaluations', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Administration - Evaluations`, () => {
 
   let evalName = '';
   let seedData: { scoringModelId: string; evaluationId: string; teamTypeId: string } | null = null;
 
   test('Manage Evaluation Memberships', async ({ citeAuthenticatedPage: page }) => {
+
+    await applyCiteTheme(page, theme);
 
     // 1. Seed a complete evaluation via API
     evalName = `Memberships Test ${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
@@ -55,4 +59,5 @@ test.describe('Administration - Evaluations', () => {
       seedData = null;
     }
   });
-});
+  });
+}

@@ -5,12 +5,14 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, seedCompleteEvaluation, cleanupCompleteEvaluation } from '../../fixtures';
-import { navigateToAdminSection, waitForAdminListLoad, deleteEvaluationByName } from '../../test-helpers';
+import { navigateToAdminSection, waitForAdminListLoad, deleteEvaluationByName, CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 
-test.describe('Administration - Evaluations', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Administration - Evaluations`, () => {
 
   const UPLOADED_EVAL_NAME = `Uploaded Eval ${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
   let tempFilePath: string;
@@ -18,6 +20,8 @@ test.describe('Administration - Evaluations', () => {
   let evalName = '';
 
   test('Upload Evaluation', async ({ citeAuthenticatedPage: page }) => {
+
+    await applyCiteTheme(page, theme);
 
     // 1. Seed an evaluation via API to get a valid download
     evalName = `Upload Test ${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
@@ -79,6 +83,9 @@ test.describe('Administration - Evaluations', () => {
   });
 
   test.afterEach(async ({ citeAuthenticatedPage: page }) => {
+
+    await applyCiteTheme(page, theme);
+
     // Clean up the original seeded evaluation via API
     if (seedData) {
       await cleanupCompleteEvaluation(seedData);
@@ -90,4 +97,5 @@ test.describe('Administration - Evaluations', () => {
       fs.unlinkSync(tempFilePath);
     }
   });
-});
+  });
+}

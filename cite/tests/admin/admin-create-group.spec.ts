@@ -5,13 +5,17 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
-import { navigateToAdminSection, deleteGroupByName } from '../../test-helpers';
+import { navigateToAdminSection, deleteGroupByName, CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Administration - Groups', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Administration - Groups`, () => {
 
   const TEST_GROUP_NAME = 'Test Group Automation';
 
   test('Create Group', async ({ citeAuthenticatedPage: page }) => {
+
+    await applyCiteTheme(page, theme);
 
     await navigateToAdminSection(page, 'Groups');
 
@@ -36,6 +40,10 @@ test.describe('Administration - Groups', () => {
   });
 
   test.afterEach(async ({ citeAuthenticatedPage: page }) => {
+
+    await applyCiteTheme(page, theme);
+
     await deleteGroupByName(page, TEST_GROUP_NAME);
   });
-});
+  });
+}

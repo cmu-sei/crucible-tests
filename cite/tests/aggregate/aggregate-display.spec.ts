@@ -5,25 +5,32 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
-import { navigateToAdminSection, createEvaluation, deleteEvaluationByName } from '../../test-helpers';
+import { navigateToAdminSection, createEvaluation, deleteEvaluationByName, CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
 // These tests share backend state (admin user memberships, team types) with
 // other aggregate tests. Running them serially avoids SignalR/session races
 // that produce an empty membership list or stale team data.
 test.describe.configure({ mode: 'serial' });
 
-test.describe('Aggregate Interface', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Aggregate Interface`, () => {
 
   const TEST_EVAL_NAME = 'Aggregate Display Test Eval';
   const TEST_TEAM_NAME = 'Aggregate Test Team';
   const TEST_TEAM_SHORT = 'AGT';
 
   test.beforeEach(async ({ citeAuthenticatedPage: page }) => {
+
+    await applyCiteTheme(page, theme);
+
     // Clean up any existing test evaluations first
     await deleteEvaluationByName(page, TEST_EVAL_NAME);
   });
 
   test('Aggregate Display', async ({ citeAuthenticatedPage: page }) => {
+
+    await applyCiteTheme(page, theme);
 
     // 1. Create an evaluation via admin
     await createEvaluation(page, TEST_EVAL_NAME);
@@ -179,6 +186,10 @@ test.describe('Aggregate Interface', () => {
   });
 
   test.afterEach(async ({ citeAuthenticatedPage: page }) => {
+
+    await applyCiteTheme(page, theme);
+
     await deleteEvaluationByName(page, TEST_EVAL_NAME);
   });
-});
+  });
+}

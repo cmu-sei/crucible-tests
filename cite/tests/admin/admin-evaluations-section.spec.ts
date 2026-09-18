@@ -5,10 +5,13 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
-import { navigateToAdminSection } from '../../test-helpers';
+import { navigateToAdminSection, CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Administration - Evaluations', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Administration - Evaluations`, () => {
   test('Evaluations Section Navigation', async ({ citeAuthenticatedPage: page }) => {
+    await applyCiteTheme(page, theme);
 
     // 1. Navigate to admin page
     await page.goto(`${Services.Cite.UI}/admin`);
@@ -31,4 +34,5 @@ test.describe('Administration - Evaluations', () => {
     const statusFilter = page.getByRole('combobox', { name: 'Statuses' });
     await expect(statusFilter).toBeVisible({ timeout: 5000 });
   });
-});
+  });
+}

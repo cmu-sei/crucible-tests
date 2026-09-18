@@ -5,10 +5,13 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
-import { navigateToAdminSection } from '../../test-helpers';
+import { navigateToAdminSection, CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Administration - Roles', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Administration - Roles`, () => {
   test('View System Roles', async ({ citeAuthenticatedPage: page }) => {
+    await applyCiteTheme(page, theme);
 
     await navigateToAdminSection(page, 'Roles');
 
@@ -19,4 +22,5 @@ test.describe('Administration - Roles', () => {
     const table = page.locator('table');
     await expect(table).toBeVisible({ timeout: 10000 });
   });
-});
+  });
+}

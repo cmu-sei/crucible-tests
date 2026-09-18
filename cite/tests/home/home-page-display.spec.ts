@@ -5,9 +5,13 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Home Page and Evaluation List', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Home Page and Evaluation List`, () => {
   test('Home Page Display', async ({ citeAuthenticatedPage: page }) => {
+    await applyCiteTheme(page, theme);
 
     // 1. Log in and land on home page
     // expect: Home page displays with 'CITE' icon and 'My Evaluations' title
@@ -29,4 +33,5 @@ test.describe('Home Page and Evaluation List', () => {
     const adminButton = page.locator('button:has-text("Administration"), a:has-text("Administration"), button:has-text("Admin"), a:has-text("Admin")').first();
     await expect(adminButton).toBeVisible({ timeout: 5000 });
   });
-});
+  });
+}

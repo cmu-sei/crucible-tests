@@ -5,9 +5,13 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Error Handling and Edge Cases', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Error Handling and Edge Cases`, () => {
   test('Browser Back Button Navigation', async ({ citeAuthenticatedPage: page }) => {
+    await applyCiteTheme(page, theme);
 
     // 1. Navigate through multiple pages (home -> admin)
     await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
@@ -30,4 +34,5 @@ test.describe('Error Handling and Edge Cases', () => {
     // expect: No errors occur
     await expect(page.locator('body')).toBeVisible();
   });
-});
+  });
+}

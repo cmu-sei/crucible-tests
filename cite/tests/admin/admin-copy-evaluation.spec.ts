@@ -5,15 +5,19 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, seedCompleteEvaluation, cleanupCompleteEvaluation } from '../../fixtures';
-import { navigateToAdminSection, waitForAdminListLoad } from '../../test-helpers';
+import { navigateToAdminSection, waitForAdminListLoad, CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Administration - Evaluations', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Administration - Evaluations`, () => {
 
   let evaluationIds: { scoringModelId: string; evaluationId: string; teamTypeId: string } | null = null;
   let evalName = '';
   const COPIED_EVAL_SUFFIX = '- Admin User';
 
   test('Copy Evaluation', async ({ citeAuthenticatedPage: page }) => {
+
+    await applyCiteTheme(page, theme);
 
     // 1. Seed an evaluation via API
     evalName = `Copy Test ${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
@@ -75,4 +79,5 @@ test.describe('Administration - Evaluations', () => {
       evaluationIds = null;
     }
   });
-});
+  });
+}

@@ -5,13 +5,17 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
-import { navigateToAdminSection, deleteTeamTypeByName } from '../../test-helpers';
+import { navigateToAdminSection, deleteTeamTypeByName, CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Administration - Team Types', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Administration - Team Types`, () => {
 
   const TEST_TEAM_TYPE = 'Test Team Type Automation';
 
   test('Create Team Type', async ({ citeAuthenticatedPage: page }) => {
+
+    await applyCiteTheme(page, theme);
 
     await navigateToAdminSection(page, 'Team Types');
 
@@ -34,6 +38,10 @@ test.describe('Administration - Team Types', () => {
   });
 
   test.afterEach(async ({ citeAuthenticatedPage: page }) => {
+
+    await applyCiteTheme(page, theme);
+
     await deleteTeamTypeByName(page, TEST_TEAM_TYPE);
   });
-});
+  });
+}

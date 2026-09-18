@@ -5,10 +5,13 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
-import { navigateToAdminSection } from '../../test-helpers';
+import { navigateToAdminSection, CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Administration - Users', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Administration - Users`, () => {
   test('View User Details', async ({ citeAuthenticatedPage: page }) => {
+    await applyCiteTheme(page, theme);
 
     await navigateToAdminSection(page, 'Users');
 
@@ -21,4 +24,5 @@ test.describe('Administration - Users', () => {
     // Verify user data is visible
     await expect(rows.first()).toContainText('Admin User');
   });
-});
+  });
+}

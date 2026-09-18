@@ -8,7 +8,7 @@
 // avoiding parallel execution issues where multiple tests compete for the same "Admin User" visibility.
 
 import { test, expect, Services, serviceUrlPattern, ensureScoringModelExists, purgeStaleEvaluations, settleForResponse } from '../../fixtures';
-import { navigateToAdminSection, deleteEvaluationByName, deleteTeamTypeByName } from '../../test-helpers';
+import { navigateToAdminSection, deleteEvaluationByName, deleteTeamTypeByName, CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
 // Test data constants
 const EXPORT_TEAM_TYPE = 'E2E Export Team Type';
@@ -217,7 +217,9 @@ async function navigateToEvaluation(page: import('@playwright/test').Page, evalN
 // Configure tests to run serially to avoid parallel execution conflicts
 test.describe.configure({ mode: 'serial' });
 
-test.describe('Report Interface', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Report Interface`, () => {
 
   // Keep the evaluations list small/deterministic — the admin suite may have flooded it.
   test.beforeAll(async () => {
@@ -226,6 +228,9 @@ test.describe('Report Interface', () => {
 
 
   test('Report Display', async ({ citeAuthenticatedPage: page }) => {
+
+
+    await applyCiteTheme(page, theme);
 
     await createActiveEvalWithMoveAndTeam(page, DISPLAY_TEAM_TYPE, DISPLAY_EVAL_NAME, 'Display Test Team', 'DTT');
     await navigateToEvaluation(page, DISPLAY_EVAL_NAME, 'E2E Display');
@@ -254,6 +259,8 @@ test.describe('Report Interface', () => {
   });
 
   test('Export Report Data', async ({ citeAuthenticatedPage: page }) => {
+
+    await applyCiteTheme(page, theme);
 
     await createActiveEvalWithMoveAndTeam(page, EXPORT_TEAM_TYPE, EXPORT_EVAL_NAME, 'Export Test Team', 'ETT');
     await navigateToEvaluation(page, EXPORT_EVAL_NAME, 'E2E Export');
@@ -294,6 +301,8 @@ test.describe('Report Interface', () => {
 
   test('View Team Comparison - Toggle User/Team Scores', async ({ citeAuthenticatedPage: page }) => {
 
+    await applyCiteTheme(page, theme);
+
     await createActiveEvalWithMoveAndTeam(page, COMPARISON_TEAM_TYPE, COMPARISON_EVAL_NAME, 'Comparison Test Team', 'CTT');
     await navigateToEvaluation(page, COMPARISON_EVAL_NAME, 'E2E Comparison');
 
@@ -333,4 +342,5 @@ test.describe('Report Interface', () => {
     await deleteTeamTypeByName(page, COMPARISON_TEAM_TYPE);
   });
 
-});
+  });
+}

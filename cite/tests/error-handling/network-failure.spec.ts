@@ -5,9 +5,13 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Error Handling and Edge Cases', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Error Handling and Edge Cases`, () => {
   test('API Error Handling - Network Failure', async ({ citeAuthenticatedPage: page }) => {
+    await applyCiteTheme(page, theme);
 
     // 1. Log in successfully
     await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
@@ -28,4 +32,5 @@ test.describe('Error Handling and Edge Cases', () => {
     // Unroute to restore network
     await page.unroute('**/api/**');
   });
-});
+  });
+}

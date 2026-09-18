@@ -5,9 +5,13 @@
 // seed: tests/seed.setup.ts
 
 import { test, expect, Services } from '../../fixtures';
+import { CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Accessibility', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Accessibility`, () => {
   test('Keyboard Navigation - Enter Key Submission', async ({ citeAuthenticatedPage: page }) => {
+    await applyCiteTheme(page, theme);
 
     // 1. Test keyboard submission using the search field on the home page
     await page.waitForLoadState('networkidle');
@@ -65,4 +69,5 @@ test.describe('Accessibility', () => {
 
     console.log('Successfully tested keyboard Enter key submission on search field');
   });
-});
+  });
+}

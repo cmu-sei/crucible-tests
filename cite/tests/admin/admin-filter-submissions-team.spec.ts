@@ -5,10 +5,13 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
-import { navigateToAdminSection } from '../../test-helpers';
+import { navigateToAdminSection, CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Administration - Submissions', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Administration - Submissions`, () => {
   test('Filter Submissions by Team', async ({ citeAuthenticatedPage: page }) => {
+    await applyCiteTheme(page, theme);
 
     // 1. Navigate to Submissions section
     await navigateToAdminSection(page, 'Submissions');
@@ -35,4 +38,5 @@ test.describe('Administration - Submissions', () => {
     // 4. Verify the filter is applied (the dropdown shows the selected value)
     await expect(typesFilter).toContainText(firstOptionText?.trim() || '', { timeout: 5000 });
   });
-});
+  });
+}

@@ -5,10 +5,13 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
-import { navigateToAdminSection } from '../../test-helpers';
+import { navigateToAdminSection, CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Administration - Roles', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Administration - Roles`, () => {
   test('View Evaluation Roles', async ({ citeAuthenticatedPage: page }) => {
+    await applyCiteTheme(page, theme);
 
     // 1. Navigate to Roles section
     await navigateToAdminSection(page, 'Roles');
@@ -27,4 +30,5 @@ test.describe('Administration - Roles', () => {
     const roleEntries = page.locator('tbody tr, mat-list-item, mat-row').first();
     await expect(roleEntries).toBeVisible({ timeout: 10000 });
   });
-});
+  });
+}

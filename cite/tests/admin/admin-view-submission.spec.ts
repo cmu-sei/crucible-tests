@@ -5,10 +5,13 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
-import { navigateToAdminSection } from '../../test-helpers';
+import { navigateToAdminSection, CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Administration - Submissions', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Administration - Submissions`, () => {
   test('View Submission Details', async ({ citeAuthenticatedPage: page }) => {
+    await applyCiteTheme(page, theme);
 
     await navigateToAdminSection(page, 'Submissions');
 
@@ -22,4 +25,5 @@ test.describe('Administration - Submissions', () => {
     const typeHeader = page.getByRole('columnheader', { name: 'Type' });
     await expect(typeHeader).toBeVisible({ timeout: 5000 });
   });
-});
+  });
+}

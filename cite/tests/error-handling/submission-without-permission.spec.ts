@@ -5,9 +5,13 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Error Handling and Edge Cases', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Error Handling and Edge Cases`, () => {
   test('Submission Without Required Permissions', async ({ citeAuthenticatedPage: page }) => {
+    await applyCiteTheme(page, theme);
 
     // 1. Verify user is authenticated on home page
     await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
@@ -21,4 +25,5 @@ test.describe('Error Handling and Edge Cases', () => {
     const rows = page.locator('mat-row, tbody tr, [class*="evaluation-row"]');
     await expect(rows).toHaveCount(0, { timeout: 5000 });
   });
-});
+  });
+}

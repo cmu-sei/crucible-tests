@@ -5,10 +5,13 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
-import { navigateToAdminSection } from '../../test-helpers';
+import { navigateToAdminSection, CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Administration - Evaluations', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Administration - Evaluations`, () => {
   test('Expand Evaluation Details', async ({ citeAuthenticatedPage: page }) => {
+    await applyCiteTheme(page, theme);
 
     await navigateToAdminSection(page);
 
@@ -21,4 +24,5 @@ test.describe('Administration - Evaluations', () => {
     const statusHeader = page.getByRole('columnheader', { name: 'Status' });
     await expect(statusHeader).toBeVisible({ timeout: 5000 });
   });
-});
+  });
+}

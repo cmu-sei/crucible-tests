@@ -5,11 +5,17 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, seedCompleteEvaluation, cleanupCompleteEvaluation } from '../../fixtures';
+import { CITE_THEMES, applyCiteTheme } from '../../test-helpers';
 
-test.describe('Evaluation Dashboard Interface', () => {
+for (const theme of CITE_THEMES) {
+
+  test.describe(`${theme} theme › Evaluation Dashboard Interface`, () => {
   let evaluationIds: { evaluationId: string; scoringModelId: string; teamTypeId: string; } | null = null;
 
   test('Move Navigation - Next Move', async ({ citeAuthenticatedPage: page }) => {
+
+    await applyCiteTheme(page, theme);
+
     // Create evaluation with team membership and multiple moves via API
     const seededData = await seedCompleteEvaluation(`Move Next Test ${Date.now()}`, 3);
     evaluationIds = {
@@ -69,4 +75,5 @@ test.describe('Evaluation Dashboard Interface', () => {
       evaluationIds = null;
     }
   });
-});
+  });
+}
