@@ -6,24 +6,28 @@
 
 import { test, expect } from '@playwright/test';
 import { authenticateWithKeycloak, Services, serviceUrlPattern } from '../../../shared-fixtures';
-test.describe('Events Management', () => {
-  test('View My Events from Home Page', async ({ page }) => {
-    // 1. Navigate to http://localhost:4403 (home page)
-    await authenticateWithKeycloak(page, Services.Alloy.UI);
+import { ALLOY_THEMES, applyAlloyTheme } from '../../test-helpers';
+for (const theme of ALLOY_THEMES) {
+  test.describe(`${theme} theme › Events Management`, () => {
+    test('View My Events from Home Page', async ({ page }) => {
+      // 1. Navigate to http://localhost:4403 (home page)
+      await authenticateWithKeycloak(page, Services.Alloy.UI);
+      await applyAlloyTheme(page, theme);
 
-    // expect: Home page loads
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Alloy.UI));
+      // expect: Home page loads
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Alloy.UI));
 
-    // 2. View the list of events displayed on the home page
-    // expect: My Events section is visible
-    await expect(page.getByText('My Events')).toBeVisible();
+      // 2. View the list of events displayed on the home page
+      // expect: My Events section is visible
+      await expect(page.getByText('My Events')).toBeVisible();
 
-    // expect: Event table is visible with columns
-    await expect(page.getByRole('columnheader', { name: 'Name', exact: true })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Description' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Duration (Hours)' })).toBeVisible();
+      // expect: Event table is visible with columns
+      await expect(page.getByRole('columnheader', { name: 'Name', exact: true })).toBeVisible();
+      await expect(page.getByRole('columnheader', { name: 'Description' })).toBeVisible();
+      await expect(page.getByRole('columnheader', { name: 'Duration (Hours)' })).toBeVisible();
 
-    // expect: Events can be clicked to view more details
-    await expect(page.getByRole('table')).toBeVisible();
+      // expect: Events can be clicked to view more details
+      await expect(page.getByRole('table')).toBeVisible();
+    });
   });
-});
+}

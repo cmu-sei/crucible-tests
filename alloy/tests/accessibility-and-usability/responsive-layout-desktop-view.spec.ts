@@ -6,31 +6,35 @@
 
 import { test, expect } from '@playwright/test';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
+import { ALLOY_THEMES, applyAlloyTheme } from '../../test-helpers';
 
-test.describe('Accessibility and Usability', () => {
-  test('Responsive Layout - Desktop View', async ({ page }) => {
-    // 1. View application in standard desktop resolution (1920x1080)
-    await page.setViewportSize({ width: 1920, height: 1080 });
-    await authenticateWithKeycloak(page, Services.Alloy.UI);
+for (const theme of ALLOY_THEMES) {
+  test.describe(`${theme} theme › Accessibility and Usability`, () => {
+    test('Responsive Layout - Desktop View', async ({ page }) => {
+      // 1. View application in standard desktop resolution (1920x1080)
+      await page.setViewportSize({ width: 1920, height: 1080 });
+      await authenticateWithKeycloak(page, Services.Alloy.UI);
+      await applyAlloyTheme(page, theme);
 
-    // expect: Page layout utilizes desktop space effectively
-    await expect(page.getByText('My Events')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
-    await expect(page.getByText('Alloy')).toBeVisible();
+      // expect: Page layout utilizes desktop space effectively
+      await expect(page.getByText('My Events')).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
+      await expect(page.getByText('Alloy')).toBeVisible();
 
-    // 2. Navigate to admin section
-    await page.goto(`${Services.Alloy.UI}/admin`);
+      // 2. Navigate to admin section
+      await page.goto(`${Services.Alloy.UI}/admin`);
 
-    // expect: Layout shows sidebar and main content properly
-    await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
-    await expect(page.locator('mat-list').getByText('Event Templates')).toBeVisible();
-    await expect(page.getByRole('table')).toBeVisible();
+      // expect: Layout shows sidebar and main content properly
+      await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
+      await expect(page.locator('mat-list').getByText('Event Templates')).toBeVisible();
+      await expect(page.getByRole('table')).toBeVisible();
 
-    // 3. Resize window to smaller width
-    await page.setViewportSize({ width: 1280, height: 720 });
+      // 3. Resize window to smaller width
+      await page.setViewportSize({ width: 1280, height: 720 });
 
-    // expect: Layout adapts smoothly to different window sizes
-    await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
-    await expect(page.getByRole('table')).toBeVisible();
+      // expect: Layout adapts smoothly to different window sizes
+      await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
+      await expect(page.getByRole('table')).toBeVisible();
+    });
   });
-});
+}

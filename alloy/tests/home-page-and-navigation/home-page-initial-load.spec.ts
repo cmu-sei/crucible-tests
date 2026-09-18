@@ -6,25 +6,29 @@
 
 import { test, expect } from '@playwright/test';
 import { authenticateWithKeycloak, Services, serviceUrlPattern } from '../../../shared-fixtures';
-test.describe('Home Page and Navigation', () => {
-  test('Home Page Initial Load', async ({ page }) => {
-    // 1. Log in as admin user and navigate to http://localhost:4403
-    await authenticateWithKeycloak(page, Services.Alloy.UI);
+import { ALLOY_THEMES, applyAlloyTheme } from '../../test-helpers';
+for (const theme of ALLOY_THEMES) {
+  test.describe(`${theme} theme › Home Page and Navigation`, () => {
+    test('Home Page Initial Load', async ({ page }) => {
+      // 1. Log in as admin user and navigate to http://localhost:4403
+      await authenticateWithKeycloak(page, Services.Alloy.UI);
+      await applyAlloyTheme(page, theme);
 
-    // expect: The home page loads successfully
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Alloy.UI));
+      // expect: The home page loads successfully
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Alloy.UI));
 
-    // expect: The topbar is visible with application branding
-    // expect: The topbar displays 'Alloy' or configured AppTopBarText
-    await expect(page.getByText('Alloy')).toBeVisible();
+      // expect: The topbar is visible with application branding
+      // expect: The topbar displays 'Alloy' or configured AppTopBarText
+      await expect(page.getByText('Alloy')).toBeVisible();
 
-    // expect: Home link is visible in topbar
-    await expect(page.getByRole('link', { name: 'Home' })).toBeVisible();
+      // expect: Home link is visible in topbar
+      await expect(page.getByRole('link', { name: 'Home' })).toBeVisible();
 
-    // expect: The user's username is displayed in the topbar
-    await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
+      // expect: The user's username is displayed in the topbar
+      await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
 
-    // expect: The main content area displays event list or welcome content
-    await expect(page.getByText('My Events')).toBeVisible();
+      // expect: The main content area displays event list or welcome content
+      await expect(page.getByText('My Events')).toBeVisible();
+    });
   });
-});
+}

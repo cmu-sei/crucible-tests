@@ -6,24 +6,28 @@
 
 import { test, expect } from '@playwright/test';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
+import { ALLOY_THEMES, applyAlloyTheme } from '../../test-helpers';
 
-test.describe('Performance and Optimization', () => {
-  test('Initial Page Load Time', async ({ page }) => {
-    // 1. Navigate to application and authenticate
-    const startTime = Date.now();
-    await authenticateWithKeycloak(page, Services.Alloy.UI);
+for (const theme of ALLOY_THEMES) {
+  test.describe(`${theme} theme › Performance and Optimization`, () => {
+    test('Initial Page Load Time', async ({ page }) => {
+      // 1. Navigate to application and authenticate
+      const startTime = Date.now();
+      await authenticateWithKeycloak(page, Services.Alloy.UI);
+      await applyAlloyTheme(page, theme);
 
-    // expect: Application loads successfully
-    await expect(page.getByText('My Events')).toBeVisible();
+      // expect: Application loads successfully
+      await expect(page.getByText('My Events')).toBeVisible();
 
-    const loadTime = Date.now() - startTime;
+      const loadTime = Date.now() - startTime;
 
-    // expect: Initial page load completes within acceptable time
-    // Note: Auth flow adds significant time, so we just verify the page loaded
-    expect(loadTime).toBeLessThan(300000); // Within Playwright's test timeout
+      // expect: Initial page load completes within acceptable time
+      // Note: Auth flow adds significant time, so we just verify the page loaded
+      expect(loadTime).toBeLessThan(300000); // Within Playwright's test timeout
 
-    // 2. Verify the page rendered correctly
-    await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
-    await expect(page.getByText('Alloy')).toBeVisible();
+      // 2. Verify the page rendered correctly
+      await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
+      await expect(page.getByText('Alloy')).toBeVisible();
+    });
   });
-});
+}

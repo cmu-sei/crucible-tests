@@ -6,27 +6,31 @@
 
 import { test, expect } from '@playwright/test';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
+import { ALLOY_THEMES, applyAlloyTheme } from '../../test-helpers';
 
-test.describe('Users Management', () => {
-  test('View User Details', async ({ page }) => {
-    // 1. Navigate to admin Users section
-    await authenticateWithKeycloak(page, Services.Alloy.UI);
-    await page.goto(`${Services.Alloy.UI}/admin`);
-    await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
+for (const theme of ALLOY_THEMES) {
+  test.describe(`${theme} theme › Users Management`, () => {
+    test('View User Details', async ({ page }) => {
+      // 1. Navigate to admin Users section
+      await authenticateWithKeycloak(page, Services.Alloy.UI);
+      await applyAlloyTheme(page, theme);
+      await page.goto(`${Services.Alloy.UI}/admin`);
+      await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
 
-    await page.locator('mat-list-item').filter({ hasText: 'Users' }).click();
+      await page.locator('mat-list-item').filter({ hasText: 'Users' }).click();
 
-    // expect: Users list is visible
-    await expect(page.getByRole('table')).toBeVisible();
+      // expect: Users list is visible
+      await expect(page.getByRole('table')).toBeVisible();
 
-    // 2. Verify user details are visible
-    // expect: User information is shown: ID, name, role
-    await expect(page.getByRole('cell', { name: 'Admin User' })).toBeVisible();
+      // 2. Verify user details are visible
+      // expect: User information is shown: ID, name, role
+      await expect(page.getByRole('cell', { name: 'Admin User' })).toBeVisible();
 
-    // expect: Role column shows role assignment
-    await expect(page.getByRole('columnheader', { name: 'Role' })).toBeVisible();
+      // expect: Role column shows role assignment
+      await expect(page.getByRole('columnheader', { name: 'Role' })).toBeVisible();
 
-    // expect: User ID is displayed
-    await expect(page.getByRole('columnheader', { name: 'ID' })).toBeVisible();
+      // expect: User ID is displayed
+      await expect(page.getByRole('columnheader', { name: 'ID' })).toBeVisible();
+    });
   });
-});
+}
