@@ -14,7 +14,7 @@ import {
   apiDeleteCollectionById,
   apiDeleteExhibitById,
   Services,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 import { getUserToken } from '../../../keycloak-admin';
 
 /**
@@ -79,7 +79,8 @@ async function unreadCount(
   return Number(body.count);
 }
 
-test.describe('Archive Functionality', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Archive Functionality`, () => {
   // Partially-built fixtures still need tearing down, so record ids as they are
   // created and let `afterEach` delete whatever exists.
   let created: Partial<ShareFixtureData> = {};
@@ -117,7 +118,7 @@ test.describe('Archive Functionality', () => {
   });
 
   test('Archive Article Share', async ({ galleryAuthenticatedPage: page }) => {
-    const api = await galleryApiContext();
+    await applyGalleryTheme(page, theme);    const api = await galleryApiContext();
     let stamp: string;
     try {
       stamp = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
@@ -275,3 +276,4 @@ test.describe('Archive Functionality', () => {
     }
   });
 });
+}

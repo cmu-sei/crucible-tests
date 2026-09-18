@@ -11,7 +11,7 @@ import {
   Services,
   apiCreateCollection,
   apiDeleteCollectionById,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
 /**
  * Articles are managed inside a collection row's expanded detail, not as a
@@ -100,7 +100,8 @@ async function galleryApi(
   }
 }
 
-test.describe('Article Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Article Management`, () => {
   // The UI delete is the subject of this test, so the removal assertion stays in
   // the body; the afterEach is the safety net for a failure before or during the
   // confirm step. Only ids this spec created are tracked — deleting a collection
@@ -119,7 +120,7 @@ test.describe('Article Management', () => {
   });
 
   test('Delete Article', async ({ galleryAuthenticatedPage: page }) => {
-    const unique = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    await applyGalleryTheme(page, theme);    const unique = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
     const collectionName = `Article Delete Collection ${unique}`;
     const cardName = `Article Delete Card ${unique}`;
     const articleName = `Delete Article ${unique}`;
@@ -232,3 +233,4 @@ test.describe('Article Management', () => {
     expect(remainingIds).toContain(seededIds[keptArticleName]);
   });
 });
+}

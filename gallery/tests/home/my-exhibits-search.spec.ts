@@ -5,7 +5,7 @@
 // seed: seed.spec.ts
 
 import { APIRequestContext, request as pwRequest } from '@playwright/test';
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services , GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 import { getUserToken } from '../../../keycloak-admin';
 
 /**
@@ -56,7 +56,8 @@ async function paginatorTotal(text: string): Promise<number> {
   return Number(match[1]);
 }
 
-test.describe('My Exhibits Landing Page', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › My Exhibits Landing Page`, () => {
   let api: APIRequestContext;
   let fixture: SearchFixture;
 
@@ -130,7 +131,7 @@ test.describe('My Exhibits Landing Page', () => {
   });
 
   test('My Exhibits Search', async ({ galleryAuthenticatedPage: page }) => {
-    const { prefix, alphaName, betaName, alphaCollectionName } = fixture;
+    await applyGalleryTheme(page, theme);    const { prefix, alphaName, betaName, alphaCollectionName } = fixture;
 
     await page.goto(Services.Gallery.UI, { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('table')).toBeVisible();
@@ -212,3 +213,4 @@ test.describe('My Exhibits Landing Page', () => {
     await expect(page.locator('mat-header-cell')).toHaveCount(4);
   });
 });
+}

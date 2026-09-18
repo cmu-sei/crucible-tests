@@ -13,7 +13,7 @@ import {
   apiCreateExhibit,
   apiCreateTeam,
   apiDeleteCollectionById,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 import { openExhibitTeamsPanel, teamRowShortNames, teamRowFullNames } from './null-team-helpers';
 
 /**
@@ -53,7 +53,8 @@ import { openExhibitTeamsPanel, teamRowShortNames, teamRowFullNames } from './nu
  * deliberately malformed team into it, which would perturb `view-exhibit-teams` and
  * `team-selector` if it landed on the shared exhibit.
  */
-test.describe('Team Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Team Management`, () => {
   // Recorded as soon as the collection exists so `afterEach` removes it even when the
   // test body throws partway through. Exhibit.CollectionId and Team.ExhibitId are both
   // configured DeleteBehavior.Cascade, so deleting the collection removes the exhibit
@@ -122,3 +123,4 @@ test.describe('Team Management', () => {
     await expect(teamsRegion.getByText(nullNameShortName, { exact: true })).toBeVisible();
   });
 });
+}

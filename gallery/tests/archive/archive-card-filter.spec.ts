@@ -10,7 +10,7 @@ import {
   gotoExhibitSection,
   apiSetExhibitMoveAndInject,
   openMatSelect,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
 /**
  * Archive Functionality §4.4 — Archive Card Filtering.
@@ -37,7 +37,8 @@ const ALL_SEEDED_IN_ORDER = [
   'Intel Article 1',
 ];
 
-test.describe('Archive Functionality', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Archive Functionality`, () => {
   test.afterEach(async ({ seededExhibit }) => {
     await apiSetExhibitMoveAndInject(seededExhibit.exhibitId, 0, 0);
   });
@@ -104,3 +105,4 @@ test.describe('Archive Functionality', () => {
     await expect(titles).toHaveText(ALL_SEEDED_IN_ORDER);
   });
 });
+}

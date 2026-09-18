@@ -4,7 +4,7 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoExhibitSection, apiSetExhibitMoveAndInject } from '../../fixtures';
+import { test, expect, gotoExhibitSection, apiSetExhibitMoveAndInject , GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
 /**
  * Archive Functionality §4.3 — Archive Search.
@@ -37,7 +37,8 @@ const ALL_SEEDED_IN_ORDER = [
   'Intel Article 1',
 ];
 
-test.describe('Archive Functionality', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Archive Functionality`, () => {
   test.afterEach(async ({ seededExhibit }) => {
     await apiSetExhibitMoveAndInject(seededExhibit.exhibitId, 0, 0);
   });
@@ -88,3 +89,4 @@ test.describe('Archive Functionality', () => {
     await expect(page.getByText(/no results/i)).toHaveCount(0);
   });
 });
+}

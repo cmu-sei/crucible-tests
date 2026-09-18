@@ -13,7 +13,7 @@ import {
   gotoAdminSection,
   apiCreateCollection,
   apiDeleteCollectionById,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
 /**
  * Card management lives inside a collection row's expanded detail, not as a
@@ -101,7 +101,8 @@ async function galleryApi(
   }
 }
 
-test.describe('Card Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Card Management`, () => {
   // Only the collection ids this spec created. Deleting a collection cascades to
   // its cards and articles, so one delete per collection is enough. Never purge
   // by name prefix — sibling specs share this stack.
@@ -118,7 +119,7 @@ test.describe('Card Management', () => {
   });
 
   test('Edit and Delete Cards', async ({ galleryAuthenticatedPage: page }) => {
-    const unique = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    await applyGalleryTheme(page, theme);    const unique = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
     const collectionName = `Card Edit Collection ${unique}`;
     const editCardName = `Edit Card ${unique}`;
     const editedCardName = `Edited Card ${unique}`;
@@ -303,3 +304,4 @@ test.describe('Card Management', () => {
     // already covers this path.
   });
 });
+}

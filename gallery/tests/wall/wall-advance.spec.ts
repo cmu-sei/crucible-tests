@@ -5,7 +5,7 @@
 // seed: seed.spec.ts
 
 import { APIRequestContext, request as pwRequest } from '@playwright/test';
-import { test, expect, gotoExhibitSection, Services } from '../../fixtures';
+import { test, expect, gotoExhibitSection, Services , GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 import { getUserToken } from '../../../keycloak-admin';
 
 /**
@@ -145,7 +145,8 @@ async function seedWallExhibit(api: APIRequestContext): Promise<WallFixture> {
   };
 }
 
-test.describe('Wall View Functionality', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Wall View Functionality`, () => {
   let api: APIRequestContext;
   let fixture: WallFixture;
 
@@ -175,7 +176,7 @@ test.describe('Wall View Functionality', () => {
   });
 
   test('Wall Advance Move and Inject', async ({ galleryAuthenticatedPage: page }) => {
-    const [card1Name, card2Name, card3Name] = fixture.cardNames;
+    await applyGalleryTheme(page, theme);    const [card1Name, card2Name, card3Name] = fixture.cardNames;
 
     // 1. Navigate to an exhibit's Wall view that has the Advance button enabled.
     await gotoExhibitSection(page, fixture.exhibitId, 'wall');
@@ -251,3 +252,4 @@ test.describe('Wall View Functionality', () => {
     expect(exhibitRow).toMatchObject({ currentMove: 1, currentInject: 1 });
   });
 });
+}

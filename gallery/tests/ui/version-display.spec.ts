@@ -4,11 +4,12 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoGalleryAdmin } from '../../fixtures';
+import { test, expect, gotoGalleryAdmin , GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
-test.describe('Admin Navigation and UI', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Admin Navigation and UI`, () => {
   test('Version Display', async ({ galleryAuthenticatedPage: page }) => {
-    // 1. Navigate to the admin section
+    await applyGalleryTheme(page, theme);    // 1. Navigate to the admin section
     await gotoGalleryAdmin(page);
 
     // expect: Version information is displayed at the bottom of the sidebar.
@@ -25,3 +26,4 @@ test.describe('Admin Navigation and UI', () => {
     await expect(versions).not.toHaveText(/ERROR!/);
   });
 });
+}

@@ -4,7 +4,7 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoExhibitSection } from '../../fixtures';
+import { test, expect, gotoExhibitSection , GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
 /**
  * Wall View Functionality §3.4 — Navigation to Archive.
@@ -19,7 +19,8 @@ import { test, expect, gotoExhibitSection } from '../../fixtures';
  * other than the one being viewed). The article-level assertions are the substantive
  * ones for this navigation step.
  */
-test.describe('Wall View Functionality', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Wall View Functionality`, () => {
   test('Wall Navigation to Archive', async ({ galleryAuthenticatedPage: page, seededExhibit }) => {
     await gotoExhibitSection(page, seededExhibit.exhibitId, 'wall');
     await expect(page).toHaveTitle('Gallery Wall');
@@ -63,3 +64,4 @@ test.describe('Wall View Functionality', () => {
     await expect(page).toHaveURL(/\/admin/);
   });
 });
+}

@@ -4,10 +4,12 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoGalleryAdmin, gotoAdminSection } from '../../fixtures';
+import { test, expect, gotoGalleryAdmin, gotoAdminSection , GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
-test.describe('User Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › User Management`, () => {
   test('User ID Copy Button', async ({ galleryAuthenticatedPage: page }) => {
+    await applyGalleryTheme(page, theme);
     await gotoGalleryAdmin(page);
 
     // Navigate to Users section
@@ -33,3 +35,4 @@ test.describe('User Management', () => {
     await expect(userRow.getByRole('cell').first()).toContainText(uuid);
   });
 });
+}

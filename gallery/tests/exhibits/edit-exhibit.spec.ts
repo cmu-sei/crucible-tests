@@ -12,7 +12,7 @@ import {
   apiCreateCollection,
   apiCreateExhibit,
   apiDeleteCollectionById,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 import type { Page } from '@playwright/test';
 
 async function selectCollection(page: Page, collectionName: string): Promise<void> {
@@ -22,7 +22,8 @@ async function selectCollection(page: Page, collectionName: string): Promise<voi
   await option.click();
 }
 
-test.describe('Exhibit Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Exhibit Management`, () => {
   // Registered as soon as the collection exists so `afterEach` removes it even when the
   // test body throws partway through.
   let collectionId: string | undefined;
@@ -36,7 +37,7 @@ test.describe('Exhibit Management', () => {
   });
 
   test('Edit Existing Exhibit', async ({ galleryAuthenticatedPage: page }) => {
-    // Both the collection and the exhibit are preconditions here — the subject under
+    await applyGalleryTheme(page, theme);    // Both the collection and the exhibit are preconditions here — the subject under
     // test is the edit dialog, so seed them via the API.
     const suffix = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
     const collection = await apiCreateCollection(`Exhibit Edit Test ${suffix}`);
@@ -80,3 +81,4 @@ test.describe('Exhibit Management', () => {
     ).toHaveCount(0);
   });
 });
+}

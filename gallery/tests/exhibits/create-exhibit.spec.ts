@@ -11,7 +11,7 @@ import {
   gotoAdminSection,
   apiCreateCollection,
   apiDeleteCollectionById,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 import type { Page } from '@playwright/test';
 
 async function selectCollection(page: Page, collectionName: string): Promise<void> {
@@ -21,7 +21,8 @@ async function selectCollection(page: Page, collectionName: string): Promise<voi
   await option.click();
 }
 
-test.describe('Exhibit Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Exhibit Management`, () => {
   // Registered the instant the collection exists so `afterEach` can remove it even if
   // the test body throws before finishing — never clean up inline at the end of a test.
   let collectionId: string | undefined;
@@ -37,7 +38,7 @@ test.describe('Exhibit Management', () => {
   });
 
   test('Create New Exhibit', async ({ galleryAuthenticatedPage: page }) => {
-    // The parent collection is a precondition, not the subject under test — seed it
+    await applyGalleryTheme(page, theme);    // The parent collection is a precondition, not the subject under test — seed it
     // through the API instead of clicking through the create-collection dialog.
     const suffix = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
     const collection = await apiCreateCollection(`Exhibit Create Test ${suffix}`);
@@ -70,3 +71,4 @@ test.describe('Exhibit Management', () => {
     await expect(newRow).toBeVisible();
   });
 });
+}

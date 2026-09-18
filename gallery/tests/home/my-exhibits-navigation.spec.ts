@@ -4,7 +4,7 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services , GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
 /**
  * My Exhibits Landing Page §2.4 — My Exhibits Navigation to Exhibit.
@@ -24,7 +24,8 @@ import { test, expect, Services } from '../../fixtures';
  * Read-only with respect to shared Gallery data (no move/inject change, no read toggles), so
  * the worker-scoped `seededExhibit` needs no restoration.
  */
-test.describe('My Exhibits Landing Page', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › My Exhibits Landing Page`, () => {
   test('My Exhibits Navigation to Exhibit', async ({
     galleryAuthenticatedPage: page,
     seededExhibit,
@@ -88,3 +89,4 @@ test.describe('My Exhibits Landing Page', () => {
     expect(remembered).toBe('wall');
   });
 });
+}

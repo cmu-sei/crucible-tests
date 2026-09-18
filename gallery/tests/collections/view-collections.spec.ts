@@ -10,9 +10,10 @@ import {
   gotoGalleryAdmin,
   apiCreateCollection,
   apiDeleteCollectionById,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
-test.describe('Collection Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Collection Management`, () => {
   // Collections created by this file, tracked so `afterEach` can remove them even
   // when the test body throws partway through.
   let createdCollectionIds: string[] = [];
@@ -28,7 +29,7 @@ test.describe('Collection Management', () => {
   });
 
   test('View Collections List', async ({ galleryAuthenticatedPage: page }) => {
-    // Seed our own row rather than depending on whatever happens to be in the
+    await applyGalleryTheme(page, theme);    // Seed our own row rather than depending on whatever happens to be in the
     // database — the per-row action-button assertions below need a known row.
     const seedName = `View Test Collection ${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
     const seeded = await apiCreateCollection(seedName, 'Collection for the view-list test');
@@ -69,3 +70,4 @@ test.describe('Collection Management', () => {
     await expect(row.getByRole('button', { name: `Delete ${seedName}` })).toBeVisible();
   });
 });
+}

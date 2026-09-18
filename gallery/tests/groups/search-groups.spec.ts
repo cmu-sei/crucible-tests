@@ -4,9 +4,10 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoGalleryAdmin, gotoAdminSection, apiDeleteGroupByName } from '../../fixtures';
+import { test, expect, gotoGalleryAdmin, gotoAdminSection, apiDeleteGroupByName , GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
-test.describe('Group Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Group Management`, () => {
   // Two groups: the filter is only meaningful if there is something for it to hide,
   // so the spec seeds both a match and a non-match. Names are registered before the
   // create actions and removed in afterEach.
@@ -24,6 +25,7 @@ test.describe('Group Management', () => {
   });
 
   test('Search Groups', async ({ galleryAuthenticatedPage: page }) => {
+    await applyGalleryTheme(page, theme);
     await gotoGalleryAdmin(page);
     await gotoAdminSection(page, 'Groups');
     await expect(page.getByRole('columnheader', { name: 'Group Name' })).toBeVisible();
@@ -85,3 +87,4 @@ test.describe('Group Management', () => {
     await expect(clearButton).toBeDisabled();
   });
 });
+}

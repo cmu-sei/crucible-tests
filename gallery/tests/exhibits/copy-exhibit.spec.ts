@@ -12,7 +12,7 @@ import {
   apiCreateCollection,
   apiCreateExhibit,
   apiDeleteCollectionById,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 import type { Page } from '@playwright/test';
 
 async function selectCollection(page: Page, collectionName: string): Promise<void> {
@@ -22,7 +22,8 @@ async function selectCollection(page: Page, collectionName: string): Promise<voi
   await option.click();
 }
 
-test.describe('Exhibit Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Exhibit Management`, () => {
   // Registered as soon as the collection exists. The old version of this spec deleted
   // the original, the copy, and the collection inline at the end of the test body, so
   // any earlier failure leaked all three; `afterEach` runs even when the body throws.
@@ -38,7 +39,7 @@ test.describe('Exhibit Management', () => {
   });
 
   test('Copy Exhibit', async ({ galleryAuthenticatedPage: page }) => {
-    // Collection and source exhibit are preconditions — the copy button is the subject.
+    await applyGalleryTheme(page, theme);    // Collection and source exhibit are preconditions — the copy button is the subject.
     const suffix = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
     const collection = await apiCreateCollection(`Exhibit Copy Test ${suffix}`);
     collectionId = collection.id;
@@ -79,3 +80,4 @@ test.describe('Exhibit Management', () => {
     await expect(matchingRows).toHaveCount(2);
   });
 });
+}

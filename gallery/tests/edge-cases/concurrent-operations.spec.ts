@@ -10,7 +10,7 @@ import {
   gotoExhibitSection,
   apiSetExhibitMoveAndInject,
   Services,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 import { request as pwRequest, type APIRequestContext } from '@playwright/test';
 import { authStatePath } from '../../../auth-paths';
 
@@ -93,7 +93,8 @@ async function apiSetUserArticleIsRead(userArticleId: string, isRead: boolean): 
   });
 }
 
-test.describe('Edge Cases and Negative Testing', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Edge Cases and Negative Testing`, () => {
   // UserArticle ids this spec marked read, so afterEach can put them back. Ids are only
   // ever this exhibit's own, never a broad reset.
   let markedReadIds: string[] = [];
@@ -341,3 +342,4 @@ test.describe('Edge Cases and Negative Testing', () => {
     }
   });
 });
+}

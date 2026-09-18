@@ -10,9 +10,10 @@ import {
   gotoGalleryAdmin,
   apiCreateCollection,
   apiDeleteCollectionByName,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
-test.describe('Collection Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Collection Management`, () => {
   // Both the original and the expected copy name are tracked so teardown removes
   // either/both regardless of where the test body fails.
   let createdCollectionNames: string[] = [];
@@ -28,7 +29,7 @@ test.describe('Collection Management', () => {
   });
 
   test('Copy Collection', async ({ galleryAuthenticatedPage: page }) => {
-    const testCollectionName = `Copy Test Collection ${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    await applyGalleryTheme(page, theme);    const testCollectionName = `Copy Test Collection ${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
     // Gallery.Api CollectionService.privateCollectionCopyAsync names the copy
     // `<original name> - <current user's name>`, so the copied name is deterministic.
     const expectedCopyName = `${testCollectionName} - Admin User`;
@@ -54,3 +55,4 @@ test.describe('Collection Management', () => {
     await expect(matchingRows).toHaveCount(2);
   });
 });
+}

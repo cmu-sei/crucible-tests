@@ -4,9 +4,10 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoGalleryAdmin, apiDeleteCollectionByName } from '../../fixtures';
+import { test, expect, gotoGalleryAdmin, apiDeleteCollectionByName , GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
-test.describe('Integration and API', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Integration and API`, () => {
   // Every name this spec puts into the database is registered here *before* the
   // record is created, so the afterEach safety net can remove it even when an
   // assertion in the middle of the test throws. Only exact names created by this
@@ -22,7 +23,7 @@ test.describe('Integration and API', () => {
   });
 
   test('Data Persistence', async ({ galleryAuthenticatedPage: page }) => {
-    const testCollectionName = `Persistence Test ${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    await applyGalleryTheme(page, theme);    const testCollectionName = `Persistence Test ${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
     const updatedName = `Updated ${testCollectionName}`;
 
     await gotoGalleryAdmin(page);
@@ -104,3 +105,4 @@ test.describe('Integration and API', () => {
     await expect(page.getByText(updatedName)).not.toBeVisible();
   });
 });
+}

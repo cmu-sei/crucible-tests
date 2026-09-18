@@ -4,7 +4,7 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoExhibitSection } from '../../fixtures';
+import { test, expect, gotoExhibitSection , GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
 /**
  * Archive Functionality §4.6 — Article View Action.
@@ -25,7 +25,8 @@ import { test, expect, gotoExhibitSection } from '../../fixtures';
  * cross-exhibit leak reported against `signalr.service.ts#addUserArticleHandlers`).
  * The per-article assertions are both stronger for this step and immune to that.
  */
-test.describe('Archive Functionality', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Archive Functionality`, () => {
   test('Archive Article View Action', async ({ galleryAuthenticatedPage: page, seededExhibit }) => {
     await gotoExhibitSection(page, seededExhibit.exhibitId, 'archive');
     await expect(page).toHaveTitle(/Gallery Archive \(\d+\)/);
@@ -62,3 +63,4 @@ test.describe('Archive Functionality', () => {
     ).toHaveClass(/mdi-checkbox-blank-outline/);
   });
 });
+}

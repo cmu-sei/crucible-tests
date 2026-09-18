@@ -4,7 +4,7 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoGalleryAdmin, apiDeleteCollectionById } from '../../fixtures';
+import { test, expect, gotoGalleryAdmin, apiDeleteCollectionById , GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 import type { Locator, Page } from '@playwright/test';
 
 /**
@@ -61,7 +61,8 @@ async function findCollectionRow(page: Page, name: string): Promise<Locator> {
   return row;
 }
 
-test.describe('Edge Cases and Negative Testing', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Edge Cases and Negative Testing`, () => {
   // Ids are captured from the create responses and deleted here, so a failure in the
   // middle of the test cannot leave collections behind.
   const createdCollectionIds: string[] = [];
@@ -74,6 +75,7 @@ test.describe('Edge Cases and Negative Testing', () => {
   });
 
   test('Special Characters and Input Sanitization', async ({ galleryAuthenticatedPage: page }) => {
+    await applyGalleryTheme(page, theme);
     await gotoGalleryAdmin(page);
 
     const suffix = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
@@ -116,3 +118,4 @@ test.describe('Edge Cases and Negative Testing', () => {
     await expect(unicodeRow.getByRole('cell').nth(1)).toHaveText(unicodeName);
   });
 });
+}

@@ -10,10 +10,11 @@ import {
   gotoGalleryAdmin,
   apiCreateCollection,
   apiDeleteCollectionById,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 import * as fs from 'fs';
 
-test.describe('Collection Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Collection Management`, () => {
   let createdCollectionIds: string[] = [];
 
   test.beforeEach(() => {
@@ -27,7 +28,7 @@ test.describe('Collection Management', () => {
   });
 
   test('Download Collection as JSON', async ({ galleryAuthenticatedPage: page }) => {
-    const testCollectionName = `Download Test Collection ${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    await applyGalleryTheme(page, theme);    const testCollectionName = `Download Test Collection ${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 
     // Setup: seed the collection to download via the API — the subject here is the
     // download action, not the create dialog.
@@ -60,3 +61,4 @@ test.describe('Collection Management', () => {
     expect(payload.Collection.Name).toBe(testCollectionName);
   });
 });
+}

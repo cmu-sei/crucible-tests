@@ -11,9 +11,10 @@ import {
   gotoAdminSection,
   createGalleryGroup,
   apiDeleteGroupByName,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
-test.describe('Group Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Group Management`, () => {
   // Three groups, so "sorted" is a claim the data can actually contradict — with
   // one or two rows every order is both ascending and descending. Names are
   // registered before the create actions and removed in afterEach.
@@ -27,6 +28,7 @@ test.describe('Group Management', () => {
   });
 
   test('Sort Groups', async ({ galleryAuthenticatedPage: page }) => {
+    await applyGalleryTheme(page, theme);
     await gotoGalleryAdmin(page);
     await gotoAdminSection(page, 'Groups');
     await expect(page.getByRole('columnheader', { name: 'Group Name' })).toBeVisible();
@@ -78,3 +80,4 @@ test.describe('Group Management', () => {
     await expect(sortHeader).toHaveAttribute('aria-sort', 'descending');
   });
 });
+}

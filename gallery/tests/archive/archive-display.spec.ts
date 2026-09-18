@@ -4,7 +4,7 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoExhibitSection } from '../../fixtures';
+import { test, expect, gotoExhibitSection , GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
 /**
  * Archive Functionality §4.1 — Archive Page Display.
@@ -24,7 +24,8 @@ import { test, expect, gotoExhibitSection } from '../../fixtures';
  * assertions below are the substantive ones and are unaffected. Tighten the title to an
  * exact "(2)" once the store is exhibit-scoped.
  */
-test.describe('Archive Functionality', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Archive Functionality`, () => {
   test('Archive Page Display', async ({ galleryAuthenticatedPage: page, seededExhibit }) => {
     // 1. Navigate to the seeded exhibit's Archive view.
     await gotoExhibitSection(page, seededExhibit.exhibitId, 'archive');
@@ -75,3 +76,4 @@ test.describe('Archive Functionality', () => {
     await expect(page.locator('app-team-selector').getByText('Team:')).toBeVisible();
   });
 });
+}

@@ -12,7 +12,7 @@ import {
   apiCreateCollection,
   apiDeleteCollectionById,
   Services,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 import { request as pwRequest, type APIRequestContext, type Page } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -85,7 +85,8 @@ async function apiCollectionNames(): Promise<string[]> {
   });
 }
 
-test.describe('Edge Cases and Negative Testing', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Edge Cases and Negative Testing`, () => {
   let tempFiles: string[] = [];
   // Collection ids to remove. Only populated if an upload unexpectedly *succeeds* —
   // registered before the upload so a surprise success can never leak a record.
@@ -139,6 +140,7 @@ test.describe('Edge Cases and Negative Testing', () => {
   }
 
   test('Invalid Upload Files', async ({ galleryAuthenticatedPage: page }) => {
+    await applyGalleryTheme(page, theme);
     await gotoGalleryAdmin(page);
 
     // `.last()`: MatSnackBar dismisses the previous snackbar (with an exit animation) when a
@@ -248,3 +250,4 @@ test.describe('Edge Cases and Negative Testing', () => {
     expect(exhibitsInHost).toHaveLength(0);
   });
 });
+}

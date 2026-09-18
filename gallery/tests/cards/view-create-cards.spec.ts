@@ -13,7 +13,7 @@ import {
   gotoAdminSection,
   apiCreateCollection,
   apiDeleteCollectionById,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
 /**
  * Cards are NOT a top-level admin section. `admin-container.component.html`
@@ -97,7 +97,8 @@ async function galleryApiPost<T>(path: string, data: unknown): Promise<T> {
   }
 }
 
-test.describe('Card Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Card Management`, () => {
   // Only ids this spec created are tracked; deleting the collection cascades to
   // its cards. Never purge by name prefix — other specs run against the same
   // stack and their live data would go with it.
@@ -114,7 +115,7 @@ test.describe('Card Management', () => {
   });
 
   test('View and Create Cards', async ({ galleryAuthenticatedPage: page }) => {
-    const unique = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    await applyGalleryTheme(page, theme);    const unique = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
     const collectionName = `Card View Collection ${unique}`;
     const seededCardName = `Seeded Card ${unique}`;
     const seededCardDescription = `Seeded card description ${unique}`;
@@ -181,3 +182,4 @@ test.describe('Card Management', () => {
     await expect(refreshedPanel).toContainText(newCardDescription);
   });
 });
+}

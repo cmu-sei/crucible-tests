@@ -4,7 +4,7 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services , GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
 /**
  * My Exhibits Landing Page §2.1 — My Exhibits Table Display.
@@ -25,7 +25,8 @@ import { test, expect, Services } from '../../fixtures';
  * seeded row is found by typing its unique name into the app's own Search box first.
  * The search input filters on `(keyup)`, so `fill()` must be followed by a key event.
  */
-test.describe('My Exhibits Landing Page', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › My Exhibits Landing Page`, () => {
   test('My Exhibits Table Display', async ({ galleryAuthenticatedPage: page, seededExhibit }) => {
     // 1. Log in and navigate to the Gallery home page.
     await page.goto(Services.Gallery.UI, { waitUntil: 'domcontentloaded' });
@@ -86,3 +87,4 @@ test.describe('My Exhibits Landing Page', () => {
     await expect(adminButton.locator('mat-icon')).toHaveClass(/mdi-cog/);
   });
 });
+}

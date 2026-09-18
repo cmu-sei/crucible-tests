@@ -4,9 +4,10 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoExhibitSection, Services } from '../../fixtures';
+import { test, expect, gotoExhibitSection, Services , GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
-test.describe('Integration and API', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Integration and API`, () => {
   test('SignalR Real-Time Connection', async ({ galleryAuthenticatedPage: page, seededExhibit }) => {
     // Watch for the SignalR websocket itself rather than scraping console text.
     // signalr.service.ts connects to `${ApiUrl}/hubs/main?bearer=<token>`, so the
@@ -43,3 +44,4 @@ test.describe('Integration and API', () => {
     await expect(page.getByText('Test Card 1')).toBeVisible();
   });
 });
+}

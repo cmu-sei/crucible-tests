@@ -10,7 +10,7 @@ import {
   gotoGalleryAdmin,
   gotoAdminSection,
   apiDeleteCollectionById,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 import type { Download, Locator, Page } from '@playwright/test';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -79,7 +79,8 @@ async function findCollectionRow(page: Page, name: string): Promise<Locator> {
   return row;
 }
 
-test.describe('Edge Cases and Negative Testing', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Edge Cases and Negative Testing`, () => {
   // Every collection this test causes to exist is registered here and removed in
   // afterEach. Importantly that includes the collections the *uploads* create:
   // CollectionService.UploadJsonAsync and ExhibitService.UploadJsonAsync both route
@@ -276,3 +277,4 @@ test.describe('Edge Cases and Negative Testing', () => {
     expect(namesOf(copiedExhibitJson.Cards)).toEqual(originalCardNames);
   });
 });
+}

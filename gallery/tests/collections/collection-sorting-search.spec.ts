@@ -10,7 +10,7 @@ import {
   gotoGalleryAdmin,
   apiCreateCollection,
   apiDeleteCollectionById,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 import type { Page } from '@playwright/test';
 
 /**
@@ -41,7 +41,8 @@ async function applySearch(page: Page, term: string): Promise<void> {
   await searchField.press('End');
 }
 
-test.describe('Collection Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Collection Management`, () => {
   let createdCollectionIds: string[] = [];
 
   test.beforeEach(() => {
@@ -58,7 +59,7 @@ test.describe('Collection Management', () => {
   });
 
   test('Collection List Sorting and Search', async ({ galleryAuthenticatedPage: page }) => {
-    // Seed a known trio so the sort assertions have deterministic data to act on and
+    await applyGalleryTheme(page, theme);    // Seed a known trio so the sort assertions have deterministic data to act on and
     // the search assertion has a term guaranteed to exist and to be unique to this run
     // — no dependence on whatever else happens to be in the database.
     const marker = `SortSearch${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
@@ -157,3 +158,4 @@ test.describe('Collection Management', () => {
     await expect(dataRows).toHaveCount(names.length);
   });
 });
+}

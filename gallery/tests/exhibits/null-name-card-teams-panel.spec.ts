@@ -16,7 +16,7 @@ import {
   apiCreateCard,
   apiCreateTeamCard,
   apiDeleteCollectionById,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 import { waitForFirstVisible } from '../../../shared-fixtures';
 
 /**
@@ -353,7 +353,8 @@ async function expectAllThreeRowsLoaded(region: Locator, seeded: SeededPanel): P
   await expect(cellCardName(nullCardNameRow)).toHaveText('');
 }
 
-test.describe('Exhibit Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Exhibit Management`, () => {
   // Recorded as soon as the collection exists so `afterEach` removes it even when the
   // test body throws partway through. Exhibit.CollectionId, Team.ExhibitId and
   // Card.CollectionId are all DeleteBehavior.Cascade, and a TeamCard cascades with its
@@ -507,3 +508,4 @@ test.describe('Exhibit Management', () => {
     });
   });
 });
+}

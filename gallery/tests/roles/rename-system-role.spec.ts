@@ -4,9 +4,10 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoGalleryAdmin, gotoAdminSection, apiCleanupSystemRoles } from '../../fixtures';
+import { test, expect, gotoGalleryAdmin, gotoAdminSection, apiCleanupSystemRoles , GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
-test.describe('Role and Permission Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Role and Permission Management`, () => {
   // Unique per test so the `afterEach` purge can never touch another spec's (or
   // another worker's) role. `RenameRoleTest`/`RenamedRoleTest` are this spec
   // file's private prefixes.
@@ -27,6 +28,7 @@ test.describe('Role and Permission Management', () => {
   });
 
   test('Rename System Role', async ({ galleryAuthenticatedPage: page }) => {
+    await applyGalleryTheme(page, theme);
     await gotoGalleryAdmin(page);
 
     // Navigate to Roles section
@@ -64,3 +66,4 @@ test.describe('Role and Permission Management', () => {
     await expect(page.getByRole('columnheader', { name: testRoleName })).toHaveCount(0);
   });
 });
+}

@@ -12,9 +12,10 @@ import {
   createGalleryGroup,
   galleryGroupRow,
   apiDeleteGroupByName,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
-test.describe('Group Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Group Management`, () => {
   // Registered before the create action and torn down in afterEach, so a failure
   // partway through still removes the row. Cleared once the UI delete is proven,
   // since at that point there is nothing left to remove.
@@ -28,6 +29,7 @@ test.describe('Group Management', () => {
   });
 
   test('Delete Group', async ({ galleryAuthenticatedPage: page }) => {
+    await applyGalleryTheme(page, theme);
     await gotoGalleryAdmin(page);
     await gotoAdminSection(page, 'Groups');
     await expect(page.getByRole('columnheader', { name: 'Group Name' })).toBeVisible();
@@ -88,3 +90,4 @@ test.describe('Group Management', () => {
     testGroupName = undefined;
   });
 });
+}

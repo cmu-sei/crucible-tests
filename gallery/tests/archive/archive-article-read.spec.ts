@@ -5,7 +5,7 @@
 // seed: seed.spec.ts
 
 import { request as pwRequest } from '@playwright/test';
-import { test, expect, gotoExhibitSection, Services } from '../../fixtures';
+import { test, expect, gotoExhibitSection, Services , GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 import { getUserToken } from '../../../keycloak-admin';
 
 /**
@@ -63,7 +63,8 @@ async function restoreAllUnread(exhibitId: string, teamId: string): Promise<void
   }
 }
 
-test.describe('Archive Functionality', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Archive Functionality`, () => {
   test.afterEach(async ({ seededExhibit }) => {
     await restoreAllUnread(seededExhibit.exhibitId, seededExhibit.teamId);
   });
@@ -121,3 +122,4 @@ test.describe('Archive Functionality', () => {
     await expect.poll(async () => unreadFromTitle(await page.title())).toBe(baselineUnread);
   });
 });
+}

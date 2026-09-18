@@ -4,7 +4,7 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoExhibitSection } from '../../fixtures';
+import { test, expect, gotoExhibitSection , GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
 /**
  * Wall View Functionality §3.1 — Wall Page Display.
@@ -26,7 +26,8 @@ import { test, expect, gotoExhibitSection } from '../../fixtures';
  * events for exhibits other than the one being viewed).
  */
 const SEEDED_CARD = /^Test Card [123]$/;
-test.describe('Wall View Functionality', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Wall View Functionality`, () => {
   test('Wall Page Display', async ({ galleryAuthenticatedPage: page, seededExhibit }) => {
     // 1. Navigate to the seeded exhibit's Wall view.
     await gotoExhibitSection(page, seededExhibit.exhibitId, 'wall');
@@ -83,3 +84,4 @@ test.describe('Wall View Functionality', () => {
     await expect(page.getByRole('button', { name: 'Advance' })).toBeVisible();
   });
 });
+}

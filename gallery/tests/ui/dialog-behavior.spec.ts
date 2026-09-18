@@ -4,9 +4,10 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoGalleryAdmin, apiDeleteCollectionByName } from '../../fixtures';
+import { test, expect, gotoGalleryAdmin, apiDeleteCollectionByName , GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
-test.describe('Responsive Design and Accessibility', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Responsive Design and Accessibility`, () => {
   // Names are registered before the record is created so the safety net below can
   // remove them even if the test throws mid-way. Only exact names created here are
   // deleted — sibling workers create their own collections concurrently.
@@ -20,6 +21,7 @@ test.describe('Responsive Design and Accessibility', () => {
   });
 
   test('Dialog and Modal Behavior', async ({ galleryAuthenticatedPage: page }) => {
+    await applyGalleryTheme(page, theme);
     await gotoGalleryAdmin(page);
 
     // 1. Open a dialog (e.g., Add Collection)
@@ -66,3 +68,4 @@ test.describe('Responsive Design and Accessibility', () => {
     // Cleanup happens in afterEach so it still runs if an assertion above fails.
   });
 });
+}

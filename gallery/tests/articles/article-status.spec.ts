@@ -13,7 +13,7 @@ import {
   apiCreateCollection,
   apiDeleteCollectionById,
   openMatSelect,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
 /**
  * Articles are managed inside a collection row's expanded detail, not as a
@@ -91,7 +91,8 @@ async function galleryApi(
   }
 }
 
-test.describe('Article Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Article Management`, () => {
   // Only collection ids this spec created. Deleting a collection cascades to its
   // exhibits, teams, cards and articles. Never purge by name prefix — sibling
   // specs share this stack.
@@ -108,7 +109,7 @@ test.describe('Article Management', () => {
   });
 
   test('Article Status Workflow', async ({ galleryAuthenticatedPage: page }) => {
-    const unique = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    await applyGalleryTheme(page, theme);    const unique = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
     const collectionName = `Article Status Collection ${unique}`;
     const cardName = `Article Status Card ${unique}`;
     const articleName = `Status Article ${unique}`;
@@ -357,3 +358,4 @@ test.describe('Article Management', () => {
     // article status.
   });
 });
+}

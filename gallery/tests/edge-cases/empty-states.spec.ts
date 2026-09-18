@@ -11,11 +11,12 @@ import {
   gotoAdminSection,
   apiCreateCollection,
   apiDeleteCollectionById,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
 const NO_MATCH_TERM = 'ZZZZNONEXISTENTCOLLECTION';
 
-test.describe('Edge Cases and Negative Testing', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Edge Cases and Negative Testing`, () => {
   // A collection with zero exhibits is a precondition for step 3, so the spec creates
   // one rather than hoping the database contains one. Registered before the assertions
   // and deleted in afterEach.
@@ -29,7 +30,7 @@ test.describe('Edge Cases and Negative Testing', () => {
   });
 
   test('Empty States', async ({ galleryAuthenticatedPage: page }) => {
-    const suffix = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    await applyGalleryTheme(page, theme);    const suffix = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
     const emptyCollection = await apiCreateCollection(`ZZEmptyStates ${suffix}`);
     emptyCollectionId = emptyCollection.id;
 
@@ -94,3 +95,4 @@ test.describe('Edge Cases and Negative Testing', () => {
     await expect(page.getByRole('columnheader', { name: 'Group Name' })).toBeVisible();
   });
 });
+}

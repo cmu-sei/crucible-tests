@@ -12,7 +12,7 @@ import {
   apiCreateCollection,
   apiCreateExhibit,
   apiDeleteCollectionById,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 import type { Page } from '@playwright/test';
 
 async function selectCollection(page: Page, collectionName: string): Promise<void> {
@@ -22,7 +22,8 @@ async function selectCollection(page: Page, collectionName: string): Promise<voi
   await option.click();
 }
 
-test.describe('Exhibit Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Exhibit Management`, () => {
   let collectionId: string | undefined;
 
   test.afterEach(async () => {
@@ -34,7 +35,7 @@ test.describe('Exhibit Management', () => {
   });
 
   test('Download Exhibit as JSON', async ({ galleryAuthenticatedPage: page }) => {
-    // Collection and exhibit are preconditions — the download button is the subject.
+    await applyGalleryTheme(page, theme);    // Collection and exhibit are preconditions — the download button is the subject.
     const suffix = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
     const collection = await apiCreateCollection(`Exhibit Download Test ${suffix}`);
     collectionId = collection.id;
@@ -67,3 +68,4 @@ test.describe('Exhibit Management', () => {
     expect(JSON.stringify(payload)).toContain(testExhibitName);
   });
 });
+}

@@ -14,7 +14,7 @@ import {
   apiCreateCollection,
   apiDeleteCollectionById,
   openMatSelect,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
 /**
  * Articles are NOT a top-level admin section — `admin-container.component.html`
@@ -122,7 +122,8 @@ async function galleryApi(
   }
 }
 
-test.describe('Article Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Article Management`, () => {
   // Only collection ids this spec created. Deleting a collection cascades to its
   // cards and articles. Never purge by name prefix — sibling specs are running
   // against the same stack and their live data would be destroyed with it.
@@ -139,7 +140,7 @@ test.describe('Article Management', () => {
   });
 
   test('Create New Article', async ({ galleryAuthenticatedPage: page }) => {
-    const unique = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    await applyGalleryTheme(page, theme);    const unique = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
     const collectionName = `Article Create Collection ${unique}`;
     const cardName = `Article Create Card ${unique}`;
     const articleName = `New Article ${unique}`;
@@ -316,3 +317,4 @@ test.describe('Article Management', () => {
     expect(new Date(persisted.datePosted).getUTCDate()).toBe(targetDay);
   });
 });
+}

@@ -13,7 +13,7 @@ import {
   apiCreateExhibit,
   apiCreateTeam,
   apiDeleteCollectionById,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 import { openExhibitTeamsPanel, teamRowShortNames, teamRowFullNames } from './null-team-helpers';
 
 /**
@@ -52,7 +52,8 @@ import { openExhibitTeamsPanel, teamRowShortNames, teamRowFullNames } from './nu
  * `seededExhibit`, because the team store is global and injecting malformed teams into
  * the shared exhibit would perturb `view-exhibit-teams` and `team-selector`.
  */
-test.describe('Team Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Team Management`, () => {
   // Recorded as soon as the collection exists so `afterEach` removes it even when the
   // test body throws partway through. Exhibit.CollectionId and Team.ExhibitId are both
   // DeleteBehavior.Cascade, so deleting the collection removes the exhibit and its teams.
@@ -150,3 +151,4 @@ test.describe('Team Management', () => {
     ]);
   });
 });
+}

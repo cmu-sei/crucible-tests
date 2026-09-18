@@ -4,7 +4,7 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoExhibitSection, apiSetExhibitMoveAndInject } from '../../fixtures';
+import { test, expect, gotoExhibitSection, apiSetExhibitMoveAndInject , GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
 /**
  * The seeded exhibit's articles occupy exactly three move/inject positions:
@@ -19,7 +19,8 @@ const POSITIONS = [
 ];
 const LAST = POSITIONS[POSITIONS.length - 1];
 
-test.describe('Edge Cases and Negative Testing', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Edge Cases and Negative Testing`, () => {
   // Advancing writes CurrentMove/CurrentInject to the database and
   // `seededExhibit` is worker-scoped, so restore the starting position after
   // each test or every later test in this worker inherits the advanced state.
@@ -79,3 +80,4 @@ test.describe('Edge Cases and Negative Testing', () => {
     await expect(moveInjectLabel).toHaveText(`Move ${LAST.move}, Inject ${LAST.inject}`);
   });
 });
+}

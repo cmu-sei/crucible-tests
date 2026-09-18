@@ -4,10 +4,12 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoGalleryAdmin, gotoAdminSection } from '../../fixtures';
+import { test, expect, gotoGalleryAdmin, gotoAdminSection , GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
-test.describe('Role and Permission Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Role and Permission Management`, () => {
   test('System Roles Permission Matrix', async ({ galleryAuthenticatedPage: page }) => {
+    await applyGalleryTheme(page, theme);
     await gotoGalleryAdmin(page);
 
     // 1. Navigate to admin section and click 'Roles' in the sidebar
@@ -40,3 +42,4 @@ test.describe('Role and Permission Management', () => {
     }
   });
 });
+}

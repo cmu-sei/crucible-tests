@@ -10,12 +10,13 @@ import {
   gotoGalleryAdmin,
   apiCreateCollection,
   apiDeleteCollectionByName,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
-test.describe('Collection Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Collection Management`, () => {
   // Names to remove in teardown: the seeded source collection and the collection the
   // upload creates.
   let createdCollectionNames: string[] = [];
@@ -40,7 +41,7 @@ test.describe('Collection Management', () => {
   });
 
   test('Upload Collection from JSON', async ({ galleryAuthenticatedPage: page }) => {
-    const sourceName = `Upload Test Collection ${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    await applyGalleryTheme(page, theme);    const sourceName = `Upload Test Collection ${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
     // UploadJsonAsync reuses privateCollectionCopyAsync, which renames the imported
     // collection to `<original name> - <current user name>`.
     const expectedUploadedName = `${sourceName} - Admin User`;
@@ -94,3 +95,4 @@ test.describe('Collection Management', () => {
     await expect(page.getByRole('row').filter({ hasText: expectedUploadedName })).toHaveCount(1);
   });
 });
+}

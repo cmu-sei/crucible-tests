@@ -4,10 +4,12 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoGalleryAdmin, Services } from '../../fixtures';
+import { test, expect, gotoGalleryAdmin, Services , GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
-test.describe('Admin Navigation and UI', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Admin Navigation and UI`, () => {
   test('Exit Administration', async ({ galleryAuthenticatedPage: page }) => {
+    await applyGalleryTheme(page, theme);
     await gotoGalleryAdmin(page);
 
     // 1. Click the 'Exit Administration' area (with logo) at the top of the admin sidebar
@@ -22,3 +24,4 @@ test.describe('Admin Navigation and UI', () => {
     await expect(page).toHaveURL(new RegExp(`${Services.Gallery.UI.replace('http://', '')}/?$`));
   });
 });
+}

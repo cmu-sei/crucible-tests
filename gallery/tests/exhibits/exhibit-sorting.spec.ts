@@ -12,7 +12,7 @@ import {
   apiCreateCollection,
   apiCreateExhibit,
   apiDeleteCollectionById,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 import type { Page } from '@playwright/test';
 
 const SORTABLE_COLUMNS = ['Name', 'Created', 'User', 'Move', 'Inject'];
@@ -30,7 +30,8 @@ async function exhibitNameColumn(page: Page): Promise<string[]> {
   return (await cells.allTextContents()).map((t) => t.trim());
 }
 
-test.describe('Exhibit Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Exhibit Management`, () => {
   // Registered as soon as the collection exists so `afterEach` removes it even when
   // the test body throws partway through.
   let collectionId: string | undefined;
@@ -96,7 +97,7 @@ test.describe('Exhibit Management', () => {
   }
 
   test('Exhibit List Sorting - headers respond to clicks', async ({ galleryAuthenticatedPage: page }) => {
-    const { collectionName, namesInCreationOrder } = await seedSortableExhibits();
+    await applyGalleryTheme(page, theme);    const { collectionName, namesInCreationOrder } = await seedSortableExhibits();
 
     await gotoGalleryAdmin(page);
     await gotoAdminSection(page, 'Exhibits');
@@ -128,7 +129,7 @@ test.describe('Exhibit Management', () => {
   });
 
   test('Exhibit List Sorting - rows reorder by column', async ({ galleryAuthenticatedPage: page }) => {
-    const { collectionName, namesInCreationOrder } = await seedSortableExhibits();
+    await applyGalleryTheme(page, theme);    const { collectionName, namesInCreationOrder } = await seedSortableExhibits();
     const ascendingByName = [...namesInCreationOrder].sort();
 
     await gotoGalleryAdmin(page);
@@ -200,3 +201,4 @@ test.describe('Exhibit Management', () => {
     await expect.poll(() => exhibitNameColumn(page), { timeout: 10000 }).toEqual(ascendingByName.slice(0, 10));
   });
 });
+}

@@ -10,7 +10,7 @@ import {
   gotoGalleryAdmin,
   apiCreateCollection,
   apiDeleteCollectionById,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
 /**
  * Number of collections this spec seeds. Chosen so that a page size of 5 splits the
@@ -19,7 +19,8 @@ import {
  */
 const SEEDED_COUNT = 6;
 
-test.describe('Collection Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Collection Management`, () => {
   let createdCollectionIds: string[] = [];
 
   test.beforeEach(() => {
@@ -36,7 +37,7 @@ test.describe('Collection Management', () => {
   });
 
   test('Collection List Pagination', async ({ galleryAuthenticatedPage: page }) => {
-    // Seed a known number of collections so the range labels below are exact numbers
+    await applyGalleryTheme(page, theme);    // Seed a known number of collections so the range labels below are exact numbers
     // rather than "whatever happens to be in the database". Names are alphabetical by
     // suffix so that sorting on Name gives a deterministic page-1/page-2 split.
     // The random component matters: a bare Date.now() collides across parallel workers.
@@ -135,3 +136,4 @@ test.describe('Collection Management', () => {
     await expect(paginatorRange).toHaveText(`1 – 5 of ${SEEDED_COUNT}`);
   });
 });
+}

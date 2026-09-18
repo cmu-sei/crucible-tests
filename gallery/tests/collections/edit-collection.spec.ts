@@ -10,9 +10,10 @@ import {
   gotoGalleryAdmin,
   apiCreateCollection,
   apiDeleteCollectionByName,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
-test.describe('Collection Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Collection Management`, () => {
   // Both the seeded name and the renamed name are tracked: the test's subject is the
   // *rename*, so teardown has to be able to find the row under either name.
   let createdCollectionNames: string[] = [];
@@ -28,7 +29,7 @@ test.describe('Collection Management', () => {
   });
 
   test('Edit Existing Collection', async ({ galleryAuthenticatedPage: page }) => {
-    const testCollectionName = `Edit Test Collection ${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    await applyGalleryTheme(page, theme);    const testCollectionName = `Edit Test Collection ${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
     const updatedName = `Updated ${testCollectionName}`;
 
     // Setup: seed the collection to edit via the API. The subject of this test is the
@@ -79,3 +80,4 @@ test.describe('Collection Management', () => {
     await expect(page.getByRole('row').filter({ hasText: 'To be edited' })).toHaveCount(0);
   });
 });
+}

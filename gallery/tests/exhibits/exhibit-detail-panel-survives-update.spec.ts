@@ -14,7 +14,7 @@ import {
   apiCreateTeam,
   apiSetExhibitMoveAndInject,
   apiDeleteCollectionById,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
 /**
  * Exhibit Management — an expanded exhibit's detail sub-panel survives an exhibit-store
@@ -56,7 +56,8 @@ import {
  * worker-scoped `seededExhibit`: it needs two exhibits in one collection, and it mutates
  * one of them.
  */
-test.describe('Exhibit Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Exhibit Management`, () => {
   // Recorded as soon as the collection exists so `afterEach` removes it even when the
   // test body throws partway through. Exhibit.CollectionId and Team.ExhibitId are both
   // DeleteBehavior.Cascade, so deleting the collection removes both exhibits and the
@@ -153,3 +154,4 @@ test.describe('Exhibit Management', () => {
     await expect(teamsRegion.getByText(teamShortName, { exact: true })).toBeVisible();
   });
 });
+}

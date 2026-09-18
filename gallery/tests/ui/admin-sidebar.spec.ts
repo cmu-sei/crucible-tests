@@ -4,11 +4,12 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoGalleryAdmin, gotoAdminSection } from '../../fixtures';
+import { test, expect, gotoGalleryAdmin, gotoAdminSection , GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
-test.describe('Admin Navigation and UI', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Admin Navigation and UI`, () => {
   test('Admin Sidebar Navigation', async ({ galleryAuthenticatedPage: page }) => {
-    // 1. Navigate to admin section
+    await applyGalleryTheme(page, theme);    // 1. Navigate to admin section
     await gotoGalleryAdmin(page);
 
     // expect: The admin page has a left sidebar with sections.
@@ -55,3 +56,4 @@ test.describe('Admin Navigation and UI', () => {
     await expect(page.getByRole('textbox', { name: 'Search Groups' })).toBeVisible();
   });
 });
+}

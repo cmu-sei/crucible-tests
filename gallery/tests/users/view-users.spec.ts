@@ -4,10 +4,12 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoGalleryAdmin, gotoAdminSection } from '../../fixtures';
+import { test, expect, gotoGalleryAdmin, gotoAdminSection , GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
-test.describe('User Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › User Management`, () => {
   test('View Users List', async ({ galleryAuthenticatedPage: page }) => {
+    await applyGalleryTheme(page, theme);
     await gotoGalleryAdmin(page);
 
     // 1. Navigate to admin section and click 'Users' in the sidebar
@@ -35,3 +37,4 @@ test.describe('User Management', () => {
     await expect(page.getByRole('button', { name: 'Add User' })).toBeVisible();
   });
 });
+}

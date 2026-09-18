@@ -4,7 +4,7 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoGalleryAdmin, gotoAdminSection, Services } from '../../fixtures';
+import { test, expect, gotoGalleryAdmin, gotoAdminSection, Services , GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 import { request as pwRequest, APIRequestContext } from '@playwright/test';
 import { randomUUID } from 'crypto';
 
@@ -39,7 +39,8 @@ async function galleryApi<T>(fn: (ctx: APIRequestContext, token: string) => Prom
   }
 }
 
-test.describe('User Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › User Management`, () => {
   // Unique per test so a parallel worker's seeded users can never be caught by
   // this spec's search term or its cleanup.
   let namePrefix: string;
@@ -78,6 +79,7 @@ test.describe('User Management', () => {
   });
 
   test('User Search and Pagination', async ({ galleryAuthenticatedPage: page }) => {
+    await applyGalleryTheme(page, theme);
     await gotoGalleryAdmin(page);
 
     // Navigate to Users section
@@ -134,3 +136,4 @@ test.describe('User Management', () => {
     await expect(rangeLabel).toContainText(`of ${unfilteredTotal}`);
   });
 });
+}

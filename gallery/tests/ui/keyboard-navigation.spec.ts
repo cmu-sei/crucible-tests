@@ -4,11 +4,12 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoGalleryAdmin, openGalleryUserMenu } from '../../fixtures';
+import { test, expect, gotoGalleryAdmin, openGalleryUserMenu , GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
-test.describe('Responsive Design and Accessibility', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Responsive Design and Accessibility`, () => {
   test('Keyboard Navigation', async ({ galleryAuthenticatedPage: page }) => {
-    // 1. Navigate the application using Tab, Enter, and Escape keys
+    await applyGalleryTheme(page, theme);    // 1. Navigate the application using Tab, Enter, and Escape keys
 
     // expect: All interactive elements are reachable via keyboard.
     // Assert focus actually lands on interactive elements on each Tab — the bare
@@ -146,3 +147,4 @@ test.describe('Responsive Design and Accessibility', () => {
     await expect(page.getByRole('button', { name: 'Add Collection' })).toBeEnabled();
   });
 });
+}

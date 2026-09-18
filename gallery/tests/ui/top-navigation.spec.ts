@@ -4,11 +4,12 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoGalleryAdmin, openGalleryUserMenu } from '../../fixtures';
+import { test, expect, gotoGalleryAdmin, openGalleryUserMenu , GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
-test.describe('Admin Navigation and UI', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Admin Navigation and UI`, () => {
   test('Top Navigation Bar', async ({ galleryAuthenticatedPage: page }) => {
-    // 1. Log in and observe the top navigation bar
+    await applyGalleryTheme(page, theme);    // 1. Log in and observe the top navigation bar
     // expect: Gallery logo/icon is visible on the left as a clickable link
     const logoLink = page.locator('a[href="/"]').first();
     await expect(logoLink).toBeVisible();
@@ -45,3 +46,4 @@ test.describe('Admin Navigation and UI', () => {
     await page.keyboard.press('Escape');
   });
 });
+}

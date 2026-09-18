@@ -11,7 +11,7 @@ import {
   gotoAdminSection,
   openMatSelect,
   Services,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 import { request as pwRequest, APIRequestContext } from '@playwright/test';
 import { randomUUID } from 'crypto';
 
@@ -79,7 +79,8 @@ async function getGalleryUserRoleId(id: string): Promise<string | null> {
   });
 }
 
-test.describe('User Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › User Management`, () => {
   let userId: string;
   let userName: string;
 
@@ -96,6 +97,7 @@ test.describe('User Management', () => {
   });
 
   test('User Role Assignment', async ({ galleryAuthenticatedPage: page }) => {
+    await applyGalleryTheme(page, theme);
     await gotoGalleryAdmin(page);
 
     // Navigate to Users section
@@ -144,3 +146,4 @@ test.describe('User Management', () => {
     expect(await getGalleryUserRoleId(userId)).toBeNull();
   });
 });
+}

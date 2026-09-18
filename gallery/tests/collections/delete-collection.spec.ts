@@ -10,9 +10,10 @@ import {
   gotoGalleryAdmin,
   apiCreateCollection,
   apiDeleteCollectionByName,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
-test.describe('Collection Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Collection Management`, () => {
   // The UI delete *is* the subject of this test, so the assertion stays in the body.
   // The afterEach is the safety net for a failure before/during the confirm step —
   // deleting an already-deleted collection is a no-op.
@@ -29,7 +30,7 @@ test.describe('Collection Management', () => {
   });
 
   test('Delete Collection', async ({ galleryAuthenticatedPage: page }) => {
-    const testCollectionName = `Delete Test Collection ${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    await applyGalleryTheme(page, theme);    const testCollectionName = `Delete Test Collection ${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 
     // Setup: seed the collection to delete via the API — the create dialog is covered
     // by create-collection.spec.ts.
@@ -72,3 +73,4 @@ test.describe('Collection Management', () => {
     await expect(row).toHaveCount(0);
   });
 });
+}

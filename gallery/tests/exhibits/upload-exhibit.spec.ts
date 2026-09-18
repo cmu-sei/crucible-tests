@@ -10,12 +10,13 @@ import {
   gotoGalleryAdmin,
   gotoAdminSection,
   apiDeleteCollectionById,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
-test.describe('Exhibit Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Exhibit Management`, () => {
   // The upload endpoint calls privateExhibitCopyAsync(..., copyTheCollection: true), so
   // it creates a brand-new collection (plus cards and articles) rather than reusing the
   // source one. That new collection is outside the worker-scoped `seededExhibit`
@@ -111,3 +112,4 @@ test.describe('Exhibit Management', () => {
     ).toBeVisible();
   });
 });
+}

@@ -12,7 +12,7 @@ import {
   apiCreateCollection,
   apiCreateExhibit,
   apiDeleteCollectionById,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 import type { Page } from '@playwright/test';
 
 async function selectCollection(page: Page, collectionName: string): Promise<void> {
@@ -22,7 +22,8 @@ async function selectCollection(page: Page, collectionName: string): Promise<voi
   await option.click();
 }
 
-test.describe('Exhibit Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Exhibit Management`, () => {
   // Registered as soon as the collection exists. Previously this spec deleted its
   // collection inline at the very end of the test body, so any earlier assertion
   // failure leaked the collection; an `afterEach` runs even when the body throws.
@@ -38,7 +39,7 @@ test.describe('Exhibit Management', () => {
   });
 
   test('Delete Exhibit', async ({ galleryAuthenticatedPage: page }) => {
-    // Collection and exhibit are preconditions — the subject under test is the
+    await applyGalleryTheme(page, theme);    // Collection and exhibit are preconditions — the subject under test is the
     // exhibit delete-confirmation flow.
     const suffix = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
     const collection = await apiCreateCollection(`Exhibit Delete Test ${suffix}`);
@@ -79,3 +80,4 @@ test.describe('Exhibit Management', () => {
     await expect(row).toHaveCount(0);
   });
 });
+}

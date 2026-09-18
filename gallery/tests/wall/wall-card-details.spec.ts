@@ -4,7 +4,7 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoExhibitSection } from '../../fixtures';
+import { test, expect, gotoExhibitSection , GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
 /**
  * Wall View Functionality §3.2 — Card Details Navigation.
@@ -18,7 +18,8 @@ import { test, expect, gotoExhibitSection } from '../../fixtures';
  * Read-only with respect to shared state (no move/inject change, no read toggles), so
  * the worker-scoped `seededExhibit` needs no restoration.
  */
-test.describe('Wall View Functionality', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Wall View Functionality`, () => {
   test('Wall Card Details Navigation', async ({ galleryAuthenticatedPage: page, seededExhibit }) => {
     await gotoExhibitSection(page, seededExhibit.exhibitId, 'wall');
     await expect(page).toHaveTitle('Gallery Wall');
@@ -69,3 +70,4 @@ test.describe('Wall View Functionality', () => {
     await expect(intelArticle.getByRole('button', { name: 'View' })).toBeVisible();
   });
 });
+}

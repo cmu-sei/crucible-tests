@@ -4,7 +4,7 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoExhibitSection, apiSetExhibitMoveAndInject } from '../../fixtures';
+import { test, expect, gotoExhibitSection, apiSetExhibitMoveAndInject , GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
 /**
  * Archive Functionality §4.2 — Source Type Filtering.
@@ -48,7 +48,8 @@ const EXPECTED_BY_SOURCE: Record<string, string[]> = {
   Email: ['Email Article 1'],
 };
 
-test.describe('Archive Functionality', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Archive Functionality`, () => {
   test.afterEach(async ({ seededExhibit }) => {
     await apiSetExhibitMoveAndInject(seededExhibit.exhibitId, 0, 0);
   });
@@ -108,3 +109,4 @@ test.describe('Archive Functionality', () => {
     }
   });
 });
+}

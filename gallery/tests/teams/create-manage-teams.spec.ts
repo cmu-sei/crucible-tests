@@ -13,7 +13,7 @@ import {
   apiCreateExhibit,
   apiDeleteCollectionById,
   Services,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 import { request as pwRequest, type APIRequestContext, type Page } from '@playwright/test';
 
 /**
@@ -123,7 +123,8 @@ async function openExhibitTeamsPanel(page: Page, collectionName: string, exhibit
   return teamsRegion;
 }
 
-test.describe('Team Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Team Management`, () => {
   // Every team name this spec asks the UI to create, registered *before* the create
   // action so a mid-test failure still gets cleaned up. Both the original and the
   // renamed name are tracked, because after step 2 the row answers to the new name.
@@ -150,7 +151,7 @@ test.describe('Team Management', () => {
   });
 
   test('Create and Manage Teams', async ({ galleryAuthenticatedPage: page }) => {
-    const unique = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    await applyGalleryTheme(page, theme);    const unique = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
     const teamName = `Managed Team ${unique}`;
     const teamShortName = `MT${unique}`.slice(0, 20);
     const renamedTeamName = `Renamed Team ${unique}`;
@@ -260,3 +261,4 @@ test.describe('Team Management', () => {
     ).toHaveCount(0);
   });
 });
+}

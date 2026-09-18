@@ -9,7 +9,7 @@ import {
   expect,
   gotoGalleryAdmin,
   gotoAdminSection,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
 /**
  * Team Management §13.1 — View Exhibit Teams.
@@ -28,7 +28,8 @@ import {
  * This test only reads; it seeds nothing of its own and so has nothing to clean up —
  * the worker-scoped `seededExhibit` fixture owns its teardown.
  */
-test.describe('Team Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Team Management`, () => {
   test('View Exhibit Teams', async ({ galleryAuthenticatedPage: page, seededExhibit }) => {
     // 1. Navigate to an exhibit's team management in admin.
     await gotoGalleryAdmin(page);
@@ -75,3 +76,4 @@ test.describe('Team Management', () => {
     ).toBeVisible();
   });
 });
+}

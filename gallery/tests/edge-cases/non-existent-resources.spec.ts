@@ -4,7 +4,7 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services , GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
 const MISSING_EXHIBIT_ID = '00000000-0000-0000-0000-000000000000';
 
@@ -13,9 +13,10 @@ const MISSING_EXHIBIT_ID = '00000000-0000-0000-0000-000000000000';
  * they run with the normal pre-authenticated fixture — being signed out is not what is
  * under test (that is the unauthorized-access spec's job).
  */
-test.describe('Edge Cases and Negative Testing', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Edge Cases and Negative Testing`, () => {
   test('Navigation to Non-Existent Resources', async ({ galleryAuthenticatedPage: page }) => {
-    // 1. Navigate to a non-existent exhibit ID.
+    await applyGalleryTheme(page, theme);    // 1. Navigate to a non-existent exhibit ID.
     // exhibit-data.service.ts `loadById` handles the failed GET by routing back to '/'
     // with the query params stripped, so pair the navigation with the 404 to prove the
     // app really did ask for the missing exhibit and recovered — rather than merely
@@ -58,3 +59,4 @@ test.describe('Edge Cases and Negative Testing', () => {
     await expect(page).toHaveURL(`${Services.Gallery.UI}/`);
   });
 });
+}

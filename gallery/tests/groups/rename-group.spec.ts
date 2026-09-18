@@ -12,9 +12,10 @@ import {
   createGalleryGroup,
   galleryGroupRow,
   apiDeleteGroupByName,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
-test.describe('Group Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Group Management`, () => {
   // Both names are torn down: whichever one the group ended up carrying when the
   // test stopped is the one that needs removing, and a failure mid-rename can
   // leave either. apiDeleteGroupByName no-ops when the name is not present.
@@ -32,6 +33,7 @@ test.describe('Group Management', () => {
   });
 
   test('Rename Group', async ({ galleryAuthenticatedPage: page }) => {
+    await applyGalleryTheme(page, theme);
     await gotoGalleryAdmin(page);
     await gotoAdminSection(page, 'Groups');
     await expect(page.getByRole('columnheader', { name: 'Group Name' })).toBeVisible();
@@ -106,3 +108,4 @@ test.describe('Group Management', () => {
     originalName = undefined;
   });
 });
+}

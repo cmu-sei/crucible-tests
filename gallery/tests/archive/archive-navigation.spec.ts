@@ -4,7 +4,7 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoExhibitSection } from '../../fixtures';
+import { test, expect, gotoExhibitSection , GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
 /**
  * Archive Functionality §4.9 — Archive Navigation.
@@ -19,7 +19,8 @@ import { test, expect, gotoExhibitSection } from '../../fixtures';
  * other than the one being viewed). This spec is about navigation, and the article-level
  * assertions below are what prove the right view rendered.
  */
-test.describe('Archive Functionality', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Archive Functionality`, () => {
   test('Archive Navigation', async ({ galleryAuthenticatedPage: page, seededExhibit }) => {
     await gotoExhibitSection(page, seededExhibit.exhibitId, 'archive');
     await expect(page).toHaveTitle(/^Gallery Archive \(\d+\)$/);
@@ -64,3 +65,4 @@ test.describe('Archive Functionality', () => {
     await expect(page.getByRole('table')).toBeVisible();
   });
 });
+}

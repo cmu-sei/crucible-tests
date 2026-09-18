@@ -4,7 +4,7 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoGalleryAdmin, gotoAdminSection, apiDeleteGroupByName } from '../../fixtures';
+import { test, expect, gotoGalleryAdmin, gotoAdminSection, apiDeleteGroupByName , GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
 /**
  * Test-plan step 9.4 describes step 2 as "link the group to a collection or exhibit",
@@ -17,7 +17,8 @@ import { test, expect, gotoGalleryAdmin, gotoAdminSection, apiDeleteGroupByName 
  * add a user, verify the membership POST and the row moving between the two panels,
  * then remove it and verify the DELETE and the empty-state message.
  */
-test.describe('Group Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Group Management`, () => {
   let testGroupName: string | undefined;
 
   test.afterEach(async () => {
@@ -29,6 +30,7 @@ test.describe('Group Management', () => {
   });
 
   test('Group Membership Management', async ({ galleryAuthenticatedPage: page }) => {
+    await applyGalleryTheme(page, theme);
     await gotoGalleryAdmin(page);
     await gotoAdminSection(page, 'Groups');
     await expect(page.getByRole('columnheader', { name: 'Group Name' })).toBeVisible();
@@ -122,3 +124,4 @@ test.describe('Group Management', () => {
     await expect(usersPanel.getByRole('row').filter({ hasText: 'Admin User' })).toBeVisible();
   });
 });
+}

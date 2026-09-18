@@ -5,7 +5,7 @@
 // seed: seed.spec.ts
 
 import { request as pwRequest } from '@playwright/test';
-import { test, expect, Services, gotoExhibitSection } from '../../fixtures';
+import { test, expect, Services, gotoExhibitSection , GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 import { getUserToken } from '../../../keycloak-admin';
 
 /**
@@ -22,7 +22,8 @@ import { getUserToken } from '../../../keycloak-admin';
  * the seeded team's short name is generated per run, so it is read from the API and
  * asserted exactly rather than being matched loosely.
  */
-test.describe('Team Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Team Management`, () => {
   test('Team Selector in Wall and Archive', async ({
     galleryAuthenticatedPage: page,
     seededExhibit,
@@ -87,3 +88,4 @@ test.describe('Team Management', () => {
     await expect(page.locator('app-team-selector')).toContainText(`Team: ${teamShortName}`);
   });
 });
+}

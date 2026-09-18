@@ -9,9 +9,10 @@ import {
   expect,
   gotoGalleryAdmin,
   apiDeleteCollectionByName,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
-test.describe('Collection Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Collection Management`, () => {
   // Names this test asked the UI to create. Registered *before* the create action so
   // a mid-create failure still gets cleaned up.
   let createdCollectionNames: string[] = [];
@@ -27,7 +28,7 @@ test.describe('Collection Management', () => {
   });
 
   test('Create New Collection', async ({ galleryAuthenticatedPage: page }) => {
-    const testCollectionName = `Test Collection ${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+    await applyGalleryTheme(page, theme);    const testCollectionName = `Test Collection ${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 
     await gotoGalleryAdmin(page);
 
@@ -60,3 +61,4 @@ test.describe('Collection Management', () => {
     await expect(row.getByRole('cell', { name: 'Automated test collection' })).toBeVisible();
   });
 });
+}

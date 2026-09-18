@@ -4,11 +4,12 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoGalleryAdmin, gotoAdminSection } from '../../fixtures';
+import { test, expect, gotoGalleryAdmin, gotoAdminSection , GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
-test.describe('Responsive Design and Accessibility', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Responsive Design and Accessibility`, () => {
   test('Responsive Design', async ({ galleryAuthenticatedPage: page }) => {
-    /**
+    await applyGalleryTheme(page, theme);    /**
      * Width of the document's horizontal overflow beyond the viewport, in CSS
      * pixels. 0 means the page fits and needs no horizontal scrollbar.
      */
@@ -72,3 +73,4 @@ test.describe('Responsive Design and Accessibility', () => {
       .toBe(0);
   });
 });
+}

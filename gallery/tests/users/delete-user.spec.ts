@@ -4,7 +4,7 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoGalleryAdmin, gotoAdminSection, Services } from '../../fixtures';
+import { test, expect, gotoGalleryAdmin, gotoAdminSection, Services , GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 import { request as pwRequest } from '@playwright/test';
 import { randomUUID } from 'crypto';
 
@@ -61,7 +61,8 @@ async function deleteGalleryUser(id: string): Promise<void> {
   });
 }
 
-test.describe('User Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › User Management`, () => {
   let userId: string;
   let userName: string;
 
@@ -79,6 +80,7 @@ test.describe('User Management', () => {
   });
 
   test('Delete User', async ({ galleryAuthenticatedPage: page }) => {
+    await applyGalleryTheme(page, theme);
     await gotoGalleryAdmin(page);
 
     // Navigate to Users section
@@ -128,3 +130,4 @@ test.describe('User Management', () => {
     expect(stillExists).toBe(false);
   });
 });
+}

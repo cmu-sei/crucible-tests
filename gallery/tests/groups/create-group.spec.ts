@@ -4,9 +4,10 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoGalleryAdmin, gotoAdminSection, apiDeleteGroupByName } from '../../fixtures';
+import { test, expect, gotoGalleryAdmin, gotoAdminSection, apiDeleteGroupByName , GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
-test.describe('Group Management', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Group Management`, () => {
   // Registered before the create action and torn down in afterEach, so a failure
   // partway through the test still removes the row. Include a random component
   // alongside the timestamp: parallel workers can call Date.now() in the same
@@ -21,6 +22,7 @@ test.describe('Group Management', () => {
   });
 
   test('Create Group', async ({ galleryAuthenticatedPage: page }) => {
+    await applyGalleryTheme(page, theme);
     await gotoGalleryAdmin(page);
     await gotoAdminSection(page, 'Groups');
     await expect(page.getByRole('columnheader', { name: 'Group Name' })).toBeVisible();
@@ -71,3 +73,4 @@ test.describe('Group Management', () => {
     await expect(page.getByRole('cell', { name: testGroupName })).toBeVisible();
   });
 });
+}

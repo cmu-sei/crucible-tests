@@ -19,7 +19,7 @@ import {
   apiAddUserToTeam,
   apiRemoveUserFromTeam,
   apiDeleteCollectionById,
-} from '../../fixtures';
+, GALLERY_THEMES, applyGalleryTheme} from '../../fixtures';
 
 /**
  * Wall View Functionality — a TeamCard belonging to another exhibit's team must not
@@ -130,7 +130,8 @@ import {
  * mutates team membership. Deleting the collection cascades to both exhibits, both
  * teams, the TeamUser rows, the cards and the TeamCards.
  */
-test.describe('Wall View Functionality', () => {
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Wall View Functionality`, () => {
   // Recorded as soon as the collection exists so `afterEach` removes it even when the
   // test body throws partway through.
   let collectionId: string | undefined;
@@ -299,3 +300,4 @@ test.describe('Wall View Functionality', () => {
     await expect(wallCardTitles).toHaveText([localCardRenamed]);
   });
 });
+}
