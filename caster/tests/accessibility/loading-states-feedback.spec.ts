@@ -4,10 +4,11 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Accessibility and Usability', () => {
-  test('Loading States and Feedback', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Accessibility and Usability`, () => {
+    test('Loading States and Feedback', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
 
     await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
 
@@ -24,5 +25,6 @@ test.describe('Accessibility and Usability', () => {
     // expect: Dialog closes and project appears
     cleanupCasterProject(await expectCasterProjectOpen(page, projectName));
     await expect(page.getByRole('dialog', { name: 'Create New Project?' })).not.toBeVisible();
-  });
+    });
 });
+}

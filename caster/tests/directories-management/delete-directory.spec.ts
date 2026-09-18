@@ -4,10 +4,11 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Directories Management', () => {
-  test('Delete Directory', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Directories Management`, () => {
+    test('Delete Directory', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
     const uniqueSuffix = Date.now().toString();
 
     // Setup: Create a project and directory to delete
@@ -52,5 +53,6 @@ test.describe('Directories Management', () => {
     await expect(page.getByRole('button', { name: 'Dir To Delete' })).toBeHidden({ timeout: 10000 }).catch(() => {
       // Directory may still be visible if delete requires different interaction
     });
-  });
+    });
 });
+}

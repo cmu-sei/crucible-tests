@@ -4,10 +4,11 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Directories Management', () => {
-  test('Edit File in Directory', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Directories Management`, () => {
+    test('Edit File in Directory', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
     const uniqueSuffix = Date.now().toString();
 
     await expect(page.getByText('My Projects')).toBeVisible();
@@ -47,5 +48,6 @@ test.describe('Directories Management', () => {
     if (await fileItem.isVisible({ timeout: 5000 }).catch(() => false)) {
       await fileItem.click();
     }
-  });
+    });
 });
+}

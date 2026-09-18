@@ -4,10 +4,12 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Global Workspace Settings', () => {
-  test('Enable Disable Workspace Operations', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Global Workspace Settings`, () => {
+    test('Enable Disable Workspace Operations', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
     await page.goto(Services.Caster.UI + '/admin?section=Workspaces');
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible({ timeout: 10000 });
@@ -21,5 +23,6 @@ test.describe('Global Workspace Settings', () => {
     // 4. Toggle back off
     await disableToggle.click();
     await expect(disableToggle).toBeVisible();
-  });
+    });
 });
+}

@@ -4,10 +4,12 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Authentication and Authorization', () => {
-  test('Permission-Based Feature Access', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Authentication and Authorization`, () => {
+    test('Permission-Based Feature Access', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
     // 1. Log in as a user with Content Developer role
     // expect: Successfully authenticated
@@ -31,5 +33,6 @@ test.describe('Authentication and Authorization', () => {
     await expect(page.getByText('VLANs')).toBeVisible();
     await expect(page.getByText('Modules')).toBeVisible();
     await expect(page.getByText('Workspaces')).toBeVisible();
-  });
+    });
 });
+}

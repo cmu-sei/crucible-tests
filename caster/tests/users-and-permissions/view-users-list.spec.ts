@@ -4,10 +4,12 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Users and Permissions Management', () => {
-  test('View Users List', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Users and Permissions Management`, () => {
+    test('View Users List', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
     // 1. Navigate to http://localhost:4310/admin
     await page.goto(Services.Caster.UI + '/admin');
@@ -35,5 +37,6 @@ test.describe('Users and Permissions Management', () => {
 
     // expect: Search box is available
     await expect(page.getByRole('textbox', { name: 'Search' })).toBeVisible();
-  });
+    });
 });
+}

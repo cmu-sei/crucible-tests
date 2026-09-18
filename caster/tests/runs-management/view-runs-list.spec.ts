@@ -4,10 +4,11 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Runs Management (Plan, Apply, Destroy)', () => {
-  test('View Runs List', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Runs Management (Plan, Apply, Destroy)`, () => {
+    test('View Runs List', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
     const projectName = `Runs-Test-Project-${Date.now()}`;
 
     await expect(page.getByText('My Projects')).toBeVisible();
@@ -32,5 +33,6 @@ test.describe('Runs Management (Plan, Apply, Destroy)', () => {
     await expect(page.getByRole('button', { name: 'WORKSPACES' })).toBeVisible();
     await page.getByRole('button', { name: 'WORKSPACES' }).click();
     await expect(page.getByText('Add Workspace')).toBeVisible();
-  });
+    });
 });
+}

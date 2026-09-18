@@ -10,11 +10,12 @@ import {
   casterGroupCell,
   deleteCasterGroup,
   gotoCasterGroupsAdmin,
-  openCreateGroupDialog,
-} from '../../fixtures';
+  openCreateGroupDialog, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Groups Management', () => {
-  test('Create New Group', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Groups Management`, () => {
+    test('Create New Group', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
     // 1. Navigate to Groups admin section
     // expect: Groups list is visible with create button
@@ -39,5 +40,6 @@ test.describe('Groups Management', () => {
     // Cleanup: delete the created group
     await deleteCasterGroup(page, 'Test Infrastructure Group');
     await expect(casterGroupCell(page, 'Test Infrastructure Group')).toHaveCount(0);
-  });
+    });
 });
+}

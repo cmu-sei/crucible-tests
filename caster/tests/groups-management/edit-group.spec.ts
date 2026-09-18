@@ -10,11 +10,12 @@ import {
   casterGroupCell,
   createCasterGroup,
   deleteCasterGroup,
-  gotoCasterGroupsAdmin,
-} from '../../fixtures';
+  gotoCasterGroupsAdmin, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Groups Management', () => {
-  test('Edit Group', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Groups Management`, () => {
+    test('Edit Group', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
     await gotoCasterGroupsAdmin(page);
 
@@ -50,5 +51,6 @@ test.describe('Groups Management', () => {
     // Cleanup: delete the renamed group
     await deleteCasterGroup(page, 'Updated Group Name');
     await expect(updatedCell).toHaveCount(0);
-  });
+    });
 });
+}

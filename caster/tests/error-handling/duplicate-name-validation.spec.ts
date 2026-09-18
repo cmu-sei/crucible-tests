@@ -4,10 +4,11 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Error Handling and Validation', () => {
-  test('Duplicate Name Validation', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Error Handling and Validation`, () => {
+    test('Duplicate Name Validation', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
 
     await expect(page.getByText('My Projects')).toBeVisible();
 
@@ -49,5 +50,6 @@ test.describe('Error Handling and Validation', () => {
     // Verify both projects exist in the list
     await expect(page.getByRole('link', { name: projectName }).first()).toBeVisible();
     await expect(page.getByRole('link', { name: projectName }).nth(1)).toBeVisible();
-  });
+    });
 });
+}

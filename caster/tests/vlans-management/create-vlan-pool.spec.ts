@@ -4,10 +4,11 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('VLANs Management', () => {
-  test('Create VLAN Pool', async ({ casterAuthenticatedPage: page, cleanupCasterPool }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › VLANs Management`, () => {
+    test('Create VLAN Pool', async ({ casterAuthenticatedPage: page, cleanupCasterPool }) => {
 
     await page.goto(Services.Caster.UI + '/admin?section=VLANs');
     await expect(page.getByRole('heading', { name: 'Pools' })).toBeVisible({ timeout: 10000 });
@@ -30,5 +31,6 @@ test.describe('VLANs Management', () => {
 
     // Verify at least one pool with the returned name appears in the list
     await expect(page.getByText(pool.name).first()).toBeVisible();
-  });
+    });
 });
+}

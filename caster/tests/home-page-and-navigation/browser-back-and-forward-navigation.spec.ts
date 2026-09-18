@@ -4,10 +4,11 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, Services, expectCasterProjectOpen, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Home Page and Navigation', () => {
-  test('Browser Back and Forward Navigation', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Home Page and Navigation`, () => {
+    test('Browser Back and Forward Navigation', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
 
     const projectName = `Nav Test Project ${Date.now()}`;
 
@@ -36,5 +37,6 @@ test.describe('Home Page and Navigation', () => {
 
     // expect: Application navigates forward to admin page
     await expect(page).toHaveURL(/\/admin/, { timeout: 10000 });
-  });
+    });
 });
+}

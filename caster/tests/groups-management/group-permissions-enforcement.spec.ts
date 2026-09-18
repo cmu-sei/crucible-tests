@@ -4,10 +4,12 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Groups Management', () => {
-  test('Group Permissions Enforcement', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Groups Management`, () => {
+    test('Group Permissions Enforcement', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
     await page.goto(Services.Caster.UI + '/admin?section=Groups');
 
@@ -18,5 +20,6 @@ test.describe('Groups Management', () => {
     // expect: As admin, create group button is available
     const createButton = page.getByRole('table').getByRole('button').first();
     await expect(createButton).toBeVisible();
-  });
+    });
 });
+}

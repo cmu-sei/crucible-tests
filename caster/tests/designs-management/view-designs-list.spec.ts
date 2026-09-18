@@ -4,10 +4,11 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Designs Management', () => {
-  test('View Designs List', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Designs Management`, () => {
+    test('View Designs List', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
     const uniqueName = `Designs Test Project ${Date.now()}`;
 
     await expect(page.getByText('My Projects')).toBeVisible();
@@ -31,5 +32,6 @@ test.describe('Designs Management', () => {
     await page.getByRole('button', { name: 'Designs Directory' }).click();
     await expect(page.getByRole('button', { name: 'DESIGNS', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'DESIGNS', exact: true }).click();
-  });
+    });
 });
+}

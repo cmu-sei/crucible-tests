@@ -4,10 +4,12 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Modules Management', () => {
-  test('Delete Module', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Modules Management`, () => {
+    test('Delete Module', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
     await page.goto(Services.Caster.UI + '/admin?section=Modules');
     await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible({ timeout: 10000 });
@@ -20,5 +22,6 @@ test.describe('Modules Management', () => {
         await confirmButton.click();
       }
     }
-  });
+    });
 });
+}

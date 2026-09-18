@@ -4,10 +4,11 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Pools Management', () => {
-  test('Create New Pool', async ({ casterAuthenticatedPage: page, cleanupCasterPool }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Pools Management`, () => {
+    test('Create New Pool', async ({ casterAuthenticatedPage: page, cleanupCasterPool }) => {
 
     // Intercept the pool creation response so we can register it for cleanup
     const createdPoolId = page.waitForResponse(
@@ -35,5 +36,6 @@ test.describe('Pools Management', () => {
     if (body?.id) {
       cleanupCasterPool(body.id);
     }
-  });
+    });
 });
+}

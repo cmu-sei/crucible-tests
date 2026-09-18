@@ -4,10 +4,11 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Designs Management', () => {
-  test('Create New Design', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Designs Management`, () => {
+    test('Create New Design', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
     const uniqueId = Date.now();
     const projectName = `Design Create Project ${uniqueId}`;
     const dirName = `Design Directory ${uniqueId}`;
@@ -46,5 +47,6 @@ test.describe('Designs Management', () => {
       await expect(nameInput).toHaveValue('Test Design');
       await page.getByRole('button', { name: 'Save' }).click();
     }
-  });
+    });
 });
+}

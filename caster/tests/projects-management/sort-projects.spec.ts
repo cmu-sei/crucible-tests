@@ -4,10 +4,12 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Projects Management', () => {
-  test('Sort Projects', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Projects Management`, () => {
+    test('Sort Projects', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
     // 1. Navigate to Projects section
     await expect(page.getByText('My Projects')).toBeVisible();
@@ -27,5 +29,6 @@ test.describe('Projects Management', () => {
 
     // expect: Projects are sorted in reverse alphabetical order
     await expect(page.getByRole('button', { name: 'Name' })).toBeVisible();
-  });
+    });
 });
+}

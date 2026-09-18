@@ -4,10 +4,12 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Host Machines Management', () => {
-  test('View Host Machines List', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Host Machines Management`, () => {
+    test('View Host Machines List', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
     await page.goto(Services.Caster.UI + '/admin');
     await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible({ timeout: 10000 });
@@ -21,5 +23,6 @@ test.describe('Host Machines Management', () => {
       await expect(page.getByText('Projects').first()).toBeVisible();
       await expect(page.getByText('Workspaces')).toBeVisible();
     }
-  });
+    });
 });
+}

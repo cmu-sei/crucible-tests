@@ -4,10 +4,11 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Search and Filtering', () => {
-  test('Filter by Project', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Search and Filtering`, () => {
+    test('Filter by Project', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
     const alphaProjectName = `Filter Alpha Project ${Date.now()}`;
     const betaProjectName = `Filter Beta Project ${Date.now()}`;
 
@@ -39,5 +40,6 @@ test.describe('Search and Filtering', () => {
     await searchBar.press('End');
     await expect(searchBar).toHaveValue('');
     await expect(page.getByText(/No data matching the filter/)).not.toBeVisible();
-  });
+    });
 });
+}

@@ -4,10 +4,11 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Variables Management', () => {
-  test('Delete Variable', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Variables Management`, () => {
+    test('Delete Variable', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
     const projectName = 'Var Delete Project';
     const directoryName = 'Var Delete Dir';
 
@@ -68,5 +69,6 @@ test.describe('Variables Management', () => {
         await varsTab.click();
       }
     }
-  });
+    });
 });
+}

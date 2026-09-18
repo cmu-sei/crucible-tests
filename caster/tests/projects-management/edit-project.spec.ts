@@ -4,10 +4,11 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Projects Management', () => {
-  test('Edit Project', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Projects Management`, () => {
+    test('Edit Project', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
     const projectName = `Project To Edit ${Date.now()}`;
     const updatedProjectName = `Updated Project Name ${Date.now()}`;
 
@@ -60,5 +61,6 @@ test.describe('Projects Management', () => {
     await searchBox.fill(updatedProjectName);
     await searchBox.press('End');
     await expect(page.getByRole('link', { name: updatedProjectName })).toBeVisible();
-  });
+    });
 });
+}

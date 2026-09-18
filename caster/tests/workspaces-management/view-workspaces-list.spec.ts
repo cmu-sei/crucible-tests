@@ -4,10 +4,11 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Workspaces Management', () => {
-  test('View Workspaces List', async ({ casterAuthenticatedPage: page, cleanupCasterProjectByName }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Workspaces Management`, () => {
+    test('View Workspaces List', async ({ casterAuthenticatedPage: page, cleanupCasterProjectByName }) => {
 
     const projectName = 'View WS List Project';
     await cleanupCasterProjectByName(projectName);
@@ -41,5 +42,6 @@ test.describe('Workspaces Management', () => {
 
     // expect: Workspaces section shows Add Workspace option
     await expect(page.getByText('Add Workspace')).toBeVisible();
-  });
+    });
 });
+}

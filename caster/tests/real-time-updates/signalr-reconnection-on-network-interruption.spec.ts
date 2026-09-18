@@ -4,10 +4,11 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Real-time Updates and SignalR', () => {
-  test('SignalR Reconnection on Network Interruption', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Real-time Updates and SignalR`, () => {
+    test('SignalR Reconnection on Network Interruption', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
 
     const consoleLogs: string[] = [];
     page.on('console', (msg) => {
@@ -40,5 +41,6 @@ test.describe('Real-time Updates and SignalR', () => {
       log.includes('SignalR')
     );
     expect(hasReconnectLog || consoleLogs.length > 0).toBeTruthy();
-  });
+    });
 });
+}

@@ -4,10 +4,12 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Roles and Permissions Management', () => {
-  test('Role Permissions Enforcement', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Roles and Permissions Management`, () => {
+    test('Role Permissions Enforcement', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
     // 1. Log in as admin user (who has full permissions)
     // 2. Navigate to Roles admin section
@@ -33,5 +35,6 @@ test.describe('Roles and Permissions Management', () => {
     const cdHeader = page.getByRole('columnheader', { name: 'Content Developer' });
     await expect(cdHeader.getByRole('button', { name: 'Rename Role' })).toBeVisible();
     await expect(cdHeader.getByRole('button', { name: 'Delete Role' })).toBeVisible();
-  });
+    });
 });
+}

@@ -4,10 +4,11 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, clickAddRoleButton } from '../../fixtures';
+import { test, expect, Services, clickAddRoleButton, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Roles and Permissions Management', () => {
-  test('Rename System Role', async ({ casterAuthenticatedPage: page, cleanupCasterRole }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Roles and Permissions Management`, () => {
+    test('Rename System Role', async ({ casterAuthenticatedPage: page, cleanupCasterRole }) => {
 
     const originalName = 'Role To Rename';
     const renamedName = 'Renamed Custom Role';
@@ -43,5 +44,6 @@ test.describe('Roles and Permissions Management', () => {
 
     // expect: Role is renamed successfully
     await expect(page.getByText(renamedName)).toBeVisible({ timeout: 10000 });
-  });
+    });
 });
+}

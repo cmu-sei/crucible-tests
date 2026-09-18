@@ -5,7 +5,7 @@
 // seed: seed.spec.ts
 
 import type { Page } from '@playwright/test';
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
 /**
  * Create a project from the home page and return to the home page.
@@ -31,8 +31,9 @@ async function createProject(page: Page, name: string): Promise<string> {
   return projectData.id;
 }
 
-test.describe('Projects Management', () => {
-  test('Search and Filter Projects', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Projects Management`, () => {
+    test('Search and Filter Projects', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
     // Two projects, because filtering can only be proven by what it *excludes*.
     // Both are seeded by this test rather than assumed to exist: "My Projects"
     // lists only projects the user is a member of, and every test in this suite
@@ -72,5 +73,6 @@ test.describe('Projects Management', () => {
     await expect(page.getByText(/No data matching the filter/)).not.toBeVisible();
     await expect(matchingRow).toBeVisible();
     await expect(otherRow).toBeVisible();
-  });
+    });
 });
+}

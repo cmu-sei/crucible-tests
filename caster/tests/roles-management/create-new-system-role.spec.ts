@@ -4,10 +4,11 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, clickAddRoleButton } from '../../fixtures';
+import { test, expect, Services, clickAddRoleButton, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Roles and Permissions Management', () => {
-  test('Create New System Role', async ({ casterAuthenticatedPage: page, cleanupCasterRole }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Roles and Permissions Management`, () => {
+    test('Create New System Role', async ({ casterAuthenticatedPage: page, cleanupCasterRole }) => {
 
     const roleName = 'Test Custom Role';
     // Register for pre-clean (remove leftovers) and post-clean
@@ -33,5 +34,6 @@ test.describe('Roles and Permissions Management', () => {
     // expect: New role is created successfully
     // expect: New role column appears in the permissions matrix
     await expect(page.getByText(roleName)).toBeVisible({ timeout: 10000 });
-  });
+    });
 });
+}

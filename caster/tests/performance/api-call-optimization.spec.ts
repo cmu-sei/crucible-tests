@@ -4,10 +4,12 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Performance and Optimization', () => {
-  test('API Call Optimization', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Performance and Optimization`, () => {
+    test('API Call Optimization', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
     const apiCalls: string[] = [];
     page.on('request', (request) => {
@@ -24,5 +26,6 @@ test.describe('Performance and Optimization', () => {
     expect(apiCalls.length).toBeGreaterThan(0);
     const uniqueCalls = [...new Set(apiCalls)];
     expect(apiCalls.length).toBeLessThan(uniqueCalls.length * 5);
-  });
+    });
 });
+}

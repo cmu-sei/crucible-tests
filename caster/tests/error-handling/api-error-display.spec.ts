@@ -4,10 +4,12 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Error Handling and Validation', () => {
-  test('API Error Display', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Error Handling and Validation`, () => {
+    test('API Error Display', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
     await expect(page.getByText('My Projects')).toBeVisible();
 
@@ -20,5 +22,6 @@ test.describe('Error Handling and Validation', () => {
     await expect(page.getByRole('button', { name: 'Save' })).toBeEnabled();
 
     await page.getByRole('button', { name: 'Cancel' }).click();
-  });
+    });
 });
+}

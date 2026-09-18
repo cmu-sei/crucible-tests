@@ -4,10 +4,11 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Workspaces Management', () => {
-  test('Create New Workspace', async ({ casterAuthenticatedPage: page, cleanupCasterProjectByName }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Workspaces Management`, () => {
+    test('Create New Workspace', async ({ casterAuthenticatedPage: page, cleanupCasterProjectByName }) => {
 
     const projectName = 'Workspace Test Project';
     await cleanupCasterProjectByName(projectName);
@@ -43,5 +44,6 @@ test.describe('Workspaces Management', () => {
     // Workspace names must match pattern: ^[a-zA-Z0-9-_.]+$ (no spaces allowed)
     await wsDialog.getByRole('textbox', { name: 'Name' }).fill('Test_Workspace');
     await wsDialog.getByRole('button', { name: 'Save' }).click();
-  });
+    });
 });
+}

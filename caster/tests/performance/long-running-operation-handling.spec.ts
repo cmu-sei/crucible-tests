@@ -4,10 +4,11 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, Services, expectCasterProjectOpen, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Performance and Optimization', () => {
-  test('Long Running Operation Handling', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Performance and Optimization`, () => {
+    test('Long Running Operation Handling', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
 
     await expect(page.getByText('My Projects')).toBeVisible();
 
@@ -29,5 +30,6 @@ test.describe('Performance and Optimization', () => {
 
     await page.goBack();
     await expect(page).toHaveURL(/\/projects\//, { timeout: 10000 });
-  });
+    });
 });
+}

@@ -18,6 +18,13 @@ import { authSessionStatePath, authStatePath } from '../auth-paths';
  */
 
 /**
+ * Themes every Caster functional spec is parameterized over. Each spec runs once
+ * per entry so every screen is exercised in both light and dark mode.
+ */
+export const CASTER_THEMES = ['light', 'dark'] as const;
+export type CasterTheme = (typeof CASTER_THEMES)[number];
+
+/**
  * Caster-specific authentication helper
  * @param page - Playwright Page object
  * @param username - Keycloak username (default: 'admin')

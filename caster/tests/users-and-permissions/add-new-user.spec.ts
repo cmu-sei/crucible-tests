@@ -8,8 +8,7 @@ import {
   test,
   expect,
   gotoCasterUsersAdmin,
-  openAddUserDialog,
-} from '../../fixtures';
+  openAddUserDialog, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
 /**
  * Users and Permissions Management §11.8 — Add New User.
@@ -25,7 +24,8 @@ import {
  * `tests/accessibility/add-user-dialog-modal-spec-compliance.spec.ts` so a
  * regression there names the design rule it broke.
  */
-test.describe('Users and Permissions Management', () => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Users and Permissions Management`, () => {
   const userName = 'Playwright Modal User';
   // A fixed GUID keeps cleanup deterministic; the fixture pre-cleans by name, so a
   // leftover row from a failed run cannot collide on this id.
@@ -197,3 +197,4 @@ test.describe('Users and Permissions Management', () => {
     ).toContainText('None Locally');
   });
 });
+}

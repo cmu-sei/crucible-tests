@@ -4,10 +4,12 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Home Page and Navigation', () => {
-  test('Sidebar Navigation Toggle', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Home Page and Navigation`, () => {
+    test('Sidebar Navigation Toggle', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
     // 1. Navigate to http://localhost:4310/admin
     await page.goto(Services.Caster.UI + '/admin');
@@ -32,5 +34,6 @@ test.describe('Home Page and Navigation', () => {
 
     // expect: The main content area updates based on sidebar selection
     await expect(page.getByRole('columnheader', { name: 'Group Name' })).toBeVisible();
-  });
+    });
 });
+}

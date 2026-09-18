@@ -4,10 +4,11 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Directories Management', () => {
-  test('Create New Directory', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Directories Management`, () => {
+    test('Create New Directory', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
     const uniqueSuffix = Date.now().toString();
 
     // 1. Navigate to Caster and create a project
@@ -42,5 +43,6 @@ test.describe('Directories Management', () => {
     // expect: The directory is created successfully
     // expect: The new directory appears in the sidebar
     await expect(page.getByRole('button', { name: 'Test Infrastructure Directory' })).toBeVisible({ timeout: 10000 });
-  });
+    });
 });
+}

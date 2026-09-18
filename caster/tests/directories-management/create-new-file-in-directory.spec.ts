@@ -4,10 +4,11 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Directories Management', () => {
-  test('Create New File in Directory', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Directories Management`, () => {
+    test('Create New File in Directory', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
     const uniqueSuffix = Date.now().toString();
 
     // Setup: Create a project and directory
@@ -46,5 +47,6 @@ test.describe('Directories Management', () => {
 
     // expect: Filename field accepts input
     await expect(fileNameInput).toHaveValue('main.tf');
-  });
+    });
 });
+}

@@ -4,10 +4,11 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Designs Management', () => {
-  test('Delete Design', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Designs Management`, () => {
+    test('Delete Design', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
     const uniqueId = Date.now();
     const projectName = `Design Delete Project ${uniqueId}`;
     const dirName = `Design Del Dir ${uniqueId}`;
@@ -49,5 +50,6 @@ test.describe('Designs Management', () => {
         await confirmButton.click();
       }
     }
-  });
+    });
 });
+}

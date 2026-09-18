@@ -4,10 +4,11 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Workspaces Management', () => {
-  test('View Workspace Details', async ({ casterAuthenticatedPage: page, cleanupCasterProjectByName }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Workspaces Management`, () => {
+    test('View Workspace Details', async ({ casterAuthenticatedPage: page, cleanupCasterProjectByName }) => {
 
     const projectName = 'View WS Detail Project';
     await cleanupCasterProjectByName(projectName);
@@ -43,5 +44,6 @@ test.describe('Workspaces Management', () => {
     if (await wsItem.isVisible({ timeout: 5000 }).catch(() => false)) {
       await wsItem.click();
     }
-  });
+    });
 });
+}

@@ -10,13 +10,14 @@ import {
   casterGroupCell,
   createCasterGroup,
   deleteCasterGroup,
-  gotoCasterGroupsAdmin,
-} from '../../fixtures';
+  gotoCasterGroupsAdmin, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
 const GROUP_NAMES = ['Bulk Delete 1', 'Bulk Delete 2'];
 
-test.describe('Groups Management', () => {
-  test('Bulk Delete Groups', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Groups Management`, () => {
+    test('Bulk Delete Groups', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
     await gotoCasterGroupsAdmin(page);
 
@@ -31,5 +32,6 @@ test.describe('Groups Management', () => {
       await deleteCasterGroup(page, groupName);
       await expect(casterGroupCell(page, groupName)).toHaveCount(0);
     }
-  });
+    });
 });
+}

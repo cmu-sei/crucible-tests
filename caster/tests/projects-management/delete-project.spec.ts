@@ -4,10 +4,11 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Projects Management', () => {
-  test('Delete Project', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Projects Management`, () => {
+    test('Delete Project', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
     const projectName = `Project To Delete ${Date.now()}`;
 
     // 1. Navigate to Projects section
@@ -64,5 +65,6 @@ test.describe('Projects Management', () => {
     // expect: The project is deleted successfully
     // expect: The project is removed from the list
     await expect(page.getByRole('link', { name: projectName })).not.toBeVisible({ timeout: 10000 });
-  });
+    });
 });
+}

@@ -4,10 +4,12 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Performance and Optimization', () => {
-  test('Large List Performance', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Performance and Optimization`, () => {
+    test('Large List Performance', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
     await page.goto(Services.Caster.UI + '/admin?section=Users');
     await expect(page.getByRole('table')).toBeVisible({ timeout: 10000 });
@@ -21,5 +23,6 @@ test.describe('Performance and Optimization', () => {
 
     await searchBox.clear();
     await expect(page.getByRole('table')).toBeVisible();
-  });
+    });
 });
+}

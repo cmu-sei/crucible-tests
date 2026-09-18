@@ -4,10 +4,12 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Accessibility and Usability', () => {
-  test('Screen Reader Compatibility', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Accessibility and Usability`, () => {
+    test('Screen Reader Compatibility', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
     await expect(page.getByText('My Projects')).toBeVisible();
 
@@ -29,5 +31,6 @@ test.describe('Accessibility and Usability', () => {
     await expect(page.getByRole('table')).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
     await expect(page.getByRole('columnheader', { name: 'Description' })).toBeVisible();
-  });
+    });
 });
+}

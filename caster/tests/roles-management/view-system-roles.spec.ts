@@ -4,10 +4,12 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Roles and Permissions Management', () => {
-  test('View System Roles and Permissions Matrix', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Roles and Permissions Management`, () => {
+    test('View System Roles and Permissions Matrix', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
     // 1. Navigate to Admin section and click on Roles in the sidebar
     await page.goto(Services.Caster.UI + '/admin?section=Roles');
@@ -39,5 +41,6 @@ test.describe('Roles and Permissions Management', () => {
     for (const perm of expectedPermissions) {
       await expect(page.getByRole('cell', { name: perm }).first()).toBeVisible();
     }
-  });
+    });
 });
+}

@@ -4,10 +4,11 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Projects Management', () => {
-  test('Create New Project', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Projects Management`, () => {
+    test('Create New Project', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
     const projectName = `Test Infrastructure Project ${Date.now()}`;
 
     // 1. Navigate to Projects section
@@ -48,5 +49,6 @@ test.describe('Projects Management', () => {
 
     // expect: The project is created successfully and opens in its detail view.
     await expectCasterProjectOpen(page, projectName);
-  });
+    });
 });
+}

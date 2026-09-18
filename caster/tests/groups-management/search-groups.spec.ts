@@ -4,10 +4,12 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Groups Management', () => {
-  test('Search Groups', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Groups Management`, () => {
+    test('Search Groups', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
     // 1. Navigate to Groups admin section
     await page.goto(Services.Caster.UI + '/admin?section=Groups');
@@ -24,5 +26,6 @@ test.describe('Groups Management', () => {
 
     // expect: All groups are displayed again
     await expect(page.getByRole('table')).toBeVisible();
-  });
+    });
 });
+}

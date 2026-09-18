@@ -4,10 +4,12 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Roles and Permissions Management', () => {
-  test('Administrator Role Protection', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Roles and Permissions Management`, () => {
+    test('Administrator Role Protection', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
     // 1. Navigate to Roles admin section
     await page.goto(Services.Caster.UI + '/admin?section=Roles');
@@ -31,5 +33,6 @@ test.describe('Roles and Permissions Management', () => {
     const adminAllCheckbox = allRow.getByRole('checkbox').first();
     await expect(adminAllCheckbox).toBeChecked();
     await expect(adminAllCheckbox).toBeDisabled();
-  });
+    });
 });
+}

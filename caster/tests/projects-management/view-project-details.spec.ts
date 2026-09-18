@@ -4,10 +4,11 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Projects Management', () => {
-  test('View Project Details', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Projects Management`, () => {
+    test('View Project Details', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
     const projectName = `Project For Details ${Date.now()}`;
 
     // 1. Navigate to Projects section
@@ -41,5 +42,6 @@ test.describe('Projects Management', () => {
 
     // expect: Main content shows placeholder when no file/workspace is selected
     await expect(page.getByText('Please open a file or workspace')).toBeVisible();
-  });
+    });
 });
+}

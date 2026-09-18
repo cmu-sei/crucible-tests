@@ -4,10 +4,12 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Projects Management', () => {
-  test('View Projects List', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Projects Management`, () => {
+    test('View Projects List', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
     // 1. Navigate to http://localhost:4310/projects
     // expect: Projects page loads successfully
@@ -23,5 +25,6 @@ test.describe('Projects Management', () => {
 
     // expect: A search box is available
     await expect(page.getByRole('textbox', { name: 'Search' })).toBeVisible();
-  });
+    });
 });
+}

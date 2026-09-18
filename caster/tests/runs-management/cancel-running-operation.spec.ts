@@ -4,10 +4,11 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Runs Management (Plan, Apply, Destroy)', () => {
-  test('Cancel Running Operation', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Runs Management (Plan, Apply, Destroy)`, () => {
+    test('Cancel Running Operation', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
     const projectName = `Cancel-Run-Project-${Date.now()}`;
 
     await expect(page.getByText('My Projects')).toBeVisible();
@@ -36,5 +37,6 @@ test.describe('Runs Management (Plan, Apply, Destroy)', () => {
     if (await cancelButton.isVisible({ timeout: 3000 }).catch(() => false)) {
       await cancelButton.click();
     }
-  });
+    });
 });
+}

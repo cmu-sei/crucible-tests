@@ -4,10 +4,11 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Integration with Alloy', () => {
-  test('Workspace Creation via Alloy Event Launch', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Integration with Alloy`, () => {
+    test('Workspace Creation via Alloy Event Launch', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
     const projectName = `Alloy Integration Project ${Date.now()}`;
 
     await expect(page.getByText('My Projects')).toBeVisible();
@@ -29,5 +30,6 @@ test.describe('Integration with Alloy', () => {
     await expect(workspacesButton).toBeVisible({ timeout: 10000 });
     await workspacesButton.click();
     await expect(page.getByText('Add Workspace')).toBeVisible({ timeout: 10000 });
-  });
+    });
 });
+}

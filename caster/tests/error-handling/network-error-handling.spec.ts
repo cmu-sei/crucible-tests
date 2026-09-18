@@ -4,10 +4,11 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Error Handling and Validation', () => {
-  test('Network Error Handling', async ({ casterAuthenticatedPage: page, context, cleanupCasterProject }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Error Handling and Validation`, () => {
+    test('Network Error Handling', async ({ casterAuthenticatedPage: page, context, cleanupCasterProject }) => {
 
     await expect(page.getByText('My Projects')).toBeVisible();
 
@@ -37,5 +38,6 @@ test.describe('Error Handling and Validation', () => {
     }
 
     cleanupCasterProject(await expectCasterProjectOpen(page, 'Network Test'));
-  });
+    });
 });
+}

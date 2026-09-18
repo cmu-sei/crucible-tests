@@ -4,10 +4,12 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Home Page and Navigation', () => {
-  test('Navigation to Admin Section', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Home Page and Navigation`, () => {
+    test('Navigation to Admin Section', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
     // 1. Log in as admin user
     // expect: Successfully authenticated on home page
@@ -28,5 +30,6 @@ test.describe('Home Page and Navigation', () => {
     await expect(page.getByText('Users')).toBeVisible();
     await expect(page.getByText('Roles')).toBeVisible();
     await expect(page.getByText('Groups')).toBeVisible();
-  });
+    });
 });
+}

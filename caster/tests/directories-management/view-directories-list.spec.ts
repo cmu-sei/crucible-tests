@@ -4,10 +4,11 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Directories Management', () => {
-  test('View Directories List', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Directories Management`, () => {
+    test('View Directories List', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
     const uniqueSuffix = Date.now().toString();
 
     // Setup: Create a project with a directory
@@ -35,5 +36,6 @@ test.describe('Directories Management', () => {
 
     // expect: Add Directory option is visible in the sidebar
     await expect(page.getByText('Add Directory').nth(1)).toBeVisible();
-  });
+    });
 });
+}

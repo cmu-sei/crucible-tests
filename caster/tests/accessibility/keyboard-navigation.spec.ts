@@ -4,10 +4,12 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Accessibility and Usability', () => {
-  test('Keyboard Navigation', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Accessibility and Usability`, () => {
+    test('Keyboard Navigation', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
     await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
 
@@ -26,5 +28,6 @@ test.describe('Accessibility and Usability', () => {
     const searchBox = page.getByRole('textbox', { name: 'Search' });
     await searchBox.focus();
     await expect(searchBox).toBeFocused();
-  });
+    });
 });
+}

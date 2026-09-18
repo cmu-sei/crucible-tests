@@ -4,10 +4,12 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Users and Permissions Management', () => {
-  test('View User Details', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Users and Permissions Management`, () => {
+    test('View User Details', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
     // 1. Navigate to admin Users section
     await page.goto(Services.Caster.UI + '/admin?section=Users');
@@ -29,5 +31,6 @@ test.describe('Users and Permissions Management', () => {
     // expect: Delete user button is available
     const deleteButton = userRow.getByRole('button', { name: 'Delete User' });
     await expect(deleteButton).toBeVisible();
-  });
+    });
 });
+}

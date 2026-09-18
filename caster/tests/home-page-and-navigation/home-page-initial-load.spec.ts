@@ -4,10 +4,12 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, setCasterTheme, CASTER_THEMES } from '../../fixtures';
 
-test.describe('Home Page and Navigation', () => {
-  test('Home Page Initial Load', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Home Page and Navigation`, () => {
+    test('Home Page Initial Load', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
     // 1. Log in as admin user and navigate to http://localhost:4310
     // expect: The home page loads successfully
@@ -25,5 +27,6 @@ test.describe('Home Page and Navigation', () => {
 
     // expect: The projects table is visible
     await expect(page.getByRole('table')).toBeVisible();
-  });
+    });
 });
+}
