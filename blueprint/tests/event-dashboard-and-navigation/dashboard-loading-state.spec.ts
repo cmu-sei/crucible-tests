@@ -4,53 +4,56 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 
-test.describe('Event Dashboard and Navigation', () => {
-  test('Dashboard Loading State', async ({ blueprintAuthenticatedPage: page }) => {
-    // 1. Navigate to Event Dashboard immediately after login
+for (const theme of BLUEPRINT_THEMES) {
+    test.describe(`${theme} theme › Event Dashboard and Navigation`, () => {
+    test('Dashboard Loading State', async ({ blueprintAuthenticatedPage: page }) => {
+    await applyBlueprintTheme(page, theme);
+      // 1. Navigate to Event Dashboard immediately after login
 
-    // Capture early loading state by listening for the page immediately
-    // expect: During data initialization, a loading card may be displayed
-    // expect: Loading card shows 'Initializing Data' title with 'Please wait ...' subtitle
-    // expect: A progress spinner is visible
-    // We check early DOM state before networkidle
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 30000 });
+      // Capture early loading state by listening for the page immediately
+      // expect: During data initialization, a loading card may be displayed
+      // expect: Loading card shows 'Initializing Data' title with 'Please wait ...' subtitle
+      // expect: A progress spinner is visible
+      // We check early DOM state before networkidle
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 30000 });
 
-    // Check for loading indicators at initial page load (may appear briefly)
-    // Check for any of these loading indicators
-    const loadingIndicators = [
-      page.getByText('Initializing Data'),
-      page.getByText('Please wait'),
-      page.locator('mat-spinner'),
-      page.locator('[class*="loading-card"]'),
-      page.locator('[class*="progress-spinner"]')
-    ];
+      // Check for loading indicators at initial page load (may appear briefly)
+      // Check for any of these loading indicators
+      const loadingIndicators = [
+        page.getByText('Initializing Data'),
+        page.getByText('Please wait'),
+        page.locator('mat-spinner'),
+        page.locator('[class*="loading-card"]'),
+        page.locator('[class*="progress-spinner"]')
+      ];
 
-    // Loading state is transient — we check if any loading indicator was shown
-    let loadingVisible = false;
-    for (const indicator of loadingIndicators) {
-      const isVisible = await indicator.isVisible({ timeout: 1000 }).catch(() => false);
-      if (isVisible) {
-        loadingVisible = true;
-        break;
+      // Loading state is transient — we check if any loading indicator was shown
+      let loadingVisible = false;
+      for (const indicator of loadingIndicators) {
+        const isVisible = await indicator.isVisible({ timeout: 1000 }).catch(() => false);
+        if (isVisible) {
+          loadingVisible = true;
+          break;
+        }
       }
-    }
 
-    // expect: After data loads, dashboard shows available cards.
-    // The card assertion below is the wait — `toBeVisible` polls, so a separate
-    // `waitForLoadState('networkidle')` added latency without adding certainty.
-    // Admin user sees "Manage an Event" card
-    const manageEventCard = page.getByRole('button', { name: /Manage an Event/i });
-    await expect(manageEventCard).toBeVisible({ timeout: 10000 });
+      // expect: After data loads, dashboard shows available cards.
+      // The card assertion below is the wait — `toBeVisible` polls, so a separate
+      // `waitForLoadState('networkidle')` added latency without adding certainty.
+      // Admin user sees "Manage an Event" card
+      const manageEventCard = page.getByRole('button', { name: /Manage an Event/i });
+      await expect(manageEventCard).toBeVisible({ timeout: 10000 });
 
-    // Verify the card has the expected subtitle
-    await expect(page.getByText('Design and Plan Events')).toBeVisible();
+      // Verify the card has the expected subtitle
+      await expect(page.getByText('Design and Plan Events')).toBeVisible();
 
-    // If loading was seen, confirm it is now gone
-    if (loadingVisible) {
-      const stillLoading = await page.getByText('Initializing Data').isVisible({ timeout: 1000 }).catch(() => false);
-      expect(stillLoading).toBe(false);
-    }
-  });
-});
+      // If loading was seen, confirm it is now gone
+      if (loadingVisible) {
+        const stillLoading = await page.getByText('Initializing Data').isVisible({ timeout: 1000 }).catch(() => false);
+        expect(stillLoading).toBe(false);
+      }
+    });
+    });
+}

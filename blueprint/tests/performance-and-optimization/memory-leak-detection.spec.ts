@@ -3,7 +3,7 @@
 
 // spec: specs/blueprint-test-plan.md
 
-import { test, expect } from '../../fixtures';
+import { test, expect, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import {
   getBlueprintToken,
   createMsel,
@@ -55,154 +55,156 @@ import {
  * torn-down subscription yields a slope of 0.0 and a flat heap. The threshold below sits far
  * enough under a real leak's magnitude to catch a dropped `takeUntil` in any MSEL section.
  */
-test.describe('Performance and Optimization', () => {
-  let token: string;
-  let mselId: string;
+for (const theme of BLUEPRINT_THEMES) {
+    test.describe(`${theme} theme › Performance and Optimization`, () => {
+    let token: string;
+    let mselId: string;
 
-  test.beforeEach(async () => {
-    token = await getBlueprintToken();
-    const msel = await createMsel(token, {
-      name: tempBlueprintName('TestBP-MemLeak'),
-      description: 'Seeded to measure retained DOM across MSEL section switches.',
+    test.beforeEach(async () => {
+      token = await getBlueprintToken();
+      const msel = await createMsel(token, {
+        name: tempBlueprintName('TestBP-MemLeak'),
+        description: 'Seeded to measure retained DOM across MSEL section switches.',
+      });
+      mselId = msel.id;
     });
-    mselId = msel.id;
-  });
 
-  test.afterEach(async () => {
-    if (mselId) {
-      try {
-        await deleteMsel(token, mselId);
-      } catch (err) {
-        console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+    test.afterEach(async () => {
+      if (mselId) {
+        try {
+          await deleteMsel(token, mselId);
+        } catch (err) {
+          console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+        }
       }
-    }
-  });
+    });
 
-  test('Memory Leak Detection', async ({ blueprintAuthenticatedPage: page, context }) => {
-    const client = await context.newCDPSession(page);
-    await client.send('Performance.enable');
+    test('Memory Leak Detection', async ({ blueprintAuthenticatedPage: page, context }) => {
+      const client = await context.newCDPSession(page);
+      await client.send('Performance.enable');
 
-    /**
-     * Force a full GC, then count nodes Chrome itself reports as detached.
-     */
-    const sample = async () => {
-      await client.send('HeapProfiler.collectGarbage');
+      /**
+       * Force a full GC, then count nodes Chrome itself reports as detached.
+       */
+      const sample = async () => {
+        await client.send('HeapProfiler.collectGarbage');
 
-      const chunks: string[] = [];
-      const onChunk = (e: { chunk: string }) => chunks.push(e.chunk);
-      client.on('HeapProfiler.addHeapSnapshotChunk', onChunk);
-      await client.send('HeapProfiler.takeHeapSnapshot', { reportProgress: false });
-      client.off('HeapProfiler.addHeapSnapshotChunk', onChunk);
+        const chunks: string[] = [];
+        const onChunk = (e: { chunk: string }) => chunks.push(e.chunk);
+        client.on('HeapProfiler.addHeapSnapshotChunk', onChunk);
+        await client.send('HeapProfiler.takeHeapSnapshot', { reportProgress: false });
+        client.off('HeapProfiler.addHeapSnapshotChunk', onChunk);
 
-      const snapshot = JSON.parse(chunks.join(''));
-      const nodeFields: string[] = snapshot.snapshot.meta.node_fields;
-      const stride = nodeFields.length;
-      const detachednessIdx = nodeFields.indexOf('detachedness');
+        const snapshot = JSON.parse(chunks.join(''));
+        const nodeFields: string[] = snapshot.snapshot.meta.node_fields;
+        const stride = nodeFields.length;
+        const detachednessIdx = nodeFields.indexOf('detachedness');
+        expect(
+          detachednessIdx,
+          'heap snapshot has no `detachedness` node field; this Chromium cannot report ' +
+            'detached nodes and the measurement would be vacuous'
+        ).toBeGreaterThanOrEqual(0);
+
+        let detached = 0;
+        for (let i = 0; i < snapshot.nodes.length; i += stride) {
+          // 0 = unknown, 1 = attached, 2 = detached
+          if (snapshot.nodes[i + detachednessIdx] === 2) detached++;
+        }
+
+        const metrics = await client.send('Performance.getMetrics');
+        const metric = (name: string) =>
+          metrics.metrics.find((m) => m.name === name)?.value ?? 0;
+
+        return { detached, heapMb: metric('JSHeapUsedSize') / 1024 / 1024 };
+      };
+
+      /**
+       * Switch sections and prove the new one rendered before returning, so each iteration
+       * is a genuine mount/destroy rather than a click the app may not have processed yet.
+       * `msel.component.ts` `getListItemClass()` returns 'selected-item' for the active tab
+       * and 'non-selected-item' otherwise, so that class flip is an app-owned signal that
+       * the switch completed — no fixed sleep needed.
+       */
+      const openSection = async (section: string) => {
+        const item = page.locator('mat-list-item').filter({ hasText: section }).first();
+        await item.click();
+        // Anchored on word boundaries: a bare /selected-item/ would also match the inactive
+        // state's 'non-selected-item' and the wait would pass immediately.
+        await expect(item).toHaveClass(/(^|\s)selected-item(\s|$)/, { timeout: 15000 });
+      };
+
+      await navigateToMsel(page, mselId);
+
+      // Toggle Info against a second section so each iteration destroys and recreates the
+      // Info component — the ordinary user action a component must survive without
+      // retaining its DOM.
+      const partner = 'Contributors';
+
+      // Warm up once so first-render lazy work (cache fills, one-time template
+      // instantiation) is charged to the baseline rather than counted as a leak.
+      await openSection(partner);
+      await openSection('Info');
+      await openSection(partner);
+
+      const blocks = 6;
+      const rendersPerBlock = 2;
+      const series: Array<{ renders: number; detached: number; heapMb: number }> = [];
+
+      series.push({ renders: 0, ...(await sample()) });
+
+      for (let block = 1; block <= blocks; block++) {
+        for (let i = 0; i < rendersPerBlock; i++) {
+          await openSection('Info');
+          await openSection(partner);
+        }
+        series.push({ renders: block * rendersPerBlock, ...(await sample()) });
+      }
+
+      for (const point of series) {
+        console.log(
+          `renders=${String(point.renders).padStart(2)} ` +
+            `detached=${String(point.detached).padStart(5)} ` +
+            `heap=${point.heapMb.toFixed(2)}MB`
+        );
+      }
+
+      // Least-squares slope of detached nodes against render count. A leak is a straight
+      // line with positive slope; stable memory is flat regardless of the absolute count.
+      const n = series.length;
+      const meanRenders = series.reduce((a, p) => a + p.renders, 0) / n;
+      const meanDetached = series.reduce((a, p) => a + p.detached, 0) / n;
+      const slope =
+        series.reduce((a, p) => a + (p.renders - meanRenders) * (p.detached - meanDetached), 0) /
+        series.reduce((a, p) => a + (p.renders - meanRenders) ** 2, 0);
+
+      const totalRenders = blocks * rendersPerBlock;
+      console.log(`slope=${slope.toFixed(1)} detached nodes/render over ${totalRenders} renders`);
+
+      // expect: destroyed section components release their DOM.
+      //
+      // Threshold rationale: a correctly torn-down subscription measures 0.0, while a leaked
+      // one runs into the hundreds of nodes per render. 50 is an order of magnitude below a
+      // real leak while leaving room for a one-time warm-up step that survived the warm-up
+      // cycle above (a single step across the series contributes a small positive slope
+      // without being unbounded growth).
       expect(
-        detachednessIdx,
-        'heap snapshot has no `detachedness` node field; this Chromium cannot report ' +
-          'detached nodes and the measurement would be vacuous'
-      ).toBeGreaterThanOrEqual(0);
+        slope,
+        `Info section retains ~${slope.toFixed(0)} detached DOM nodes per render ` +
+          `(${series[0].detached} → ${series[n - 1].detached} over ${totalRenders} renders). ` +
+          `These survived a forced GC, so a live reference is pinning them. The usual cause ` +
+          `is a store subscription created without takeUntil(this.unsubscribe$), which keeps ` +
+          `the destroyed component's DOM alive.`
+      ).toBeLessThan(50);
 
-      let detached = 0;
-      for (let i = 0; i < snapshot.nodes.length; i += stride) {
-        // 0 = unknown, 1 = attached, 2 = detached
-        if (snapshot.nodes[i + detachednessIdx] === 2) detached++;
-      }
+      // expect: no unbounded heap growth from the same cause — a leaked subscription drives
+      // steady per-render heap growth with no plateau.
+      const heapGrowth = series[n - 1].heapMb - series[0].heapMb;
+      expect(
+        heapGrowth,
+        `heap grew ${heapGrowth.toFixed(2)}MB across ${totalRenders} Info renders`
+      ).toBeLessThan(5);
 
-      const metrics = await client.send('Performance.getMetrics');
-      const metric = (name: string) =>
-        metrics.metrics.find((m) => m.name === name)?.value ?? 0;
-
-      return { detached, heapMb: metric('JSHeapUsedSize') / 1024 / 1024 };
-    };
-
-    /**
-     * Switch sections and prove the new one rendered before returning, so each iteration
-     * is a genuine mount/destroy rather than a click the app may not have processed yet.
-     * `msel.component.ts` `getListItemClass()` returns 'selected-item' for the active tab
-     * and 'non-selected-item' otherwise, so that class flip is an app-owned signal that
-     * the switch completed — no fixed sleep needed.
-     */
-    const openSection = async (section: string) => {
-      const item = page.locator('mat-list-item').filter({ hasText: section }).first();
-      await item.click();
-      // Anchored on word boundaries: a bare /selected-item/ would also match the inactive
-      // state's 'non-selected-item' and the wait would pass immediately.
-      await expect(item).toHaveClass(/(^|\s)selected-item(\s|$)/, { timeout: 15000 });
-    };
-
-    await navigateToMsel(page, mselId);
-
-    // Toggle Info against a second section so each iteration destroys and recreates the
-    // Info component — the ordinary user action a component must survive without
-    // retaining its DOM.
-    const partner = 'Contributors';
-
-    // Warm up once so first-render lazy work (cache fills, one-time template
-    // instantiation) is charged to the baseline rather than counted as a leak.
-    await openSection(partner);
-    await openSection('Info');
-    await openSection(partner);
-
-    const blocks = 6;
-    const rendersPerBlock = 2;
-    const series: Array<{ renders: number; detached: number; heapMb: number }> = [];
-
-    series.push({ renders: 0, ...(await sample()) });
-
-    for (let block = 1; block <= blocks; block++) {
-      for (let i = 0; i < rendersPerBlock; i++) {
-        await openSection('Info');
-        await openSection(partner);
-      }
-      series.push({ renders: block * rendersPerBlock, ...(await sample()) });
-    }
-
-    for (const point of series) {
-      console.log(
-        `renders=${String(point.renders).padStart(2)} ` +
-          `detached=${String(point.detached).padStart(5)} ` +
-          `heap=${point.heapMb.toFixed(2)}MB`
-      );
-    }
-
-    // Least-squares slope of detached nodes against render count. A leak is a straight
-    // line with positive slope; stable memory is flat regardless of the absolute count.
-    const n = series.length;
-    const meanRenders = series.reduce((a, p) => a + p.renders, 0) / n;
-    const meanDetached = series.reduce((a, p) => a + p.detached, 0) / n;
-    const slope =
-      series.reduce((a, p) => a + (p.renders - meanRenders) * (p.detached - meanDetached), 0) /
-      series.reduce((a, p) => a + (p.renders - meanRenders) ** 2, 0);
-
-    const totalRenders = blocks * rendersPerBlock;
-    console.log(`slope=${slope.toFixed(1)} detached nodes/render over ${totalRenders} renders`);
-
-    // expect: destroyed section components release their DOM.
-    //
-    // Threshold rationale: a correctly torn-down subscription measures 0.0, while a leaked
-    // one runs into the hundreds of nodes per render. 50 is an order of magnitude below a
-    // real leak while leaving room for a one-time warm-up step that survived the warm-up
-    // cycle above (a single step across the series contributes a small positive slope
-    // without being unbounded growth).
-    expect(
-      slope,
-      `Info section retains ~${slope.toFixed(0)} detached DOM nodes per render ` +
-        `(${series[0].detached} → ${series[n - 1].detached} over ${totalRenders} renders). ` +
-        `These survived a forced GC, so a live reference is pinning them. The usual cause ` +
-        `is a store subscription created without takeUntil(this.unsubscribe$), which keeps ` +
-        `the destroyed component's DOM alive.`
-    ).toBeLessThan(50);
-
-    // expect: no unbounded heap growth from the same cause — a leaked subscription drives
-    // steady per-render heap growth with no plateau.
-    const heapGrowth = series[n - 1].heapMb - series[0].heapMb;
-    expect(
-      heapGrowth,
-      `heap grew ${heapGrowth.toFixed(2)}MB across ${totalRenders} Info renders`
-    ).toBeLessThan(5);
-
-    await client.detach();
-  });
-});
+      await client.detach();
+    });
+    });
+}

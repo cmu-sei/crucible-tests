@@ -3,7 +3,7 @@
 
 // spec: specs/blueprint-test-plan.md
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import { chromium } from '@playwright/test';
 import {
   getKeycloakAdminToken,
@@ -61,162 +61,165 @@ import {
  * `.presence-container` appearing at all is itself the signal, and `.presence-name` carries
  * the other user's name.
  */
-test.describe('Real-time Collaboration and SignalR', () => {
-  let blueprintToken: string;
-  let keycloakToken: string;
-  let mselId: string;
-  let unitId: string | undefined;
-  let mselUnitId: string | undefined;
-  let secondUserId: string | undefined;
-  let secondBlueprintUserId: string | undefined;
-  let secondUsername: string;
-  let secondDisplayName: string;
-  const secondPassword = 'TestPassword123!';
+for (const theme of BLUEPRINT_THEMES) {
+    test.describe(`${theme} theme › Real-time Collaboration and SignalR`, () => {
+    let blueprintToken: string;
+    let keycloakToken: string;
+    let mselId: string;
+    let unitId: string | undefined;
+    let mselUnitId: string | undefined;
+    let secondUserId: string | undefined;
+    let secondBlueprintUserId: string | undefined;
+    let secondUsername: string;
+    let secondDisplayName: string;
+    const secondPassword = 'TestPassword123!';
 
-  test.beforeEach(async () => {
-    blueprintToken = await getBlueprintToken();
-    const msel = await createMsel(blueprintToken, {
-      name: tempBlueprintName('TestBP-Presence'),
-      description: 'Seeded to verify SignalR presence propagation.',
+    test.beforeEach(async () => {
+      blueprintToken = await getBlueprintToken();
+      const msel = await createMsel(blueprintToken, {
+        name: tempBlueprintName('TestBP-Presence'),
+        description: 'Seeded to verify SignalR presence propagation.',
+      });
+      mselId = msel.id;
+
+      // A real second identity. Presence excludes your own connections, so the observer and
+      // the observed must be different users.
+      keycloakToken = await getKeycloakAdminToken();
+      secondUsername = tempUsername('bppresence');
+      // The presence chip renders the token's `name` claim, which Keycloak composes from
+      // firstName + lastName -- NOT the username. Left at the helper's defaults it reads
+      // "Test User", which would make the name assertion below indistinguishable between
+      // users. Set both explicitly so the chip carries something unique to this run.
+      secondDisplayName = `Presence ${secondUsername}`;
+      const kcUser = await createKeycloakUser(keycloakToken, {
+        username: secondUsername,
+        password: secondPassword,
+        email: `${secondUsername}@test.local`,
+        firstName: 'Presence',
+        lastName: secondUsername,
+        realmRoles: [],
+      });
+      secondUserId = kcUser.id;
+
+      // Blueprint keys presence off its own user id, which must match the Keycloak subject.
+      const bpUser = await createBlueprintUser(blueprintToken, {
+        id: kcUser.id,
+        name: secondUsername,
+      });
+      secondBlueprintUserId = bpUser.id;
+
+      // Unit membership is what puts the second user in this MSEL's SignalR group
+      // (MainHub.Join -> GetMselIdList, which reads UnitUsers -> MselUnits).
+      const unit = await createUnit(blueprintToken, { name: tempBlueprintName('TestBP-PresenceUnit') });
+      unitId = unit.id;
+      await addUserToUnit(blueprintToken, unit.id, kcUser.id);
+      const mselUnit = await addUnitToMsel(blueprintToken, mselId, unit.id);
+      mselUnitId = mselUnit.id;
     });
-    mselId = msel.id;
 
-    // A real second identity. Presence excludes your own connections, so the observer and
-    // the observed must be different users.
-    keycloakToken = await getKeycloakAdminToken();
-    secondUsername = tempUsername('bppresence');
-    // The presence chip renders the token's `name` claim, which Keycloak composes from
-    // firstName + lastName -- NOT the username. Left at the helper's defaults it reads
-    // "Test User", which would make the name assertion below indistinguishable between
-    // users. Set both explicitly so the chip carries something unique to this run.
-    secondDisplayName = `Presence ${secondUsername}`;
-    const kcUser = await createKeycloakUser(keycloakToken, {
-      username: secondUsername,
-      password: secondPassword,
-      email: `${secondUsername}@test.local`,
-      firstName: 'Presence',
-      lastName: secondUsername,
-      realmRoles: [],
+    test.afterEach(async () => {
+      try {
+        if (mselUnitId) await removeUnitFromMsel(blueprintToken, mselUnitId);
+      } catch (err) {
+        console.warn(`Cleanup failed for MselUnit ${mselUnitId}: ${err}`);
+      }
+      try {
+        if (unitId) await deleteUnit(blueprintToken, unitId);
+      } catch (err) {
+        console.warn(`Cleanup failed for unit ${unitId}: ${err}`);
+      }
+      try {
+        if (secondBlueprintUserId) await deleteBlueprintUser(blueprintToken, secondBlueprintUserId);
+      } catch (err) {
+        console.warn(`Cleanup failed for Blueprint user ${secondBlueprintUserId}: ${err}`);
+      }
+      try {
+        if (secondUserId) await deleteKeycloakUser(keycloakToken, secondUserId);
+      } catch (err) {
+        console.warn(`Cleanup failed for Keycloak user ${secondUserId}: ${err}`);
+      }
+      try {
+        if (mselId) await deleteMsel(blueprintToken, mselId);
+      } catch (err) {
+        console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+      }
     });
-    secondUserId = kcUser.id;
 
-    // Blueprint keys presence off its own user id, which must match the Keycloak subject.
-    const bpUser = await createBlueprintUser(blueprintToken, {
-      id: kcUser.id,
-      name: secondUsername,
+    test('User Presence Indicators', async ({ blueprintAuthenticatedPage: page }) => {
+    await applyBlueprintTheme(page, theme);
+      // ── Window 1: admin, on the seeded MSEL ─────────────────────────────────────
+      await navigateToMsel(page, mselId);
+
+      const presenceContainer = page.locator('.presence-container');
+      const presenceChips = page.locator('.presence-chip');
+
+      // expect: no one else is here yet, so the bar does not render at all
+      // (`@if (actors.length > 0)`).
+      await expect(presenceChips).toHaveCount(0, { timeout: 15000 });
+
+      // ── Window 2: the second user, on the same MSEL ─────────────────────────────
+      const browser = await chromium.launch();
+      try {
+        const context2 = await browser.newContext({ ignoreHTTPSErrors: true });
+        const page2 = await context2.newPage();
+
+        // Sign in as the second user. Two Keycloak behaviours have to be worked around:
+        //   - A plain visit to Blueprint reuses the realm's existing SSO session and lands
+        //     straight in as *admin*, with no login form.
+        //   - Adding `prompt=login` does re-prompt, but Keycloak pins the form to the already
+        //     identified account: it renders "admin / Please re-authenticate to continue" with a
+        //     password field only, and no username field (measured).
+        // Clearing the realm cookies for this context drops that session, so the next
+        // authorization request renders the full username+password form.
+        await page2.goto(Services.Blueprint.UI, { waitUntil: 'domcontentloaded' });
+        await context2.clearCookies();
+        await page2.goto(Services.Blueprint.UI, { waitUntil: 'domcontentloaded' });
+
+        const usernameField = page2.getByRole('textbox', { name: /username/i });
+        await expect(usernameField).toBeVisible({ timeout: 30000 });
+        await usernameField.fill(secondUsername);
+        await page2.getByRole('textbox', { name: /password/i }).fill(secondPassword);
+        await page2.getByRole('button', { name: /sign in/i }).click();
+
+        await expect(page2.locator('app-root mat-toolbar').first()).toBeVisible({ timeout: 30000 });
+        await navigateToMsel(page2, mselId);
+
+        // expect: window 1 learns about the second user with no reload. `expect.poll` re-reads
+        // the live DOM; window 1 is never refreshed, so only a pushed PresenceArrived (or the
+        // greet-back) can satisfy this.
+        await expect
+          .poll(() => presenceChips.count(), {
+            timeout: 30000,
+            intervals: [250, 500, 1000],
+            message: 'window 1 never received PresenceArrived for the second user',
+          })
+          .toBeGreaterThan(0);
+
+        await expect(presenceContainer).toBeVisible();
+
+        // expect: the chip names the *other* user, not the viewer. The name comes from the
+        // token's `name` claim (firstName + lastName), seeded uniquely above.
+        await expect(page.locator('.presence-chip .presence-name').first()).toHaveText(
+          new RegExp(secondDisplayName, 'i'),
+          { timeout: 15000 }
+        );
+        await expect(page.locator('.presence-chip .presence-name')).not.toHaveText(/Admin User/i);
+
+        // ── The second user leaves ────────────────────────────────────────────────
+        await context2.close();
+
+        // expect: window 1 drops them again, via PresenceDeparted on disconnect
+        // (MainHub.OnDisconnectedAsync).
+        await expect
+          .poll(() => presenceChips.count(), {
+            timeout: 30000,
+            intervals: [250, 500, 1000],
+            message: 'window 1 never received PresenceDeparted after the second user closed',
+          })
+          .toBe(0);
+      } finally {
+        await browser.close();
+      }
     });
-    secondBlueprintUserId = bpUser.id;
-
-    // Unit membership is what puts the second user in this MSEL's SignalR group
-    // (MainHub.Join -> GetMselIdList, which reads UnitUsers -> MselUnits).
-    const unit = await createUnit(blueprintToken, { name: tempBlueprintName('TestBP-PresenceUnit') });
-    unitId = unit.id;
-    await addUserToUnit(blueprintToken, unit.id, kcUser.id);
-    const mselUnit = await addUnitToMsel(blueprintToken, mselId, unit.id);
-    mselUnitId = mselUnit.id;
-  });
-
-  test.afterEach(async () => {
-    try {
-      if (mselUnitId) await removeUnitFromMsel(blueprintToken, mselUnitId);
-    } catch (err) {
-      console.warn(`Cleanup failed for MselUnit ${mselUnitId}: ${err}`);
-    }
-    try {
-      if (unitId) await deleteUnit(blueprintToken, unitId);
-    } catch (err) {
-      console.warn(`Cleanup failed for unit ${unitId}: ${err}`);
-    }
-    try {
-      if (secondBlueprintUserId) await deleteBlueprintUser(blueprintToken, secondBlueprintUserId);
-    } catch (err) {
-      console.warn(`Cleanup failed for Blueprint user ${secondBlueprintUserId}: ${err}`);
-    }
-    try {
-      if (secondUserId) await deleteKeycloakUser(keycloakToken, secondUserId);
-    } catch (err) {
-      console.warn(`Cleanup failed for Keycloak user ${secondUserId}: ${err}`);
-    }
-    try {
-      if (mselId) await deleteMsel(blueprintToken, mselId);
-    } catch (err) {
-      console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
-    }
-  });
-
-  test('User Presence Indicators', async ({ blueprintAuthenticatedPage: page }) => {
-    // ── Window 1: admin, on the seeded MSEL ─────────────────────────────────────
-    await navigateToMsel(page, mselId);
-
-    const presenceContainer = page.locator('.presence-container');
-    const presenceChips = page.locator('.presence-chip');
-
-    // expect: no one else is here yet, so the bar does not render at all
-    // (`@if (actors.length > 0)`).
-    await expect(presenceChips).toHaveCount(0, { timeout: 15000 });
-
-    // ── Window 2: the second user, on the same MSEL ─────────────────────────────
-    const browser = await chromium.launch();
-    try {
-      const context2 = await browser.newContext({ ignoreHTTPSErrors: true });
-      const page2 = await context2.newPage();
-
-      // Sign in as the second user. Two Keycloak behaviours have to be worked around:
-      //   - A plain visit to Blueprint reuses the realm's existing SSO session and lands
-      //     straight in as *admin*, with no login form.
-      //   - Adding `prompt=login` does re-prompt, but Keycloak pins the form to the already
-      //     identified account: it renders "admin / Please re-authenticate to continue" with a
-      //     password field only, and no username field (measured).
-      // Clearing the realm cookies for this context drops that session, so the next
-      // authorization request renders the full username+password form.
-      await page2.goto(Services.Blueprint.UI, { waitUntil: 'domcontentloaded' });
-      await context2.clearCookies();
-      await page2.goto(Services.Blueprint.UI, { waitUntil: 'domcontentloaded' });
-
-      const usernameField = page2.getByRole('textbox', { name: /username/i });
-      await expect(usernameField).toBeVisible({ timeout: 30000 });
-      await usernameField.fill(secondUsername);
-      await page2.getByRole('textbox', { name: /password/i }).fill(secondPassword);
-      await page2.getByRole('button', { name: /sign in/i }).click();
-
-      await expect(page2.locator('app-root mat-toolbar').first()).toBeVisible({ timeout: 30000 });
-      await navigateToMsel(page2, mselId);
-
-      // expect: window 1 learns about the second user with no reload. `expect.poll` re-reads
-      // the live DOM; window 1 is never refreshed, so only a pushed PresenceArrived (or the
-      // greet-back) can satisfy this.
-      await expect
-        .poll(() => presenceChips.count(), {
-          timeout: 30000,
-          intervals: [250, 500, 1000],
-          message: 'window 1 never received PresenceArrived for the second user',
-        })
-        .toBeGreaterThan(0);
-
-      await expect(presenceContainer).toBeVisible();
-
-      // expect: the chip names the *other* user, not the viewer. The name comes from the
-      // token's `name` claim (firstName + lastName), seeded uniquely above.
-      await expect(page.locator('.presence-chip .presence-name').first()).toHaveText(
-        new RegExp(secondDisplayName, 'i'),
-        { timeout: 15000 }
-      );
-      await expect(page.locator('.presence-chip .presence-name')).not.toHaveText(/Admin User/i);
-
-      // ── The second user leaves ────────────────────────────────────────────────
-      await context2.close();
-
-      // expect: window 1 drops them again, via PresenceDeparted on disconnect
-      // (MainHub.OnDisconnectedAsync).
-      await expect
-        .poll(() => presenceChips.count(), {
-          timeout: 30000,
-          intervals: [250, 500, 1000],
-          message: 'window 1 never received PresenceDeparted after the second user closed',
-        })
-        .toBe(0);
-    } finally {
-      await browser.close();
-    }
-  });
-});
+    });
+}
