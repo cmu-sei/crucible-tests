@@ -1425,6 +1425,22 @@ accessibility contract is covered separately by 17.7.
     - expect: Run creation is prevented
     - expect: User is informed they must unlock the workspace first
 
+#### 15.8. File Name Path Traversal Rejection
+
+**File:** `tests/error-handling/file-name-path-traversal.spec.ts`
+
+**Steps:**
+  1. Create a project and a directory to hold files
+    - expect: Directory is created
+  2. POST /api/files with a name containing path traversal segments (e.g. `../../escaped.tf`)
+    - expect: API responds 400 and the file is not created
+  3. POST /api/files with a name containing a path separator or null byte
+    - expect: API responds 400 for each
+  4. Rename an existing file to a traversing name via POST /api/files/{id}/actions/rename
+    - expect: API responds 400 and the file keeps its original name
+  5. POST /api/files with an ordinary name such as `main.tf`
+    - expect: API responds 201 and the file is created
+
 ### 16. Integration with Alloy
 
 **Seed:** `tests/seed.spec.ts`
