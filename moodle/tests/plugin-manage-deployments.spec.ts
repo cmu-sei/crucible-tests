@@ -3,7 +3,7 @@
 
 // spec: moodle/moodle-test-plan.md
 
-import { Page } from '@playwright/test';
+import { Locator, Page } from '@playwright/test';
 import { test, expect, Services } from '../fixtures';
 import {
   cleanupMoodleCrucibleParticipant,
@@ -59,6 +59,10 @@ async function openScheduleModal(page: Page, participant: MoodleCrucibleParticip
   return { dialog, row };
 }
 
+function backgroundColor(locator: Locator): Promise<string> {
+  return locator.evaluate(element => getComputedStyle(element).backgroundColor);
+}
+
 test.describe('Moodle plugin manage deployment pages', () => {
   test('Crucible and TopoMojo use matching table headers and extend modal behavior', async ({ moodleAdminPage: page }) => {
     const consoleErrors: string[] = [];
@@ -68,10 +72,27 @@ test.describe('Moodle plugin manage deployment pages', () => {
       }
     });
 
+    const headerBackgrounds = new Map<string, string>();
+
     for (const managePage of managePages) {
       await openManagePage(page, managePage);
 
-      await expect(page.locator(`${managePage.table} th`).first()).toHaveCSS('background-color', 'rgb(245, 245, 245)');
+      // Asserting a literal colour here does not work. The dev stack sets
+      // data-bs-theme="dark" on <html> server-side while the browser reports
+      // prefers-color-scheme: light, so Playwright's colorScheme option cannot
+      // opt out and the light value both plugins ship is unreachable. Pinning the
+      // dark value instead would encode the palette: Crucible derives its header
+      // from --bs-tertiary-bg and TopoMojo from --bs-gray-800, so the two differ
+      // and both move when the theme changes.
+      //
+      // Nor does the header carry a background of its own in dark mode.
+      // local_boost_dark paints every table cell one colour with a blanket
+      // !important, header and body alike, and that flat look is accepted - so
+      // this checks only what survives: the two plugins agree with each other.
+      const header = page.locator(`${managePage.table} th`).first();
+      await expect(header).toBeVisible();
+      headerBackgrounds.set(managePage.name, await backgroundColor(header));
+
       await expect(page.locator(`${managePage.table} .cell-status`, { hasText: /^Active$/ })).toHaveCount(0);
       await expect(page.locator('#schedule-modal-content #scheduledfor-input')).toHaveAttribute(
         'value',
@@ -99,6 +120,11 @@ test.describe('Moodle plugin manage deployment pages', () => {
 
       await dialog.getByRole('button', { name: /Cancel/i }).click();
     }
+
+    expect(
+      new Set(headerBackgrounds.values()).size,
+      `both plugins should use one table header colour, got ${JSON.stringify(Object.fromEntries(headerBackgrounds))}`
+    ).toBe(1);
 
     expect(consoleErrors.filter(error => error.includes('does not conform to the required format'))).toEqual([]);
   });
