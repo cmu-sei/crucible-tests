@@ -5,16 +5,14 @@
 
 import { Page } from '@playwright/test';
 import { test, expect, Services } from '../fixtures';
+import { MoodleLabModule, resolveMoodleLabActivityCmid } from '../db-helpers';
 
-const crucibleActivityId = process.env.MOODLE_CRUCIBLE_ACTIVITY_ID || '3';
-const topomojoActivityId = process.env.MOODLE_TOPOMOJO_ACTIVITY_ID || '21';
-
-const settingsPages = [
-  { name: 'Crucible', updateId: crucibleActivityId },
-  { name: 'TopoMojo', updateId: topomojoActivityId },
+const settingsPages: { name: string; module: MoodleLabModule }[] = [
+  { name: 'Crucible', module: 'crucible' },
+  { name: 'TopoMojo', module: 'topomojo' },
 ];
 
-async function openSettingsPage(page: Page, updateId: string): Promise<void> {
+async function openSettingsPage(page: Page, updateId: number): Promise<void> {
   await page.goto(`${Services.Moodle}/course/modedit.php?update=${updateId}&return=1`, {
     waitUntil: 'domcontentloaded',
     timeout: 60000,
@@ -26,7 +24,7 @@ async function openSettingsPage(page: Page, updateId: string): Promise<void> {
 test.describe('Moodle plugin settings pages', () => {
   test('Crucible and TopoMojo use Timer wording and expose max score field', async ({ moodleAdminPage: page }) => {
     for (const settings of settingsPages) {
-      await openSettingsPage(page, settings.updateId);
+      await openSettingsPage(page, await resolveMoodleLabActivityCmid(settings.module));
 
       await expect(page.locator('label[for="id_clock"]')).toHaveText('Timer');
       await expect(page.locator('label[for="id_clock"]')).not.toHaveText('Clock');

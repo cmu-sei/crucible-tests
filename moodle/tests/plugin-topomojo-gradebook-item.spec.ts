@@ -27,10 +27,14 @@ import {
   connectMoodleDatabase,
   getMoodleTopomojoActivity,
   getMoodleTopomojoGradeItem,
+  resolveMoodleLabActivityCmid,
 } from '../db-helpers';
 import { runMoodlePhp } from '../cli-helpers';
 
-const topomojoActivityId = process.env.MOODLE_TOPOMOJO_ACTIVITY_ID || '21';
+// Resolved in beforeAll rather than hardcoded: the course-module id differs
+// between the Moodle 5.0 and 5.2 containers and changes whenever the demo course
+// is reseeded.
+let topomojoActivityId: number;
 
 // These tests drive a live TopoMojo: each run registers real gamespaces and holds
 // real VMs. They also share one Moodle instance, so a second browser project would
@@ -118,6 +122,7 @@ test.describe('mod_topomojo gradebook item', () => {
   let createdCmid: number | undefined;
 
   test.beforeAll(async () => {
+    topomojoActivityId = await resolveMoodleLabActivityCmid('topomojo');
     // Reuse the course and workspace an existing activity already points at, so
     // the test follows the environment rather than hardcoding either.
     const reference = await getMoodleTopomojoActivity(topomojoActivityId);

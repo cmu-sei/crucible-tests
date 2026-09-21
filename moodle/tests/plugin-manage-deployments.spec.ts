@@ -8,27 +8,36 @@ import { test, expect, Services } from '../fixtures';
 import {
   cleanupMoodleCrucibleParticipant,
   MoodleCrucibleParticipant,
+  MoodleLabModule,
+  resolveMoodleLabActivityCmid,
   seedMoodleCrucibleParticipant,
 } from '../db-helpers';
 
-const crucibleActivityId = process.env.MOODLE_CRUCIBLE_ACTIVITY_ID || '3';
-const topomojoActivityId = process.env.MOODLE_TOPOMOJO_ACTIVITY_ID || '21';
-
-const managePages = [
+// The two plugins do not agree on the script name, so the path is built per
+// plugin rather than from the module alone.
+const managePages: { name: string; module: MoodleLabModule; script: string; table: string }[] = [
   {
     name: 'Crucible',
-    path: `/mod/crucible/manage_deployments.php?id=${crucibleActivityId}`,
+    module: 'crucible',
+    script: 'manage_deployments.php',
     table: '.mod-crucible-users-table',
   },
   {
     name: 'TopoMojo',
-    path: `/mod/topomojo/manage.php?id=${topomojoActivityId}`,
+    module: 'topomojo',
+    script: 'manage.php',
     table: '.mod-topomojo-users-table',
   },
 ];
 
-async function openManagePage(page: Page, path: string): Promise<void> {
-  await page.goto(`${Services.Moodle}${path}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+const crucibleManagePage = managePages.find(managePage => managePage.module === 'crucible')!;
+
+async function openManagePage(page: Page, managePage: { module: MoodleLabModule; script: string }): Promise<void> {
+  const cmid = await resolveMoodleLabActivityCmid(managePage.module);
+  await page.goto(`${Services.Moodle}/mod/${managePage.module}/${managePage.script}?id=${cmid}`, {
+    waitUntil: 'domcontentloaded',
+    timeout: 60000,
+  });
   await expect(page.getByRole('heading', { name: 'Manage Deployments' })).toBeVisible();
 }
 
@@ -38,7 +47,7 @@ function addMinutes(datetime: string, minutes: number): string {
 }
 
 async function openScheduleModal(page: Page, participant: MoodleCrucibleParticipant) {
-  await openManagePage(page, `/mod/crucible/manage_deployments.php?id=${crucibleActivityId}`);
+  await openManagePage(page, crucibleManagePage);
 
   const row = page.locator(`.mod-crucible-users-table tr[data-userid="${participant.userId}"]`);
   await expect(row).toContainText(participant.displayName);
@@ -60,7 +69,7 @@ test.describe('Moodle plugin manage deployment pages', () => {
     });
 
     for (const managePage of managePages) {
-      await openManagePage(page, managePage.path);
+      await openManagePage(page, managePage);
 
       await expect(page.locator(`${managePage.table} th`).first()).toHaveCSS('background-color', 'rgb(245, 245, 245)');
       await expect(page.locator(`${managePage.table} .cell-status`, { hasText: /^Active$/ })).toHaveCount(0);
@@ -98,7 +107,7 @@ test.describe('Moodle plugin manage deployment pages', () => {
     let participant: MoodleCrucibleParticipant | undefined;
 
     test.beforeEach(async () => {
-      participant = await seedMoodleCrucibleParticipant(crucibleActivityId);
+      participant = await seedMoodleCrucibleParticipant(await resolveMoodleLabActivityCmid('crucible'));
     });
 
     test.afterEach(async () => {
@@ -107,7 +116,7 @@ test.describe('Moodle plugin manage deployment pages', () => {
     });
 
     test('refreshes the schedule default and rejects a past time without submitting', async ({ moodleAdminPage: page }) => {
-      await openManagePage(page, `/mod/crucible/manage_deployments.php?id=${crucibleActivityId}`);
+      await openManagePage(page, crucibleManagePage);
       const templateDatetime = await page.locator('#schedule-modal-content #scheduledfor-input').inputValue();
 
       // The modal body is rendered at page load. Advance the browser wall clock

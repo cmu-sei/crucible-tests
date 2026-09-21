@@ -5,29 +5,24 @@
 
 import { Page } from '@playwright/test';
 import { test, expect, Services } from '../fixtures';
-
-const crucibleActivityId = process.env.MOODLE_CRUCIBLE_ACTIVITY_ID || '3';
-const topomojoActivityId = process.env.MOODLE_TOPOMOJO_ACTIVITY_ID || '21';
+import { MoodleLabModule, resolveMoodleLabActivityCmid } from '../db-helpers';
 
 type Plugin = {
   name: 'Crucible' | 'TopoMojo';
-  path: string;
   bodyId: RegExp;
-  prefix: 'crucible' | 'topomojo';
+  prefix: MoodleLabModule;
   manageUrlPattern: RegExp;
 };
 
 const plugins: Plugin[] = [
   {
     name: 'Crucible',
-    path: `/mod/crucible/view.php?id=${crucibleActivityId}`,
     bodyId: /page-mod-crucible-view/,
     prefix: 'crucible',
     manageUrlPattern: /\/mod\/crucible\/manage_deployments\.php/,
   },
   {
     name: 'TopoMojo',
-    path: `/mod/topomojo/view.php?id=${topomojoActivityId}`,
     bodyId: /page-mod-topomojo-view/,
     prefix: 'topomojo',
     manageUrlPattern: /\/mod\/topomojo\/manage\.php/,
@@ -35,7 +30,11 @@ const plugins: Plugin[] = [
 ];
 
 async function openActivity(page: Page, plugin: Plugin): Promise<void> {
-  await page.goto(`${Services.Moodle}${plugin.path}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  const cmid = await resolveMoodleLabActivityCmid(plugin.prefix);
+  await page.goto(`${Services.Moodle}/mod/${plugin.prefix}/view.php?id=${cmid}`, {
+    waitUntil: 'domcontentloaded',
+    timeout: 60000,
+  });
   await expect(page.locator('body')).toHaveAttribute('id', plugin.bodyId);
   await expect(page.locator('.page-header-headings h1').first()).toBeVisible();
 }

@@ -1661,8 +1661,13 @@ teardown even when the assertions fail. Seeded participants, their enrolments, a
 question usages and job rows are removed with them.
 
 The scenarios reuse an existing TopoMojo activity's course and workspace rather than
-hardcoding either, so they follow whatever the environment is pointed at.
-`MOODLE_TOPOMOJO_ACTIVITY_ID` selects the activity (default `21`).
+hardcoding either, so they follow whatever the environment is pointed at. The activity is
+the one mod_topomojo activity in the demo course (`MOODLE_DEMO_COURSE`, default
+`Test Course`), looked up at run time by `resolveMoodleLabActivityCmid()` — the
+course-module id is not stable enough to hardcode, since it differs between the Moodle
+5.0 and 5.2 containers and changes whenever the course is reseeded. Set
+`MOODLE_TOPOMOJO_ACTIVITY_ID` to point a run at some other activity, or
+`MOODLE_TOPOMOJO_ACTIVITY_NAME` to disambiguate a course holding several.
 
 #### 11.1. Gamespace API Contract
 

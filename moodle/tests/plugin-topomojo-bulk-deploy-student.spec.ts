@@ -32,11 +32,15 @@ import {
   getMoodleTopomojoAttempts,
   getMoodleTopomojoDeployments,
   MoodleTopomojoActivity,
+  resolveMoodleLabActivityCmid,
 } from '../db-helpers';
 import { queueMoodleTopomojoBulkDeploy, runMoodleAdhocTask } from '../cli-helpers';
 import { deleteGamespace, getTopoMojoAdminToken } from '../../topomojo-helpers';
 
-const topomojoActivityId = process.env.MOODLE_TOPOMOJO_ACTIVITY_ID || '21';
+// Resolved in beforeAll rather than hardcoded: the course-module id differs
+// between the Moodle 5.0 and 5.2 containers and changes whenever the demo course
+// is reseeded.
+let topomojoActivityId: number;
 
 // These tests drive a live TopoMojo: each run registers real gamespaces and holds
 // real VMs. They also share one Moodle instance, so a second browser project would
@@ -94,6 +98,7 @@ test.describe('mod_topomojo bulk-deployed attempt, as the student', () => {
   let topoToken: string;
 
   test.beforeAll(async () => {
+    topomojoActivityId = await resolveMoodleLabActivityCmid('topomojo');
     topoToken = await getTopoMojoAdminToken();
     activity = await getMoodleTopomojoActivity(topomojoActivityId);
     studentUserId = await findDemoUserId();
