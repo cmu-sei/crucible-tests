@@ -1438,8 +1438,10 @@ accessibility contract is covered separately by 17.7.
     - expect: API responds 400 for each
   4. Rename an existing file to a traversing name via POST /api/files/{id}/actions/rename
     - expect: API responds 400 and the file keeps its original name
-  5. POST /api/files with an ordinary name such as `main.tf`
-    - expect: API responds 201 and the file is created
+  5. POST /api/files with an ordinary name such as `main.tf`, and with a name containing a space such as `my file.tf`
+    - expect: API responds 201 for each and the files are created
+  6. Edit the file with a traversing name via PUT /api/files/{id}, then via PATCH /api/files/{id}, then PATCH with only content
+    - expect: API responds 400 for each name, and 200 for the partial edit that supplies no name
 
 ### 16. Integration with Alloy
 

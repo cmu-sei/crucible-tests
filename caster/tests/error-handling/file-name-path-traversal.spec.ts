@@ -51,9 +51,9 @@ test.describe('Error Handling and Validation', () => {
         }
         if (!token) throw new Error('No access token found in session storage');
 
-        const send = async (path: string, body: unknown) =>
+        const send = async (path: string, body: unknown, method = 'POST') =>
           fetch(`${apiUrl}${path}`, {
-            method: 'POST',
+            method,
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
           });
@@ -88,6 +88,51 @@ test.describe('Error Handling and Validation', () => {
         const validStatus = validResp.status;
         const file = validStatus === 201 ? await validResp.json() : null;
 
+        // So is a name with a space in it, which was accepted before this rule existed
+        const spacedResp = await send('/api/files', {
+          name: 'my file.tf',
+          directoryId: directory.id,
+          content: '# content',
+        });
+        const spacedStatus = spacedResp.status;
+
+        // Edit and partial edit are validated too. Saving a file requires holding its
+        // lock, otherwise the API responds 409 before the name is ever looked at.
+        let lockStatus: number | null = null;
+        let editStatus: number | null = null;
+        let partialEditStatus: number | null = null;
+        let validEditStatus: number | null = null;
+        if (file) {
+          const lockResp = await send(`/api/files/${file.id}/actions/lock`, {});
+          lockStatus = lockResp.status;
+
+          const editResp = await send(
+            `/api/files/${file.id}`,
+            {
+              name: '../../etc/cron.d/backdoor',
+              directoryId: directory.id,
+              content: '# content',
+            },
+            'PUT'
+          );
+          editStatus = editResp.status;
+
+          const partialEditResp = await send(
+            `/api/files/${file.id}`,
+            { name: '../../etc/cron.d/backdoor' },
+            'PATCH'
+          );
+          partialEditStatus = partialEditResp.status;
+
+          // A partial edit that does not supply a name is still allowed
+          const validEditResp = await send(
+            `/api/files/${file.id}`,
+            { content: '# updated' },
+            'PATCH'
+          );
+          validEditStatus = validEditResp.status;
+        }
+
         // Renaming to a traversing name is rejected and leaves the name alone
         let renameStatus: number | null = null;
         let nameAfterRename: string | null = null;
@@ -109,6 +154,11 @@ test.describe('Error Handling and Validation', () => {
           directoryStatus: directoryResp.status,
           rejected,
           validStatus,
+          spacedStatus,
+          lockStatus,
+          editStatus,
+          partialEditStatus,
+          validEditStatus,
           renameStatus,
           nameAfterRename,
         };
@@ -127,11 +177,18 @@ test.describe('Error Handling and Validation', () => {
       expect(status, `POST /api/files should reject name ${JSON.stringify(name)}`).toBe(400);
     }
 
-    // 5. An ordinary file name still works
+    // 5. An ordinary file name still works, including one with a space in it
     expect(result.validStatus).toBe(201);
+    expect(result.spacedStatus).toBe(201);
 
     // 4. Rename is validated too, and the file keeps its name
     expect(result.renameStatus).toBe(400);
     expect(result.nameAfterRename).toBe('main.tf');
+
+    // 6. Edit and partial edit are validated, and a partial edit without a name still works
+    expect(result.lockStatus).toBe(200);
+    expect(result.editStatus).toBe(400);
+    expect(result.partialEditStatus).toBe(400);
+    expect(result.validEditStatus).toBe(200);
   });
 });
