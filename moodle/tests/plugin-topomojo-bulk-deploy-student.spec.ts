@@ -19,7 +19,8 @@
  * A pre-existing Keycloak account is borrowed rather than created, because the
  * login goes through the identity provider and a DB-seeded Moodle user has no
  * credentials there. Everything the deploy leaves on that account is removed in
- * teardown; the account itself and its enrolment are left as they were.
+ * teardown, as is the course enrolment when this run is what made it; the account
+ * itself is left alone.
  */
 
 import { Page } from '@playwright/test';
@@ -35,6 +36,13 @@ import {
   resolveMoodleLabActivityCmid,
 } from '../db-helpers';
 import { queueMoodleTopomojoBulkDeploy, runMoodleAdhocTask } from '../cli-helpers';
+import {
+  DemoUserEnrolment,
+  demoUsername,
+  enrolMoodleDemoUser,
+  resolveMoodleDemoUserId,
+  unenrolMoodleDemoUser,
+} from '../demo-user-helpers';
 import { deleteGamespace, getTopoMojoAdminToken } from '../../topomojo-helpers';
 
 // Resolved in beforeAll rather than hardcoded: the course-module id differs
@@ -50,28 +58,6 @@ let topomojoActivityId: number;
 test.skip(({ browserName }) => browserName !== 'chromium', 'live-VM test; runs on one project only');
 
 const BULKDEPLOY_TASK = '\\mod_topomojo\\task\\bulkdeploy_run';
-const demoUsername = process.env.MOODLE_DEMO_USERNAME || 'demo-user';
-
-/** Resolves the Moodle user the demo Keycloak account maps to. */
-async function findDemoUserId(): Promise<number> {
-  const client = await connectMoodleDatabase();
-  try {
-    const result = await client.query<{ id: number }>(
-      `SELECT id FROM mdl_user
-        WHERE deleted = 0 AND (username = $1 OR username LIKE $2)
-        ORDER BY id
-        LIMIT 1`,
-      [demoUsername, `${demoUsername}@%`]
-    );
-    if (result.rowCount !== 1) {
-      throw new Error(`No Moodle account for the demo Keycloak user "${demoUsername}".`);
-    }
-    return Number(result.rows[0].id);
-  } finally {
-    await client.end();
-  }
-}
-
 async function openActivity(page: Page): Promise<void> {
   await page.goto(`${Services.Moodle}/mod/topomojo/view.php?id=${topomojoActivityId}`, {
     waitUntil: 'domcontentloaded',
@@ -95,13 +81,19 @@ test.describe('mod_topomojo bulk-deployed attempt, as the student', () => {
 
   let activity: MoodleTopomojoActivity;
   let studentUserId: number;
+  let enrolment: DemoUserEnrolment;
   let topoToken: string;
 
   test.beforeAll(async () => {
     topomojoActivityId = await resolveMoodleLabActivityCmid('topomojo');
     topoToken = await getTopoMojoAdminToken();
     activity = await getMoodleTopomojoActivity(topomojoActivityId);
-    studentUserId = await findDemoUserId();
+    studentUserId = resolveMoodleDemoUserId();
+
+    // The deploy writes an attempt for the student whether or not they are in the
+    // course, but the pages under test are the student's own view of the activity,
+    // and an unenrolled user is sent to the enrolment page instead of reaching it.
+    enrolment = enrolMoodleDemoUser('topomojo', topomojoActivityId, studentUserId);
 
     // Start from a clean slate: an attempt left over from an earlier run would be
     // picked up as the open attempt and the deploy below would be skipped.
@@ -134,6 +126,10 @@ test.describe('mod_topomojo bulk-deployed attempt, as the student', () => {
     const gamespaceIds = await cleanupMoodleTopomojoDeployments([activity.instanceId], [studentUserId]);
     for (const gamespaceId of gamespaceIds) {
       await deleteGamespace(topoToken, gamespaceId);
+    }
+    // Guarded: beforeAll can fail before the enrolment is made.
+    if (enrolment) {
+      unenrolMoodleDemoUser(enrolment, studentUserId);
     }
   });
 
