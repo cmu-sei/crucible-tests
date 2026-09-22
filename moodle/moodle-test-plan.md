@@ -1876,3 +1876,99 @@ standard collection.
       which made the plugin read an empty selection and refuse every export on 5.2 until
       its selector was matched on the checkbox name instead
 
+### 13. TopoMojo Question Type (qtype_mojomatch, qbehaviour_mojomatch)
+
+`qtype_mojomatch` grades a short typed answer against model answers using one of four
+matching modes, and forces its own `qbehaviour_mojomatch` regardless of what the question
+usage asks for. The plugin's PHPUnit suite already covers the matching itself and an
+attempt walkthrough, so these scenarios cover only what a unit test cannot reach: that the
+question chooser offers the type, that the extra options reach the database through the
+real edit form, and that a response is graded through the forced behaviour. Nothing here
+needs TopoMojo — the type is usable on its own.
+
+Questions are created in the demo course's question bank (`MOODLE_DEMO_COURSE`, default
+`Test Course`), whose course-module id is looked up at run time rather than hardcoded, and
+every question created is deleted in teardown.
+
+#### 13.1. The Chooser and the Edit Form
+
+**File:** `moodle/tests/plugin-mojomatch-question.spec.ts`
+
+**Steps:**
+  1. Open the question bank's Create a new question chooser as admin
+    - expect: The type is offered as "TopoMojo", with the summary describing a response of
+      one or a few words graded against model answers
+  2. Choose it and inspect the form
+    - expect: Case sensitivity defaults to "No, case is unimportant" and offers the
+      case-must-match alternative
+    - expect: The matching mode offers four options, defaulting to MatchAlpha, which is
+      described as stripping all characters other than alphabetic ones
+    - expect: Variant defaults to 1, transforms to enabled, and the workspace id is empty
+    - expect: `qorder` has no form element — it records a question's position inside an
+      imported TopoMojo challenge and is never typed by an author
+
+#### 13.2. A Question With No Full-Marks Answer
+
+**File:** `moodle/tests/plugin-mojomatch-question.spec.ts`
+
+**Steps:**
+  1. Fill the form with an answer graded "None" and save
+    - expect: The form comes back saying one of the answers should have a score of 100%
+    - expect: No question is stored
+
+#### 13.3. Saving a Question
+
+**File:** `moodle/tests/plugin-mojomatch-question.spec.ts`
+
+**Steps:**
+  1. Fill the form with an answer worth 100%, variant 2, a workspace id, transforms off and
+     MatchAlpha, then save
+    - expect: The question is stored, with each of those options recorded against it
+    - expect: Its single answer is the text entered, at fraction 1
+    - expect: The save completes — `save_defaults_for_new_questions()` used to hand every
+      field in `extra_question_fields()` to the typed `set_default_value()`, including the
+      `qorder` the form never sends, so the null threw after the question had been written
+      and rolled the whole save back, leaving the author on an exception page with nothing
+      created
+
+#### 13.4. Grading Through the Forced Behaviour
+
+**File:** `moodle/tests/plugin-mojomatch-question.spec.ts`
+
+**Steps:**
+  1. Preview a MatchAlpha question with immediate feedback and answer it wrongly, then
+     Check
+    - expect: The question is marked Incorrect, 0.00 out of 1.00
+  2. Start again and answer with the right answer in the wrong case and punctuation
+    - expect: The question is marked Correct, 1.00 out of 1.00 — MatchAlpha strips
+      everything but letters before comparing
+    - expect: The attempt's stored behaviour is `mojomatch`, not the preview's
+      `immediatefeedback` — `qbehaviour_mojomatch_type::is_archetypal()` is false, so the
+      behaviour is never offered in "How questions behave" and the stored value is the only
+      evidence the type forced it
+  3. Preview a question saved with transforms enabled and answer with a sentence containing
+     the answer
+    - expect: The question is marked Correct, 1.00 out of 1.00
+
+#### 13.5. A Question With More Than One Answer
+
+**File:** `moodle/tests/plugin-mojomatch-question.spec.ts`
+
+The edit form offers more answer rows, so a question with two of them is ordinary authoring.
+Both `grade_response_qa()` and the renderer used to take the single answer out of
+`get_answers()` without checking there was one; with any other number `$rightanswer` was
+never assigned and `grade_attempt()`'s typed parameter threw a TypeError, so the response
+could not be submitted and the question could not be rendered.
+
+**Steps:**
+  1. Save a Match question with a full-marks answer and a second answer worth 50%
+    - expect: Both answers are stored, at fractions 1 and 0.5
+  2. Preview it with immediate feedback and answer with the full-marks answer, then Check
+    - expect: The question is marked Correct, 1.00 out of 1.00 — and the page renders at
+      all, rather than replacing the attempt with an exception
+  3. Start again and answer with the second answer exactly
+    - expect: The question is marked Partially correct, 0.50 out of 1.00 — with no single
+      answer to substitute a live TopoMojo answer into, the response is graded against every
+      stored answer in turn
+  4. Start again and answer with something matching neither
+    - expect: The question is marked Incorrect, 0.00 out of 1.00
