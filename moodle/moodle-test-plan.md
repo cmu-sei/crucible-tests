@@ -1793,13 +1793,86 @@ recovered from the stored record; these scenarios drive the real forms to prove 
   1. Add a TopoMojo activity through the activity form, choosing a workspace and entering a
      maximum of 80
     - expect: The activity is created with no validation errors
+    - expect: The activity stores 80 — `topomojo_add_instance()` used to assign 100
+      unconditionally, which discarded the maximum entered on the add form
     - expect: A gradebook item exists for it, named after the activity, of type Value with
       a minimum of 0 and a maximum matching what was stored
-    - Pending upstream: `topomojo_add_instance()` assigns 100 unconditionally, so the
-      maximum entered on the add form is discarded
   2. Open the course's Gradebook setup
     - expect: The activity is listed as a column showing its stored maximum
   3. Edit the activity and set its maximum to 80
     - expect: The activity stores 80 — the edit path does honour the form value
     - expect: The gradebook item survives the update, stays of type Value, and follows the
       new maximum
+
+### 12. Tag Manager (local_tagmanager)
+
+`local_tagmanager` adds bulk import and export to Moodle's own tag administration. It has
+no pages of its own beyond `import.php` and `export.php`: everything else is injected into
+core's tag pages by an AMD module, so the scenarios below are all browser-level — there is
+no server-side entry point to drive them through instead. Each scenario works inside a
+collection seeded for the run and deleted with its tags in teardown, so nothing touches the
+standard collection.
+
+#### 12.1. Import and Export Actions on the Manage Tags Page
+
+**File:** `moodle/tests/plugin-tagmanager.spec.ts`
+
+**Steps:**
+  1. Seed a tag collection holding two tags with descriptions, then open Manage tags as
+     admin
+    - expect: The collection is listed
+    - expect: Its row offers an Import tags link pointing at `import.php` for that
+      collection — the link is added by the AMD module, so this is also the assertion that
+      the module loaded and its hook fired
+    - expect: Its row offers an Export link pointing at `export.php` for that collection
+      and carrying a session key, without which `require_sesskey()` would refuse every
+      export
+
+#### 12.2. Exporting a Collection
+
+**File:** `moodle/tests/plugin-tagmanager.spec.ts`
+
+**Steps:**
+  1. Follow the collection's Export link
+    - expect: A CSV downloads headed `tagname,description`
+    - expect: Every seeded tag is present with its description
+    - expect: Nothing outside the collection is included
+  2. Request `export.php` for the collection with no `sesskey` parameter
+    - expect: The request is refused rather than streaming the collection — either the
+      missing-parameter error or "Invalid session key", since the parameter is required
+      before it can be compared
+
+#### 12.3. Importing a CSV
+
+**File:** `moodle/tests/plugin-tagmanager.spec.ts`
+
+**Steps:**
+  1. Open the collection's Import tags page and upload a CSV naming one new tag and one
+     tag that already exists, then submit
+    - expect: The import redirects back to the collection reporting "Created tag:" for the
+      new one as a success and "Tag already exists:" for the other as a warning
+    - expect: The new tag exists in the collection with the description the CSV gave it
+    - expect: The existing tag keeps its original description — the row naming it does not
+      overwrite it
+    - Pending upstream: `import.php` builds those two notifications from hardcoded English
+      literals instead of its own `notif_created`/`notif_exists` language strings, so
+      neither can be translated
+
+#### 12.4. Exporting a Selection
+
+**File:** `moodle/tests/plugin-tagmanager.spec.ts`
+
+**Steps:**
+  1. Open the collection's own tag page
+    - expect: The module's Export selected and Import standard tags controls are rendered
+  2. Use Export selected with nothing ticked
+    - expect: A notification asks for a tag to be selected, rather than exporting the whole
+      collection
+  3. Tick one tag and use Export selected
+    - expect: A CSV downloads headed `tagname,description`
+    - expect: It carries the ticked tag and its description
+    - expect: It does not carry the tag that was left unticked — Moodle 5.2 renamed the
+      value of `data-toggle` on report-builder row checkboxes from `slave` to `target`,
+      which made the plugin read an empty selection and refuse every export on 5.2 until
+      its selector was matched on the checkbox name instead
+
