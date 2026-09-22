@@ -46,6 +46,29 @@ Put their course-module IDs into `ACTIVITY_IDS` in the spec.
 > modes without deleting attempts and changing the setting. Separate activities
 > keep each test independent.
 
+### 5. Crucible activity and Alloy event template
+`plugin-crucible-launch-lab.spec.ts` deploys a real Alloy event, so it needs:
+
+- one **mod_crucible** activity in the demo course (`MOODLE_DEMO_COURSE`, default
+  `Test Course`), created by `create_crucible_activity.php` in the Moodle
+  container. Override with `MOODLE_CRUCIBLE_ACTIVITY_ID`.
+- that activity's **event template GUID** pointing at a template Alloy actually
+  holds. Nothing in Moodle validates the GUID, so a reseeded Alloy leaves it
+  dangling. Override with `MOODLE_CRUCIBLE_EVENT_TEMPLATE_ID`.
+- the **admin** account and an `alloy.ui` Keycloak client granting
+  `player player-vm alloy caster steamfitter`, used to read and end the event
+  independently of the plugin's own token.
+
+All three are checked in `beforeAll` and reported by name, before the browser is
+driven — a missing prerequisite fails fast rather than part-way through a launch.
+The event is ended in teardown even when assertions fail, via the Alloy API if
+the End Lab button was never reached, and an event a killed run left behind is
+ended before the next run launches.
+
+It runs on **chromium only**. The three singletons above are shared, so a second
+browser project races the first for them rather than adding coverage — and the
+launch is a server-side write path, which does not differ by browser.
+
 ### Gamespace requirement (important)
 mojomatch resolves the correct answer from the **deployed gamespace's** cloned
 challenge, so every attempt deploys real VMs (~1 min each, and can fail for

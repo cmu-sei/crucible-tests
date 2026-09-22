@@ -1824,6 +1824,12 @@ a token the plugin did not mint.
 The activity is the one mod_crucible activity in the demo course (`MOODLE_DEMO_COURSE`,
 default `Test Course`), looked up at run time by `resolveMoodleLabActivityCmid()`.
 
+That activity, its event template and the admin account are shared singletons, so the
+scenario runs on one browser project and starts by ending any event the account still has
+deployed for the template — a run killed mid-deploy would otherwise leave every later run
+opening the activity already launched, since `get_active_events()` counts an `Ending` event
+among the active ones.
+
 #### 12.1. Launch and End a Lab
 
 **File:** `moodle/tests/plugin-crucible-launch-lab.spec.ts`
