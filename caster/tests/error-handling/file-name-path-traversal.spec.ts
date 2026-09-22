@@ -18,9 +18,18 @@ const invalidFileNames = [
   'subdir/main.tf',
   '..\\escaped.tf',
   'main.tf\0.txt',
+  'main\tsomething.tf',
+  '.',
   '..',
+  ' main.tf',
   '',
 ];
+
+/**
+ * Names that cannot escape the working directory are accepted, including ones that
+ * were valid before the rule existed.
+ */
+const validFileNames = ['main.tf', 'my file.tf', 'network (old).tf', 'café.tf'];
 
 test.describe('Error Handling and Validation', () => {
   test('File Name Path Traversal Rejection', async ({
@@ -30,7 +39,7 @@ test.describe('Error Handling and Validation', () => {
     await expect(page.getByText('My Projects')).toBeVisible();
 
     const result = await page.evaluate(
-      async ({ names }) => {
+      async ({ names, validNames }) => {
         const settingsResp = await fetch('/assets/config/settings.env.json');
         const apiUrl: string = (await settingsResp.json()).ApiUrl;
 
@@ -79,22 +88,21 @@ test.describe('Error Handling and Validation', () => {
           rejected.push({ name, status: resp.status });
         }
 
-        // An ordinary name is still accepted
-        const validResp = await send('/api/files', {
-          name: 'main.tf',
-          directoryId: directory.id,
-          content: '# content',
-        });
-        const validStatus = validResp.status;
-        const file = validStatus === 201 ? await validResp.json() : null;
+        // Ordinary names are still accepted. The first one is kept for the edit checks below.
+        const accepted: { name: string; status: number }[] = [];
+        let file: { id: string; name: string } | null = null;
+        for (const name of validNames) {
+          const resp = await send('/api/files', {
+            name,
+            directoryId: directory.id,
+            content: '# content',
+          });
+          accepted.push({ name, status: resp.status });
 
-        // So is a name with a space in it, which was accepted before this rule existed
-        const spacedResp = await send('/api/files', {
-          name: 'my file.tf',
-          directoryId: directory.id,
-          content: '# content',
-        });
-        const spacedStatus = spacedResp.status;
+          if (resp.status === 201 && !file) {
+            file = await resp.json();
+          }
+        }
 
         // Edit and partial edit are validated too. Saving a file requires holding its
         // lock, otherwise the API responds 409 before the name is ever looked at.
@@ -153,8 +161,7 @@ test.describe('Error Handling and Validation', () => {
           projectStatus: projectResp.status,
           directoryStatus: directoryResp.status,
           rejected,
-          validStatus,
-          spacedStatus,
+          accepted,
           lockStatus,
           editStatus,
           partialEditStatus,
@@ -163,7 +170,7 @@ test.describe('Error Handling and Validation', () => {
           nameAfterRename,
         };
       },
-      { names: invalidFileNames }
+      { names: invalidFileNames, validNames: validFileNames }
     );
 
     cleanupCasterProject(result.projectId);
@@ -177,9 +184,10 @@ test.describe('Error Handling and Validation', () => {
       expect(status, `POST /api/files should reject name ${JSON.stringify(name)}`).toBe(400);
     }
 
-    // 5. An ordinary file name still works, including one with a space in it
-    expect(result.validStatus).toBe(201);
-    expect(result.spacedStatus).toBe(201);
+    // 5. Names that cannot escape the working directory still work
+    for (const { name, status } of result.accepted) {
+      expect(status, `POST /api/files should accept name ${JSON.stringify(name)}`).toBe(201);
+    }
 
     // 4. Rename is validated too, and the file keeps its name
     expect(result.renameStatus).toBe(400);
