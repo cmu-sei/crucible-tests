@@ -71,7 +71,11 @@ export async function connectMoodleDatabase(): Promise<Client> {
     port: getPostgresPort(),
     user: 'postgres',
     password: getPostgresPassword(),
-    database: 'moodle',
+    // Each Moodle instance Aspire runs gets its own database, because booting a
+    // newer Moodle against another instance's database runs irreversible upgrade
+    // migrations. Override this when pointing the suite at the 5.2 instance,
+    // alongside MOODLE_URL / MOODLE_CONTAINER / MOODLE_CONTAINER_ROOT.
+    database: process.env.MOODLE_DB || 'moodle',
   });
   await client.connect();
   return client;
