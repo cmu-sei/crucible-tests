@@ -1803,3 +1803,46 @@ recovered from the stored record; these scenarios drive the real forms to prove 
     - expect: The activity stores 80 — the edit path does honour the form value
     - expect: The gradebook item survives the update, stays of type Value, and follows the
       new maximum
+
+### 12. Crucible Activity (mod_crucible)
+
+`mod_crucible` deploys an Alloy event per student from an event template. Launching is the
+only flow that makes the plugin *write* to Alloy — "Launch Lab" POSTs
+`/eventtemplates/{id}/events` and "End Lab" DELETEs `/events/{id}/end` — and both go
+through the OAuth client `crucible_configure_api_client()` hands back, which is where
+certificate verification and the request timeouts are set. The plugin's own PHPUnit suite
+covers that configuration against a `\curl` instance, so the scenario below runs against a
+live Alloy instead: it deploys a real event and ends it in teardown even when the
+assertions fail, falling back to the Alloy API when the End Lab button was never reached.
+
+Loading the activity page is not a substitute. "Scheduled Duration" is a static label and
+`view.php` reads `durationHours` off the event template unconditionally, so the Lab Details
+section renders — and its assertions pass — even when the Alloy read failed and left the
+template `false`. Proving a call happened needs the event cross-checked against Alloy under
+a token the plugin did not mint.
+
+The activity is the one mod_crucible activity in the demo course (`MOODLE_DEMO_COURSE`,
+default `Test Course`), looked up at run time by `resolveMoodleLabActivityCmid()`.
+
+#### 12.1. Launch and End a Lab
+
+**File:** `moodle/tests/plugin-crucible-launch-lab.spec.ts`
+
+**Steps:**
+  1. Open the Crucible activity as an administrator
+    - expect: The activity opens with no event running, offering Launch Lab
+  2. Click Launch Lab and confirm "Are you sure you want to launch the lab?"
+    - expect: `view.php` publishes the new event id, so the POST to Alloy was accepted
+    - expect: Alloy knows the event, and its event template matches the activity's
+    - Note: the confirmation is bound by an AMD module, so a click landing before it
+      submits the form without `start_confirmed` and the request is silently ignored
+  3. Wait out the deployment
+    - expect: A Lab Workspace section renders, holding the embedded frame or Player link
+      built from the view id Alloy returned
+    - expect: Alloy reports the event Active with a Player view assigned
+    - expect: No "Debug info:" warning is left on the page — a failed Alloy call does not
+      stop the page, it annotates it
+  4. Click End Lab and confirm "Are you sure you want to end the lab?"
+    - expect: The attempt is closed and the page redirects to the review page
+    - expect: Alloy reports the event Ending, Ended or Expired
+    - expect: Reopening the activity offers Launch Lab again
