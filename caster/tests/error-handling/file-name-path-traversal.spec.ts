@@ -15,13 +15,19 @@ import { test, expect } from '../../fixtures';
 const invalidFileNames = [
   '../../etc/cron.d/backdoor',
   '../escaped.tf',
+  '....//escaped.tf',
   'subdir/main.tf',
+  '/etc/cron.d/backdoor',
   '..\\escaped.tf',
+  '\\\\server\\share\\backdoor',
   'main.tf\0.txt',
   'main\tsomething.tf',
+  'main\nsomething.tf',
   '.',
   '..',
   ' main.tf',
+  'main.tf ',
+  `${'a'.repeat(253)}.tf`,
   '',
 ];
 
@@ -29,7 +35,15 @@ const invalidFileNames = [
  * Names that cannot escape the working directory are accepted, including ones that
  * were valid before the rule existed.
  */
-const validFileNames = ['main.tf', 'my file.tf', 'network (old).tf', 'café.tf'];
+const validFileNames = [
+  'main.tf',
+  'my file.tf',
+  'network (old).tf',
+  'café.tf',
+  // Percent encoded separators are never decoded, so the name is stored and written literally
+  '%2e%2e%2fescaped.tf',
+  `${'a'.repeat(252)}.tf`,
+];
 
 test.describe('Error Handling and Validation', () => {
   test('File Name Path Traversal Rejection', async ({
