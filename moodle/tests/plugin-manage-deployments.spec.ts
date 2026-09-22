@@ -110,16 +110,28 @@ test.describe('Moodle plugin manage deployment pages', () => {
       await openManagePage(page, `/mod/crucible/manage_deployments.php?id=${crucibleActivityId}`);
       const templateDatetime = await page.locator('#schedule-modal-content #scheduledfor-input').inputValue();
 
+      const row = page.locator(`.mod-crucible-users-table tr[data-userid="${participant!.userId}"]`);
+      await expect(row).toContainText(participant!.displayName);
+      await row.locator('.user-checkbox').check();
+
+      // mod_crucible/manage_deployments takes its own Date.now() baseline when the
+      // AMD module initialises, which is well after domcontentloaded: the requirejs
+      // bundle is still loading when the heading above becomes visible. Advancing
+      // the clock before that point moves the baseline by the same amount, the
+      // elapsed-time delta stays at zero and an entirely healthy plugin looks like
+      // it never refreshes the default. PHP renders the button disabled and only
+      // the module's change listener enables it, so waiting for it here pins the
+      // baseline to real time before the clock moves.
+      const scheduleButton = page.getByRole('button', { name: /Schedule Selected/ });
+      await expect(scheduleButton).toBeEnabled();
+
       // The modal body is rendered at page load. Advance the browser wall clock
       // before opening it to prove that the displayed default is refreshed.
       await page.evaluate((advanceMs) => {
         const originalNow = Date.now.bind(Date);
         Date.now = () => originalNow() + advanceMs;
       }, 2 * 60_000);
-      const row = page.locator(`.mod-crucible-users-table tr[data-userid="${participant!.userId}"]`);
-      await expect(row).toContainText(participant!.displayName);
-      await row.locator('.user-checkbox').check();
-      await page.getByRole('button', { name: /Schedule Selected/ }).click();
+      await scheduleButton.click();
 
       const dialog = page.locator('.modal-dialog', { hasText: /Schedule Selected/ }).last();
       await expect(dialog).toBeVisible();
