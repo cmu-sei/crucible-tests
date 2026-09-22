@@ -6,6 +6,7 @@
 import { Page } from '@playwright/test';
 import { test, expect, Services } from '../fixtures';
 import { MoodleLabModule, resolveMoodleLabActivityCmid } from '../db-helpers';
+import { runMoodlePhp } from '../cli-helpers';
 
 type Plugin = {
   name: 'Crucible' | 'TopoMojo';
@@ -13,6 +14,75 @@ type Plugin = {
   prefix: MoodleLabModule;
   manageUrlPattern: RegExp;
 };
+
+/** The learner account, borrowed from Keycloak by the moodleDemoUserPage fixture. */
+const demoUsername = process.env.MOODLE_DEMO_USERNAME || 'demo-user';
+
+/** A course the demo user was enrolled in here, so teardown can put it back. */
+type Enrolment = { courseId: number; created: boolean };
+
+/**
+ * Resolves the Moodle account the demo Keycloak user maps to.
+ *
+ * The account is created by the identity provider on first login, so it only
+ * exists once something has logged in as it. Every environment this suite runs
+ * against has, and seeding one here would produce a second account with no
+ * Keycloak credentials behind it.
+ */
+function resolveDemoUserId(): number {
+  const output = runMoodlePhp(
+    `$user = $DB->get_record_select('user', 'deleted = 0 AND (username = ? OR username LIKE ?)',`
+    + ` ['${demoUsername}', '${demoUsername}@%'], 'id', IGNORE_MULTIPLE);`
+    + ` echo $user ? $user->id : '';`
+  );
+  const userId = Number(output);
+  if (!Number.isInteger(userId) || userId <= 0) {
+    throw new Error(
+      `No Moodle account for the demo Keycloak user "${demoUsername}". `
+      + 'It is created on first login, so log in as it once and re-run.'
+    );
+  }
+  return userId;
+}
+
+/**
+ * Enrols the demo user as a student in the course an activity belongs to.
+ *
+ * The view page is what is under test, and an unenrolled user never reaches it —
+ * Moodle sends them to the enrolment page instead. Enrolment goes through
+ * `enrol_try_internal_enrol()` rather than an INSERT so the role assignment that
+ * carries the learner capabilities comes with it.
+ *
+ * Reports whether the enrolment was created here: the demo account is shared, so
+ * an enrolment it already had is left alone.
+ */
+function enrolDemoUser(plugin: Plugin, cmid: number, userId: number): Enrolment {
+  const output = runMoodlePhp(
+    `require_once($CFG->libdir . '/enrollib.php');`
+    + ` $cm = get_coursemodule_from_id('${plugin.prefix}', ${cmid}, 0, false, MUST_EXIST);`
+    + ` $context = context_course::instance($cm->course);`
+    + ` if (is_enrolled($context, ${userId})) { echo 'already:' . $cm->course; exit; }`
+    + ` $role = $DB->get_record('role', ['shortname' => 'student'], '*', MUST_EXIST);`
+    + ` enrol_try_internal_enrol($cm->course, ${userId}, $role->id);`
+    + ` echo (is_enrolled($context, ${userId}) ? 'enrolled' : 'failed') . ':' . $cm->course;`
+  );
+
+  const [state, courseId] = output.trim().split(':');
+  if (state === 'failed') {
+    throw new Error(`Could not enrol ${demoUsername} in the course holding ${plugin.name} activity ${cmid}.`);
+  }
+  return { courseId: Number(courseId), created: state === 'enrolled' };
+}
+
+/** Reverses `enrolDemoUser`, including the role assignment it made. */
+function unenrolDemoUser(enrolment: Enrolment, userId: number): void {
+  runMoodlePhp(
+    `require_once($CFG->libdir . '/enrollib.php');`
+    + ` $manual = enrol_get_plugin('manual');`
+    + ` foreach (enrol_get_instances(${enrolment.courseId}, true) as $instance) {`
+    + ` if ($instance->enrol === 'manual') { $manual->unenrol_user($instance, ${userId}); } }`
+  );
+}
 
 const plugins: Plugin[] = [
   {
@@ -70,6 +140,29 @@ async function expectNoEmptyTopoMojoLabContent(page: Page): Promise<void> {
 }
 
 test.describe('Moodle plugin view pages', () => {
+  let demoUserId: number;
+  const enrolments: Enrolment[] = [];
+
+  test.beforeAll(async () => {
+    demoUserId = resolveDemoUserId();
+    for (const plugin of plugins) {
+      const cmid = await resolveMoodleLabActivityCmid(plugin.prefix);
+      enrolments.push(enrolDemoUser(plugin, cmid, demoUserId));
+    }
+  });
+
+  test.afterAll(async () => {
+    // Only the enrolments this run created, and only once per course: both
+    // activities normally live in the same demo course.
+    const undone = new Set<number>();
+    for (const enrolment of enrolments) {
+      if (enrolment.created && !undone.has(enrolment.courseId)) {
+        undone.add(enrolment.courseId);
+        unenrolDemoUser(enrolment, demoUserId);
+      }
+    }
+  });
+
   test('admin sees standardized lab sections and instructor controls', async ({ moodleAdminPage: page }) => {
     for (const plugin of plugins) {
       await openActivity(page, plugin);
