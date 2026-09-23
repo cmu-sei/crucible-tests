@@ -16,10 +16,18 @@
  * here: that the pages render, that the questions are actually on them, and what the
  * student's grade ends up as when they leave those questions blank.
  *
+ * The last two tests then take the closed, zero-graded attempt the others leave
+ * behind. One reviews it as an instructor, which is the only page that prints the
+ * answer `qtype_mojomatch` fetched live from the gamespace and so the only place
+ * the plugin's TopoMojo API client is observable from the outside. The other has
+ * an instructor override a mark on it, which is the other half of the grading
+ * path above: recalculating a student's grade from somebody else's session.
+ *
  * A pre-existing Keycloak account is borrowed rather than created, because the
  * login goes through the identity provider and a DB-seeded Moodle user has no
  * credentials there. Everything the deploy leaves on that account is removed in
- * teardown; the account itself and its enrolment are left as they were.
+ * teardown, as is the course enrolment when this run is what made it; the account
+ * itself is left alone.
  */
 
 import { Page } from '@playwright/test';
@@ -27,15 +35,29 @@ import { test, expect, Services } from '../fixtures';
 import {
   cleanupMoodleTopomojoDeployments,
   connectMoodleDatabase,
+  getMoodleMojomatchQuestion,
   getMoodleQuestionUsage,
   getMoodleTopomojoActivity,
   getMoodleTopomojoAttempts,
   getMoodleTopomojoDeployments,
   MoodleTopomojoActivity,
   resolveMoodleLabActivityCmid,
+  setMoodleQuestionAnswer,
 } from '../db-helpers';
-import { queueMoodleTopomojoBulkDeploy, runMoodleAdhocTask } from '../cli-helpers';
-import { deleteGamespace, getTopoMojoAdminToken } from '../../topomojo-helpers';
+import { purgeMoodleCaches, queueMoodleTopomojoBulkDeploy, runMoodleAdhocTask } from '../cli-helpers';
+import {
+  DemoUserEnrolment,
+  demoUsername,
+  enrolMoodleDemoUser,
+  resolveMoodleDemoUserId,
+  unenrolMoodleDemoUser,
+} from '../demo-user-helpers';
+import {
+  challengeQuestionsForVariant,
+  deleteGamespace,
+  getTopoMojoAdminToken,
+  getWorkspaceChallengeSpec,
+} from '../../topomojo-helpers';
 
 // Resolved in beforeAll rather than hardcoded: the course-module id differs
 // between the Moodle 5.0 and 5.2 containers and changes whenever the demo course
@@ -50,33 +72,33 @@ let topomojoActivityId: number;
 test.skip(({ browserName }) => browserName !== 'chromium', 'live-VM test; runs on one project only');
 
 const BULKDEPLOY_TASK = '\\mod_topomojo\\task\\bulkdeploy_run';
-const demoUsername = process.env.MOODLE_DEMO_USERNAME || 'demo-user';
+async function openActivity(page: Page): Promise<void> {
+  // view.php asks TopoMojo for the gamespace and its VMs before it renders, so the
+  // page is only as quick as the lab it is reporting on.
+  await page.goto(`${Services.Moodle}/mod/topomojo/view.php?id=${topomojoActivityId}`, {
+    waitUntil: 'domcontentloaded',
+    timeout: 120000,
+  });
+}
 
-/** Resolves the Moodle user the demo Keycloak account maps to. */
-async function findDemoUserId(): Promise<number> {
+/**
+ * Every grade the plugin has stored for an activity, keyed by user.
+ *
+ * Read as a whole rather than for one user: what the grader must not do is write a
+ * grade for somebody who has no attempts, and that shows up as a user appearing in
+ * this table who was not in it before.
+ */
+async function readTopomojoGrades(topomojoId: number): Promise<Map<number, number>> {
   const client = await connectMoodleDatabase();
   try {
-    const result = await client.query<{ id: number }>(
-      `SELECT id FROM mdl_user
-        WHERE deleted = 0 AND (username = $1 OR username LIKE $2)
-        ORDER BY id
-        LIMIT 1`,
-      [demoUsername, `${demoUsername}@%`]
+    const result = await client.query<{ userid: string; grade: string }>(
+      `SELECT userid, grade FROM mdl_topomojo_grades WHERE topomojoid = $1`,
+      [topomojoId]
     );
-    if (result.rowCount !== 1) {
-      throw new Error(`No Moodle account for the demo Keycloak user "${demoUsername}".`);
-    }
-    return Number(result.rows[0].id);
+    return new Map(result.rows.map(row => [Number(row.userid), Number(row.grade)]));
   } finally {
     await client.end();
   }
-}
-
-async function openActivity(page: Page): Promise<void> {
-  await page.goto(`${Services.Moodle}/mod/topomojo/view.php?id=${topomojoActivityId}`, {
-    waitUntil: 'domcontentloaded',
-    timeout: 60000,
-  });
 }
 
 /**
@@ -95,13 +117,19 @@ test.describe('mod_topomojo bulk-deployed attempt, as the student', () => {
 
   let activity: MoodleTopomojoActivity;
   let studentUserId: number;
+  let enrolment: DemoUserEnrolment;
   let topoToken: string;
 
   test.beforeAll(async () => {
     topomojoActivityId = await resolveMoodleLabActivityCmid('topomojo');
     topoToken = await getTopoMojoAdminToken();
     activity = await getMoodleTopomojoActivity(topomojoActivityId);
-    studentUserId = await findDemoUserId();
+    studentUserId = resolveMoodleDemoUserId();
+
+    // The deploy writes an attempt for the student whether or not they are in the
+    // course, but the pages under test are the student's own view of the activity,
+    // and an unenrolled user is sent to the enrolment page instead of reaching it.
+    enrolment = enrolMoodleDemoUser('topomojo', topomojoActivityId, studentUserId);
 
     // Start from a clean slate: an attempt left over from an earlier run would be
     // picked up as the open attempt and the deploy below would be skipped.
@@ -111,14 +139,25 @@ test.describe('mod_topomojo bulk-deployed attempt, as the student', () => {
     }
 
     const jobId = queueMoodleTopomojoBulkDeploy(topomojoActivityId, [studentUserId]);
+    // Ordinary cron runs inside the Moodle container, so the queued task is a race:
+    // whichever of cron and this CLI claims it first is the one that runs it, and
+    // the loser reports "Ran 0 adhoc tasks found" having done nothing. Either way
+    // the deploy happens, so what is waited on below is the attempt appearing rather
+    // than this command being the one to create it.
     const taskOutput = runMoodleAdhocTask(BULKDEPLOY_TASK);
 
-    const attempts = await getMoodleTopomojoAttempts(activity.instanceId, [studentUserId]);
-    // The task records a per-user failure and still completes successfully, so the
-    // rows it wrote and its own output are carried into the failure message —
-    // otherwise a TopoMojo error, a skipped user and a task that was never picked up
-    // all look identical from here. Teardown deletes these rows, so this is the only
+    // The task records a per-user failure and still completes successfully, so its
+    // own output and the rows it wrote are carried into the failure message —
+    // otherwise a TopoMojo error, a skipped user and a task nobody has got to yet
+    // all look identical from here. Teardown deletes those rows, so this is the only
     // chance to see them.
+    let attempts = await getMoodleTopomojoAttempts(activity.instanceId, [studentUserId]);
+    const deadline = Date.now() + 180_000;
+    while (attempts.length === 0 && Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 2_000));
+      attempts = await getMoodleTopomojoAttempts(activity.instanceId, [studentUserId]);
+    }
+
     const deployments = await getMoodleTopomojoDeployments([activity.instanceId], [studentUserId]);
     expect(
       attempts,
@@ -134,6 +173,10 @@ test.describe('mod_topomojo bulk-deployed attempt, as the student', () => {
     const gamespaceIds = await cleanupMoodleTopomojoDeployments([activity.instanceId], [studentUserId]);
     for (const gamespaceId of gamespaceIds) {
       await deleteGamespace(topoToken, gamespaceId);
+    }
+    // Guarded: beforeAll can fail before the enrolment is made.
+    if (enrolment) {
+      unenrolMoodleDemoUser(enrolment, studentUserId);
     }
   });
 
@@ -227,6 +270,144 @@ test.describe('mod_topomojo bulk-deployed attempt, as the student', () => {
       expect(gradebook.rowCount, 'grading should have written a gradebook entry').toBe(1);
       expect(Number(gradebook.rows[0].finalgrade)).toBe(0);
       expect(Number(gradebook.rows[0].rawgrademax)).toBe(activity.grade);
+    } finally {
+      await client.end();
+    }
+  });
+
+  test('the review shows the answer TopoMojo holds, not a stale imported one', async ({
+    moodleAdminPage: page,
+  }) => {
+    const [attempt] = await getMoodleTopomojoAttempts(activity.instanceId, [studentUserId]);
+    const usage = await getMoodleQuestionUsage(attempt.questionUsageId);
+    const slot = usage.slots[0];
+    expect(slot.questionType, 'an imported challenge question is a mojomatch one').toBe('mojomatch');
+
+    const stored = await getMoodleMojomatchQuestion(slot.questionId);
+    expect(stored.qorder, 'the import should have recorded a position for the question').not.toBeNull();
+    expect(stored.variant, 'the imported question should belong to the deployed variant').toBe(attempt.variant);
+
+    // What TopoMojo says the answer is. Read from the workspace the gamespace was
+    // deployed from, which is where the answers are authored; a challenge using
+    // transforms would generate its answer at deploy time instead, and this
+    // workspace has none.
+    const spec = await getWorkspaceChallengeSpec(topoToken, stored.workspaceId);
+    expect(spec.transforms ?? [], 'a transformed challenge would not answer from the spec').toHaveLength(0);
+    const liveAnswer = challengeQuestionsForVariant(spec, attempt.variant)[stored.qorder! - 1]?.answer;
+    expect(liveAnswer, `variant ${attempt.variant} should have a question at position ${stored.qorder}`)
+      .toBeTruthy();
+
+    // The import mirrors it, so in the ordinary case the two agree and the page
+    // would look right either way. Making the mirror wrong is what separates a
+    // client that reached TopoMojo from one that fell back to the question bank.
+    expect(stored.answer, 'the imported answer should mirror TopoMojo').toBe(liveAnswer);
+    const stale = `stale-mirror-${Date.now()}`;
+    await setMoodleQuestionAnswer(stored.answerId, stale);
+    // Question definitions are cached, so the write above is invisible to a page
+    // request until the cache is dropped - and a test that skipped this would pass
+    // whether or not the live answer was ever fetched.
+    purgeMoodleCaches();
+
+    try {
+      await page.goto(`${Services.Moodle}/mod/topomojo/viewattempt.php?a=${attempt.id}`, {
+        waitUntil: 'domcontentloaded',
+        timeout: 120000,
+      });
+      await expectNoMoodleError(page);
+
+      // qtype_mojomatch's renderer asks TopoMojo for this attempt's gamespace
+      // challenge through the client `setup()` builds — the one carrying
+      // certificate verification, the connect and transfer timeouts, and the
+      // redirect refusal that keeps x-api-key off a host a 3xx named — and only
+      // falls back to the stored answer when that call comes back with nothing.
+      await expect(
+        page.getByText(`The correct answer is: ${liveAnswer}`),
+        'the review should show the answer the gamespace holds'
+      ).toBeVisible();
+      await expect(
+        page.getByText(stale),
+        'showing the stale mirror means the API client never reached TopoMojo'
+      ).toHaveCount(0);
+    } finally {
+      await setMoodleQuestionAnswer(stored.answerId, stored.answer);
+      purgeMoodleCaches();
+    }
+  });
+
+  test('an instructor overriding a mark regrades the student and not themselves', async ({
+    moodleAdminPage: page,
+  }) => {
+    const [attempt] = await getMoodleTopomojoAttempts(activity.instanceId, [studentUserId]);
+    // The save button is only rendered for a closed attempt, which is what the test
+    // above leaves behind, graded zero for answering nothing.
+    expect(attempt.state, 'the override is only offered on a closed attempt').toBe('finished');
+    expect(attempt.score).toBe(0);
+
+    const usage = await getMoodleQuestionUsage(attempt.questionUsageId);
+    const gradedBefore = await readTopomojoGrades(activity.instanceId);
+
+    await page.goto(`${Services.Moodle}/mod/topomojo/viewattempt.php?a=${attempt.id}`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 60000,
+    });
+    await expectNoMoodleError(page);
+
+    // Instructor-only, and only rendered for a question that carries a max mark, so
+    // its presence is the first half of what is under test.
+    const markInput = page.locator('input[name$="-mark"]').first();
+    await expect(markInput).toBeVisible();
+
+    // Full marks on the first question and the rest left unmarked: the smallest
+    // override that has to move the grade off zero, and one whose arithmetic is
+    // predictable however many questions the challenge turns out to have.
+    const awarded = usage.slots[0].maxMark;
+    const available = usage.slots.reduce((total, slot) => total + slot.maxMark, 0);
+    const expected = (awarded / available) * activity.grade;
+    expect(expected, 'the override has to be able to move the grade').toBeGreaterThan(0);
+    await markInput.fill(String(awarded));
+
+    // One form per question, each posting its own slot back to viewattempt.php.
+    const form = markInput.locator('xpath=ancestor::form[1]');
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 120000 }),
+      form.locator('input[type="submit"][name="submit"]').click(),
+    ]);
+    await expectNoMoodleError(page);
+
+    // savecomment saves the mark through the question engine and then regrades. The
+    // grading method is applied to the attempt's own user, so the student's grade is
+    // recomputed from the student's attempts.
+    const [regraded] = await getMoodleTopomojoAttempts(activity.instanceId, [studentUserId]);
+    expect(regraded.id, 'the override should have regraded the attempt it was made on').toBe(attempt.id);
+    expect(regraded.score!).toBeCloseTo(expected, 2);
+
+    const gradedAfter = await readTopomojoGrades(activity.instanceId);
+    expect(gradedAfter.get(studentUserId)).toBeCloseTo(expected, 2);
+
+    // And nobody else acquires a grade for it. The instructor reviewing an attempt
+    // has none of their own, and used to be the user the grading method was applied
+    // to: the student's grade was recomputed from the reviewer's empty list of
+    // attempts and stored over what the student had earned.
+    const newlyGraded = [...gradedAfter.keys()].filter(
+      userId => userId !== studentUserId && !gradedBefore.has(userId)
+    );
+    expect(newlyGraded, 'reviewing an attempt should not grade the reviewer').toEqual([]);
+
+    // The gradebook is what the course actually reads, and process_attempt() only
+    // reaches it once the grading method has produced a grade to send.
+    const client = await connectMoodleDatabase();
+    try {
+      const gradebook = await client.query<{ finalgrade: string | null }>(
+        `SELECT gg.finalgrade
+           FROM mdl_grade_grades gg
+           JOIN mdl_grade_items gi ON gi.id = gg.itemid
+          WHERE gi.itemtype = 'mod' AND gi.itemmodule = 'topomojo'
+            AND gi.iteminstance = $1 AND gi.itemnumber = 0
+            AND gg.userid = $2`,
+        [activity.instanceId, studentUserId]
+      );
+      expect(gradebook.rowCount).toBe(1);
+      expect(Number(gradebook.rows[0].finalgrade)).toBeCloseTo(expected, 2);
     } finally {
       await client.end();
     }

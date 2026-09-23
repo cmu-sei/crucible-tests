@@ -6,6 +6,12 @@
 import { Page } from '@playwright/test';
 import { test, expect, Services } from '../fixtures';
 import { MoodleLabModule, resolveMoodleLabActivityCmid } from '../db-helpers';
+import {
+  DemoUserEnrolment,
+  enrolMoodleDemoUser,
+  resolveMoodleDemoUserId,
+  unenrolMoodleDemoUser,
+} from '../demo-user-helpers';
 
 type Plugin = {
   name: 'Crucible' | 'TopoMojo';
@@ -87,6 +93,29 @@ async function expectNoEmptyTopoMojoLabContent(page: Page): Promise<void> {
 }
 
 test.describe('Moodle plugin view pages', () => {
+  let demoUserId: number;
+  const enrolments: DemoUserEnrolment[] = [];
+
+  test.beforeAll(async () => {
+    demoUserId = resolveMoodleDemoUserId();
+    for (const plugin of plugins) {
+      const cmid = await resolveMoodleLabActivityCmid(plugin.prefix);
+      enrolments.push(enrolMoodleDemoUser(plugin.prefix, cmid, demoUserId));
+    }
+  });
+
+  test.afterAll(async () => {
+    // Only the enrolments this run created, and only once per course: both
+    // activities normally live in the same demo course.
+    const undone = new Set<number>();
+    for (const enrolment of enrolments) {
+      if (enrolment.created && !undone.has(enrolment.courseId)) {
+        undone.add(enrolment.courseId);
+        unenrolMoodleDemoUser(enrolment, demoUserId);
+      }
+    }
+  });
+
   test('admin sees standardized lab sections and instructor controls', async ({ moodleAdminPage: page }) => {
     for (const plugin of plugins) {
       await openActivity(page, plugin);

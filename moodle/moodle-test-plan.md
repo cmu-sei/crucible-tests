@@ -1753,6 +1753,18 @@ enrolment are left as they were.
     - expect: The attempt scores 0 and the gradebook records 0 out of the activity's
       maximum, because the questions were left blank rather than absent — the usage the
       grade was computed over still holds them
+  4. Overwrite the stored answer of the attempt's first question with a value TopoMojo has
+     never held, purge caches, and open the instructor review of the closed attempt
+    - expect: The imported answer matched TopoMojo's before it was overwritten, so the
+      workspace challenge spec is what the question bank mirrors
+    - expect: The review reports "The correct answer is:" with the answer the gamespace
+      holds, which `qtype_mojomatch` can only have got by asking TopoMojo through the
+      client `setup()` builds
+    - expect: The overwritten value appears nowhere on the page, so the renderer did not
+      fall back to the question bank
+  5. As an instructor, override the mark on the first slot of the student's closed attempt
+    - expect: The attempt's grade rises to the overridden mark and the gradebook follows
+    - expect: No grade row appears for any user who has no attempt
 
 #### 11.5. Subject ID Length Limit
 
@@ -1793,10 +1805,10 @@ recovered from the stored record; these scenarios drive the real forms to prove 
   1. Add a TopoMojo activity through the activity form, choosing a workspace and entering a
      maximum of 80
     - expect: The activity is created with no validation errors
+    - expect: The activity stores 80 — `topomojo_add_instance()` used to assign 100
+      unconditionally, which discarded the maximum entered on the add form
     - expect: A gradebook item exists for it, named after the activity, of type Value with
       a minimum of 0 and a maximum matching what was stored
-    - Pending upstream: `topomojo_add_instance()` assigns 100 unconditionally, so the
-      maximum entered on the add form is discarded
   2. Open the course's Gradebook setup
     - expect: The activity is listed as a column showing its stored maximum
   3. Edit the activity and set its maximum to 80
@@ -1852,3 +1864,172 @@ among the active ones.
     - expect: The attempt is closed and the page redirects to the review page
     - expect: Alloy reports the event Ending, Ended or Expired
     - expect: Reopening the activity offers Launch Lab again
+
+### 13. Tag Manager (local_tagmanager)
+
+`local_tagmanager` adds bulk import and export to Moodle's own tag administration. It has
+no pages of its own beyond `import.php` and `export.php`: everything else is injected into
+core's tag pages by an AMD module, so the scenarios below are all browser-level — there is
+no server-side entry point to drive them through instead. Each scenario works inside a
+collection seeded for the run and deleted with its tags in teardown, so nothing touches the
+standard collection.
+
+#### 13.1. Import and Export Actions on the Manage Tags Page
+
+**File:** `moodle/tests/plugin-tagmanager.spec.ts`
+
+**Steps:**
+  1. Seed a tag collection holding two tags with descriptions, then open Manage tags as
+     admin
+    - expect: The collection is listed
+    - expect: Its row offers an Import tags link pointing at `import.php` for that
+      collection — the link is added by the AMD module, so this is also the assertion that
+      the module loaded and its hook fired
+    - expect: Its row offers an Export link pointing at `export.php` for that collection
+      and carrying a session key, without which `require_sesskey()` would refuse every
+      export
+
+#### 13.2. Exporting a Collection
+
+**File:** `moodle/tests/plugin-tagmanager.spec.ts`
+
+**Steps:**
+  1. Follow the collection's Export link
+    - expect: A CSV downloads headed `tagname,description`
+    - expect: Every seeded tag is present with its description
+    - expect: Nothing outside the collection is included
+  2. Request `export.php` for the collection with no `sesskey` parameter
+    - expect: The request is refused rather than streaming the collection — either the
+      missing-parameter error or "Invalid session key", since the parameter is required
+      before it can be compared
+
+#### 13.3. Importing a CSV
+
+**File:** `moodle/tests/plugin-tagmanager.spec.ts`
+
+**Steps:**
+  1. Open the collection's Import tags page and upload a CSV naming one new tag and one
+     tag that already exists, then submit
+    - expect: The import redirects back to the collection reporting "Created tag:" for the
+      new one as a success and "Tag already exists:" for the other as a warning
+    - expect: The new tag exists in the collection with the description the CSV gave it
+    - expect: The existing tag keeps its original description — the row naming it does not
+      overwrite it
+    - Pending upstream: `import.php` builds those two notifications from hardcoded English
+      literals instead of its own `notif_created`/`notif_exists` language strings, so
+      neither can be translated
+
+#### 13.4. Exporting a Selection
+
+**File:** `moodle/tests/plugin-tagmanager.spec.ts`
+
+**Steps:**
+  1. Open the collection's own tag page
+    - expect: The module's Export selected and Import standard tags controls are rendered
+  2. Use Export selected with nothing ticked
+    - expect: A notification asks for a tag to be selected, rather than exporting the whole
+      collection
+  3. Tick one tag and use Export selected
+    - expect: A CSV downloads headed `tagname,description`
+    - expect: It carries the ticked tag and its description
+    - expect: It does not carry the tag that was left unticked — Moodle 5.2 renamed the
+      value of `data-toggle` on report-builder row checkboxes from `slave` to `target`,
+      which made the plugin read an empty selection and refuse every export on 5.2 until
+      its selector was matched on the checkbox name instead
+
+### 14. TopoMojo Question Type (qtype_mojomatch, qbehaviour_mojomatch)
+
+`qtype_mojomatch` grades a short typed answer against model answers using one of four
+matching modes, and forces its own `qbehaviour_mojomatch` regardless of what the question
+usage asks for. The plugin's PHPUnit suite already covers the matching itself and an
+attempt walkthrough, so these scenarios cover only what a unit test cannot reach: that the
+question chooser offers the type, that the extra options reach the database through the
+real edit form, and that a response is graded through the forced behaviour. Nothing here
+needs TopoMojo — the type is usable on its own.
+
+Questions are created in the demo course's question bank (`MOODLE_DEMO_COURSE`, default
+`Test Course`), whose course-module id is looked up at run time rather than hardcoded, and
+every question created is deleted in teardown.
+
+#### 14.1. The Chooser and the Edit Form
+
+**File:** `moodle/tests/plugin-mojomatch-question.spec.ts`
+
+**Steps:**
+  1. Open the question bank's Create a new question chooser as admin
+    - expect: The type is offered as "TopoMojo", with the summary describing a response of
+      one or a few words graded against model answers
+  2. Choose it and inspect the form
+    - expect: Case sensitivity defaults to "No, case is unimportant" and offers the
+      case-must-match alternative
+    - expect: The matching mode offers four options, defaulting to MatchAlpha, which is
+      described as stripping all characters other than alphabetic ones
+    - expect: Variant defaults to 1, transforms to enabled, and the workspace id is empty
+    - expect: `qorder` has no form element — it records a question's position inside an
+      imported TopoMojo challenge and is never typed by an author
+
+#### 14.2. A Question With No Full-Marks Answer
+
+**File:** `moodle/tests/plugin-mojomatch-question.spec.ts`
+
+**Steps:**
+  1. Fill the form with an answer graded "None" and save
+    - expect: The form comes back saying one of the answers should have a score of 100%
+    - expect: No question is stored
+
+#### 14.3. Saving a Question
+
+**File:** `moodle/tests/plugin-mojomatch-question.spec.ts`
+
+**Steps:**
+  1. Fill the form with an answer worth 100%, variant 2, a workspace id, transforms off and
+     MatchAlpha, then save
+    - expect: The question is stored, with each of those options recorded against it
+    - expect: Its single answer is the text entered, at fraction 1
+    - expect: The save completes — `save_defaults_for_new_questions()` used to hand every
+      field in `extra_question_fields()` to the typed `set_default_value()`, including the
+      `qorder` the form never sends, so the null threw after the question had been written
+      and rolled the whole save back, leaving the author on an exception page with nothing
+      created
+
+#### 14.4. Grading Through the Forced Behaviour
+
+**File:** `moodle/tests/plugin-mojomatch-question.spec.ts`
+
+**Steps:**
+  1. Preview a MatchAlpha question with immediate feedback and answer it wrongly, then
+     Check
+    - expect: The question is marked Incorrect, 0.00 out of 1.00
+  2. Start again and answer with the right answer in the wrong case and punctuation
+    - expect: The question is marked Correct, 1.00 out of 1.00 — MatchAlpha strips
+      everything but letters before comparing
+    - expect: The attempt's stored behaviour is `mojomatch`, not the preview's
+      `immediatefeedback` — `qbehaviour_mojomatch_type::is_archetypal()` is false, so the
+      behaviour is never offered in "How questions behave" and the stored value is the only
+      evidence the type forced it
+  3. Preview a question saved with transforms enabled and answer with a sentence containing
+     the answer
+    - expect: The question is marked Correct, 1.00 out of 1.00
+
+#### 14.5. A Question With More Than One Answer
+
+**File:** `moodle/tests/plugin-mojomatch-question.spec.ts`
+
+The edit form offers more answer rows, so a question with two of them is ordinary authoring.
+Both `grade_response_qa()` and the renderer used to take the single answer out of
+`get_answers()` without checking there was one; with any other number `$rightanswer` was
+never assigned and `grade_attempt()`'s typed parameter threw a TypeError, so the response
+could not be submitted and the question could not be rendered.
+
+**Steps:**
+  1. Save a Match question with a full-marks answer and a second answer worth 50%
+    - expect: Both answers are stored, at fractions 1 and 0.5
+  2. Preview it with immediate feedback and answer with the full-marks answer, then Check
+    - expect: The question is marked Correct, 1.00 out of 1.00 — and the page renders at
+      all, rather than replacing the attempt with an exception
+  3. Start again and answer with the second answer exactly
+    - expect: The question is marked Partially correct, 0.50 out of 1.00 — with no single
+      answer to substitute a live TopoMojo answer into, the response is graded against every
+      stored answer in turn
+  4. Start again and answer with something matching neither
+    - expect: The question is marked Incorrect, 0.00 out of 1.00

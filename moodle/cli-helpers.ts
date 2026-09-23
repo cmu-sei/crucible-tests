@@ -49,6 +49,17 @@ export function runMoodleAdhocTask(classname: string, timeoutMs: number = 600_00
   );
 }
 
+/**
+ * Purges every Moodle cache.
+ *
+ * Needed after writing to a table Moodle caches, which question definitions are:
+ * an UPDATE on mdl_question_answers is invisible to a page request until the
+ * question bank's cached copy is dropped.
+ */
+export function purgeMoodleCaches(timeoutMs: number = 300_000): string {
+  return runMoodleCli('admin/cli/purge_caches.php', [], timeoutMs);
+}
+
 /** Runs one scheduled task to completion, e.g. `\mod_topomojo\task\close_attempts`. */
 export function runMoodleScheduledTask(classname: string, timeoutMs: number = 600_000): string {
   return runMoodleCli('admin/cli/scheduled_task.php', [`--execute=${classname}`, '--force'], timeoutMs);

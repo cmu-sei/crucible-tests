@@ -15,8 +15,9 @@
  * GRADE_TYPE_NONE, stripping grading from the activity. Both are recovered from
  * the stored record; this test drives the real form to prove it end to end.
  *
- * Along the way it pins down that the add form's grade field is ignored while the
- * edit form's is honoured, so the two paths are asserted separately.
+ * The add and edit paths assemble that record differently, so both are asserted:
+ * `topomojo_add_instance()` used to overwrite the submitted grade with 100, which
+ * left a new activity at the wrong maximum until it was saved a second time.
  *
  * The activity is created through the UI and deleted in teardown.
  */
@@ -43,11 +44,8 @@ let topomojoActivityId: number;
 // what is under test is the plugin's server-side behaviour, not browser rendering.
 test.skip(({ browserName }) => browserName !== 'chromium', 'live-VM test; runs on one project only');
 
-/** Deliberately not 100, so a value that was ignored is distinguishable. */
+/** Deliberately not 100, the module default, so a value that was ignored is distinguishable. */
 const ACTIVITY_GRADE = 80;
-
-/** What `topomojo_add_instance()` hardcodes, whatever the form said. */
-const DEFAULT_GRADE = 100;
 
 /**
  * Opens every collapsed section of a Moodle form.
@@ -181,12 +179,11 @@ test.describe('mod_topomojo gradebook item', () => {
 
       const activity = await getMoodleTopomojoActivity(createdCmid);
 
-      // Pending upstream: topomojo_add_instance() assigns `$topomojo->grade = 100`
-      // unconditionally, so the point maximum typed on the add form is discarded
-      // and every new activity is stored as 100. The edit form does honour the
-      // value (see the update test below), so this is only the add path. Asserted
-      // as-is so the fix flips this expectation rather than quietly passing.
-      expect(activity.grade, 'the add form discards the grade that was entered').toBe(DEFAULT_GRADE);
+      // topomojo_add_instance() used to assign `$topomojo->grade = 100`
+      // unconditionally, which discarded the point maximum typed on the add form.
+      // The activity then showed the wrong maximum until it was saved a second
+      // time through the edit form, which always honoured it.
+      expect(activity.grade, 'the add form should store the grade that was entered').toBe(ACTIVITY_GRADE);
 
       const gradeItem = await getMoodleTopomojoGradeItem(courseId, activity.instanceId);
       expect(gradeItem, 'adding the activity should create its gradebook item').not.toBeNull();

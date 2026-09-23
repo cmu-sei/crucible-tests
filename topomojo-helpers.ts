@@ -261,6 +261,70 @@ export async function setWorkspaceAudience(
   }
 }
 
+/** One question of a challenge variant, as TopoMojo authored it. */
+export interface TopoMojoChallengeQuestion {
+  text: string;
+  answer: string;
+  weight?: number;
+  [key: string]: unknown;
+}
+
+/** A variant of a challenge. `mod_topomojo` imports one of these per deployed gamespace. */
+export interface TopoMojoChallengeVariant {
+  text?: string;
+  sections?: { name?: string; questions?: TopoMojoChallengeQuestion[] }[];
+}
+
+export interface TopoMojoChallengeSpec {
+  text?: string;
+  /** Substitutions resolved at deploy time. When non-empty a variant's stored answer is only a template. */
+  transforms?: unknown[];
+  variants?: TopoMojoChallengeVariant[];
+}
+
+/**
+ * The challenge spec a workspace holds, which is the authoring source for every
+ * answer a gamespace deployed from it will grade against.
+ *
+ * The workspace GET returns `challenge` as a JSON *string* rather than an object —
+ * it is stored that way, as `setWorkspaceChallenge` notes — so it is parsed here.
+ */
+export async function getWorkspaceChallengeSpec(
+  token: string,
+  workspaceId: string
+): Promise<TopoMojoChallengeSpec> {
+  const r = await tmCall<any>(token, `/api/workspace/${workspaceId}`);
+  if (!r.ok || !r.data) {
+    throw new Error(`getWorkspaceChallengeSpec(${workspaceId}) failed (${r.status}): ${r.text}`);
+  }
+  const challenge = r.data.challenge;
+  if (!challenge) {
+    throw new Error(`Workspace ${workspaceId} has no challenge spec.`);
+  }
+  return typeof challenge === 'string' ? JSON.parse(challenge) : challenge;
+}
+
+/**
+ * The questions of one variant, in the order `qorder` counts them.
+ *
+ * Flattened across the variant's sections and 1-based, matching how
+ * `mod_topomojo\questionmanager` assigns qorder at import: indexing a single
+ * section instead would place a question in a multi-section challenge wrongly.
+ *
+ * @param variant 1-based, as the plugin stores it.
+ */
+export function challengeQuestionsForVariant(
+  spec: TopoMojoChallengeSpec,
+  variant: number
+): TopoMojoChallengeQuestion[] {
+  const variants = spec.variants ?? [];
+  const chosen = variants[variant - 1];
+  if (!chosen) {
+    throw new Error(`Challenge has no variant ${variant}; it has ${variants.length}.`);
+  }
+  return (chosen.sections ?? []).flatMap(section => section.questions ?? []);
+}
+
 export async function listWorkspaces(
   token: string,
   query: { term?: string; aud?: string; take?: number } = {}
