@@ -16,9 +16,12 @@
  * here: that the pages render, that the questions are actually on them, and what the
  * student's grade ends up as when they leave those questions blank.
  *
- * The last test then takes the closed, zero-graded attempt the others leave behind
- * and has an instructor override a mark on it, which is the other half of the same
- * grading path: recalculating a student's grade from somebody else's session.
+ * The last two tests then take the closed, zero-graded attempt the others leave
+ * behind. One reviews it as an instructor, which is the only page that prints the
+ * answer `qtype_mojomatch` fetched live from the gamespace and so the only place
+ * the plugin's TopoMojo API client is observable from the outside. The other has
+ * an instructor override a mark on it, which is the other half of the grading
+ * path above: recalculating a student's grade from somebody else's session.
  *
  * A pre-existing Keycloak account is borrowed rather than created, because the
  * login goes through the identity provider and a DB-seeded Moodle user has no
@@ -32,14 +35,16 @@ import { test, expect, Services } from '../fixtures';
 import {
   cleanupMoodleTopomojoDeployments,
   connectMoodleDatabase,
+  getMoodleMojomatchQuestion,
   getMoodleQuestionUsage,
   getMoodleTopomojoActivity,
   getMoodleTopomojoAttempts,
   getMoodleTopomojoDeployments,
   MoodleTopomojoActivity,
   resolveMoodleLabActivityCmid,
+  setMoodleQuestionAnswer,
 } from '../db-helpers';
-import { queueMoodleTopomojoBulkDeploy, runMoodleAdhocTask } from '../cli-helpers';
+import { purgeMoodleCaches, queueMoodleTopomojoBulkDeploy, runMoodleAdhocTask } from '../cli-helpers';
 import {
   DemoUserEnrolment,
   demoUsername,
@@ -47,7 +52,12 @@ import {
   resolveMoodleDemoUserId,
   unenrolMoodleDemoUser,
 } from '../demo-user-helpers';
-import { deleteGamespace, getTopoMojoAdminToken } from '../../topomojo-helpers';
+import {
+  challengeQuestionsForVariant,
+  deleteGamespace,
+  getTopoMojoAdminToken,
+  getWorkspaceChallengeSpec,
+} from '../../topomojo-helpers';
 
 // Resolved in beforeAll rather than hardcoded: the course-module id differs
 // between the Moodle 5.0 and 5.2 containers and changes whenever the demo course
@@ -262,6 +272,65 @@ test.describe('mod_topomojo bulk-deployed attempt, as the student', () => {
       expect(Number(gradebook.rows[0].rawgrademax)).toBe(activity.grade);
     } finally {
       await client.end();
+    }
+  });
+
+  test('the review shows the answer TopoMojo holds, not a stale imported one', async ({
+    moodleAdminPage: page,
+  }) => {
+    const [attempt] = await getMoodleTopomojoAttempts(activity.instanceId, [studentUserId]);
+    const usage = await getMoodleQuestionUsage(attempt.questionUsageId);
+    const slot = usage.slots[0];
+    expect(slot.questionType, 'an imported challenge question is a mojomatch one').toBe('mojomatch');
+
+    const stored = await getMoodleMojomatchQuestion(slot.questionId);
+    expect(stored.qorder, 'the import should have recorded a position for the question').not.toBeNull();
+    expect(stored.variant, 'the imported question should belong to the deployed variant').toBe(attempt.variant);
+
+    // What TopoMojo says the answer is. Read from the workspace the gamespace was
+    // deployed from, which is where the answers are authored; a challenge using
+    // transforms would generate its answer at deploy time instead, and this
+    // workspace has none.
+    const spec = await getWorkspaceChallengeSpec(topoToken, stored.workspaceId);
+    expect(spec.transforms ?? [], 'a transformed challenge would not answer from the spec').toHaveLength(0);
+    const liveAnswer = challengeQuestionsForVariant(spec, attempt.variant)[stored.qorder! - 1]?.answer;
+    expect(liveAnswer, `variant ${attempt.variant} should have a question at position ${stored.qorder}`)
+      .toBeTruthy();
+
+    // The import mirrors it, so in the ordinary case the two agree and the page
+    // would look right either way. Making the mirror wrong is what separates a
+    // client that reached TopoMojo from one that fell back to the question bank.
+    expect(stored.answer, 'the imported answer should mirror TopoMojo').toBe(liveAnswer);
+    const stale = `stale-mirror-${Date.now()}`;
+    await setMoodleQuestionAnswer(stored.answerId, stale);
+    // Question definitions are cached, so the write above is invisible to a page
+    // request until the cache is dropped - and a test that skipped this would pass
+    // whether or not the live answer was ever fetched.
+    purgeMoodleCaches();
+
+    try {
+      await page.goto(`${Services.Moodle}/mod/topomojo/viewattempt.php?a=${attempt.id}`, {
+        waitUntil: 'domcontentloaded',
+        timeout: 120000,
+      });
+      await expectNoMoodleError(page);
+
+      // qtype_mojomatch's renderer asks TopoMojo for this attempt's gamespace
+      // challenge through the client `setup()` builds — the one carrying
+      // certificate verification, the connect and transfer timeouts, and the
+      // redirect refusal that keeps x-api-key off a host a 3xx named — and only
+      // falls back to the stored answer when that call comes back with nothing.
+      await expect(
+        page.getByText(`The correct answer is: ${liveAnswer}`),
+        'the review should show the answer the gamespace holds'
+      ).toBeVisible();
+      await expect(
+        page.getByText(stale),
+        'showing the stale mirror means the API client never reached TopoMojo'
+      ).toHaveCount(0);
+    } finally {
+      await setMoodleQuestionAnswer(stored.answerId, stored.answer);
+      purgeMoodleCaches();
     }
   });
 

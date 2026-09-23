@@ -1753,6 +1753,18 @@ enrolment are left as they were.
     - expect: The attempt scores 0 and the gradebook records 0 out of the activity's
       maximum, because the questions were left blank rather than absent — the usage the
       grade was computed over still holds them
+  4. Overwrite the stored answer of the attempt's first question with a value TopoMojo has
+     never held, purge caches, and open the instructor review of the closed attempt
+    - expect: The imported answer matched TopoMojo's before it was overwritten, so the
+      workspace challenge spec is what the question bank mirrors
+    - expect: The review reports "The correct answer is:" with the answer the gamespace
+      holds, which `qtype_mojomatch` can only have got by asking TopoMojo through the
+      client `setup()` builds
+    - expect: The overwritten value appears nowhere on the page, so the renderer did not
+      fall back to the question bank
+  5. As an instructor, override the mark on the first slot of the student's closed attempt
+    - expect: The attempt's grade rises to the overridden mark and the gradebook follows
+    - expect: No grade row appears for any user who has no attempt
 
 #### 11.5. Subject ID Length Limit
 

@@ -605,6 +605,82 @@ export async function getMoodleQuestionUsage(questionUsageId: number): Promise<M
   }
 }
 
+export interface MoodleMojomatchQuestion {
+  questionId: number;
+  /** 1-based; TopoMojo reports the deployed variant 0-based and the plugin stores `+ 1`. */
+  variant: number;
+  /** 1-based position across the variant's sections, flattened. Null on questions imported before it was recorded. */
+  qorder: number | null;
+  workspaceId: string;
+  /** 1 when the lab generates the answer at deploy time, so the imported answer is only a template. */
+  transforms: number;
+  /** Row id in mdl_question_answers, so a test can write the stored answer back. */
+  answerId: number;
+  answer: string;
+}
+
+/**
+ * Reads what the question bank holds for an imported TopoMojo challenge question.
+ *
+ * The answer here is a mirror of TopoMojo's, taken at import time, and the plugin
+ * treats TopoMojo as the authority: `variant` and `qorder` are how it finds the
+ * question again in a live gamespace, and the answer it finds there is what it
+ * renders and grades against.
+ */
+export async function getMoodleMojomatchQuestion(questionId: number): Promise<MoodleMojomatchQuestion> {
+  const client = await connectMoodleDatabase();
+  try {
+    const result = await client.query(
+      `SELECT o.questionid, o.variant, o.qorder, o.workspaceid, o.transforms,
+              a.id AS answerid, a.answer
+         FROM mdl_qtype_mojomatch_options o
+         JOIN mdl_question_answers a ON a.question = o.questionid
+        WHERE o.questionid = $1
+        ORDER BY a.id`,
+      [questionId]
+    );
+    if (result.rowCount !== 1) {
+      throw new Error(
+        `Expected question ${questionId} to be a mojomatch question with one answer, found ${result.rowCount} rows.`
+      );
+    }
+    const row = result.rows[0];
+    return {
+      questionId: Number(row.questionid),
+      variant: Number(row.variant),
+      qorder: row.qorder === null ? null : Number(row.qorder),
+      workspaceId: row.workspaceid,
+      transforms: Number(row.transforms),
+      answerId: Number(row.answerid),
+      answer: row.answer,
+    };
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * Overwrites a stored question answer.
+ *
+ * For making the question bank's copy of a TopoMojo answer deliberately stale, so
+ * a page that renders the answer has to have fetched the live one to be right.
+ * Restore the original in a finally: the record outlives the test.
+ */
+export async function setMoodleQuestionAnswer(answerId: number, answer: string): Promise<void> {
+  const client = await connectMoodleDatabase();
+  try {
+    const result = await client.query(`UPDATE mdl_question_answers SET answer = $1 WHERE id = $2`, [
+      answer,
+      answerId,
+    ]);
+    if (result.rowCount !== 1) {
+      throw new Error(`Could not update answer ${answerId}.`);
+    }
+  } finally {
+    await client.end();
+  }
+}
+
 export interface MoodleTopomojoDeployment {
   userId: number;
   jobId: number;
