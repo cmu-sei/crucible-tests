@@ -77,6 +77,117 @@ export async function connectMoodleDatabase(): Promise<Client> {
   return client;
 }
 
+/** Lab plugins whose demo activity the Moodle seeders create. */
+export type MoodleLabModule = 'crucible' | 'topomojo';
+
+/**
+ * Names create_crucible_activity.php and create_topomojo_activity.php give the
+ * seeded demo labs, used only to disambiguate when a course holds several
+ * activities of the same module.
+ *
+ * Not the primary key on the activity, because for mod_crucible the name is not
+ * stable: view.php overwrites `name` with the Alloy event template's name and
+ * calls update_record on every view, and mod_form's data_postprocessing() does
+ * the same on every save. A freshly seeded 'Demo Crucible Lab' is therefore
+ * called 'Alloy Event (No Caster)' the moment anyone opens it. mod_topomojo does
+ * not do this, so only crucible actually drifts - but the lookup below does not
+ * depend on the difference.
+ */
+const LAB_ACTIVITY_NAMES: Record<MoodleLabModule, string> = {
+  crucible: 'Demo Crucible Lab',
+  topomojo: 'Demo TopoMojo Lab',
+};
+
+/** Overrides, for a stack whose demo activities were renamed or hand-built. */
+const LAB_ACTIVITY_ID_ENV: Record<MoodleLabModule, string> = {
+  crucible: 'MOODLE_CRUCIBLE_ACTIVITY_ID',
+  topomojo: 'MOODLE_TOPOMOJO_ACTIVITY_ID',
+};
+
+const LAB_ACTIVITY_NAME_ENV: Record<MoodleLabModule, string> = {
+  crucible: 'MOODLE_CRUCIBLE_ACTIVITY_NAME',
+  topomojo: 'MOODLE_TOPOMOJO_ACTIVITY_NAME',
+};
+
+const labActivityCmids = new Map<MoodleLabModule, number>();
+
+/**
+ * Resolves the course-module id of the demo lab activity in the demo course.
+ *
+ * Looks the activity up by module and course rather than by a hardcoded id: the
+ * id differs per Moodle instance (the 5.0 and 5.2 containers seed the same
+ * course at different ids) and changes again whenever the course is reseeded.
+ * The demo course holds one activity per lab plugin, so module plus course is
+ * enough; the seeded name is consulted only to break a tie.
+ *
+ * Memoised per worker process, so the specs can call this from every beforeAll
+ * without a query each time. An explicit MOODLE_*_ACTIVITY_ID still wins, for
+ * pointing a run at some other activity.
+ */
+export async function resolveMoodleLabActivityCmid(module: MoodleLabModule): Promise<number> {
+  const override = process.env[LAB_ACTIVITY_ID_ENV[module]];
+  if (override) {
+    return Number(override);
+  }
+
+  const cached = labActivityCmids.get(module);
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  const name = process.env[LAB_ACTIVITY_NAME_ENV[module]] || LAB_ACTIVITY_NAMES[module];
+  const courseName = process.env.MOODLE_DEMO_COURSE || 'Test Course';
+
+  const client = await connectMoodleDatabase();
+  try {
+    // The activity name lives on the instance row, not on course_modules, so the
+    // instance table has to be interpolated. It comes from the MoodleLabModule
+    // union and is checked against LAB_ACTIVITY_NAMES below, so it is never
+    // caller-supplied text.
+    if (!Object.prototype.hasOwnProperty.call(LAB_ACTIVITY_NAMES, module)) {
+      throw new Error(`Unsupported lab module '${module}'.`);
+    }
+    const result = await client.query(
+      `SELECT cm.id AS cmid, a.name
+         FROM mdl_course_modules cm
+         JOIN mdl_modules m ON m.id = cm.module AND m.name = $1
+         JOIN mdl_${module} a ON a.id = cm.instance
+         JOIN mdl_course c ON c.id = cm.course
+        WHERE c.fullname = $2
+        ORDER BY cm.id`,
+      [module, courseName]
+    );
+
+    if (result.rowCount === 0) {
+      throw new Error(
+        `Course '${courseName}' has no mod_${module} activity. Run ` +
+          `create_${module}_activity.php in the Moodle container, or set ` +
+          `${LAB_ACTIVITY_ID_ENV[module]} to an existing course-module id.`
+      );
+    }
+
+    let candidates = result.rows;
+    if (candidates.length > 1) {
+      const named = candidates.filter(row => row.name === name);
+      if (named.length !== 1) {
+        const found = candidates.map(row => `${row.cmid} ('${row.name}')`).join(', ');
+        throw new Error(
+          `Course '${courseName}' has ${candidates.length} mod_${module} activities and ` +
+            `${named.length} named '${name}', so the demo activity is ambiguous: ${found}. ` +
+            `Set ${LAB_ACTIVITY_ID_ENV[module]}, or ${LAB_ACTIVITY_NAME_ENV[module]} to the one you mean.`
+        );
+      }
+      candidates = named;
+    }
+
+    const cmid = Number(candidates[0].cmid);
+    labActivityCmids.set(module, cmid);
+    return cmid;
+  } finally {
+    await client.end();
+  }
+}
+
 export interface MoodleCrucibleParticipant {
   userId: number;
   username: string;
@@ -89,7 +200,7 @@ export interface MoodleCrucibleParticipant {
  * Crucible activity. The participant is never used to log in or deploy a lab;
  * it exists only as an isolated table row for manage-deployments UI tests.
  */
-export async function seedMoodleCrucibleParticipant(cmid: string): Promise<MoodleCrucibleParticipant> {
+export async function seedMoodleCrucibleParticipant(cmid: string | number): Promise<MoodleCrucibleParticipant> {
   const client = await connectMoodleDatabase();
   const suffix = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
   const username = `__e2e_crucible_schedule_${suffix}`;

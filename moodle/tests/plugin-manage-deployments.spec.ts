@@ -3,32 +3,41 @@
 
 // spec: moodle/moodle-test-plan.md
 
-import { Page } from '@playwright/test';
+import { Locator, Page } from '@playwright/test';
 import { test, expect, Services } from '../fixtures';
 import {
   cleanupMoodleCrucibleParticipant,
   MoodleCrucibleParticipant,
+  MoodleLabModule,
+  resolveMoodleLabActivityCmid,
   seedMoodleCrucibleParticipant,
 } from '../db-helpers';
 
-const crucibleActivityId = process.env.MOODLE_CRUCIBLE_ACTIVITY_ID || '3';
-const topomojoActivityId = process.env.MOODLE_TOPOMOJO_ACTIVITY_ID || '21';
-
-const managePages = [
+// The two plugins do not agree on the script name, so the path is built per
+// plugin rather than from the module alone.
+const managePages: { name: string; module: MoodleLabModule; script: string; table: string }[] = [
   {
     name: 'Crucible',
-    path: `/mod/crucible/manage_deployments.php?id=${crucibleActivityId}`,
+    module: 'crucible',
+    script: 'manage_deployments.php',
     table: '.mod-crucible-users-table',
   },
   {
     name: 'TopoMojo',
-    path: `/mod/topomojo/manage.php?id=${topomojoActivityId}`,
+    module: 'topomojo',
+    script: 'manage.php',
     table: '.mod-topomojo-users-table',
   },
 ];
 
-async function openManagePage(page: Page, path: string): Promise<void> {
-  await page.goto(`${Services.Moodle}${path}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+const crucibleManagePage = managePages.find(managePage => managePage.module === 'crucible')!;
+
+async function openManagePage(page: Page, managePage: { module: MoodleLabModule; script: string }): Promise<void> {
+  const cmid = await resolveMoodleLabActivityCmid(managePage.module);
+  await page.goto(`${Services.Moodle}/mod/${managePage.module}/${managePage.script}?id=${cmid}`, {
+    waitUntil: 'domcontentloaded',
+    timeout: 60000,
+  });
   await expect(page.getByRole('heading', { name: 'Manage Deployments' })).toBeVisible();
 }
 
@@ -38,7 +47,7 @@ function addMinutes(datetime: string, minutes: number): string {
 }
 
 async function openScheduleModal(page: Page, participant: MoodleCrucibleParticipant) {
-  await openManagePage(page, `/mod/crucible/manage_deployments.php?id=${crucibleActivityId}`);
+  await openManagePage(page, crucibleManagePage);
 
   const row = page.locator(`.mod-crucible-users-table tr[data-userid="${participant.userId}"]`);
   await expect(row).toContainText(participant.displayName);
@@ -50,6 +59,10 @@ async function openScheduleModal(page: Page, participant: MoodleCrucibleParticip
   return { dialog, row };
 }
 
+function backgroundColor(locator: Locator): Promise<string> {
+  return locator.evaluate(element => getComputedStyle(element).backgroundColor);
+}
+
 test.describe('Moodle plugin manage deployment pages', () => {
   test('Crucible and TopoMojo use matching table headers and extend modal behavior', async ({ moodleAdminPage: page }) => {
     const consoleErrors: string[] = [];
@@ -59,10 +72,27 @@ test.describe('Moodle plugin manage deployment pages', () => {
       }
     });
 
-    for (const managePage of managePages) {
-      await openManagePage(page, managePage.path);
+    const headerBackgrounds = new Map<string, string>();
 
-      await expect(page.locator(`${managePage.table} th`).first()).toHaveCSS('background-color', 'rgb(245, 245, 245)');
+    for (const managePage of managePages) {
+      await openManagePage(page, managePage);
+
+      // Asserting a literal colour here does not work. The dev stack sets
+      // data-bs-theme="dark" on <html> server-side while the browser reports
+      // prefers-color-scheme: light, so Playwright's colorScheme option cannot
+      // opt out and the light value both plugins ship is unreachable. Pinning the
+      // dark value instead would encode the palette: Crucible derives its header
+      // from --bs-tertiary-bg and TopoMojo from --bs-gray-800, so the two differ
+      // and both move when the theme changes.
+      //
+      // Nor does the header carry a background of its own in dark mode.
+      // local_boost_dark paints every table cell one colour with a blanket
+      // !important, header and body alike, and that flat look is accepted - so
+      // this checks only what survives: the two plugins agree with each other.
+      const header = page.locator(`${managePage.table} th`).first();
+      await expect(header).toBeVisible();
+      headerBackgrounds.set(managePage.name, await backgroundColor(header));
+
       await expect(page.locator(`${managePage.table} .cell-status`, { hasText: /^Active$/ })).toHaveCount(0);
       await expect(page.locator('#schedule-modal-content #scheduledfor-input')).toHaveAttribute(
         'value',
@@ -91,6 +121,11 @@ test.describe('Moodle plugin manage deployment pages', () => {
       await dialog.getByRole('button', { name: /Cancel/i }).click();
     }
 
+    expect(
+      new Set(headerBackgrounds.values()).size,
+      `both plugins should use one table header colour, got ${JSON.stringify(Object.fromEntries(headerBackgrounds))}`
+    ).toBe(1);
+
     expect(consoleErrors.filter(error => error.includes('does not conform to the required format'))).toEqual([]);
   });
 
@@ -98,7 +133,7 @@ test.describe('Moodle plugin manage deployment pages', () => {
     let participant: MoodleCrucibleParticipant | undefined;
 
     test.beforeEach(async () => {
-      participant = await seedMoodleCrucibleParticipant(crucibleActivityId);
+      participant = await seedMoodleCrucibleParticipant(await resolveMoodleLabActivityCmid('crucible'));
     });
 
     test.afterEach(async () => {
@@ -107,7 +142,7 @@ test.describe('Moodle plugin manage deployment pages', () => {
     });
 
     test('refreshes the schedule default and rejects a past time without submitting', async ({ moodleAdminPage: page }) => {
-      await openManagePage(page, `/mod/crucible/manage_deployments.php?id=${crucibleActivityId}`);
+      await openManagePage(page, crucibleManagePage);
       const templateDatetime = await page.locator('#schedule-modal-content #scheduledfor-input').inputValue();
 
       const row = page.locator(`.mod-crucible-users-table tr[data-userid="${participant!.userId}"]`);

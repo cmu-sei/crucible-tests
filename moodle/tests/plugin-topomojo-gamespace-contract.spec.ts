@@ -27,9 +27,15 @@ import {
   registerGamespace,
   TopoMojoGamespace,
 } from '../../topomojo-helpers';
-import { getMoodleTopomojoActivity } from '../db-helpers';
+import {
+  getMoodleTopomojoActivity,
+  resolveMoodleLabActivityCmid,
+} from '../db-helpers';
 
-const topomojoActivityId = process.env.MOODLE_TOPOMOJO_ACTIVITY_ID || '21';
+// Resolved in beforeAll rather than hardcoded: the course-module id differs
+// between the Moodle 5.0 and 5.2 containers and changes whenever the demo course
+// is reseeded.
+let topomojoActivityId: number;
 
 // These tests drive a live TopoMojo: each run registers real gamespaces and holds
 // real VMs. They also share one Moodle instance, so a second browser project would
@@ -37,7 +43,6 @@ const topomojoActivityId = process.env.MOODLE_TOPOMOJO_ACTIVITY_ID || '21';
 // seeding one — race the first project for the same records. One project is enough:
 // what is under test is the plugin's server-side behaviour, not browser rendering.
 test.skip(({ browserName }) => browserName !== 'chromium', 'live-VM test; runs on one project only');
-
 
 // The activity's own maxMinutes, so the expiry window asserted below is the one
 // the plugin would actually request.
@@ -51,6 +56,7 @@ test.describe('mod_topomojo gamespace API contract', () => {
   let registeredAt: number;
 
   test.beforeAll(async () => {
+    topomojoActivityId = await resolveMoodleLabActivityCmid('topomojo');
     token = await getTopoMojoAdminToken();
     const activity = await getMoodleTopomojoActivity(topomojoActivityId);
     expect(
