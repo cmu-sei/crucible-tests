@@ -1139,6 +1139,51 @@ string as well as a null-valued team.
   6. Refresh the page
     - expect: The deleted collection no longer appears
 
+#### 14.5. Exhibit User Articles Exclude Another Exhibit's Articles
+
+**File:** `tests/integration/userarticle-exhibit-scoping.spec.ts`
+
+Running one collection as several concurrent exhibits is the normal shape, so
+`GET /api/exhibits/{exhibitId}/userArticles` has to filter on the exhibit as well as on
+the release position. Both halves are asserted, because a filter that kept only one of
+them would otherwise look correct.
+
+**Steps:**
+  1. Seed one collection with two exhibits, both parked at move 1 / inject 1
+    - expect: Both exhibits exist at the same timeline position
+  2. Seed articles for exhibit B behind, at, and ahead of that position, plus one article
+     whose UserArticle belongs to exhibit A and which sits at move 1 / inject 0
+    - expect: The exhibit A article is returned by exhibit A's own endpoint, confirming
+      the row exists and is released there
+  3. Request the user articles for exhibit B
+    - expect: Every row returned belongs to exhibit B
+    - expect: Exactly B's two released articles come back
+    - expect: B's unreleased article is still withheld
+
+#### 14.6. An Observer Sees Only the Observed Team's Articles for This Exhibit
+
+**File:** `tests/integration/userarticle-exhibit-scoping.spec.ts`
+
+`GET /api/exhibits/{exhibitId}/teams/{teamId}/userarticles` answers an observer with
+another team's feed, so it must scope that team's articles to the exhibit in the route —
+a member of teams in two exhibits must not have the other exhibit's articles shown to an
+observer reviewing this one.
+
+**Steps:**
+  1. Seed one collection with two exhibits at move 1 / inject 1, an observer team and an
+     observed team on exhibit B, and a team on exhibit A
+    - expect: The caller is an observer on exhibit B; a separate seeded user is on the
+      observed team and on exhibit A's team
+  2. Seed a released and an unreleased article for the observed user in exhibit B, and one
+     article for that same user in exhibit A at move 1 / inject 0
+    - expect: The exhibit A article is returned by exhibit A's own endpoint
+  3. Request the observed team's user articles for exhibit B
+    - expect: The observed team's released article is returned, proving the observer
+      branch ran rather than falling through to an empty list
+    - expect: Every row returned belongs to exhibit B
+    - expect: The exhibit A article is absent
+    - expect: The unreleased exhibit B article is absent
+
 ### 15. Edge Cases and Negative Testing
 
 **Seed:** `tests/seed.spec.ts`
