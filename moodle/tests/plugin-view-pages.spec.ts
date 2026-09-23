@@ -66,6 +66,23 @@ async function expectSharedViewLayout(page: Page, plugin: Plugin): Promise<void>
   }
 }
 
+/**
+ * The TopoMojo view page proves the plugin's configured API client still works.
+ *
+ * view.php calls topomojo_check_health() through the client setup() hands back - the one
+ * carrying certificate verification, the connect and transfer timeouts, and the redirect
+ * refusal that keeps x-api-key off a host a 3xx named - and stops the page dead with this
+ * notification if the call did not come back 200. The sections asserted below would be
+ * missing too, so this is really about naming the cause: a client that cannot reach
+ * TopoMojo looks identical to a broken template otherwise.
+ */
+async function expectTopoMojoApiReachable(page: Page): Promise<void> {
+  await expect(
+    page.getByText('Labs are currently unavailable. Please contact your administrator.'),
+    'view.php shows this when its API client could not reach TopoMojo'
+  ).toBeHidden();
+}
+
 async function expectNoEmptyTopoMojoLabContent(page: Page): Promise<void> {
   const contentSections = page.locator('.topomojo-activity-section--content');
   for (let index = 0; index < await contentSections.count(); index++) {
@@ -111,6 +128,7 @@ test.describe('Moodle plugin view pages', () => {
       );
 
       if (plugin.name === 'TopoMojo') {
+        await expectTopoMojoApiReachable(page);
         await expect(page.getByText('No VMs available for this event. Please contact support.')).toBeHidden();
         await expectNoEmptyTopoMojoLabContent(page);
       }
@@ -126,6 +144,7 @@ test.describe('Moodle plugin view pages', () => {
       await expect(activitySection(page, plugin, 'actions').getByRole('button', { name: /Manage Deployments/i })).toHaveCount(0);
 
       if (plugin.name === 'TopoMojo') {
+        await expectTopoMojoApiReachable(page);
         await expect(page.getByText('No VMs available for this event. Please contact support.')).toBeHidden();
         await expectNoEmptyTopoMojoLabContent(page);
       }

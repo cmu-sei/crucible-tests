@@ -1816,7 +1816,56 @@ recovered from the stored record; these scenarios drive the real forms to prove 
     - expect: The gradebook item survives the update, stays of type Value, and follows the
       new maximum
 
-### 12. Tag Manager (local_tagmanager)
+### 12. Crucible Activity (mod_crucible)
+
+`mod_crucible` deploys an Alloy event per student from an event template. Launching is the
+only flow that makes the plugin *write* to Alloy — "Launch Lab" POSTs
+`/eventtemplates/{id}/events` and "End Lab" DELETEs `/events/{id}/end` — and both go
+through the OAuth client `crucible_configure_api_client()` hands back, which is where
+certificate verification and the request timeouts are set. The plugin's own PHPUnit suite
+covers that configuration against a `\curl` instance, so the scenario below runs against a
+live Alloy instead: it deploys a real event and ends it in teardown even when the
+assertions fail, falling back to the Alloy API when the End Lab button was never reached.
+
+Loading the activity page is not a substitute. "Scheduled Duration" is a static label and
+`view.php` reads `durationHours` off the event template unconditionally, so the Lab Details
+section renders — and its assertions pass — even when the Alloy read failed and left the
+template `false`. Proving a call happened needs the event cross-checked against Alloy under
+a token the plugin did not mint.
+
+The activity is the one mod_crucible activity in the demo course (`MOODLE_DEMO_COURSE`,
+default `Test Course`), looked up at run time by `resolveMoodleLabActivityCmid()`.
+
+That activity, its event template and the admin account are shared singletons, so the
+scenario runs on one browser project and starts by ending any event the account still has
+deployed for the template — a run killed mid-deploy would otherwise leave every later run
+opening the activity already launched, since `get_active_events()` counts an `Ending` event
+among the active ones.
+
+#### 12.1. Launch and End a Lab
+
+**File:** `moodle/tests/plugin-crucible-launch-lab.spec.ts`
+
+**Steps:**
+  1. Open the Crucible activity as an administrator
+    - expect: The activity opens with no event running, offering Launch Lab
+  2. Click Launch Lab and confirm "Are you sure you want to launch the lab?"
+    - expect: `view.php` publishes the new event id, so the POST to Alloy was accepted
+    - expect: Alloy knows the event, and its event template matches the activity's
+    - Note: the confirmation is bound by an AMD module, so a click landing before it
+      submits the form without `start_confirmed` and the request is silently ignored
+  3. Wait out the deployment
+    - expect: A Lab Workspace section renders, holding the embedded frame or Player link
+      built from the view id Alloy returned
+    - expect: Alloy reports the event Active with a Player view assigned
+    - expect: No "Debug info:" warning is left on the page — a failed Alloy call does not
+      stop the page, it annotates it
+  4. Click End Lab and confirm "Are you sure you want to end the lab?"
+    - expect: The attempt is closed and the page redirects to the review page
+    - expect: Alloy reports the event Ending, Ended or Expired
+    - expect: Reopening the activity offers Launch Lab again
+
+### 13. Tag Manager (local_tagmanager)
 
 `local_tagmanager` adds bulk import and export to Moodle's own tag administration. It has
 no pages of its own beyond `import.php` and `export.php`: everything else is injected into
@@ -1825,7 +1874,7 @@ no server-side entry point to drive them through instead. Each scenario works in
 collection seeded for the run and deleted with its tags in teardown, so nothing touches the
 standard collection.
 
-#### 12.1. Import and Export Actions on the Manage Tags Page
+#### 13.1. Import and Export Actions on the Manage Tags Page
 
 **File:** `moodle/tests/plugin-tagmanager.spec.ts`
 
@@ -1840,7 +1889,7 @@ standard collection.
       and carrying a session key, without which `require_sesskey()` would refuse every
       export
 
-#### 12.2. Exporting a Collection
+#### 13.2. Exporting a Collection
 
 **File:** `moodle/tests/plugin-tagmanager.spec.ts`
 
@@ -1854,7 +1903,7 @@ standard collection.
       missing-parameter error or "Invalid session key", since the parameter is required
       before it can be compared
 
-#### 12.3. Importing a CSV
+#### 13.3. Importing a CSV
 
 **File:** `moodle/tests/plugin-tagmanager.spec.ts`
 
@@ -1870,7 +1919,7 @@ standard collection.
       literals instead of its own `notif_created`/`notif_exists` language strings, so
       neither can be translated
 
-#### 12.4. Exporting a Selection
+#### 13.4. Exporting a Selection
 
 **File:** `moodle/tests/plugin-tagmanager.spec.ts`
 
@@ -1888,7 +1937,7 @@ standard collection.
       which made the plugin read an empty selection and refuse every export on 5.2 until
       its selector was matched on the checkbox name instead
 
-### 13. TopoMojo Question Type (qtype_mojomatch, qbehaviour_mojomatch)
+### 14. TopoMojo Question Type (qtype_mojomatch, qbehaviour_mojomatch)
 
 `qtype_mojomatch` grades a short typed answer against model answers using one of four
 matching modes, and forces its own `qbehaviour_mojomatch` regardless of what the question
@@ -1902,7 +1951,7 @@ Questions are created in the demo course's question bank (`MOODLE_DEMO_COURSE`, 
 `Test Course`), whose course-module id is looked up at run time rather than hardcoded, and
 every question created is deleted in teardown.
 
-#### 13.1. The Chooser and the Edit Form
+#### 14.1. The Chooser and the Edit Form
 
 **File:** `moodle/tests/plugin-mojomatch-question.spec.ts`
 
@@ -1919,7 +1968,7 @@ every question created is deleted in teardown.
     - expect: `qorder` has no form element — it records a question's position inside an
       imported TopoMojo challenge and is never typed by an author
 
-#### 13.2. A Question With No Full-Marks Answer
+#### 14.2. A Question With No Full-Marks Answer
 
 **File:** `moodle/tests/plugin-mojomatch-question.spec.ts`
 
@@ -1928,7 +1977,7 @@ every question created is deleted in teardown.
     - expect: The form comes back saying one of the answers should have a score of 100%
     - expect: No question is stored
 
-#### 13.3. Saving a Question
+#### 14.3. Saving a Question
 
 **File:** `moodle/tests/plugin-mojomatch-question.spec.ts`
 
@@ -1943,7 +1992,7 @@ every question created is deleted in teardown.
       and rolled the whole save back, leaving the author on an exception page with nothing
       created
 
-#### 13.4. Grading Through the Forced Behaviour
+#### 14.4. Grading Through the Forced Behaviour
 
 **File:** `moodle/tests/plugin-mojomatch-question.spec.ts`
 
@@ -1962,7 +2011,7 @@ every question created is deleted in teardown.
      the answer
     - expect: The question is marked Correct, 1.00 out of 1.00
 
-#### 13.5. A Question With More Than One Answer
+#### 14.5. A Question With More Than One Answer
 
 **File:** `moodle/tests/plugin-mojomatch-question.spec.ts`
 

@@ -614,14 +614,26 @@ export async function apiGetAdminUserId(): Promise<string> {
  * `GET /api/exhibits/{id}/my-teams` (the Wall's `loadMine`) answers from, so specs
  * that need to be *inside* an exhibit have to create this row. Cascade-deleted with
  * the team.
+ *
+ * Pass `{ isObserver: true }` to seed an observer. That flag is what routes
+ * `UserArticleService.GetByExhibitTeamAsync` down its second branch: asked for a team
+ * other than the caller's own, it answers the other team's articles only when the
+ * caller's TeamUser row on *this* exhibit carries `IsObserver`. Note that the same
+ * method reads that row with `SingleOrDefaultAsync(tu => tu.UserId == userId &&
+ * tu.Team.ExhibitId == exhibitId)` and then dereferences it unconditionally — so the
+ * caller must be on exactly one team per exhibit, never zero and never two.
  */
-export async function apiAddUserToTeam(teamId: string, userId: string): Promise<{ id: string }> {
+export async function apiAddUserToTeam(
+  teamId: string,
+  userId: string,
+  options: { isObserver?: boolean } = {}
+): Promise<{ id: string }> {
   const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
   try {
     const token = await getGalleryApiToken(apiContext);
     const response = await apiContext.post(`${Services.Gallery.API}/api/teamusers`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      data: { teamId, userId, isObserver: false },
+      data: { teamId, userId, isObserver: options.isObserver ?? false },
     });
     if (!response.ok()) {
       throw new Error(`Failed to add user to team: ${response.status()} ${await response.text()}`);
@@ -847,6 +859,218 @@ export async function apiAdvanceExhibit(
     }
     if (!response.ok()) {
       throw new Error(`Failed to advance exhibit: ${response.status()} ${await response.text()}`);
+    }
+    return await response.json();
+  } finally {
+    await apiContext.dispose();
+  }
+}
+
+/**
+ * Seed a Gallery user directly, without provisioning a Keycloak account.
+ *
+ * Gallery mirrors identity-provider subjects into its own `users` table and
+ * `POST /api/users` just persists whatever id/name it is handed (gallery.api
+ * `UserService.CreateAsync`), so a disposable subject can be created without ever
+ * logging in as it. Specs need this whenever the *data* has to belong to somebody
+ * other than `admin` — an observer can only be shown another user's articles if such
+ * a user exists to own them.
+ *
+ * Not cascade-deleted by anything a collection teardown touches; pair with
+ * `apiDeleteGalleryUser`.
+ */
+export async function apiCreateGalleryUser(id: string, name: string): Promise<{ id: string; name: string }> {
+  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
+  try {
+    const token = await getGalleryApiToken(apiContext);
+    const response = await apiContext.post(`${Services.Gallery.API}/api/users`, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      data: { id, name },
+    });
+    if (!response.ok()) {
+      throw new Error(`Failed to seed Gallery user ${name}: ${response.status()} ${await response.text()}`);
+    }
+    console.log(`Seeded gallery user: ${name} (${id})`);
+    return await response.json();
+  } finally {
+    await apiContext.dispose();
+  }
+}
+
+/** Delete a Gallery user by id. Safe to call for an already-deleted user. */
+export async function apiDeleteGalleryUser(id: string): Promise<void> {
+  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
+  try {
+    const token = await getGalleryApiToken(apiContext);
+    const response = await apiContext.delete(`${Services.Gallery.API}/api/users/${id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok() && response.status() !== 404) {
+      console.warn(`Cleanup: failed to delete gallery user ${id}: ${response.status()}`);
+    }
+  } finally {
+    await apiContext.dispose();
+  }
+}
+
+/**
+ * Create an article via the API. Cascade-deleted with its collection.
+ *
+ * `move`/`inject` place the article on the MSEL timeline, and every UserArticle query
+ * gates on them against the *exhibit's* `CurrentMove`/`CurrentInject` — an article is
+ * released once its move is behind the exhibit, or its move matches and its inject is
+ * at or behind. Specs that care about release state have to set these explicitly;
+ * the default 0/0 is released for any exhibit past the start.
+ *
+ * **Leave `exhibitId` unset when the spec seeds its own UserArticles.** A collection-level
+ * article is the normal pre-instantiation state, and it is also the only shape that
+ * `POST /api/articles` handles unconditionally. Setting `exhibitId` sends
+ * `ArticleService.CreateAsync` down a branch that both fans the article out to every
+ * TeamCard on its card — calling `LoadUserArticlesAsync`, whose rows then collide with an
+ * explicit `apiCreateUserArticle` on the unique `(ExhibitId, UserId, ArticleId)` index —
+ * and calls `LogXApiAsync`, which throws on a null card id and on a caller who is not on
+ * exactly one team in the exhibit.
+ *
+ * None of that constrains what a UserArticle can be seeded against: `UserArticleEntity`
+ * carries its own `ExhibitId`, and every UserArticle query filters on *that* column and on
+ * `ua.Article.Move`/`Inject`. `Article.ExhibitId` is not read by any of them.
+ */
+export async function apiCreateArticle(
+  collectionId: string,
+  name: string,
+  options: {
+    exhibitId?: string | null;
+    cardId?: string | null;
+    move?: number;
+    inject?: number;
+    description?: string;
+    summary?: string;
+  } = {}
+): Promise<{ id: string; name: string; move: number; inject: number }> {
+  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
+  try {
+    const token = await getGalleryApiToken(apiContext);
+    const response = await apiContext.post(`${Services.Gallery.API}/api/articles`, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      data: {
+        name,
+        summary: options.summary ?? 'Auto-seeded article for Playwright tests',
+        description: options.description ?? 'Auto-seeded article for Playwright tests',
+        collectionId,
+        exhibitId: options.exhibitId ?? null,
+        cardId: options.cardId ?? null,
+        move: options.move ?? 0,
+        inject: options.inject ?? 0,
+        // Enums serialize as strings — Startup registers a JsonStringEnumConverter.
+        status: 'Open',
+        sourceType: 'News',
+        sourceName: 'Playwright',
+        url: '',
+        datePosted: new Date().toISOString(),
+        openInNewTab: false,
+      },
+    });
+    if (!response.ok()) {
+      throw new Error(`Failed to create article: ${response.status()} ${await response.text()}`);
+    }
+    return await response.json();
+  } finally {
+    await apiContext.dispose();
+  }
+}
+
+/**
+ * Create a UserArticle — one user's copy of an article within one exhibit.
+ *
+ * This is the row that carries the `ExhibitId` the UserArticle queries are supposed to
+ * filter on, and creating it directly is the only way to seed a *specific* user's
+ * article without driving team membership and TeamCards. Unique on
+ * `(ExhibitId, UserId, ArticleId)`, so a second call with the same triple fails.
+ *
+ * Cascade-deleted with the exhibit, hence with the collection.
+ */
+export async function apiCreateUserArticle(
+  exhibitId: string,
+  userId: string,
+  articleId: string,
+  options: { isRead?: boolean; actualDatePosted?: string } = {}
+): Promise<{ id: string; exhibitId: string; userId: string; articleId: string }> {
+  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
+  try {
+    const token = await getGalleryApiToken(apiContext);
+    const response = await apiContext.post(`${Services.Gallery.API}/api/userArticles`, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      data: {
+        exhibitId,
+        userId,
+        articleId,
+        isRead: options.isRead ?? false,
+        actualDatePosted: options.actualDatePosted ?? new Date().toISOString(),
+      },
+    });
+    if (!response.ok()) {
+      throw new Error(`Failed to create user article: ${response.status()} ${await response.text()}`);
+    }
+    return await response.json();
+  } finally {
+    await apiContext.dispose();
+  }
+}
+
+/** A UserArticle as the API returns it. `article` is only populated on endpoints that Include it. */
+export interface ApiUserArticle {
+  id: string;
+  exhibitId: string;
+  userId: string;
+  articleId: string;
+  isRead: boolean;
+  article: { id: string; name: string; move: number; inject: number } | null;
+}
+
+/**
+ * `GET /api/exhibits/{exhibitId}/userArticles` — every user's articles for one exhibit.
+ *
+ * `GetByExhibitAsync` does not `Include` the Article navigation (it only joins through
+ * it to order), so `article` comes back null here. Assert on `articleId`.
+ */
+export async function apiGetExhibitUserArticles(exhibitId: string): Promise<ApiUserArticle[]> {
+  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
+  try {
+    const token = await getGalleryApiToken(apiContext);
+    const response = await apiContext.get(
+      `${Services.Gallery.API}/api/exhibits/${exhibitId}/userArticles`,
+      { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } }
+    );
+    if (!response.ok()) {
+      throw new Error(`Failed to get exhibit user articles: ${response.status()} ${await response.text()}`);
+    }
+    return await response.json();
+  } finally {
+    await apiContext.dispose();
+  }
+}
+
+/**
+ * `GET /api/exhibits/{exhibitId}/teams/{teamId}/userarticles` — the article feed the
+ * Archive renders, either the caller's own or, for an observer, another team's.
+ *
+ * Both branches `Include` the Article, so `article` is populated here.
+ */
+export async function apiGetExhibitTeamUserArticles(
+  exhibitId: string,
+  teamId: string
+): Promise<ApiUserArticle[]> {
+  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
+  try {
+    const token = await getGalleryApiToken(apiContext);
+    const response = await apiContext.get(
+      `${Services.Gallery.API}/api/exhibits/${exhibitId}/teams/${teamId}/userarticles`,
+      { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } }
+    );
+    if (!response.ok()) {
+      throw new Error(
+        `Failed to get exhibit team user articles: ${response.status()} ${await response.text()}`
+      );
     }
     return await response.json();
   } finally {
