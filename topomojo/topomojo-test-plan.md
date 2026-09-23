@@ -546,6 +546,30 @@ This updated test plan covers recent feature additions including: configurable b
     - expect: User is redirected to home page
     - expect: Workspace no longer appears in list
 
+#### 4.15. Workspace Editor - Document Image Path Containment
+
+**File:** `topomojo/tests/workspace-editor/document-image-path-containment.spec.ts`
+
+API-level, not UI-driven: the UI only ever submits a filename returned by
+`GET /api/images/{id}`, so a browser cannot express the case under test.
+Traversal targets are restricted to files the spec itself created, because
+against a build without the containment check these requests really do delete
+what they point at.
+
+**Steps:**
+  1. Create two workspaces, save markdown on the second, upload an image to the first
+    - expect: Both workspaces exist with document artifacts on disk
+  2. `DELETE /api/image/{first}?filename=../{second}.md`
+    - expect: Request is rejected with 400
+    - expect: The second workspace's document is still readable and unchanged
+  3. Repeat with a traversal that re-enters through a sibling directory
+    - expect: Rejected with 400, document unchanged
+  4. Repeat with a backslash-separated traversal
+    - expect: Rejected with 400, document unchanged
+  5. Upload an image, then delete it by the filename the API returned
+    - expect: Delete succeeds with 200
+    - expect: Image no longer appears in the image list
+
 ### 5. Gamespace Management
 
 **Seed:** `seed.spec.ts`

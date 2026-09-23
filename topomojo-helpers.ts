@@ -84,6 +84,12 @@ interface ApiOpts {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
   body?: any;
   query?: Record<string, string | number | boolean | undefined>;
+  /**
+   * Extra request headers. Needed for endpoints taking a bare `[FromBody] string`:
+   * Playwright sends a string `data` as text/plain, which those reject with 415,
+   * so the caller has to JSON-encode the body and say so here.
+   */
+  headers?: Record<string, string>;
 }
 
 async function tmCall<T = any>(
@@ -102,7 +108,7 @@ async function tmCall<T = any>(
   try {
     const res = await ctx.fetch(url.toString(), {
       method: opts.method ?? 'GET',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${token}`, ...opts.headers },
       data: opts.body,
     });
     const text = await res.text();
@@ -207,6 +213,101 @@ export async function deleteWorkspace(token: string, workspaceId: string): Promi
   if (!r.ok && r.status !== 404) {
     console.warn(`deleteWorkspace(${workspaceId}) returned ${r.status}`);
   }
+}
+
+/**
+ * Write the workspace's markdown document. Stored as `<DocRoot>/<id>.md`, a
+ * sibling of the `<DocRoot>/<id>/` directory that holds the document's images.
+ */
+export async function saveWorkspaceDocument(
+  token: string,
+  workspaceId: string,
+  text: string
+): Promise<void> {
+  const r = await tmCall(token, `/api/document/${workspaceId}`, {
+    method: 'PUT',
+    body: JSON.stringify(text),
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!r.ok) {
+    throw new Error(`saveWorkspaceDocument(${workspaceId}) returned ${r.status}: ${r.text}`);
+  }
+}
+
+/**
+ * Read the workspace's markdown document, or null when the endpoint refuses.
+ * The API returns the markdown as a JSON string; older builds send it as
+ * text/plain, so fall back to the raw body.
+ */
+export async function loadWorkspaceDocument(
+  token: string,
+  workspaceId: string
+): Promise<string | null> {
+  const r = await tmCall<string>(token, `/api/document/${workspaceId}`);
+  if (!r.ok) return null;
+  return typeof r.data === 'string' ? r.data : r.text;
+}
+
+export interface DocumentImage {
+  filename: string;
+}
+
+export async function listDocumentImages(
+  token: string,
+  workspaceId: string
+): Promise<string[]> {
+  const r = await tmCall<DocumentImage[]>(token, `/api/images/${workspaceId}`);
+  if (!r.ok) {
+    throw new Error(`listDocumentImages(${workspaceId}) returned ${r.status}: ${r.text}`);
+  }
+  return (r.data ?? []).map((i) => i.filename);
+}
+
+/**
+ * Upload a document image. The API sanitizes the name and appends a random
+ * suffix, so the stored filename it returns will not match `filename`.
+ */
+export async function uploadDocumentImage(
+  token: string,
+  workspaceId: string,
+  filename: string,
+  contents: Buffer
+): Promise<string> {
+  const base = await resolveTopoApiBase();
+  const ctx = await newContext();
+  try {
+    const res = await ctx.fetch(`${base}/api/image/${workspaceId}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      multipart: {
+        file: { name: filename, mimeType: 'image/png', buffer: contents },
+      },
+    });
+    const text = await res.text();
+    if (!res.ok()) {
+      throw new Error(`uploadDocumentImage(${workspaceId}) returned ${res.status()}: ${text}`);
+    }
+    return JSON.parse(text).filename as string;
+  } finally {
+    await ctx.dispose();
+  }
+}
+
+/**
+ * Delete a document image by name. Returns the raw status so callers can assert
+ * a rejection; `filename` is sent as a query parameter exactly as given, which
+ * is what lets a test submit a traversing name.
+ */
+export async function deleteDocumentImage(
+  token: string,
+  workspaceId: string,
+  filename: string
+): Promise<number> {
+  const r = await tmCall(token, `/api/image/${workspaceId}`, {
+    method: 'DELETE',
+    query: { filename },
+  });
+  return r.status;
 }
 
 /**
