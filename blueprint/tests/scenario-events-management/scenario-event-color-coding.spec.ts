@@ -3,6 +3,15 @@
 
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
+//
+// Row highlighting is a rendering concern: the colour is stored in the event's `rowMetadata`
+// ("<height>,<r>,<g>,<b>"), and ScenarioEventListComponent.getRowStyle turns it into an inline
+// `rgba(r, g, b, <theme tint>)` background on the row. The swatches in the Highlight menu are
+// styled by the same getStyleFromColor, so a correctly highlighted row has exactly the computed
+// background of the swatch that was clicked. That the PUT is accepted is the API suite's job.
+//
+// The menu's first option is the "no colour" swatch — the previous version of this spec clicked
+// it, so it cleared a highlight that was never set and then asserted only the PUT's 200.
 
 import { test, expect } from '../../fixtures';
 import {
@@ -11,65 +20,69 @@ import {
   deleteMsel,
   createRenderableScenarioEvent,
   navigateToMselSection,
+  findScenarioEventRow,
+  tempBlueprintName,
 } from '../../test-helpers';
+
+const TRANSPARENT = 'rgba(0, 0, 0, 0)';
 
 test.describe('Scenario Events Management', () => {
   let token: string;
-  let mselId: string;
-  let eventId: string;
+  let mselId: string | undefined;
+  const eventText = tempBlueprintName('ColorCoding');
 
   test.beforeEach(async () => {
-    // Seed: create a MSEL with a scenario event for color coding
     token = await getBlueprintToken();
-    const msel = await createMsel(token);
-    mselId = msel.id;
-
-    const event = await createRenderableScenarioEvent(token, mselId, 'Test event for color coding', { deltaSeconds: 300 });
-    eventId = event.id;
+    mselId = (await createMsel(token)).id;
+    await createRenderableScenarioEvent(token, mselId, eventText, { deltaSeconds: 300 });
   });
 
   test.afterEach(async () => {
-    // Cleanup: delete the MSEL (cascade deletes its events)
-    try {
-      if (mselId) await deleteMsel(token, mselId);
-    } catch (err) {
-      console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
-    }
+    if (mselId) await deleteMsel(token, mselId);
   });
 
   test('Scenario Event Color Coding', async ({ blueprintAuthenticatedPage: page }) => {
-    // Navigate to the MSEL Scenario Events section
-    await navigateToMselSection(page, mselId, 'Scenario Events');
+    await navigateToMselSection(page, mselId!, 'Scenario Events');
+    const row = await findScenarioEventRow(page, eventText);
+    const rowBackground = () => row.evaluate((el) => getComputedStyle(el).backgroundColor);
 
-    // expect: The seeded event is visible
-    const eventRow = page.locator('table tbody tr').last();
-    await expect(eventRow).toBeVisible({ timeout: 5000 });
+    // expect: an unhighlighted row has no background of its own.
+    expect(await rowBackground()).toBe(TRANSPARENT);
 
-    // Open the action menu for the event
-    const actionListButton = eventRow.getByRole('button', { name: /Action List/i });
-    await expect(actionListButton).toBeVisible({ timeout: 5000 });
-    await actionListButton.click();
+    const openHighlightMenu = async () => {
+      await row.getByRole('button', { name: /Action List/i }).click();
+      await page.getByRole('menuitem', { name: /^Highlight$/ }).click();
+      const swatches = page.locator('.mat-mdc-menu-panel button.color-option-button');
+      await expect(swatches.nth(1)).toBeVisible({ timeout: 5000 });
+      return swatches;
+    };
 
-    // Click the Highlight menu item
-    const highlightMenuItem = page.getByRole('menuitem', { name: /highlight/i });
-    await expect(highlightMenuItem).toBeVisible({ timeout: 5000 });
-    await highlightMenuItem.click();
+    // 1. Highlight the row with the first real colour (index 0 is "no colour").
+    let swatches = await openHighlightMenu();
+    const swatchColor = await swatches
+      .nth(1)
+      .locator('.color-option')
+      .evaluate((el) => getComputedStyle(el).backgroundColor);
+    expect(swatchColor, 'the swatch should render a colour').not.toBe(TRANSPARENT);
+    await swatches.nth(1).click();
 
-    // expect: Color options menu appears
-    const colorOption = page.locator('button.color-option-button').first();
-    await expect(colorOption).toBeVisible({ timeout: 5000 });
+    // expect: the row renders in the swatch's colour.
+    await expect.poll(rowBackground, { timeout: 10000 }).toBe(swatchColor);
 
-    // Click a color option and wait for the PUT request
-    const updatePromise = page.waitForResponse(
-      (res) => /\/api\/scenarioevents/i.test(res.url()) && res.request().method() === 'PUT',
-      { timeout: 10000 }
-    );
-    await colorOption.click();
+    // 2. Reload: the highlight is rendered from the stored rowMetadata, not local state.
+    await page.reload();
+    await expect(page.locator('mat-list-item').filter({ hasText: 'Info' }).first()).toBeVisible({
+      timeout: 30000,
+    });
+    await page.locator('mat-list-item').filter({ hasText: 'Scenario Events' }).first().click();
+    await findScenarioEventRow(page, eventText);
+    await expect.poll(rowBackground, { timeout: 15000 }).toBe(swatchColor);
 
-    // expect: The event color is updated (server-side)
-    const updateResponse = await updatePromise;
-    expect(updateResponse.status()).toBe(200);
+    // 3. Clear it with the "no colour" swatch.
+    swatches = await openHighlightMenu();
+    await swatches.nth(0).click();
 
-    // expect: The event row may have a background color applied (visual verification)
+    // expect: the row is back to no background.
+    await expect.poll(rowBackground, { timeout: 10000 }).toBe(TRANSPARENT);
   });
 });

@@ -12,7 +12,6 @@ import {
   tempBlueprintName,
   navigateToMsel,
   retypeMselField,
-  tryUpdateMsel,
 } from '../../test-helpers';
 
 /**
@@ -30,9 +29,9 @@ import {
  *   - Name input has maxlength=70, Description maxlength=600; both truncate on input.
  *   - The counters render as `mat-hint` elements ("70 / 70 characters").
  *
- * The empty-name case is covered at both layers: the UI guard (clearing Name disables Save and
- * renders a mat-error, so nothing reaches the server) and the API guard behind it, since a UI-only
- * check is bypassed by any other client.
+ * The empty-name case is covered here only as the UI guard (clearing Name disables Save and
+ * renders a mat-error, so nothing reaches the server). The API guard behind it is covered by
+ * Blueprint.Api.Tests (MselEndpointTests.Update_WithABlankName_Is400AndLeavesTheNameAlone).
  */
 test.describe('MSEL Management', () => {
   let token: string;
@@ -119,19 +118,5 @@ test.describe('MSEL Management', () => {
 
     // Nothing may reach the server.
     expect((await getMsel(token, mselId)).name).toBe(originalName);
-  });
-
-  test('MSEL Form Validation - empty name is rejected by the API', async () => {
-    // The UI guard above is only half the contract: any other client — the generated API client,
-    // a script, an import job — goes straight to `PUT /api/msels/{id}`. Each of these bodies is a
-    // complete, otherwise-valid MSEL differing only in Name, so a 200 here would mean the name
-    // requirement lives in the browser alone.
-    for (const name of ['', '   ', null]) {
-      const res = await tryUpdateMsel(token, mselId, { name });
-      expect(res.status, `PUT with name ${JSON.stringify(name)} must be refused`).toBe(400);
-
-      // And refused before it reached the database.
-      expect((await getMsel(token, mselId)).name).toBe(originalName);
-    }
   });
 });
