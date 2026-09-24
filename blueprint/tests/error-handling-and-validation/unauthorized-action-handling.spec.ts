@@ -3,6 +3,12 @@
 
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
+//
+// What a signed-in user with no Blueprint permissions *sees*. That the API refuses them
+// (401/403 per route) is Blueprint.Api.Tests' job — RouteAuthorizationTests tables every route —
+// so this spec asserts only the UI's gating: the controls a permission-less user is shown, and
+// the ones withheld. A fresh Keycloak user with no realm roles has an empty
+// `/api/me/systempermissions`, so every permission-gated control must be absent or disabled.
 
 import { test, expect, Services } from '../../fixtures';
 import {
@@ -10,86 +16,90 @@ import {
   createKeycloakUser,
   deleteKeycloakUser,
   tempUsername,
-  getUserToken,
 } from '../../../keycloak-admin';
-import { getBlueprintToken, createMsel, deleteMsel } from '../../test-helpers';
 
 test.describe('Error Handling and Validation', () => {
   test.describe('Unauthorized Action Handling', () => {
-    // Override storageState for this describe block - non-admin user needs fresh login
+    // Unauthorized-access specs own their browser context — the shared storage state is admin.
     test.use({ storageState: { cookies: [], origins: [] } });
 
     let adminToken: string;
-    let nonAdminUserId: string;
-    let nonAdminUsername: string;
-    let nonAdminPassword: string;
-    let mselId: string;
+    let userId: string | undefined;
+    let username: string;
+    const password = 'TestPassword123!';
 
     test.beforeEach(async () => {
-      // Create a non-admin Keycloak user (no Administrator role)
       adminToken = await getKeycloakAdminToken();
-      nonAdminUsername = tempUsername('blueprinttest');
-      nonAdminPassword = 'TestPassword123!';
+      username = tempUsername('blueprinttest');
       const user = await createKeycloakUser(adminToken, {
-        username: nonAdminUsername,
-        password: nonAdminPassword,
-        email: `${nonAdminUsername}@test.local`,
-        realmRoles: [], // No roles - regular user
+        username,
+        password,
+        email: `${username}@test.local`,
+        realmRoles: [],
       });
-      nonAdminUserId = user.id;
-
-      // Seed a MSEL using admin token for the non-admin user to attempt to access
-      const blueprintAdminToken = await getBlueprintToken();
-      const msel = await createMsel(blueprintAdminToken);
-      mselId = msel.id;
+      userId = user.id;
     });
 
     test.afterEach(async () => {
-      // Clean up: delete the non-admin user and the MSEL
-      if (nonAdminUserId) {
-        await deleteKeycloakUser(adminToken, nonAdminUserId);
-      }
-      if (mselId) {
-        const blueprintAdminToken = await getBlueprintToken();
-        await deleteMsel(blueprintAdminToken, mselId);
-      }
+      if (userId) await deleteKeycloakUser(adminToken, userId);
     });
 
-    test('Non-admin user receives 403 Forbidden on admin API calls', async ({ page, context }) => {
-      // Authenticate as non-admin user via Keycloak
+    test('User without permissions is shown no privileged controls', async ({ page }) => {
+      // 1. Sign in as the permission-less user.
       await page.goto(Services.Blueprint.UI);
       const usernameField = page.getByRole('textbox', { name: /username/i });
       await expect(usernameField).toBeVisible({ timeout: 20000 });
-      await usernameField.fill(nonAdminUsername);
-      await page.getByRole('textbox', { name: /password/i }).fill(nonAdminPassword);
-      await page.getByRole('button', { name: /sign in/i }).click();
+      await usernameField.fill(username);
+      await page.getByRole('textbox', { name: /password/i }).fill(password);
 
-      // Wait for redirect back to Blueprint
-      const appShell = page.locator('app-root mat-toolbar').first();
-      await expect(appShell).toBeVisible({ timeout: 30000 });
-
-      // Verify user landed on Blueprint home
-      await expect(page).toHaveURL(Services.Blueprint.UI, { timeout: 10000 });
-
-      // Attempt to navigate to the admin page directly and wait for initial API call
-      const forbiddenResponsePromise = page.waitForResponse(
-        response => response.url().includes('/api/') && response.status() === 403,
-        { timeout: 10000 }
+      // The topbar's Administration item is decided by this response, so it is awaited before
+      // the menu is opened: an absent item is then a gating decision, not a load still pending.
+      const permissionsLoaded = page.waitForResponse(
+        (r) => r.url().includes('/api/me/systempermissions') && r.ok(),
+        { timeout: 60000 }
       );
+      await page.getByRole('button', { name: /sign in/i }).click();
+      await expect(page.locator('app-root mat-toolbar').first()).toBeVisible({ timeout: 30000 });
+      await permissionsLoaded;
 
+      // expect: the dashboard offers nothing to do — no Join/Start/Manage card.
+      await expect(page.getByText('Nothing to see here!')).toBeVisible({ timeout: 15000 });
+      await expect(page.getByText('Manage an Event')).toHaveCount(0);
+      await expect(page.getByText('Start an Event')).toHaveCount(0);
+      await expect(page.getByText('Join an Event')).toHaveCount(0);
+
+      // expect: the user menu has Logout but no Administration entry.
+      await page.locator('app-root mat-toolbar button strong').first().click();
+      await expect(page.getByRole('menuitem', { name: 'Logout' })).toBeVisible({ timeout: 5000 });
+      await expect(page.getByRole('menuitem', { name: 'Administration' })).toHaveCount(0);
+      await page.keyboard.press('Escape');
+
+      // 2. Go to /admin directly — the route has no guard, so the shell renders.
+      const adminPermissions = page.waitForResponse(
+        (r) => r.url().includes('/api/me/systempermissions') && r.ok(),
+        { timeout: 30000 }
+      );
       await page.goto(`${Services.Blueprint.UI}/admin`);
+      await adminPermissions;
+      await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible({
+        timeout: 15000,
+      });
+      await expect(page.locator('div.app-versions')).toContainText('Versions:');
 
-      // expect: At least one API call returns 403 Forbidden
-      const forbiddenResponse = await forbiddenResponsePromise;
-      expect(forbiddenResponse.status()).toBe(403);
+      // expect: the sidebar lists no sections, and no section's content is rendered — every
+      // entry and every section body is gated on its own View* permission.
+      await expect(page.locator('.appitems-container mat-list-item')).toHaveCount(0);
+      await expect(page.locator('mat-sidenav-content table')).toHaveCount(0);
+      await expect(page.locator('mat-sidenav-content app-admin-units')).toHaveCount(0);
 
-      // expect: The page shows the Administration heading (UI renders even though API blocks data)
-      const adminHeading = page.getByRole('heading', { name: 'Administration' });
-      await expect(adminHeading).toBeVisible({ timeout: 5000 });
-
-      // This demonstrates correct authorization: the UI router allows the page to render,
-      // but the API enforces role-based access control and returns 403 for unauthorized requests.
-      // The non-admin user sees the page shell but cannot load admin data.
+      // 3. The /build list: the create and upload controls are disabled without CreateMsels.
+      await page.goto(`${Services.Blueprint.UI}/build`);
+      await expect(page.getByRole('button', { name: 'Add blank MSEL' })).toBeDisabled({
+        timeout: 15000,
+      });
+      await expect(
+        page.getByRole('button', { name: 'Upload a new MSEL from a file' })
+      ).toBeDisabled();
     });
   });
 });
