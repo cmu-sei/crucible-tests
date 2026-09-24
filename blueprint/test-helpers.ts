@@ -25,7 +25,7 @@ import {
   request as playwrightRequest,
   expect,
 } from '@playwright/test';
-import { Services, waitForFirstVisible } from '../shared-fixtures';
+import { Services, isKeycloakUrl, waitForFirstVisible } from '../shared-fixtures';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -263,23 +263,6 @@ export async function updateMsel(
     throw new Error(`updateMsel(${mselId}) failed (${r.status}): ${r.text}`);
   }
   return r.data;
-}
-
-/**
- * Same GET-then-PUT merge as `updateMsel`, but returns the response instead of throwing on a
- * non-2xx. Use this when the rejection *is* the thing under test — `updateMsel` cannot express
- * "expect this to be refused" because its own error path hides the status and body.
- */
-export async function tryUpdateMsel(
-  token: string,
-  mselId: string,
-  changes: Record<string, unknown>
-): Promise<{ ok: boolean; status: number; data: any; text: string }> {
-  const current = await getMsel(token, mselId);
-  return blueprintCall<any>(token, `/api/msels/${mselId}`, {
-    method: 'PUT',
-    body: { ...current, ...changes },
-  });
 }
 
 /**
@@ -1802,6 +1785,74 @@ export async function purgeAllBlueprintTestData(): Promise<void> {
         }
       }
     }
+
+    // Card / CITE action / CITE duty templates and groups have no MSEL, so the MSEL delete
+    // above does not cascade to them. CITE action templates carry no name — the specs put
+    // the tempBlueprintName() in the description instead.
+    for (const [listPath, collection, label] of [
+      ['/api/cards/templates', 'cards', 'card template'],
+      ['/api/citeActions/templates', 'citeActions', 'CITE action template'],
+      ['/api/citeDuties/templates', 'citeDuties', 'CITE duty template'],
+      ['/api/groups', 'groups', 'group'],
+    ] as const) {
+      const res = await blueprintCall<any[]>(token, listPath);
+      if (!res.ok) {
+        console.warn(`[Blueprint purge] ${label} list failed (${res.status}); not purged.`);
+        continue;
+      }
+      const leftovers =
+        res.data?.filter((r: any) => isTempBlueprintName(r.name) || isTempBlueprintName(r.description)) ??
+        [];
+      console.log(`[Blueprint purge] Found ${leftovers.length} test ${label}(s) to delete.`);
+      for (const record of leftovers) {
+        await deleteBlueprintRecord(token, collection, record.id);
+      }
+    }
+
+    // Competency frameworks and proficiency scales are global reference data. Frameworks go
+    // first: the API refuses to delete one while a MSEL's competency pool references it, and
+    // those references were cascaded away with the MSELs above.
+    for (const [listPath, label] of [
+      ['/api/competencyframeworks', 'competency framework'],
+      ['/api/proficiencyScales', 'proficiency scale'],
+    ] as const) {
+      const res = await blueprintCall<any[]>(token, listPath);
+      if (!res.ok) {
+        console.warn(`[Blueprint purge] ${label} list failed (${res.status}); not purged.`);
+        continue;
+      }
+      const leftovers = res.data?.filter((r: any) => isTempBlueprintName(r.name)) ?? [];
+      console.log(`[Blueprint purge] Found ${leftovers.length} test ${label}(s) to delete.`);
+      for (const record of leftovers) {
+        const del = await blueprintCall(token, `${listPath}/${record.id}`, { method: 'DELETE' });
+        if (!del.ok && del.status !== 404) {
+          console.warn(`[Blueprint purge] Failed to delete ${label} ${record.id} (${del.status})`);
+        }
+      }
+    }
+
+    // Player application templates seeded by the player-applications specs live in Player, not
+    // Blueprint. Only `TestBP-` names are swept, so other apps' templates are never touched.
+    const playerCtx = await newContext();
+    try {
+      const res = await playerCtx.get(
+        `${Services.Player.API.replace(/\/$/, '')}/api/application-templates`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (res.ok()) {
+        const leftovers = ((await res.json()) as any[]).filter(
+          (t) => t.name?.startsWith('TestBP-') && isTempBlueprintName(t.name)
+        );
+        console.log(`[Blueprint purge] Found ${leftovers.length} test Player application template(s) to delete.`);
+        for (const t of leftovers) {
+          await deletePlayerApplicationTemplate(token, t.id);
+        }
+      } else {
+        console.warn(`[Blueprint purge] Player application template list failed (${res.status()}); not purged.`);
+      }
+    } finally {
+      await playerCtx.dispose();
+    }
   } catch (error) {
     console.warn(`[Blueprint purge] Error during cleanup: ${error}`);
   }
@@ -1874,4 +1925,609 @@ export async function assertJoinedMselGroup(
       console.warn(`assertJoinedMselGroup: failed to clean up probe event ${probe.id}: ${err}`);
     }
   }
+}
+
+// ============================================================================
+// Player applications, invitations, MSEL roles and ad-hoc data fields
+// ============================================================================
+//
+// All of these are MSEL-scoped and cascade-delete with their MSEL, so a spec that already
+// deletes the MSEL in teardown needs no separate cleanup for them.
+
+/** Create a Player application on a MSEL. `POST /api/playerApplications`. */
+export async function createPlayerApplication(
+  token: string,
+  mselId: string,
+  opts: { name?: string; url?: string; icon?: string; embeddable?: boolean } = {}
+): Promise<{ id: string; name: string; url: string }> {
+  const r = await blueprintCall<any>(token, '/api/playerApplications', {
+    method: 'POST',
+    body: {
+      id: randomUUID(),
+      mselId,
+      name: opts.name ?? tempBlueprintName('TestBP-PlayerApp'),
+      url: opts.url ?? 'https://example.test/app',
+      icon: opts.icon ?? '',
+      embeddable: opts.embeddable ?? true,
+      loadInBackground: false,
+    },
+  });
+  if (!r.ok) {
+    throw new Error(`createPlayerApplication failed (${r.status}): ${r.text}`);
+  }
+  return { id: r.data.id, name: r.data.name, url: r.data.url };
+}
+
+/** A MSEL's Player applications — `GET /api/msels/{id}/playerApplications`. */
+export async function listPlayerApplications(token: string, mselId: string): Promise<any[]> {
+  const r = await blueprintCall<any[]>(token, `/api/msels/${mselId}/playerApplications`);
+  if (!r.ok) {
+    throw new Error(`listPlayerApplications failed (${r.status}): ${r.text}`);
+  }
+  return r.data ?? [];
+}
+
+/** A MSEL's Player-application ↔ team assignments — `GET /api/msels/{id}/teamplayerApplications`. */
+export async function listPlayerApplicationTeams(token: string, mselId: string): Promise<any[]> {
+  const r = await blueprintCall<any[]>(token, `/api/msels/${mselId}/teamplayerApplications`);
+  if (!r.ok) {
+    throw new Error(`listPlayerApplicationTeams failed (${r.status}): ${r.text}`);
+  }
+  return r.data ?? [];
+}
+
+/** A MSEL's invitations — `GET /api/msels/{id}/invitations`. */
+export async function listInvitations(token: string, mselId: string): Promise<any[]> {
+  const r = await blueprintCall<any[]>(token, `/api/msels/${mselId}/invitations`);
+  if (!r.ok) {
+    throw new Error(`listInvitations failed (${r.status}): ${r.text}`);
+  }
+  return r.data ?? [];
+}
+
+/**
+ * Give a user a MSEL-level role (Owner, Editor, Approver, Evaluator, Viewer, ...) —
+ * `POST /api/usermselroles`. Cascade-deletes with the MSEL.
+ */
+export async function addUserMselRole(
+  token: string,
+  mselId: string,
+  userId: string,
+  role: string
+): Promise<{ id: string }> {
+  const r = await blueprintCall<any>(token, '/api/usermselroles', {
+    method: 'POST',
+    body: { mselId, userId, role },
+  });
+  if (!r.ok) {
+    throw new Error(`addUserMselRole(${role}) failed (${r.status}): ${r.text}`);
+  }
+  return { id: r.data.id };
+}
+
+/** Remove a MSEL-level role by its UserMselRole id. Swallows 404. */
+export async function removeUserMselRole(token: string, userMselRoleId: string): Promise<void> {
+  const r = await blueprintCall(token, `/api/usermselroles/${userMselRoleId}`, { method: 'DELETE' });
+  if (!r.ok && r.status !== 404) {
+    console.warn(`removeUserMselRole(${userMselRoleId}) returned ${r.status}: ${r.text}`);
+  }
+}
+
+/**
+ * Create a Player **application template** — the entries Blueprint's "Add Player Application"
+ * menu offers, which it reads live from Player (`GET {Player.API}/api/application-templates`).
+ * The Blueprint admin token is accepted by the Player API; creating a template needs Player's
+ * ManageApplications permission, which the admin has.
+ *
+ * These live in Player, so no MSEL delete cascades to them: pair every call with
+ * `deletePlayerApplicationTemplate`. Name them with `tempBlueprintName('TestBP-...')` so
+ * `purgeAllBlueprintTestData` can sweep a leak.
+ */
+export async function createPlayerApplicationTemplate(
+  token: string,
+  opts: { name: string; url: string; icon?: string; embeddable?: boolean; loadInBackground?: boolean }
+): Promise<{ id: string; name: string; url: string }> {
+  const ctx = await newContext();
+  try {
+    const res = await ctx.post(`${Services.Player.API.replace(/\/$/, '')}/api/application-templates`, {
+      headers: { Authorization: `Bearer ${token}` },
+      data: {
+        name: opts.name,
+        url: opts.url,
+        icon: opts.icon ?? '',
+        embeddable: opts.embeddable ?? true,
+        loadInBackground: opts.loadInBackground ?? false,
+      },
+    });
+    if (!res.ok()) {
+      throw new Error(`createPlayerApplicationTemplate failed (${res.status()}): ${await res.text()}`);
+    }
+    const data = await res.json();
+    return { id: data.id, name: data.name, url: data.url };
+  } finally {
+    await ctx.dispose();
+  }
+}
+
+/** Delete a Player application template by id. Swallows 404. */
+export async function deletePlayerApplicationTemplate(token: string, templateId: string): Promise<void> {
+  const ctx = await newContext();
+  try {
+    const res = await ctx.delete(
+      `${Services.Player.API.replace(/\/$/, '')}/api/application-templates/${templateId}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!res.ok() && res.status() !== 404) {
+      console.warn(`deletePlayerApplicationTemplate(${templateId}) returned ${res.status()}`);
+    }
+  } finally {
+    await ctx.dispose();
+  }
+}
+
+/**
+ * Create one DataField on a MSEL with explicit flags — for specs that need a specific column
+ * shape (e.g. an assessor-visible Checkbox) rather than the standard set `seedMselDataFields`
+ * provides. `POST /api/dataFields`.
+ */
+export async function createDataField(
+  token: string,
+  mselId: string,
+  field: { name: string; dataType: string; displayOrder: number } & Record<string, unknown>
+): Promise<any> {
+  const r = await blueprintCall<any>(token, '/api/dataFields', {
+    method: 'POST',
+    body: {
+      mselId,
+      onScenarioEventList: true,
+      onExerciseView: false,
+      isChosenFromList: false,
+      isInformationField: false,
+      isFacilitationField: false,
+      isInitiallyHidden: false,
+      dataOptions: [],
+      ...field,
+    },
+  });
+  if (!r.ok) {
+    throw new Error(`createDataField(${field.name}) failed (${r.status}): ${r.text}`);
+  }
+  return r.data;
+}
+
+/**
+ * Sign a page in to Blueprint as a specific (usually temporary) Keycloak user.
+ *
+ * The page's context must not carry the shared admin storageState. Keycloak's realm SSO
+ * cookie would otherwise log it straight in as admin, and `prompt=login` pins the form to
+ * the already-identified account, so the context's cookies are cleared after the first
+ * redirect to force a full username+password form.
+ */
+export async function signInToBlueprintAs(
+  page: Page,
+  username: string,
+  password: string,
+  url: string = Services.Blueprint.UI
+): Promise<void> {
+  await page.goto(url, { waitUntil: 'domcontentloaded' });
+  // Let the app's own redirect to Keycloak finish first: on Firefox it otherwise aborts the
+  // second goto (NS_BINDING_ABORTED).
+  await page.waitForURL((u) => isKeycloakUrl(u), { timeout: 30000 });
+  await page.context().clearCookies();
+  await page.goto(url, { waitUntil: 'domcontentloaded' });
+
+  const usernameField = page.getByRole('textbox', { name: /username/i });
+  await expect(usernameField).toBeVisible({ timeout: 30000 });
+  await usernameField.fill(username);
+  await page.getByRole('textbox', { name: /password/i }).fill(password);
+  await page.getByRole('button', { name: /sign in/i }).click();
+  // Only "left Keycloak" is asserted: a deep link such as an invitation link may carry the
+  // page straight on to another app once the OIDC callback completes.
+  await page.waitForURL((u) => !isKeycloakUrl(u), { timeout: 30000 });
+}
+
+// ============================================================================
+// Moves, Gallery cards, CITE actions/duties, and groups
+// ============================================================================
+//
+// MSEL-scoped records (moves, cards, CITE actions/duties) are removed by the MSEL delete
+// cascade, so a spec that seeds them on its own MSEL only needs `deleteMsel` in teardown.
+// Templates (the admin-page cards/actions/duties, which have no `mselId`) and groups are
+// global and must be deleted individually — `purgeAllBlueprintTestData` sweeps them too.
+
+/**
+ * Create a move on a MSEL. A new MSEL has no moves, so specs that need the Move pickers in
+ * the card / CITE dialogs to offer anything must seed them.
+ */
+export async function createMove(
+  token: string,
+  mselId: string,
+  opts: { moveNumber: number; deltaSeconds?: number; description?: string }
+): Promise<any> {
+  const r = await blueprintCall<any>(token, '/api/moves', {
+    method: 'POST',
+    body: {
+      id: randomUUID(),
+      mselId,
+      moveNumber: opts.moveNumber,
+      deltaSeconds: opts.deltaSeconds ?? opts.moveNumber * 600,
+      description: opts.description ?? `Move ${opts.moveNumber}`,
+      situationDescription: '',
+      situationTime: new Date().toISOString(),
+    },
+  });
+  if (!r.ok) {
+    throw new Error(`createMove failed (${r.status}): ${r.text}`);
+  }
+  return r.data;
+}
+
+/**
+ * List a MSEL-scoped collection (`moves`, `cards`, `citeActions`, `citeDuties`) — the
+ * server-side check after a UI action, e.g. that the CITE dialog's "All Teams" fan-out
+ * really created one record per team.
+ */
+export async function listMselRecords(
+  token: string,
+  mselId: string,
+  collection: 'moves' | 'cards' | 'citeActions' | 'citeDuties'
+): Promise<any[]> {
+  const r = await blueprintCall<any[]>(token, `/api/msels/${mselId}/${collection}`);
+  if (!r.ok) {
+    throw new Error(`list ${collection} for MSEL ${mselId} failed (${r.status}): ${r.text}`);
+  }
+  return r.data ?? [];
+}
+
+/** List the global templates of a template-able collection. */
+export async function listTemplates(
+  token: string,
+  collection: 'cards' | 'citeActions' | 'citeDuties'
+): Promise<any[]> {
+  const r = await blueprintCall<any[]>(token, `/api/${collection}/templates`);
+  if (!r.ok) {
+    throw new Error(`list ${collection} templates failed (${r.status}): ${r.text}`);
+  }
+  return r.data ?? [];
+}
+
+/**
+ * Create a Gallery card template (no MSEL). Pair with `deleteBlueprintRecord('cards', id)`.
+ */
+export async function createCardTemplate(
+  token: string,
+  name: string,
+  description: string
+): Promise<any> {
+  const r = await blueprintCall<any>(token, '/api/cards', {
+    method: 'POST',
+    body: { id: randomUUID(), name, description, isTemplate: true, move: 0, inject: 0 },
+  });
+  if (!r.ok) {
+    throw new Error(`createCardTemplate failed (${r.status}): ${r.text}`);
+  }
+  return r.data;
+}
+
+/**
+ * Delete one record from a flat Blueprint collection by id (`cards`, `citeActions`,
+ * `citeDuties`, `moves`, `groups`). Swallows 404, so teardown can call it on a record
+ * the test already deleted through the UI.
+ */
+export async function deleteBlueprintRecord(
+  token: string,
+  collection: 'cards' | 'citeActions' | 'citeDuties' | 'moves' | 'groups',
+  id: string
+): Promise<void> {
+  const r = await blueprintCall(token, `/api/${collection}/${id}`, { method: 'DELETE' });
+  if (!r.ok && r.status !== 404) {
+    console.warn(`delete ${collection}/${id} returned ${r.status}: ${r.text}`);
+  }
+}
+
+/** List every group. `GET /api/groups` is the admin list the Groups section renders. */
+export async function listGroups(token: string): Promise<any[]> {
+  const r = await blueprintCall<any[]>(token, '/api/groups');
+  if (!r.ok) {
+    throw new Error(`listGroups failed (${r.status}): ${r.text}`);
+  }
+  return r.data ?? [];
+}
+
+/** List a group's memberships (`{ id, groupId, userId }`). */
+export async function listGroupMemberships(token: string, groupId: string): Promise<any[]> {
+  const r = await blueprintCall<any[]>(token, `/api/groups/${groupId}/memberships`);
+  if (!r.ok) {
+    throw new Error(`listGroupMemberships(${groupId}) failed (${r.status}): ${r.text}`);
+  }
+  return r.data ?? [];
+}
+
+// ============================================================================
+// CDK drag-and-drop
+// ============================================================================
+
+/**
+ * Drag a CDK drag handle onto a target element with real pointer events.
+ *
+ * `locator.dragTo()` does not work for `cdkDrag`: it emits the whole move in a single jump,
+ * and the CDK only starts a drag after the pointer has travelled past its 5px
+ * `dragStartThreshold` *while held down*, then re-sorts the list on each subsequent move. So
+ * the pointer is pressed on the handle, nudged past the threshold, walked to the vertical
+ * centre of the target in small steps (each step lets the CDK re-sort), and released there.
+ *
+ * The CDK decides the drop index from the item the pointer is over, so dropping on the
+ * target's centre puts the dragged item in the target's slot.
+ *
+ * @param page - Playwright Page object
+ * @param handle - The element carrying `cdkDragHandle` (or the `cdkDrag` element itself)
+ * @param target - The row/item whose slot the dragged item should take
+ */
+export async function cdkDragTo(page: Page, handle: Locator, target: Locator): Promise<void> {
+  await handle.scrollIntoViewIfNeeded();
+  const from = await handle.boundingBox();
+  const to = await target.boundingBox();
+  if (!from || !to) {
+    throw new Error('cdkDragTo: handle or target has no bounding box (not rendered?)');
+  }
+  const x = from.x + from.width / 2;
+  const startY = from.y + from.height / 2;
+  const endY = to.y + to.height / 2;
+  const direction = endY > startY ? 1 : -1;
+
+  await page.mouse.move(x, startY);
+  await page.mouse.down();
+  await page.mouse.move(x, startY + direction * 10, { steps: 5 });
+  await page.mouse.move(x, endY, { steps: 20 });
+  await page.mouse.up();
+}
+
+// ============================================================================
+// Competency frameworks, proficiency scales and MSEL competency pools
+// ============================================================================
+//
+// Frameworks and scales are global reference data, not MSEL-scoped, so deleting a MSEL does
+// not remove them. Seed them under a tempBlueprintName() so `purgeAllBlueprintTestData`
+// sweeps any a crashed test leaves behind, and delete them in teardown. A framework cannot be
+// deleted while a MSEL's competency pool references it — delete the MSEL first.
+
+export interface SeedCompetency {
+  idNumber: string;
+  shortName?: string;
+  description?: string;
+  /** idNumber of another competency in the same seed list, which becomes this one's parent. */
+  parentIdNumber?: string;
+}
+
+export interface CreatedCompetencyFramework {
+  id: string;
+  name: string;
+  version: string;
+  /** Seeded competencies keyed by idNumber. */
+  competencies: Record<string, { id: string; idNumber: string; shortName: string }>;
+}
+
+/**
+ * Create a competency framework, then its competencies one at a time (parents before
+ * children, so a child can name its parent's id). Pair with `deleteCompetencyFramework`.
+ */
+export async function createCompetencyFramework(
+  token: string,
+  opts: {
+    name?: string;
+    version?: string;
+    source?: string;
+    description?: string;
+    defaultProficiencyScaleId?: string;
+    /** Unique across frameworks when set. */
+    idNumber?: string;
+    competencies?: SeedCompetency[];
+  } = {}
+): Promise<CreatedCompetencyFramework> {
+  const name = opts.name ?? tempBlueprintName('TestBP-Framework');
+  const version = opts.version ?? '1.0';
+  const r = await blueprintCall<any>(token, '/api/competencyframeworks', {
+    method: 'POST',
+    body: {
+      id: randomUUID(),
+      name,
+      version,
+      source: opts.source ?? 'TEST',
+      description: opts.description ?? 'Automated test framework; deleted on teardown.',
+      defaultProficiencyScaleId: opts.defaultProficiencyScaleId ?? null,
+      idNumber: opts.idNumber ?? null,
+    },
+  });
+  if (!r.ok) {
+    throw new Error(`createCompetencyFramework failed (${r.status}): ${r.text}`);
+  }
+
+  const framework: CreatedCompetencyFramework = {
+    id: r.data.id,
+    name: r.data.name,
+    version: r.data.version,
+    competencies: {},
+  };
+  for (const c of opts.competencies ?? []) {
+    const parentId = c.parentIdNumber ? framework.competencies[c.parentIdNumber]?.id : null;
+    const cr = await blueprintCall<any>(token, `/api/competencyframeworks/${framework.id}/competencies`, {
+      method: 'POST',
+      body: {
+        id: randomUUID(),
+        competencyFrameworkId: framework.id,
+        parentId,
+        idNumber: c.idNumber,
+        shortName: c.shortName ?? c.idNumber,
+        description: c.description ?? '',
+      },
+    });
+    if (!cr.ok) {
+      throw new Error(`create competency ${c.idNumber} failed (${cr.status}): ${cr.text}`);
+    }
+    framework.competencies[c.idNumber] = {
+      id: cr.data.id,
+      idNumber: cr.data.idNumber,
+      shortName: cr.data.shortName,
+    };
+  }
+  return framework;
+}
+
+/** Delete a competency framework and its competencies. Swallows 404. */
+export async function deleteCompetencyFramework(token: string, frameworkId: string): Promise<void> {
+  const r = await blueprintCall(token, `/api/competencyframeworks/${frameworkId}`, { method: 'DELETE' });
+  if (!r.ok && r.status !== 404) {
+    console.warn(`deleteCompetencyFramework(${frameworkId}) returned ${r.status}: ${r.text}`);
+  }
+}
+
+/** Get one framework with its competencies. */
+export async function getCompetencyFramework(token: string, frameworkId: string): Promise<any> {
+  const r = await blueprintCall<any>(token, `/api/competencyframeworks/${frameworkId}`);
+  if (!r.ok) {
+    throw new Error(`getCompetencyFramework(${frameworkId}) failed (${r.status}): ${r.text}`);
+  }
+  return r.data;
+}
+
+/**
+ * Find frameworks by exact name — for teardown of one the test created through the UI, whose
+ * id the test never held. Returns every match, so a double-submit leaks nothing.
+ */
+export async function findCompetencyFrameworksByName(token: string, name: string): Promise<any[]> {
+  const r = await blueprintCall<any[]>(token, '/api/competencyframeworks');
+  if (!r.ok) {
+    throw new Error(`list competency frameworks failed (${r.status}): ${r.text}`);
+  }
+  return (r.data ?? []).filter((f: any) => f.name === name);
+}
+
+/** Create a proficiency scale with optional levels. Pair with `deleteProficiencyScale`. */
+export async function createProficiencyScale(
+  token: string,
+  opts: {
+    name?: string;
+    description?: string;
+    levels?: { name: string; value: number; displayOrder?: number; description?: string }[];
+  } = {}
+): Promise<{ id: string; name: string }> {
+  const name = opts.name ?? tempBlueprintName('TestBP-Scale');
+  const r = await blueprintCall<any>(token, '/api/proficiencyScales', {
+    method: 'POST',
+    body: { name, description: opts.description ?? 'Automated test scale; deleted on teardown.' },
+  });
+  if (!r.ok) {
+    throw new Error(`createProficiencyScale failed (${r.status}): ${r.text}`);
+  }
+  for (const [i, level] of (opts.levels ?? []).entries()) {
+    const lr = await blueprintCall(token, '/api/proficiencyLevels', {
+      method: 'POST',
+      body: {
+        proficiencyScaleId: r.data.id,
+        name: level.name,
+        value: level.value,
+        displayOrder: level.displayOrder ?? i + 1,
+        description: level.description ?? '',
+      },
+    });
+    if (!lr.ok) {
+      throw new Error(`create proficiency level ${level.name} failed (${lr.status}): ${lr.text}`);
+    }
+  }
+  return { id: r.data.id, name: r.data.name };
+}
+
+/** Delete a proficiency scale (its levels go with it). Swallows 404. */
+export async function deleteProficiencyScale(token: string, scaleId: string): Promise<void> {
+  const r = await blueprintCall(token, `/api/proficiencyScales/${scaleId}`, { method: 'DELETE' });
+  if (!r.ok && r.status !== 404) {
+    console.warn(`deleteProficiencyScale(${scaleId}) returned ${r.status}: ${r.text}`);
+  }
+}
+
+/** Find proficiency scales by exact name, for teardown of one created through the UI. */
+export async function findProficiencyScalesByName(token: string, name: string): Promise<any[]> {
+  const r = await blueprintCall<any[]>(token, '/api/proficiencyScales');
+  if (!r.ok) {
+    throw new Error(`list proficiency scales failed (${r.status}): ${r.text}`);
+  }
+  return (r.data ?? []).filter((s: any) => s.name === name);
+}
+
+/** Add a competency to a MSEL's competency pool. Deleted with the MSEL. */
+export async function addCompetencyToMsel(
+  token: string,
+  mselId: string,
+  competencyId: string
+): Promise<{ id: string }> {
+  const r = await blueprintCall<any>(token, '/api/mselcompetencies', {
+    method: 'POST',
+    body: { mselId, competencyId },
+  });
+  if (!r.ok) {
+    throw new Error(`addCompetencyToMsel failed (${r.status}): ${r.text}`);
+  }
+  return { id: r.data.id };
+}
+
+/** List a MSEL's team-to-competency assignments (`{ id, teamId, competencyId }`). */
+export async function listMselTeamCompetencies(token: string, mselId: string): Promise<any[]> {
+  const r = await blueprintCall<any[]>(token, `/api/msels/${mselId}/teamcompetencies`);
+  if (!r.ok) {
+    throw new Error(`listMselTeamCompetencies(${mselId}) failed (${r.status}): ${r.text}`);
+  }
+  return r.data ?? [];
+}
+
+/**
+ * Fill a dialog's inputs and confirm every one of them still holds its value.
+ *
+ * Under parallel load, Firefox sometimes drops a Playwright fill: a field typed a moment
+ * earlier reads empty again by the time Save is clicked, and the request goes out without
+ * it. (A probe that logged the DOM and the POST body showed this for both text and number
+ * inputs, and never for a real typist.) Re-reading every field after the batch and retrying
+ * the whole batch keeps the dialog from being saved half-filled.
+ */
+export async function fillDialogFields(fields: Array<[Locator, string]>): Promise<void> {
+  await expect(async () => {
+    for (const [input, value] of fields) {
+      if ((await input.inputValue()) !== value) await input.fill(value);
+    }
+    for (const [input, value] of fields) {
+      expect(await input.inputValue()).toBe(value);
+    }
+  }).toPass({ timeout: 15000, intervals: [100, 250, 500, 1000] });
+}
+
+/**
+ * Create an option-list DataField (`isChosenFromList`) with its DataOptions in one
+ * `POST /api/dataFields` — the API creates the field's options in the same call. Options are
+ * `{ optionName, optionValue }`: the UI labels `optionName` "ID" and `optionValue` "Name" /
+ * "Description", and a scenario event's dropdown shows `optionName` but stores `optionValue`.
+ * Cascade-deletes with its MSEL.
+ */
+export async function createOptionListDataField(
+  token: string,
+  mselId: string,
+  name: string,
+  options: Array<{ optionName: string; optionValue: string }>,
+  field: { dataType?: string; displayOrder?: number } & Record<string, unknown> = {}
+): Promise<any> {
+  const id = randomUUID();
+  return createDataField(token, mselId, {
+    dataType: 'String',
+    displayOrder: 100,
+    onExerciseView: true,
+    isShownOnDefaultTab: true,
+    ...field,
+    id,
+    name,
+    isChosenFromList: true,
+    dataOptions: options.map((o, i) => ({
+      id: randomUUID(),
+      dataFieldId: id,
+      displayOrder: i + 1,
+      ...o,
+    })),
+  });
 }

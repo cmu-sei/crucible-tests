@@ -136,22 +136,25 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
 **File:** `blueprint/tests/event-dashboard-and-navigation/navigation-to-admin-section.spec.ts`
 
 **Steps:**
-  1. Log in as admin user and click user menu, select 'Administration'
+  1. Log in as admin user, open the topbar user menu, and select 'Administration'
+    - expect: The Administration item appears once permissions load (the menu is reopened until it does)
     - expect: Navigation to /admin occurs
     - expect: The admin interface loads with sidebar navigation
-    - expect: Admin sections are visible: Units, Data Fields, Inject Types, Catalogs, Organizations, Gallery Cards, CITE Actions, CITE Duties, Users, Roles, Groups
-    - expect: A version display at the bottom of the admin sidebar shows 'Versions: UI 0.0.0, API 1.6.1' or similar
+    - expect: Admin sections are visible: Units, Data Fields, Inject Types, Catalogs, Organizations, Gallery Cards, CITE Actions, CITE Duties, Users, Roles, Groups (Gallery and CITE entries are rendered unconditionally)
+    - expect: The version display at the bottom of the admin sidebar is present and populated
 
 #### 2.6. Theme Toggle Light Dark Mode
 
 **File:** `blueprint/tests/event-dashboard-and-navigation/theme-toggle-light-dark-mode.spec.ts`
 
 **Steps:**
-  1. Navigate to Event Dashboard and click user menu, toggle 'Dark Theme' switch
-    - expect: The application theme switches between light and dark mode
-    - expect: Theme preference is saved in local storage
+  1. Navigate to Event Dashboard, open the user menu, and flip the 'Dark Theme' switch
+    - expect: The `darkMode` class on the page body flips
+    - expect: The choice is saved as `selectedTheme` in the `uiState` localStorage entry
   2. Refresh the page
-    - expect: The selected theme persists after page reload
+    - expect: The toggled theme persists after page reload
+  3. Toggle the switch back
+    - expect: The original theme is restored and saved
 
 #### 2.7. Dashboard Loading State
 
@@ -163,6 +166,22 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
     - expect: Loading card shows 'Initializing Data' title with 'Please wait ...' subtitle
     - expect: A progress spinner is visible
     - expect: After data loads, dashboard shows available cards
+
+#### 2.8. Browser Back and Forward Navigation
+
+**File:** `blueprint/tests/event-dashboard-and-navigation/browser-back-and-forward-navigation.spec.ts`
+
+**Steps:**
+  1. Seed a MSEL. Start on the Event Dashboard, go to the /build list, and open the seeded MSEL from it
+    - expect: The MSEL detail view for that MSEL is shown
+  2. Press browser Back
+    - expect: The MSEL list is shown again, not the MSEL
+  3. Press Back again
+    - expect: The Event Dashboard is shown
+  4. Press Forward
+    - expect: The MSEL list is shown
+  5. Press Forward again
+    - expect: The same MSEL's detail view is shown
 
 ### 3. MSEL Management
 
@@ -258,15 +277,14 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
 **File:** `blueprint/tests/msel-management/msel-form-validation.spec.ts`
 
 **Steps:**
-  1. Navigate to an existing MSEL Config tab and type in the Name field
-    - expect: A character counter is shown (e.g., '31 / 70 characters')
-    - expect: The maximum allowed name length is 70 characters
+  1. Navigate to a seeded MSEL's Info tab and type in the Name field
+    - expect: The input declares a 70 character maximum and the counter tracks the live length
+    - expect: Input past 70 characters is truncated, not accepted
   2. Type in the Description field
-    - expect: A character counter is shown (e.g., '176 / 600 characters')
-    - expect: The maximum allowed description length is 600 characters
-  3. Try to save with an empty name field
-    - expect: Validation error is displayed
-    - expect: Form submission is prevented
+    - expect: The same contract holds at 600 characters
+  3. Dirty the form through another field, then clear Name and try to save
+    - expect: A required-field validation error is displayed
+    - expect: The save is blocked and no request reaches the server
 
 #### 3.8. MSEL Status Lifecycle
 
@@ -467,6 +485,25 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
     - expect: Steamfitter integration shows linked Scenario name
     - expect: Names are fetched dynamically from the respective service APIs
 
+#### 4.9. MSEL Moves
+
+**File:** `blueprint/tests/msel-info-pages/msel-moves.spec.ts`
+
+**Steps:**
+  1. Open a new MSEL's Moves section and click 'Add new move', enter a description, and click 'Save'
+    - expect: The 'Add a Move' dialog pre-fills Move Number 1
+    - expect: The move is listed as move 1 and no ordering warning is shown
+  2. Add a second move
+    - expect: The dialog pre-fills Move Number 2 and the latest existing start offset
+    - expect: '** The moves are not in ascending start time order!' is shown, because both moves start at the same time
+  3. Edit Move 2, set 'Minutes from Start' to 30, and click 'Save'
+    - expect: The ordering warning disappears and the new offset is saved
+  4. Search for move 1's description, then clear the search
+    - expect: Only move 1 is listed, then both moves are listed again
+  5. Click 'Delete Move 1', answer 'No', then repeat and answer 'Yes'
+    - expect: The confirmation reads 'Are you sure that you want to delete <description>?'
+    - expect: Declining keeps the move; confirming removes only move 1
+
 ### 5. Contributors Management
 
 **Seed:** `/mnt/data/crucible-tests/blueprint/tests/seed.setup.ts`
@@ -637,44 +674,24 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
 
 **Seed:** `/mnt/data/crucible-tests/blueprint/tests/seed.setup.ts`
 
-#### 9.1. View Units List
+#### 9.1. Unit Lifecycle
 
-**File:** `blueprint/tests/admin-units-management/view-units-list.spec.ts`
-
-**Steps:**
-  1. Navigate to Admin section and select 'Units'
-    - expect: Units list is displayed in a table format with Short Name and Name columns
-    - expect: Search functionality is available
-    - expect: Pagination controls are visible
-    - expect: Edit and Delete action buttons are shown
-
-#### 9.2. Create New Unit
-
-**File:** `blueprint/tests/admin-units-management/create-new-unit.spec.ts`
+**File:** `blueprint/tests/admin-units-management/unit-lifecycle.spec.ts`
 
 **Steps:**
-  1. Navigate to Units admin section and click 'Add Unit' button, enter 'CU' in Short Name and 'Cyber Unit' in Name, then click 'Save'
-    - expect: Unit is created successfully
-    - expect: New unit appears in the units table
+  1. Navigate to Admin > Units, click 'Add Unit', enter a Name and Short Name, and click 'Save'
+    - expect: The dialog closes and searching for the name finds one row showing both names
+  2. Click 'Edit' for the unit, change its Name, and click 'Save'
+    - expect: The dialog is prefilled with the current values
+    - expect: Searching finds the new name, and the old name matches nothing
+  3. Click 'Delete' for the unit and answer 'No'
+    - expect: The confirmation names the unit, and the row remains
+  4. Click 'Delete' again and answer 'Yes'
+    - expect: The row is removed
+  5. Reload and search for the unit
+    - expect: The deletion persists
 
-#### 9.3. Edit Unit
-
-**File:** `blueprint/tests/admin-units-management/edit-unit.spec.ts`
-
-**Steps:**
-  1. Navigate to Units list and click edit icon for a unit, modify details, and click 'Save'
-    - expect: Unit is updated successfully
-    - expect: Changes are reflected in the table
-
-#### 9.4. Delete Unit
-
-**File:** `blueprint/tests/admin-units-management/delete-unit.spec.ts`
-
-**Steps:**
-  1. Navigate to Units list and click delete icon for a unit, then confirm
-    - expect: Unit is deleted successfully and removed from table
-
-#### 9.5. Search and Filter Units
+#### 9.2. Search and Filter Units
 
 **File:** `blueprint/tests/admin-units-management/search-and-filter-units.spec.ts`
 
@@ -684,32 +701,28 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
   2. Click clear button
     - expect: All units are displayed again
 
-#### 9.6. View and Manage Unit Users
+#### 9.3. View and Manage Unit Users
 
 **File:** `blueprint/tests/admin-units-management/view-and-manage-unit-users.spec.ts`
 
 **Steps:**
-  1. Navigate to Units list and click on a unit row to expand it
-    - expect: Row expands to show users assigned to this unit
-    - expect: If user has manage permissions, can add/remove users from unit
-  2. Click on the same row again
-    - expect: Row collapses
+  1. Seed a unit and a user. Navigate to Units, search for the unit, and click its row
+    - expect: The row expands to show 'Users' (not in the unit) and 'Unit Members' tables
+    - expect: Searching both tables shows the user under Users with an 'Add' button, and not under Unit Members
+  2. Click 'Add' for the user
+    - expect: The user moves from Users to Unit Members
+  3. Reload and reopen the unit
+    - expect: The membership persisted
+  4. Click 'Remove' for the user
+    - expect: The user leaves Unit Members and reappears under Users
+  5. Click the unit row again
+    - expect: The member panels collapse
 
 ### 10. Admin - Inject Types and Catalogs Management
 
 **Seed:** `/mnt/data/crucible-tests/blueprint/tests/seed.setup.ts`
 
-#### 10.1. View Inject Types List
-
-**File:** `blueprint/tests/admin-inject-types-and-catalogs/view-inject-types-list.spec.ts`
-
-**Steps:**
-  1. Navigate to Admin section and select 'Inject Types'
-    - expect: Inject Types list is displayed with Name and Description columns
-    - expect: Search functionality is available
-    - expect: Add, Edit, and Delete buttons are available
-
-#### 10.2. Create Inject Type
+#### 10.1. Create Inject Type
 
 **File:** `blueprint/tests/admin-inject-types-and-catalogs/create-inject-type.spec.ts`
 
@@ -717,7 +730,7 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
   1. Navigate to Inject Types admin section, click 'Add' button, enter a name and description, then click 'Save'
     - expect: Inject type is created and appears in the list
 
-#### 10.3. Edit and Delete Inject Type
+#### 10.2. Edit and Delete Inject Type
 
 **File:** `blueprint/tests/admin-inject-types-and-catalogs/edit-and-delete-inject-type.spec.ts`
 
@@ -727,18 +740,7 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
   2. Click delete icon and confirm
     - expect: Inject type is deleted
 
-#### 10.4. View Catalogs List
-
-**File:** `blueprint/tests/admin-inject-types-and-catalogs/view-catalogs-list.spec.ts`
-
-**Steps:**
-  1. Navigate to Admin section and select 'Catalogs'
-    - expect: Catalogs list is displayed with columns: Public (checkbox), Name, Inject Type, Description
-    - expect: Search functionality is available
-    - expect: Actions include: Add new Catalog button, Upload a new catalog from a file button
-    - expect: For each catalog row: Download (JSON), Upload xlsx, Delete, and Copy action buttons
-
-#### 10.5. Create Catalog
+#### 10.3. Create Catalog
 
 **File:** `blueprint/tests/admin-inject-types-and-catalogs/create-catalog.spec.ts`
 
@@ -746,7 +748,7 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
   1. Navigate to Catalogs admin section, click 'Add new Catalog', fill in name and select an inject type, then save
     - expect: Catalog is created successfully and appears in the list
 
-#### 10.6. Upload Catalog from File
+#### 10.4. Upload Catalog from File
 
 **File:** `blueprint/tests/admin-inject-types-and-catalogs/upload-catalog-from-file.spec.ts`
 
@@ -754,7 +756,7 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
   1. Click 'Upload a new catalog from a file' button and select a valid JSON file
     - expect: The catalog is uploaded and a new catalog entry appears in the list
 
-#### 10.7. Download Catalog as JSON
+#### 10.5. Download Catalog as JSON
 
 **File:** `blueprint/tests/admin-inject-types-and-catalogs/download-catalog-as-json.spec.ts`
 
@@ -763,7 +765,7 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
     - expect: A JSON file is downloaded named '{catalogName}-catalog.json'
     - expect: The file contains the catalog data including its injects
 
-#### 10.8. Copy Catalog
+#### 10.6. Copy Catalog
 
 **File:** `blueprint/tests/admin-inject-types-and-catalogs/copy-catalog.spec.ts`
 
@@ -771,7 +773,7 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
   1. Click the Copy button for a catalog and confirm
     - expect: A copy of the catalog is created and appears in the list
 
-#### 10.9. Expand Catalog to View Injects
+#### 10.7. Expand Catalog to View Injects
 
 **File:** `blueprint/tests/admin-inject-types-and-catalogs/expand-catalog-to-view-injects.spec.ts`
 
@@ -876,6 +878,20 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
     - expect: URL includes msel, scenarioEvent, and dataValue query parameters
     - expect: The data field content is displayed
 
+#### 11.10. Scenario Event Color Coding
+
+**File:** `blueprint/tests/scenario-events-management/scenario-event-color-coding.spec.ts`
+
+**Steps:**
+  1. Seed a MSEL with one scenario event and open Scenario Events
+    - expect: The unhighlighted row has no background of its own
+  2. Highlight the row with the first real colour from the Highlight menu (not the 'no colour' swatch)
+    - expect: The row renders with exactly the swatch's computed background
+  3. Reload the page
+    - expect: The highlight is rendered from the stored row metadata
+  4. Clear it with the 'no colour' swatch
+    - expect: The row has no background again
+
 ### 12. Integration with Crucible Services
 
 **Seed:** `/mnt/data/crucible-tests/blueprint/tests/seed.setup.ts`
@@ -934,6 +950,22 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
     - expect: Responses are in expected JSON format
     - expect: Admin sidebar shows API version (e.g., 'Versions: UI 0.0.0, API 1.6.1')
 
+#### 12.6. Integration In Progress Navigation Guard
+
+**File:** `blueprint/tests/integration-with-crucible-services/integration-in-progress-navigation-guard.spec.ts`
+
+**Steps:**
+  1. Open a MSEL whose integration status is 'Pushing Integrations'
+    - expect: The MSEL shows 'Processing integrations ...' with a 'Cancel Push' button
+  2. Click the topbar home link and dismiss the browser confirmation
+    - expect: A confirm dialog reads 'An integration push is in progress. Are you sure you want to leave?'
+    - expect: The user stays on the MSEL's build page and the push status is still shown
+  3. Repeat, accepting the confirmation
+    - expect: The user is taken to the Event Dashboard
+  4. Open a MSEL whose integration status is an ERROR and click the topbar home link
+    - expect: 'Integration Failed' is shown instead of the in-progress status
+    - expect: Navigation happens with no confirmation dialog
+
 ### 13. Real-time Collaboration and SignalR
 
 **Seed:** `/mnt/data/crucible-tests/blueprint/tests/seed.setup.ts`
@@ -969,25 +1001,20 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
     - expect: Error notification or message is displayed
     - expect: Error is clear and actionable
 
-#### 14.2. Required Field Validation
-
-**File:** `blueprint/tests/error-handling-and-validation/required-field-validation.spec.ts`
-
-**Steps:**
-  1. Leave required fields empty in any form and attempt to submit
-    - expect: Validation errors are displayed for each required field
-    - expect: Form submission is prevented
-
-#### 14.3. Unauthorized Action Handling
+#### 14.2. Unauthorized Action Handling
 
 **File:** `blueprint/tests/error-handling-and-validation/unauthorized-action-handling.spec.ts`
 
 **Steps:**
-  1. Log in as a user without admin permissions and attempt to access admin-only features
-    - expect: Access is denied with appropriate error message
-    - expect: Admin menu option is not visible if user lacks permissions
+  1. Sign in (from an empty storage state) as a fresh Keycloak user with no Blueprint permissions
+    - expect: The dashboard offers no Join, Start, or Manage card
+    - expect: Once permissions have loaded, the user menu has Logout but no Administration entry
+  2. Navigate directly to /admin
+    - expect: The shell renders, but the sidebar lists no sections and no section content is shown
+  3. Navigate to /build
+    - expect: The create and upload MSEL controls are disabled
 
-#### 14.4. API Health Check Error
+#### 14.3. API Health Check Error
 
 **File:** `blueprint/tests/error-handling-and-validation/api-health-check-error.spec.ts`
 
@@ -996,16 +1023,6 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
     - expect: Application detects API health check failure
     - expect: Error message explains API unavailability
     - expect: 'Please refresh this page' message is shown
-
-#### 14.5. MSEL Character Limit Validation
-
-**File:** `blueprint/tests/error-handling-and-validation/msel-character-limit-validation.spec.ts`
-
-**Steps:**
-  1. Navigate to a MSEL Config tab and observe character counts while typing
-    - expect: Name field shows character counter (e.g., '31 / 70 characters') with 70 character maximum
-    - expect: Description field shows character counter (e.g., '176 / 600 characters') with 600 character maximum
-    - expect: Attempting to exceed limits is prevented or shows a validation error
 
 ### 15. Export and Import
 
@@ -1046,12 +1063,17 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
 **File:** `blueprint/tests/accessibility-and-usability/keyboard-navigation.spec.ts`
 
 **Steps:**
-  1. Navigate to Event Dashboard and use Tab key to navigate through interactive elements
-    - expect: Focus moves sequentially through all interactive elements
-    - expect: Focus indicator is clearly visible
-    - expect: Dashboard cards are accessible via keyboard
-  2. Use Enter or Space to activate focused cards
-    - expect: Cards respond to keyboard activation and navigate to the corresponding section
+  1. Navigate to the /build MSEL list and press Tab twelve times from the top of the page
+    - expect: Every Tab lands on a new, visible element (no focus traps, no hidden stops)
+    - expect: The Search box is one of the stops
+  2. Press Shift+Tab three times
+    - expect: Focus retraces the forward order exactly
+  3. Focus the Name column sort header and press Enter three times
+    - expect: Each press changes the column's aria-sort, and both ascending and descending are reached
+  4. Navigate to the Event Dashboard and Tab to the 'Manage an Event' card
+    - expect: The card is reachable by keyboard
+  5. Press Enter, then Space, on the focused card
+    - expect: The card activates and navigates to /build (currently fails upstream: the cards only handle mouse clicks, so the spec asserts that no click fires)
 
 #### 16.2. Loading States and Feedback
 
@@ -1065,3 +1087,603 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
   2. Wait for action to complete
     - expect: Loading indicator disappears
     - expect: Success or error message is displayed
+#### 16.3. Color Contrast Compliance
+
+**File:** `blueprint/tests/accessibility-and-usability/color-contrast-compliance.spec.ts`
+
+**Steps:**
+  1. Seed a MSEL with one scenario event. In the current theme, run axe-core's color-contrast rule on the Event Dashboard, the /build list, the MSEL's Info section, its Scenario Events grid, and Administration
+    - expect: Each screen has zero contrast violations
+    - expect: Each screen has passing nodes, so a blank page cannot pass
+  2. Switch theme from the user menu and repeat the sweep
+    - expect: The same holds in the other theme
+
+### 17. Admin - Competencies and Proficiency
+
+**Seed:** `/mnt/data/crucible-tests/blueprint/tests/seed.setup.ts`
+
+#### 17.1. Proficiency Scale and Level Management
+
+**File:** `blueprint/tests/admin-competencies-and-proficiency/proficiency-scales-and-levels.spec.ts`
+
+**Steps:**
+  1. Navigate to Admin → 'Proficiency Scales', click 'Add proficiency scale', enter a name and Save
+    - expect: Save is disabled until a name is entered
+    - expect: Searching for the scale shows one row with 0 levels
+  2. Expand the scale and add levels 'Novice' and 'Expert'
+    - expect: The levels panel starts with "No levels defined", then lists both levels and the count updates
+  3. Edit 'Novice' to 'Beginner', then delete 'Expert'
+    - expect: The table reflects each change
+  4. Click 'Delete Scale', answer No, then repeat and answer Yes
+    - expect: No keeps the scale; Yes removes it from the table
+
+#### 17.2. Competency Framework Lifecycle
+
+**File:** `blueprint/tests/admin-competencies-and-proficiency/competency-framework-lifecycle.spec.ts`
+
+**Steps:**
+  1. Navigate to Admin → 'Competencies', click 'Add new competency framework', fill in Name, Version, Source, Description, pick a Proficiency Scale and Save
+    - expect: Save is disabled until a name is entered
+    - expect: The row shows each field, with the scale shown by name
+    - expect: A search that matches nothing shows "No Competency Frameworks found"
+  2. Edit the framework and change its Version
+    - expect: The dialog opens pre-filled and the row shows the new version
+  3. Expand the row and add a Knowledge competency
+    - expect: Choosing the Type pre-fills the ID Number with 'K'
+    - expect: The competency appears under 'Competencies (1)' with type Knowledge
+  4. Add a work role from the Work Roles panel
+    - expect: Type is locked and the ID Number is pre-filled with 'WRL-'
+    - expect: The work role appears under Work Roles only
+  5. Delete the competency (No, then Yes)
+    - expect: No keeps it; Yes shows "No competencies found"
+  6. Delete the framework
+    - expect: The confirmation gives the number of competencies that will be deleted (currently always reads 0 — pending upstream)
+    - expect: The row is removed
+  7. With a framework whose competency is in a MSEL pool, view its row
+    - expect: The delete button is disabled and its tooltip reads "In use by 1 MSEL(s): <name>"
+    - expect: After the MSEL is deleted and the page reloads, the button is enabled with tooltip "Delete framework"
+
+#### 17.3. Import and Download Competency Frameworks
+
+**File:** `blueprint/tests/admin-competencies-and-proficiency/competency-framework-import.spec.ts`
+
+**Steps:**
+  1. Open the Import dialog and choose a .txt file
+    - expect: Import is disabled and "Supported formats: .csv (Moodle), .json (NICE), .xlsx (DCWF)" is shown
+  2. Choose a Blueprint framework JSON export
+    - expect: The preview shows the framework name, Source, Version, "Competencies to import: 3" and "Relationships: 2"
+    - expect: Cancel imports nothing
+  3. Choose an export whose framework ID number already exists
+    - expect: A conflict error names the existing framework and version, and no counts are shown
+  4. Import the file
+    - expect: A progress bar and status reach 'Complete' / 100% from polling
+    - expect: The dialog then shows "Successfully imported <name>" with only a Close button
+    - expect: The table lists the framework with the file's Source and Version, and 1 work role and 2 competencies
+  5. Click a framework row's Download button
+    - expect: A file named "<name>-<version>.json" downloads, containing the framework and its competencies
+
+#### 17.4. MSEL Competency Pool
+
+**File:** `blueprint/tests/admin-competencies-and-proficiency/msel-competency-pool.spec.ts`
+
+**Steps:**
+  1. Open a MSEL's Competencies tab while its pool is empty
+    - expect: "No competencies associated with this MSEL." and "MSEL Competencies (0)"
+    - expect: The Add Competencies panel is open and asks for a framework
+  2. Choose a framework in 'Competency Framework'
+    - expect: Only its work roles are listed
+  3. Expand a work role
+    - expect: Its child competencies are listed with their types (Task, Knowledge)
+    - expect: A work role with no children shows "No related competencies in framework"
+  4. Check one child, then use Select All, then check the work role
+    - expect: The pool count goes 1 → 2 → 3
+    - expect: Select All is shown as partly selected after the first child is checked
+    - expect: Pool rows show ID, Type, "<framework> (<version>)", Name, "—" for teams and 0 events
+  5. Uncheck a pooled child in the browser (No, then Yes)
+    - expect: The "Remove Competency" confirmation names the competency; No keeps it, Yes removes it
+    - expect: After No, the checkbox is ticked again (currently it stays unticked until the work role is collapsed and re-expanded — pending upstream)
+  6. Remove a row with its 'Remove from MSEL' button, then select the last row and click 'Remove 1'
+    - expect: Each removal is confirmed, and the pool ends empty
+
+#### 17.5. Propagate Team Assignments to Related Competencies
+
+**File:** `blueprint/tests/admin-competencies-and-proficiency/team-competency-propagate.spec.ts`
+
+**Steps:**
+  1. In a MSEL with a team and a pooled work role plus two pooled children, expand the work role's pool row
+    - expect: "Assigned (0)" and "No teams assigned"
+  2. Click 'Add <team>'
+    - expect: "Add Team from Related" lists both children, pre-selected, with 'Yes (2)'
+    - expect: Unchecking changes the count to 'Yes (1)'; with none selected, 'Yes (0)' is disabled
+  3. Confirm with one child selected
+    - expect: The Teams column shows the team on the work role and that child, and "—" on the other child
+  4. Click 'Remove <team>' on the work role and answer No
+    - expect: "Remove Team from Related" lists only the child that has the team
+    - expect: The team is removed from the work role only
+  5. Add the team to a competency that has no pooled children
+    - expect: It is assigned without a dialog
+
+### 18. Reordering
+
+**Seed:** `/mnt/data/crucible-tests/blueprint/tests/seed.setup.ts`
+
+#### 18.1. Scenario Event Drag and Drop Reordering
+
+**File:** `blueprint/tests/reordering/scenario-event-drag-reorder.spec.ts`
+
+**Steps:**
+  1. Open a MSEL's Scenario Events with three events at different times
+    - expect: Events are listed chronologically and each row has a drag handle
+  2. Drag the third event onto the second event's row
+    - expect: The event is saved and the grid shows it between the other two
+    - expect: The event's time is moved to midway between its new neighbours
+  3. Reload the page
+    - expect: The new order is still shown
+  4. Sort the grid by Description, then clear the sort
+    - expect: Drag handles are hidden while sorted and return once the sort is cleared
+
+#### 18.2. Data Field Drag and Drop Reordering
+
+**File:** `blueprint/tests/reordering/data-field-drag-reorder.spec.ts`
+
+**Steps:**
+  1. Open a MSEL's Data Fields with the standard fields
+    - expect: The four system-defined rows (Move, Group, Execution Time, Integration Target) come first and have no drag handle
+    - expect: The MSEL's own fields follow in display order, each with a drag handle
+  2. Drag 'Title' onto the second row
+    - expect: The field is saved, 'Title' is second, and the fields it passed shift down one
+  3. Reload the page
+    - expect: The new order is still shown
+  4. Sort by Name, then clear the sort
+    - expect: The list is alphabetical with no drag handles, then returns to display order with handles
+    - expect: System-defined rows stay first and unsorted
+
+#### 18.3. Player Application Team Order
+
+**File:** `blueprint/tests/reordering/player-team-app-order.spec.ts`
+
+**Steps:**
+  1. On a Player-enabled MSEL with a team assigned two applications, open Player Apps > Team Application Order and click the team
+    - expect: Both applications are listed with display orders 1 and 2
+    - expect: 'Move player application up' is disabled on the first; 'Move player application down' is disabled on the last
+  2. Click 'Move player application down' on the first application
+    - expect: The change is saved and the two applications swap places and numbers
+  3. Reload and reopen the team
+    - expect: The new order is still shown
+
+### 19. Player Applications
+
+**Seed:** `/mnt/data/crucible-tests/blueprint/tests/seed.setup.ts`
+
+#### 19.1. Player Apps Section Gating
+
+**File:** `blueprint/tests/player-applications/player-application-crud.spec.ts`
+
+**Steps:**
+  1. Open a MSEL with usePlayer off
+    - expect: No 'Player Apps' section in the sidebar
+  2. Turn usePlayer on and reopen the MSEL
+    - expect: 'Player Apps' section is offered
+
+#### 19.2. Create Player Application with URL Validation
+
+**File:** `blueprint/tests/player-applications/player-application-crud.spec.ts`
+
+**Steps:**
+  1. Player Apps → expand 'Player Applications' → Add → 'New Player Application'
+    - expect: Dialog 'Add a Player Application'; Embeddable checked, Load in Background unchecked
+  2. Enter a URL with an unknown variable and Save
+    - expect: 'Unknown variable(s): {notAVariable}'; dialog stays open
+  3. Enter a URL with an unpaired brace, then a bad Icon URL, and Save
+    - expect: 'URL contains unpaired or invalid braces'; dialog stays open
+  4. Enter valid URL/Icon URL using {blueprintMselId}/{playerViewId}/{galleryUrl}, check Load in Background, Save
+    - expect: Row shows name and unsubstituted URL; values persisted
+
+#### 19.3. Edit and Delete Player Application
+
+**File:** `blueprint/tests/player-applications/player-application-crud.spec.ts`
+
+**Steps:**
+  1. Edit a seeded application
+    - expect: Dialog 'Edit Player Application' prefilled with current values
+  2. Rename, change URL, uncheck Embeddable, Save
+    - expect: Row shows new name/URL; old name gone; changes persisted
+  3. Delete it and confirm YES (and, separately, answer NO)
+    - expect: 'Delete PlayerApplication' confirmation names the app; YES removes the row, NO keeps it
+  4. With two seeded applications, sort by Name twice, then by URL twice
+    - expect: Name sorts ascending then descending
+    - expect: URL sorts by URL in each direction (currently sorts by name — pending upstream)
+
+#### 19.4. Assign Player Application to Teams
+
+**File:** `blueprint/tests/player-applications/player-application-teams.spec.ts`
+
+**Steps:**
+  1. Expand an application row
+    - expect: 'MSEL Teams' lists every team; 'Player Application Teams' is empty
+  2. Click 'Add Alpha Team'
+    - expect: ALPHA moves to 'Player Application Teams'; assignment persists across reload
+  3. Click the ALPHA remove button
+    - expect: ALPHA returns to 'MSEL Teams'; assignment deleted
+
+#### 19.5. Search MSEL Teams
+
+**File:** `blueprint/tests/player-applications/player-application-teams.spec.ts`
+
+**Steps:**
+  1. Type 'charlie' in the MSEL Teams search
+    - expect: Only Charlie Team offered; Clear Search enabled
+  2. Type a non-matching term
+    - expect: 'No teams found'
+  3. Click Clear Search
+    - expect: Box empties and all teams return
+  4. Search for 'bravo' and assign Bravo Team
+    - expect: The box still says 'bravo' and the list stays filtered (currently shows every remaining team — pending upstream)
+
+#### 19.6. Add Player Application from Template
+
+**File:** `blueprint/tests/player-applications/player-application-templates.spec.ts`
+
+**Steps:**
+  1. Seed a Player application template; open Add menu
+    - expect: Template listed, titled with its URL
+  2. Pick it
+    - expect: Dialog prefilled with template name, URL, icon, Embeddable, Load in Background
+  3. Save
+    - expect: A new MSEL application (not the template id) is listed and persisted
+  4. Pick a template whose URL uses {viewId} and Save
+    - expect: 'Unknown variable(s): {viewId}' (pending upstream); after changing to {playerViewId} it saves
+
+### 20. Invitations
+
+**Seed:** `/mnt/data/crucible-tests/blueprint/tests/seed.setup.ts`
+
+#### 20.1. Create Invitation with Validation
+
+**File:** `blueprint/tests/invitations/invitation-crud.spec.ts`
+
+**Steps:**
+  1. Invitations section of a MSEL with no invitations
+    - expect: 'No invitations found'
+  2. Click 'Add an invitation'
+    - expect: 'Create an Invitation to this MSEL'; max uses '1'; expiration shown; team-leader option disabled; Save disabled
+  3. Choose team ALPHA; try domains 'abcd.test', '@ab', '@abc.test'
+    - expect: Save enabled only with a team and a domain longer than 3 characters containing '@'
+  4. Set max uses 4 and Save
+    - expect: Row ALPHA / @abc.test / expiration / 4 / 4; persisted
+
+#### 20.2. Invitation Link Availability
+
+**File:** `blueprint/tests/invitations/invitation-crud.spec.ts`
+
+**Steps:**
+  1. View an invitation on a Pending MSEL
+    - expect: Copy Invitation Link disabled with an empty link
+  2. Deploy the MSEL and reopen
+    - expect: Copy enabled; link carries msel and team ids (path '//join/', pending upstream)
+
+#### 20.3. Edit Invitation
+
+**File:** `blueprint/tests/invitations/invitation-crud.spec.ts`
+
+**Steps:**
+  1. Edit a seeded invitation
+    - expect: 'Edit an Invitation to this MSEL'; team shown as text, not selectable; fields prefilled
+  2. Change domain and max uses, Save
+    - expect: Row shows new domain, max and remaining uses; persisted (currently typing throws a read-only-property TypeError, and Save keeps the original values — pending upstream)
+
+#### 20.4. Search Invitations
+
+**File:** `blueprint/tests/invitations/invitation-crud.spec.ts`
+
+**Steps:**
+  1. Search by email domain, then by team short name
+    - expect: Only matching invitations listed
+  2. Search a non-matching term, then Clear Search
+    - expect: 'No invitations found', then the full list returns
+
+#### 20.5. Delete Invitation
+
+**File:** `blueprint/tests/invitations/invitation-crud.spec.ts`
+
+**Steps:**
+  1. Delete an invitation and answer NO
+    - expect: Confirmation names the domain; invitation kept
+  2. Delete again and answer YES
+    - expect: Only that invitation removed
+
+#### 20.6. Join Through an Invitation Link
+
+**File:** `blueprint/tests/invitations/invitation-join.spec.ts`
+
+**Steps:**
+  1. Admin copies the ALPHA invitation link (domain @test.local, 2 uses) of a Deployed MSEL
+  2. A temporary user follows the link in a fresh context and signs in
+    - expect: Browser is sent to Player at /view/<playerViewId>
+  3. Admin reopens Invitations
+    - expect: ALPHA remaining uses 1; other invitation unchanged
+  4. Temporary user opens /join
+    - expect: The MSEL is offered with a Join button
+
+#### 20.7. Invitation Domain Mismatch
+
+**File:** `blueprint/tests/invitations/invitation-join.spec.ts`
+
+**Steps:**
+  1. Temporary user follows a link whose invitation requires @elsewhere.test
+    - expect: Error names the user's email and the required domain; user stays in Blueprint
+    - expect: The invitation's remaining uses are unchanged
+
+### 21. Assessor Page
+
+**Seed:** `/mnt/data/crucible-tests/blueprint/tests/seed.setup.ts`
+
+#### 21.1. No Assessor-visible Fields
+
+**File:** `blueprint/tests/assessor-page/assessor-page.spec.ts`
+
+**Steps:**
+  1. Open /assess?msel=<id> for a MSEL with no assessor-visible fields
+    - expect: 'No data fields are marked as assessor-visible.'; no event rows
+
+#### 21.2. Events by Move and Group
+
+**File:** `blueprint/tests/assessor-page/assessor-page.spec.ts`
+
+**Steps:**
+  1. Open /assess for a MSEL with one move, two assessor-visible fields, one hidden field, two events
+    - expect: Columns are the visible fields in display order; hidden field and its values absent
+    - expect: 'Move 1' header with description, 'Group 0' and 'Group 1' headers, events numbered 1 and 2
+
+#### 21.3. Expand and Collapse
+
+**File:** `blueprint/tests/assessor-page/assessor-page.spec.ts`
+
+**Steps:**
+  1. Click an event row, then click again
+    - expect: Detail shows 'No xAPI statements found for this event.' and 'No competencies on this event.'; second click closes it
+  2. Expand All, then Collapse All
+    - expect: All move/group/event details open (Expand All disabled), then all close (Collapse All disabled)
+
+#### 21.4. Search Events
+
+**File:** `blueprint/tests/assessor-page/assessor-page.spec.ts`
+
+**Steps:**
+  1. Search Events and type the second event's note
+    - expect: Only that event remains, under its move
+  2. Type a value held only in the hidden field
+    - expect: No events
+  3. Clear Search
+    - expect: Search row hidden; all events return
+
+#### 21.5. Tick Assessor Checkbox
+
+**File:** `blueprint/tests/assessor-page/assessor-page.spec.ts`
+
+**Steps:**
+  1. As admin, tick an event's Checkbox field
+    - expect: Ticked without expanding the row; persists across reload; other event unticked
+  2. Untick it
+    - expect: Value saved as false
+
+#### 21.6. Access by MSEL Role
+
+**File:** `blueprint/tests/assessor-page/assessor-page.spec.ts`
+
+**Steps:**
+  1. Temporary user with no MSEL role opens /assess
+    - expect: 'Access Denied' with the Editor-role explanation after roles load
+  2. Add the user to a unit attached to the MSEL (a MSEL role alone grants no API reads), grant Editor and reload
+    - expect: Events visible; checkboxes disabled
+  3. Replace with Owner and reload
+    - expect: Checkboxes enabled; ticking one persists
+    - note: Evaluator is the intended role here, but the page and the API disagree on what an Evaluator may do (pending upstream)
+
+### 22. Data Fields and Options
+
+**Seed:** `/mnt/data/crucible-tests/blueprint/tests/seed.setup.ts`
+
+#### 22.1. Add a Data Field
+
+**File:** `blueprint/tests/data-fields-and-options/data-field-edit-dialog.spec.ts`
+
+**Steps:**
+  1. Open a MSEL's Data Fields section
+    - expect: System-defined rows (Move, Group, Execution Time, Integration Target) show '*System Defined*' and have no Edit/Delete actions
+  2. Click 'Add data Field' → 'New Data Field'
+    - expect: 'Add a Data Field' dialog opens with Display Order one past the existing fields, and 'Display on the Events list', 'Display on the Exercise View' and 'Display on "Default" edit tab' checked
+    - expect: Save is disabled without a Name, and with a Display Order of 0 or empty
+  3. Enter a name, choose Integer, and Save
+    - expect: The field appears in the grid with its order and type
+    - expect: The field is a column of the Scenario Events grid and a text input on the Edit Event dialog's Default tab
+
+#### 22.2. Edit and Delete a Data Field
+
+**File:** `blueprint/tests/data-fields-and-options/data-field-edit-dialog.spec.ts`
+
+**Steps:**
+  1. Click 'Edit {name}' on a field
+    - expect: 'Edit Data Field' dialog opens prefilled; clearing Name disables Save
+  2. Rename and Save
+    - expect: The grid shows the new name and not the old one
+  3. Click 'Delete {name}' and answer No
+    - expect: 'Delete Data Field' asks 'Are you sure that you want to delete {name}?'; the field remains
+  4. Delete again and answer Yes
+    - expect: The field is removed from the grid and from the Scenario Events columns
+
+#### 22.3. Data Type Drives the Option-List Controls
+
+**File:** `blueprint/tests/data-fields-and-options/data-field-edit-dialog.spec.ts`
+
+**Steps:**
+  1. In the Add dialog choose DateTime, Boolean and Html in turn
+    - expect: 'Use Option List' is disabled
+  2. Choose String and check 'Use Option List'
+    - expect: 'Multi-select' appears unchecked and a '0 options' link is shown
+  3. Switch to DateTime
+    - expect: Both checkboxes are disabled and the options link is hidden
+  4. Choose Competency
+    - expect: 'Use Option List' and 'Multi-select' are checked and locked, 'Facilitation Data Field' is checked, the link reads 'Manage', and Save is disabled until a competency is chosen
+  5. Cancel
+    - expect: No field is added
+
+#### 22.4. Manage Options in the Edit Data Field Dialog
+
+**File:** `blueprint/tests/data-fields-and-options/data-option-list-dialog.spec.ts`
+
+**Steps:**
+  1. Edit an option-list field and click its 'N options' link
+    - expect: 'Manage Options (N)' lists options by display order
+  2. Add an option ('Add new option')
+    - expect: 'Edit Option' proposes the next display order; Save needs both ID and Name; the title count increases
+  3. Edit an option and delete another
+    - expect: The table and title update; no request is sent while the field dialog is open
+  4. Close and Save the field
+    - expect: The field is saved once; the Edit Event dialog offers exactly the current option IDs in a drop-down
+
+#### 22.5. Browse Options from the Data Fields Grid
+
+**File:** `blueprint/tests/data-fields-and-options/data-option-list-dialog.spec.ts`
+
+**Steps:**
+  1. Click a field's 'N options' cell
+    - expect: 'Manage Options (N)' opens; search filters by ID or description, case-insensitively; clicking the ID header sorts by ID
+  2. Add, edit, delete and import options
+    - expect: Each change is saved to the field (currently each fails with a TypeError alert and nothing is saved; see BP-DF3)
+
+#### 22.6. Cancel Discards Option Changes
+
+**File:** `blueprint/tests/data-fields-and-options/data-option-list-dialog.spec.ts`
+
+**Steps:**
+  1. In the Edit Data Field dialog delete an option, close the list, then Cancel
+    - expect: The link showed one fewer option, but the grid, the reopened list and the stored field keep all options; no update is sent
+
+#### 22.7. Option-List Fields in the Event Editor
+
+**File:** `blueprint/tests/data-fields-and-options/data-option-list-dialog.spec.ts`
+
+**Steps:**
+  1. Open Edit Event for a MSEL with Integer and Double option-list fields
+    - expect: Each renders as a drop-down only (currently the Double field also renders a stray text input; see BP-DF1)
+
+#### 22.8. Import Options from a File
+
+**File:** `blueprint/tests/data-fields-and-options/data-option-import-dialog.spec.ts`
+
+**Steps:**
+  1. From the Manage Options dialog click the import button
+    - expect: 'Import Options' shows the supported-formats instructions, a 'Choose File' button and a disabled 'Import 0 Options'
+  2. Choose a CSV whose rows include an existing ID in different case
+    - expect: The file name and 'Preview (X to import, Y to skip)' are shown; the existing row is disabled and unchecked
+  3. Uncheck a row, then use the header checkbox
+    - expect: Counts and the 'Import N Option(s)' label update; the header box is indeterminate for a partial selection and never selects the existing row
+  4. Import, then Save the field
+    - expect: New options are appended after the existing ones, which are unchanged
+
+#### 22.9. Import File Errors
+
+**File:** `blueprint/tests/data-fields-and-options/data-option-import-dialog.spec.ts`
+
+**Steps:**
+  1. Choose a CSV with only a header row
+    - expect: 'CSV file must have a header row and at least one data row.' is shown and nothing can be imported
+  2. Choose a valid CSV with the columns in a different order
+    - expect: The error clears and the preview maps columns by header
+  3. Cancel
+    - expect: No options are added
+
+#### 22.10. Import into an Unsaved Field
+
+**File:** `blueprint/tests/data-fields-and-options/data-option-import-dialog.spec.ts`
+
+**Steps:**
+  1. In a new String field with 'Use Option List', open the options list and click import
+    - expect: The field is created first, then 'Import Options' opens
+  2. Import options, close the list, and Save
+    - expect: The link shows the imported count; Save stores them, and the grid has one row for the field
+
+### 23. Admin - Gallery Cards and CITE
+
+**Seed:** `/mnt/data/crucible-tests/blueprint/tests/seed.setup.ts`
+
+#### 23.1. Gallery Card Template Lifecycle
+
+**File:** `blueprint/tests/admin-gallery-and-cite/gallery-card-templates.spec.ts`
+
+**Steps:**
+  1. Navigate to Admin 'Gallery Cards', click 'Add a template card', enter a Name and Card Description, and click 'Save'
+    - expect: The dialog offers no Move picker
+    - expect: Searching by the description lists the new template
+  2. Edit the card, change the description, press Escape, then click 'Cancel'
+    - expect: Escape does not close the dialog while there are unsaved changes
+    - expect: Cancel discards the change
+  3. Edit the description again and click 'Save'
+    - expect: A search for the old description no longer matches; a search for the new one does
+  4. Delete the card, answer 'No', then repeat and answer 'Yes'
+    - expect: Declining keeps the row; confirming removes it
+
+#### 23.2. MSEL Gallery Cards and Card Teams
+
+**File:** `blueprint/tests/admin-gallery-and-cite/msel-gallery-cards.spec.ts`
+
+**Steps:**
+  1. Open a MSEL that does not use Gallery, then enable Gallery and reopen it
+    - expect: The 'Gallery Cards' section appears only once Gallery is enabled
+  2. In Gallery Cards, open 'Add card' and choose a template, pick Move 2, and click 'Save'
+    - expect: The menu offers 'New Card' plus each template, and the template pre-fills Name and Description
+    - expect: The card is listed with Move 2
+  3. Click the card row, add a MSEL team, toggle 'Is Shown', then remove the team
+    - expect: The team moves between the MSEL-teams list and the card-teams list
+  4. Delete the card
+    - expect: The card is removed and the template is still offered in the add menu
+
+#### 23.3. CITE Actions
+
+**File:** `blueprint/tests/admin-gallery-and-cite/cite-actions.spec.ts`
+
+**Steps:**
+  1. In Admin 'CITE Actions', add a template, then edit it and delete it
+    - expect: The dialog has no Move, Team or Display Order fields, and Save is disabled until a description is entered
+  2. In a MSEL with CITE enabled, 2 teams and 2 moves, add a new CITE action with 'All Moves' and 'All Teams'
+    - expect: 4 rows are created, one per team per move
+  3. Use the Move and Team filters, then search by a team's short name
+    - expect: Each narrows the list client-side
+  4. Delete one row
+    - expect: Only that row is removed
+
+#### 23.4. CITE Duties
+
+**File:** `blueprint/tests/admin-gallery-and-cite/cite-duties.spec.ts`
+
+**Steps:**
+  1. In Admin 'CITE Duties', add a template, then edit it and delete it
+    - expect: Save is disabled while the Name is empty, including when an edit clears it
+  2. In a MSEL with CITE enabled and 2 teams, add a new CITE duty with 'All Teams'
+    - expect: 2 rows are created, each showing 'shortName - name' for its team
+  3. Filter by one team, then edit that duty
+    - expect: The filter narrows the list, and the edit dialog lists the MSEL's teams without 'All Teams'
+  4. Delete the duty
+    - expect: The duty is removed
+
+### 24. Admin - Groups
+
+**Seed:** `/mnt/data/crucible-tests/blueprint/tests/seed.setup.ts`
+
+#### 24.1. Group Lifecycle With Membership
+
+**File:** `blueprint/tests/admin-groups/group-lifecycle.spec.ts`
+
+**Steps:**
+  1. Navigate to Admin 'Groups', click the add button, enter a name, and click 'Save'
+    - expect: 'Create New Group?' is shown and Save is disabled until a name is entered
+    - expect: Searching 'Search Groups' lists the new group
+  2. Click 'Rename', then click 'Cancel'; click 'Rename' again, enter a new name, and click 'Save'
+    - expect: The dialog opens pre-filled, with Save disabled until the name changes
+    - expect: The old name no longer matches the search and the new one does
+  3. Expand the group row, search for a user in the Users panel, click 'Add <user>', then click 'Remove <user>'
+    - expect: The group starts with 'This Group currently has no members'
+    - expect: The user moves into Group Members, then back into Users
+  4. Delete the group and confirm with 'Delete'
+    - expect: The confirmation reads 'Delete Group <name>?' and the group is removed
