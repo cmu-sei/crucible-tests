@@ -48,6 +48,14 @@ async function ensureOnAdminPage(page: Page): Promise<void> {
   await expect(eventTemplatesTable).toBeVisible({ timeout: 30000 });
 }
 
+/**
+ * Wait for a Material dialog to finish opening before typing into it.
+ */
+export async function waitForDialogOpen(dialog: Locator): Promise<void> {
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator(':focus')).toHaveCount(1);
+}
+
 export async function fillFieldAndVerify(field: Locator, value: string): Promise<void> {
   let lastError: unknown;
 
@@ -195,7 +203,7 @@ export async function createTestEventTemplate(
   // Click Add Event Template to open the create dialog (no API call yet).
   const createDialog = page.getByRole('dialog', { name: 'Create New Event Template' });
   await page.getByRole('button', { name: 'Add Event Template' }).click();
-  await expect(createDialog).toBeVisible({ timeout: 5000 });
+  await waitForDialogOpen(createDialog);
 
   // Fill in the name, description, and duration. Name and Duration Hours are
   // required; duration must be an integer greater than 0.

@@ -49,34 +49,77 @@ function playerToken(): Promise<string> {
   return getUserToken('admin', 'admin', 'alloy.ui', 'openid player');
 }
 
-/**
- * Create a Player View with no Teams on it.
- *
- * Alloy's first launch step clones the Event Template's Player View and then adds the user to
- * its default Team. With no Team to add anyone to, that step raises a *permanent* failure, so
- * the launch fails on its first pass - no waiting out ApiClientLaunchFailureMaxRetries, and no
- * dependency on Caster or Steamfitter being configured.
- *
- * Pointing the template at a View id that does not exist looks like the simpler seed, but
- * Player answers a clone of a missing View with a 500, which Alloy - rightly - treats as
- * transient and retries ten times before giving up.
- */
-async function createTeamlessPlayerView(
+const VIEW_DESCRIPTION = 'Auto-created to verify failed-launch reporting.';
+
+interface SeededPlayerView {
+  viewId: string;
+  teamId: string;
+}
+
+async function updatePlayerViewDefaultTeam(
   api: APIRequestContext,
   token: string,
-  name: string
-): Promise<string> {
-  const response = await api.post(`${Services.Player.API}/api/views`, {
+  viewId: string,
+  name: string,
+  defaultTeamId: string | null
+): Promise<void> {
+  const response = await api.put(`${Services.Player.API}/api/views/${viewId}`, {
     headers: alloyHeaders(token),
-    data: { name, description: 'Auto-created to verify failed-launch reporting.', status: 'Active' },
+    data: { name, description: VIEW_DESCRIPTION, status: 'Active', isTemplate: false, defaultTeamId },
   });
-  expect(response.status(), await response.text()).toBe(201);
-  return (await response.json()).id as string;
+  expect(response.ok(), await response.text()).toBe(true);
 }
 
 /**
- * Create a published Event Template whose launch cannot succeed. Published so that any
- * authenticated user picks up ViewEventTemplate on it and can launch it from the home page.
+ * Create a Player View with a participant Team set as its default. Alloy refuses to save an
+ * Event Template whose View has no default Team, so the View has to start out valid.
+ */
+async function createPlayerViewWithDefaultTeam(
+  api: APIRequestContext,
+  token: string,
+  name: string
+): Promise<SeededPlayerView> {
+  const viewResponse = await api.post(`${Services.Player.API}/api/views`, {
+    headers: alloyHeaders(token),
+    data: { name, description: VIEW_DESCRIPTION, status: 'Active' },
+  });
+  expect(viewResponse.status(), await viewResponse.text()).toBe(201);
+  const viewId = (await viewResponse.json()).id as string;
+
+  const teamResponse = await api.post(`${Services.Player.API}/api/views/${viewId}/teams`, {
+    headers: alloyHeaders(token),
+    data: { name: 'Participants' },
+  });
+  expect(teamResponse.status(), await teamResponse.text()).toBe(201);
+  const teamId = (await teamResponse.json()).id as string;
+
+  await updatePlayerViewDefaultTeam(api, token, viewId, name, teamId);
+
+  return { viewId, teamId };
+}
+
+/**
+ * Leave the View with no Team a participant can join, after the Event Template has been saved
+ * against it - the way a View gets broken by someone editing it in Player later.
+ */
+async function removeParticipantTeam(
+  api: APIRequestContext,
+  token: string,
+  view: SeededPlayerView,
+  name: string
+): Promise<void> {
+  // The default-team foreign key blocks deleting the Team while the View still points at it.
+  await updatePlayerViewDefaultTeam(api, token, view.viewId, name, null);
+
+  const response = await api.delete(`${Services.Player.API}/api/teams/${view.teamId}`, {
+    headers: alloyHeaders(token),
+  });
+  expect(response.ok(), await response.text()).toBe(true);
+}
+
+/**
+ * Create a published Event Template. Published so that any authenticated user picks up
+ * ViewEventTemplate on it and can launch it from the home page.
  */
 async function createFailingEventTemplate(
   api: APIRequestContext,
@@ -88,7 +131,7 @@ async function createFailingEventTemplate(
     headers: alloyHeaders(token),
     data: {
       name,
-      description: 'Auto-created to verify failed-launch reporting.',
+      description: VIEW_DESCRIPTION,
       durationHours: 1,
       viewId,
       isPublished: true,
@@ -199,11 +242,14 @@ test.describe('Events Management', () => {
 
   /** Seed a published Event Template that always fails on its first launch attempt. */
   async function seedFailingEventTemplate(name: string): Promise<string> {
-    const viewId = await createTeamlessPlayerView(api, playerAdminToken, `${name} View`);
-    seededViewIds.push(viewId);
+    const viewName = `${name} View`;
+    const view = await createPlayerViewWithDefaultTeam(api, playerAdminToken, viewName);
+    seededViewIds.push(view.viewId);
 
-    const templateId = await createFailingEventTemplate(api, adminToken, name, viewId);
+    const templateId = await createFailingEventTemplate(api, adminToken, name, view.viewId);
     seededTemplateIds.push(templateId);
+
+    await removeParticipantTeam(api, playerAdminToken, view, viewName);
 
     return templateId;
   }
@@ -328,10 +374,11 @@ test.describe('Events Management', () => {
     await failedCheckbox.uncheck();
   });
 
-  // The reason ErrorMessage and ErrorDetail are separate fields: an ordinary user has to be
-  // told their launch broke and be able to retry, without being handed the infrastructure
-  // output, which can name internal hostnames, addresses and variable values.
-  test('Failed Launch - User Sees The Reason But Not The Infrastructure Output', async ({
+  // An ordinary user has to be told their launch broke and be able to retry, without being
+  // handed the diagnosis: the upstream response and infrastructure output can name internal
+  // hostnames, addresses and variable values, so they stay behind the admin-only error-detail
+  // endpoint and the admin Events panel.
+  test('Failed Launch - User Is Told It Failed But Not The Infrastructure Output', async ({
     page,
   }) => {
     test.setTimeout(300000);
@@ -364,15 +411,20 @@ test.describe('Events Management', () => {
     await page.getByRole('button', { name: 'Launch', exact: true }).click();
 
     // expect: the user is told the launch failed, in an assertive live region
+    const failureAlert = page.getByRole('alert').filter({ hasText: /failed to launch/i });
+    await expect(failureAlert).toBeVisible({ timeout: 120000 });
     await expect(
-      page.getByRole('alert').filter({ hasText: /could not be launched/i })
-    ).toBeVisible({ timeout: 120000 });
+      failureAlert.getByText('Please try again. Contact an administrator if it continues to fail.')
+    ).toBeVisible();
 
-    // expect: a summary of what went wrong, and the step it failed at
-    await expect(page.getByText(/^Failed to create the virtual environment/)).toBeVisible();
-    await expect(page.getByText(/^Stage:/)).toBeVisible();
+    // expect: the message is deliberately generic - the summary and the step it failed at are
+    // for administrators, not shown on the user's card
+    await expect(page.getByText(/Failed to create the virtual environment/)).toHaveCount(0);
+    await expect(page.getByText(new RegExp(EXPECTED_STAGE))).toHaveCount(0);
 
-    // expect: the user can retry without an administrator
+    // expect: the identifiers an administrator needs are one click away, and the user can
+    // retry without an administrator
+    await expect(failureAlert.getByRole('button', { name: 'Copy failure details' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Launch Again' })).toBeVisible();
 
     // expect: the infrastructure output never reached the browser
