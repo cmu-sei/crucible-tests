@@ -19,7 +19,7 @@ test.describe('Administration - Team Types', () => {
     }, { timeout: 15000 });
 
     await page.evaluate(() => {
-      const items = Array.from(document.querySelectorAll('mat-list-item'));
+      const items = Array.from(document.querySelectorAll<HTMLElement>('mat-list-item'));
       const teamTypesItem = items.find(el => el.textContent?.trim() === 'Team Types');
       if (teamTypesItem) {
         teamTypesItem.click();

@@ -23,8 +23,10 @@ test.describe('Event Detail Page', () => {
     const msel = await createMsel(token);
     mselId = msel.id;
 
+    // `createScenarioEvent` has no `description` option (event text lives in an
+    // event's data values, which this seed leaves empty) — one used to be passed
+    // here and was silently dropped. Nothing below reads it.
     const event = await createScenarioEvent(token, mselId, {
-      description: 'Test event for detail page',
       deltaSeconds: 300,
     });
     eventId = event.id;

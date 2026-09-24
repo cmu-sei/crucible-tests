@@ -1,0 +1,51 @@
+name: Validate
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  # Static validation only. Running the suite needs a full Crucible stack -
+  # Keycloak, every app API and UI, Postgres - which a hosted runner cannot
+  # provide, so this job checks everything that can be checked without one.
+  # It is not a substitute for running the suite; it catches the breakage that
+  # would otherwise only surface minutes into a real run, on a machine that has
+  # a stack.
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+
+      # No browsers are installed: none of the checks below launch one.
+      - name: Install dependencies
+        run: npm ci
+
+      # Playwright strips types instead of checking them, so a spec calling a
+      # helper with the wrong arguments only fails at runtime, against a live
+      # stack, as a confusing timeout. tsc catches it here.
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Fails on `test.skip(!thing, ...)` and bare `test.skip()`, which report a
+      # green run while asserting nothing. See scripts/check-self-skips.mjs.
+      - name: Check for conditional self-skips
+        run: npm run check:skips
+
+      # Loads every spec and fixture. Catches syntax errors, unresolved imports,
+      # renamed exports and duplicate test titles, and fails outright if zero
+      # tests are discovered - which is what a broken testMatch or a spec moved
+      # out of a `tests/` directory looks like. `--list` does not run
+      # globalSetup, so no stack is required.
+      - name: Check test discovery
+        run: npm run check:discovery
