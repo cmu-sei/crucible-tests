@@ -19,9 +19,16 @@ import { ALLOY_THEMES, applyAlloyTheme } from '../../test-helpers';
  * background pair against WCAG 2.1 AA 1.4.3 (normal text >= 4.5:1, large text >= 3:1),
  * once per theme.
  *
+ * It also checks the color settings contract from the Crucible colors design spec
+ * (`crucible-development/design-specs/angular/colors.md`): the top bar keeps its
+ * colors in both themes, and Material's `primary` / `on-primary` roles take each
+ * mode's configured value verbatim. Expected colors are read from the app's own
+ * settings files rather than hardcoded, so an environment that overrides them
+ * still passes as long as the app applies what it was given.
+ *
  * Read-only: it navigates and reads computed styles, seeds nothing, and depends on
- * no table rows (it measures the always-present heading, column headers, and the
- * "Add Event Template" button), so it needs no cleanup.
+ * no table rows (it measures the always-present heading, column headers, the
+ * "Add Event Template" button, and an unsaved create dialog), so it needs no cleanup.
  */
 
 /** WCAG relative luminance for an `rgb(...)` / `rgba(...)` string. */
@@ -98,6 +105,47 @@ async function assertReadable(locator: Locator, label: string): Promise<number> 
   return ratio;
 }
 
+/** The six color keys defined by the colors design spec (§4). */
+interface ColorSettings {
+  AppTopBarHexColor?: string;
+  AppTopBarHexTextColor?: string;
+  AppLightModePrimaryHexColor?: string;
+  AppLightModePrimaryHexTextColor?: string;
+  AppDarkModePrimaryHexColor?: string;
+  AppDarkModePrimaryHexTextColor?: string;
+}
+
+/**
+ * The effective color settings, layered the way `ComnSettingsService` layers them:
+ * `settings.json`, then `settings.shared.json`, then `settings.env.json`. The color
+ * keys are all top-level, so a shallow merge is enough. A missing overlay is skipped.
+ */
+async function effectiveColorSettings(page: Page): Promise<ColorSettings> {
+  return page.evaluate(async () => {
+    const merged: Record<string, unknown> = {};
+    for (const file of ['settings.json', 'settings.shared.json', 'settings.env.json']) {
+      const res = await fetch(`/assets/config/${file}`, { cache: 'no-store' });
+      if (res.ok) Object.assign(merged, await res.json());
+    }
+    return merged;
+  });
+}
+
+/** Read a CSS custom property as set on `<body>`, trimmed and uppercased for comparison. */
+async function cssVar(page: Page, name: string): Promise<string> {
+  return page.evaluate(
+    (n) => getComputedStyle(document.body).getPropertyValue(n).trim().toUpperCase(),
+    name
+  );
+}
+
+/** `#rrggbb` → `rgb(r, g, b)`, matching how computed styles serialize colors. */
+function hexToRgb(hex: string): string {
+  const h = hex.replace('#', '');
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
 for (const theme of ALLOY_THEMES) {
   test.describe(`${theme} theme › Accessibility and Usability`, () => {
     // WCAG 1.4.3 — text contrast. Passes in both themes today.
@@ -138,10 +186,10 @@ for (const theme of ALLOY_THEMES) {
     });
 
     // WCAG 1.4.11 — non-text (icon) contrast for the primary action control. The
-    // "Add Event Template" mat-icon-button draws its mdi-plus-circle glyph in the
-    // brand accent colour; both themes must keep it >= 3:1 against the surface it
-    // sits on. Threshold stays generic — the accent is derived from the configured
-    // brand colour, so don't hardcode a specific hex.
+    // "Add Event Template" mat-icon-button draws its mdi-plus-circle glyph in
+    // `--mat-sys-primary`; both themes must keep it >= 3:1 against the surface it
+    // sits on. Threshold stays generic: `primary` comes from each mode's configured
+    // setting, so don't hardcode a specific hex.
     test('Primary action icon contrast (WCAG 1.4.11)', async ({ page }: { page: Page }) => {
       await authenticateWithKeycloak(page, Services.Alloy.UI);
       await applyAlloyTheme(page, theme);
@@ -160,6 +208,84 @@ for (const theme of ALLOY_THEMES) {
         `${theme}: "Add Event Template" icon contrast ${ratio.toFixed(2)}:1 ` +
           `(${s.color} on ${s.surface}) must be >= 3:1 (WCAG 1.4.11)`
       ).toBeGreaterThanOrEqual(3);
+    });
+
+    // Colors design spec §3–§4: the top bar keeps the same colors in both modes,
+    // and `primary` / `on-primary` take the active mode's settings verbatim (dark
+    // falls back to light when its key is absent). Nothing is derived or corrected.
+    test('Color settings applied per theme (design spec)', async ({ page }: { page: Page }) => {
+      await authenticateWithKeycloak(page, Services.Alloy.UI);
+      await applyAlloyTheme(page, theme);
+      await page.goto(`${Services.Alloy.UI}/admin`);
+      await expect(page.getByRole('table')).toBeVisible();
+
+      const settings = await effectiveColorSettings(page);
+      for (const key of [
+        'AppTopBarHexColor',
+        'AppTopBarHexTextColor',
+        'AppLightModePrimaryHexColor',
+        'AppLightModePrimaryHexTextColor',
+      ] as const) {
+        expect(settings[key], `settings must define ${key}`).toBeTruthy();
+      }
+
+      const expectedPrimary =
+        theme === 'dark'
+          ? settings.AppDarkModePrimaryHexColor || settings.AppLightModePrimaryHexColor!
+          : settings.AppLightModePrimaryHexColor!;
+      const expectedOnPrimary =
+        theme === 'dark'
+          ? settings.AppDarkModePrimaryHexTextColor || settings.AppLightModePrimaryHexTextColor!
+          : settings.AppLightModePrimaryHexTextColor!;
+
+      // Top bar: same pair in both themes, and actually painted on the toolbar.
+      expect(await cssVar(page, '--app-topbar-background')).toBe(settings.AppTopBarHexColor!.toUpperCase());
+      expect(await cssVar(page, '--app-topbar-text')).toBe(settings.AppTopBarHexTextColor!.toUpperCase());
+      const toolbar = page.locator('mat-toolbar.toolbar');
+      await expect(toolbar).toHaveCSS('background-color', hexToRgb(settings.AppTopBarHexColor!));
+
+      // Material primary roles: the active mode's pair, verbatim.
+      expect(await cssVar(page, '--mat-sys-primary'), `${theme}: --mat-sys-primary`).toBe(
+        expectedPrimary.toUpperCase()
+      );
+      expect(await cssVar(page, '--mat-sys-on-primary'), `${theme}: --mat-sys-on-primary`).toBe(
+        expectedOnPrimary.toUpperCase()
+      );
+    });
+
+    // Colors design spec §3b checks 1 and 3 (WCAG 1.4.3): `primary` used as text on
+    // the surface (a text/outlined button label) and `on-primary` on a filled
+    // `primary` button must each reach 4.5:1. Uses the create dialog without saving.
+    test('Primary and on-primary text contrast (WCAG 1.4.3)', async ({ page }: { page: Page }) => {
+      await authenticateWithKeycloak(page, Services.Alloy.UI);
+      await applyAlloyTheme(page, theme);
+      await page.goto(`${Services.Alloy.UI}/admin`);
+      await expect(page.getByRole('table')).toBeVisible();
+
+      const createDialog = page.getByRole('dialog', { name: 'Create New Event Template' });
+      await page.getByRole('button', { name: 'Add Event Template' }).click();
+      await expect(createDialog).toBeVisible();
+
+      // Save stays disabled (and greyed) until the required fields are filled; fill
+      // them so the button renders in its enabled filled-primary state. Nothing is
+      // POSTed until Save is clicked, and this test never clicks it.
+      await createDialog.getByRole('textbox', { name: /^Name/ }).fill('Contrast probe');
+      await createDialog.getByRole('spinbutton', { name: 'Duration Hours' }).fill('1');
+      const saveButton = createDialog.getByRole('button', { name: 'Save' });
+      await expect(saveButton).toBeEnabled();
+
+      // `on-primary` label on the filled `primary` Save button.
+      const primary = await cssVar(page, '--mat-sys-primary');
+      await expect(saveButton).toHaveCSS('background-color', hexToRgb(primary));
+      await assertReadable(saveButton, `${theme}: filled Save button label`);
+
+      // `primary` used as text on the dialog surface.
+      const cancelButton = createDialog.getByRole('button', { name: 'Cancel' });
+      await expect(cancelButton).toHaveCSS('color', hexToRgb(primary));
+      await assertReadable(cancelButton, `${theme}: Cancel button label`);
+
+      await cancelButton.click();
+      await expect(createDialog).toBeHidden();
     });
   });
 }
