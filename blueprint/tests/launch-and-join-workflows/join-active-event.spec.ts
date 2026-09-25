@@ -149,7 +149,9 @@ test.describe('Launch and Join Event Workflows', () => {
     ]);
 
     // expect: the join call succeeded and returned this MSEL's Player View id.
-    expect(joinResponse.status(), await joinResponse.text().catch(() => '')).toBe(200);
+    // Read the body only on failure. On success the page navigates away and the browser drops
+    // the body; from Playwright 1.63, reading it then waits out the test timeout instead of rejecting.
+    expect(joinResponse.status(), joinResponse.status() === 200 ? '' : await joinResponse.text().catch(() => '')).toBe(200);
 
     // expect: User is redirected to the event participant view — i.e. the PLAYER app (not
     // Blueprint, which is what the old assertion checked) at the returned view id.

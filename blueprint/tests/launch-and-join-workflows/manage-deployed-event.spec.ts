@@ -135,7 +135,9 @@ test.describe('Launch and Join Event Workflows', () => {
       ),
       confirmButton.click(),
     ]);
-    expect(archiveResponse.status(), await archiveResponse.text().catch(() => '')).toBe(200);
+    // Read the body only on failure. On success the page navigates away and the browser drops
+    // the body; from Playwright 1.63, reading it then waits out the test timeout instead of rejecting.
+    expect(archiveResponse.status(), archiveResponse.status() === 200 ? '' : await archiveResponse.text().catch(() => '')).toBe(200);
 
     // expect: Event status changes from 'Deployed' to Archived.
     //
