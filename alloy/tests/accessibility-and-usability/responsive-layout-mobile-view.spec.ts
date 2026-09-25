@@ -6,21 +6,25 @@
 
 import { test, expect } from '@playwright/test';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
+import { ALLOY_THEMES, applyAlloyTheme } from '../../test-helpers';
 
-test.describe('Accessibility and Usability', () => {
-  test('Responsive Layout - Mobile View', async ({ page }) => {
-    // 1. Resize browser to mobile viewport (375x667)
-    await page.setViewportSize({ width: 375, height: 667 });
-    await authenticateWithKeycloak(page, Services.Alloy.UI);
+for (const theme of ALLOY_THEMES) {
+  test.describe(`${theme} theme › Accessibility and Usability`, () => {
+    test('Responsive Layout - Mobile View', async ({ page }) => {
+      // 1. Resize browser to mobile viewport (375x667)
+      await page.setViewportSize({ width: 375, height: 667 });
+      await authenticateWithKeycloak(page, Services.Alloy.UI);
+      await applyAlloyTheme(page, theme);
 
-    // expect: Page layout adapts to mobile view
-    // expect: All content is accessible
-    await expect(page.getByText('My Events')).toBeVisible();
+      // expect: Page layout adapts to mobile view
+      // expect: All content is accessible
+      await expect(page.getByText('My Events')).toBeVisible();
 
-    // 2. Navigate through the application
-    await page.goto(`${Services.Alloy.UI}/admin`);
+      // 2. Navigate through the application
+      await page.goto(`${Services.Alloy.UI}/admin`);
 
-    // expect: Navigation is accessible
-    await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
+      // expect: Navigation is accessible
+      await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
+    });
   });
-});
+}

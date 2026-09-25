@@ -6,26 +6,30 @@
 
 import { test, expect } from '@playwright/test';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
+import { ALLOY_THEMES, applyAlloyTheme } from '../../test-helpers';
 
-test.describe('Events Management', () => {
-  test('Edit Event', async ({ page }) => {
-    // Note: This test verifies the Events admin section has edit capabilities.
+for (const theme of ALLOY_THEMES) {
+  test.describe(`${theme} theme › Events Management`, () => {
+    test('Edit Event', async ({ page }) => {
+      // Note: This test verifies the Events admin section has edit capabilities.
 
-    // 1. Navigate to admin Events section
-    await authenticateWithKeycloak(page, Services.Alloy.UI);
-    await page.goto(`${Services.Alloy.UI}/admin`);
-    await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
+      // 1. Navigate to admin Events section
+      await authenticateWithKeycloak(page, Services.Alloy.UI);
+      await applyAlloyTheme(page, theme);
+      await page.goto(`${Services.Alloy.UI}/admin`);
+      await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
 
-    await page.locator('mat-list-item').filter({ hasText: 'Events' }).click();
+      await page.locator('mat-list-item').filter({ hasText: 'Events' }).click();
 
-    // expect: Events list is visible
-    await expect(page.getByRole('table')).toBeVisible();
+      // expect: Events list is visible
+      await expect(page.getByRole('table')).toBeVisible();
 
-    // 2. Verify event table columns support viewing/editing
-    await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Status', exact: true })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Launch Date' })).toBeVisible();
+      // 2. Verify event table columns support viewing/editing
+      await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
+      await expect(page.getByRole('columnheader', { name: 'Status', exact: true })).toBeVisible();
+      await expect(page.getByRole('columnheader', { name: 'Launch Date' })).toBeVisible();
 
-    // Note: Editing specific events requires active events in the system
+      // Note: Editing specific events requires active events in the system
+    });
   });
-});
+}
