@@ -77,7 +77,7 @@ Alloy is an advanced orchestration application within the Crucible cybersecurity
     - expect: The home page loads successfully
     - expect: The topbar is visible with application branding
     - expect: The topbar displays 'Alloy' or configured AppTopBarText
-    - expect: The topbar color matches the configured color (#719F94 by default)
+    - expect: The topbar color matches the configured `AppTopBarHexColor` (#006B6D by default)
     - expect: The user's username is displayed in the topbar
     - expect: The main content area displays event list or welcome content
 
@@ -1529,6 +1529,29 @@ Alloy is an advanced orchestration application within the Crucible cybersecurity
     - expect: Loading indicator disappears
     - expect: Success or error message is displayed
     - expect: UI updates to reflect the completed action
+
+#### 13.9. Theme Contrast Compliance
+
+**File:** `tests/accessibility-and-usability/theme-contrast-compliance.spec.ts`
+
+Runs once per theme (light and dark). Follows the Crucible colors design spec
+(`crucible-development/design-specs/angular/colors.md`). Expected colors are read from the
+app's layered settings files (`settings.json`, `settings.shared.json`, `settings.env.json`),
+not hardcoded.
+
+**Steps:**
+  1. Log in, apply the theme, and navigate to the admin Event Templates list
+    - expect: The Administration heading and a table column header meet WCAG 1.4.3 (4.5:1 normal, 3:1 large text)
+    - expect: Dark theme renders light-on-dark text; light theme renders dark-on-light
+    - expect: The "Add Event Template" icon meets WCAG 1.4.11 (3:1) against its surface
+  2. Compare the applied CSS custom properties against the color settings
+    - expect: `--app-topbar-background` / `--app-topbar-text` equal `AppTopBarHexColor` / `AppTopBarHexTextColor` in both themes, and the top bar paints that background
+    - expect: In light mode, `--mat-sys-primary` / `--mat-sys-on-primary` equal `AppLightModePrimaryHexColor` / `AppLightModePrimaryHexTextColor`
+    - expect: In dark mode, they equal `AppDarkModePrimaryHexColor` / `AppDarkModePrimaryHexTextColor`, falling back to the light-mode keys when absent
+  3. Open the Create New Event Template dialog and fill the required fields without saving
+    - expect: The filled Save button paints `--mat-sys-primary`, and its `on-primary` label meets 4.5:1
+    - expect: The Cancel button label is painted in `--mat-sys-primary` and meets 4.5:1 against the dialog surface
+    - expect: Cancel closes the dialog without creating a template
 
 ### 14. Performance and Optimization
 
