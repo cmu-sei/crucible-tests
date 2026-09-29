@@ -10,7 +10,7 @@
 // status codes and persisted rows (ProficiencyScaleEndpointTests, ProficiencyLevelEndpointTests);
 // this spec only asserts what the page shows.
 
-import { test, expect, Page, Locator } from '../../fixtures';
+import { test, expect, Page, Locator, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import {
   getBlueprintToken,
   gotoBlueprintAdminSection,
@@ -48,99 +48,102 @@ async function saveLevelDialog(
   await expect(dialog).toBeHidden();
 }
 
-test.describe('Admin - Competencies and Proficiency', () => {
-  let scaleName: string;
+for (const theme of BLUEPRINT_THEMES) {
+  test.describe(`${theme} theme › Admin - Competencies and Proficiency`, () => {
+    let scaleName: string;
 
-  test.afterEach(async () => {
-    const token = await getBlueprintToken();
-    for (const scale of await findProficiencyScalesByName(token, scaleName)) {
-      await deleteProficiencyScale(token, scale.id);
-    }
+    test.afterEach(async () => {
+      const token = await getBlueprintToken();
+      for (const scale of await findProficiencyScalesByName(token, scaleName)) {
+        await deleteProficiencyScale(token, scale.id);
+      }
+    });
+
+    test('Create a proficiency scale and manage its levels', async ({ blueprintAuthenticatedPage: page }) => {
+      await applyBlueprintTheme(page, theme);
+      scaleName = tempBlueprintName('ProfScale');
+
+      await gotoBlueprintAdminSection(page, 'Proficiency Scales');
+
+      // 1. The create dialog will not save a nameless scale.
+      await page.getByTitle('Add proficiency scale').click();
+      const dialog = page.getByRole('dialog');
+      await expect(dialog.getByText('Create Proficiency Scale')).toBeVisible();
+      const save = dialog.getByRole('button', { name: 'Save' });
+      await expect(save).toBeDisabled();
+
+      await fillDialogFields([
+        [dialog.getByLabel('Name'), scaleName],
+        [dialog.getByLabel('Description'), 'Levels for the scale spec'],
+      ]);
+      await expect(save).toBeEnabled();
+      const created = page.waitForResponse(
+        (r) => r.url().toLowerCase().includes('/api/proficiencyscales') && r.request().method() === 'POST'
+      );
+      await save.click();
+      expect((await created).ok()).toBe(true);
+      await expect(dialog).toBeHidden();
+
+      // 2. The new scale is listed with no levels.
+      const row = await findScaleRow(page, scaleName);
+      await expect(row.locator('mat-cell.sub-col-levels')).toHaveText('0');
+      await expect(row.locator('mat-cell.sub-col-desc')).toHaveText('Levels for the scale spec');
+
+      // 3. Expanding the row shows its (empty) levels table.
+      await row.click();
+      const detail = page.locator('.levels-detail').filter({ hasText: `Levels for "${scaleName}"` });
+      await expect(detail).toBeVisible();
+      await expect(detail.getByText('No levels defined')).toBeVisible();
+
+      // 4. Add two levels. Each appears in the detail table and bumps the Levels column.
+      await detail.getByTitle('Add level').click();
+      await expect(page.getByRole('dialog').getByText('Create Proficiency Level')).toBeVisible();
+      await expect(page.getByRole('dialog').getByRole('button', { name: 'Save' })).toBeDisabled();
+      await saveLevelDialog(page, 'POST', { name: 'Novice', value: '1', displayOrder: '1' });
+
+      const levelRows = detail.locator('tr.mat-mdc-row');
+      await expect(levelRows).toHaveCount(1);
+      await expect(levelRows.first()).toContainText('Novice');
+      await expect(detail.getByText('No levels defined')).toBeHidden();
+      await expect(row.locator('mat-cell.sub-col-levels')).toHaveText('1');
+
+      await detail.getByTitle('Add level').click();
+      await saveLevelDialog(page, 'POST', { name: 'Expert', value: '3', displayOrder: '2' });
+      await expect(levelRows).toHaveCount(2);
+      await expect(row.locator('mat-cell.sub-col-levels')).toHaveText('2');
+
+      // 5. Edit a level: the dialog opens pre-filled and the row shows the new name.
+      await detail.getByTitle('Edit Novice').click();
+      await expect(page.getByRole('dialog').getByText('Edit Proficiency Level')).toBeVisible();
+      await expect(page.getByRole('dialog').getByLabel('Value')).toHaveValue('1');
+      await saveLevelDialog(page, 'PUT', { name: 'Beginner' });
+      await expect(detail.locator('tr.mat-mdc-row').filter({ hasText: 'Beginner' })).toHaveCount(1);
+      await expect(detail.locator('tr.mat-mdc-row').filter({ hasText: 'Novice' })).toHaveCount(0);
+
+      // 6. Deleting a level has no confirmation; the row and the count both drop.
+      const levelDeleted = page.waitForResponse(
+        (r) => r.url().toLowerCase().includes('/api/proficiencylevels/') && r.request().method() === 'DELETE'
+      );
+      await detail.getByTitle('Delete Expert').click();
+      expect((await levelDeleted).ok()).toBe(true);
+      await expect(detail.locator('tr.mat-mdc-row')).toHaveCount(1);
+      await expect(row.locator('mat-cell.sub-col-levels')).toHaveText('1');
+
+      // 7. Deleting the scale asks first; answering No keeps it.
+      await row.getByTitle(`Delete ${scaleName}`).click();
+      const confirm = page.getByRole('dialog').filter({ hasText: 'Delete Scale' });
+      await expect(confirm).toContainText(`Are you sure you want to delete ${scaleName}?`);
+      await confirm.getByRole('button', { name: 'No' }).click();
+      await expect(confirm).toBeHidden();
+      await expect(row).toBeVisible();
+
+      await row.getByTitle(`Delete ${scaleName}`).click();
+      const scaleDeleted = page.waitForResponse(
+        (r) => r.url().toLowerCase().includes('/api/proficiencyscales/') && r.request().method() === 'DELETE'
+      );
+      await page.getByRole('dialog').filter({ hasText: 'Delete Scale' }).getByRole('button', { name: 'Yes' }).click();
+      expect((await scaleDeleted).ok()).toBe(true);
+      await expect(page.locator('mat-row.element-row').filter({ hasText: scaleName })).toHaveCount(0);
+    });
   });
-
-  test('Create a proficiency scale and manage its levels', async ({ blueprintAuthenticatedPage: page }) => {
-    scaleName = tempBlueprintName('ProfScale');
-
-    await gotoBlueprintAdminSection(page, 'Proficiency Scales');
-
-    // 1. The create dialog will not save a nameless scale.
-    await page.getByTitle('Add proficiency scale').click();
-    const dialog = page.getByRole('dialog');
-    await expect(dialog.getByText('Create Proficiency Scale')).toBeVisible();
-    const save = dialog.getByRole('button', { name: 'Save' });
-    await expect(save).toBeDisabled();
-
-    await fillDialogFields([
-      [dialog.getByLabel('Name'), scaleName],
-      [dialog.getByLabel('Description'), 'Levels for the scale spec'],
-    ]);
-    await expect(save).toBeEnabled();
-    const created = page.waitForResponse(
-      (r) => r.url().toLowerCase().includes('/api/proficiencyscales') && r.request().method() === 'POST'
-    );
-    await save.click();
-    expect((await created).ok()).toBe(true);
-    await expect(dialog).toBeHidden();
-
-    // 2. The new scale is listed with no levels.
-    const row = await findScaleRow(page, scaleName);
-    await expect(row.locator('mat-cell.sub-col-levels')).toHaveText('0');
-    await expect(row.locator('mat-cell.sub-col-desc')).toHaveText('Levels for the scale spec');
-
-    // 3. Expanding the row shows its (empty) levels table.
-    await row.click();
-    const detail = page.locator('.levels-detail').filter({ hasText: `Levels for "${scaleName}"` });
-    await expect(detail).toBeVisible();
-    await expect(detail.getByText('No levels defined')).toBeVisible();
-
-    // 4. Add two levels. Each appears in the detail table and bumps the Levels column.
-    await detail.getByTitle('Add level').click();
-    await expect(page.getByRole('dialog').getByText('Create Proficiency Level')).toBeVisible();
-    await expect(page.getByRole('dialog').getByRole('button', { name: 'Save' })).toBeDisabled();
-    await saveLevelDialog(page, 'POST', { name: 'Novice', value: '1', displayOrder: '1' });
-
-    const levelRows = detail.locator('tr.mat-mdc-row');
-    await expect(levelRows).toHaveCount(1);
-    await expect(levelRows.first()).toContainText('Novice');
-    await expect(detail.getByText('No levels defined')).toBeHidden();
-    await expect(row.locator('mat-cell.sub-col-levels')).toHaveText('1');
-
-    await detail.getByTitle('Add level').click();
-    await saveLevelDialog(page, 'POST', { name: 'Expert', value: '3', displayOrder: '2' });
-    await expect(levelRows).toHaveCount(2);
-    await expect(row.locator('mat-cell.sub-col-levels')).toHaveText('2');
-
-    // 5. Edit a level: the dialog opens pre-filled and the row shows the new name.
-    await detail.getByTitle('Edit Novice').click();
-    await expect(page.getByRole('dialog').getByText('Edit Proficiency Level')).toBeVisible();
-    await expect(page.getByRole('dialog').getByLabel('Value')).toHaveValue('1');
-    await saveLevelDialog(page, 'PUT', { name: 'Beginner' });
-    await expect(detail.locator('tr.mat-mdc-row').filter({ hasText: 'Beginner' })).toHaveCount(1);
-    await expect(detail.locator('tr.mat-mdc-row').filter({ hasText: 'Novice' })).toHaveCount(0);
-
-    // 6. Deleting a level has no confirmation; the row and the count both drop.
-    const levelDeleted = page.waitForResponse(
-      (r) => r.url().toLowerCase().includes('/api/proficiencylevels/') && r.request().method() === 'DELETE'
-    );
-    await detail.getByTitle('Delete Expert').click();
-    expect((await levelDeleted).ok()).toBe(true);
-    await expect(detail.locator('tr.mat-mdc-row')).toHaveCount(1);
-    await expect(row.locator('mat-cell.sub-col-levels')).toHaveText('1');
-
-    // 7. Deleting the scale asks first; answering No keeps it.
-    await row.getByTitle(`Delete ${scaleName}`).click();
-    const confirm = page.getByRole('dialog').filter({ hasText: 'Delete Scale' });
-    await expect(confirm).toContainText(`Are you sure you want to delete ${scaleName}?`);
-    await confirm.getByRole('button', { name: 'No' }).click();
-    await expect(confirm).toBeHidden();
-    await expect(row).toBeVisible();
-
-    await row.getByTitle(`Delete ${scaleName}`).click();
-    const scaleDeleted = page.waitForResponse(
-      (r) => r.url().toLowerCase().includes('/api/proficiencyscales/') && r.request().method() === 'DELETE'
-    );
-    await page.getByRole('dialog').filter({ hasText: 'Delete Scale' }).getByRole('button', { name: 'Yes' }).click();
-    expect((await scaleDeleted).ok()).toBe(true);
-    await expect(page.locator('mat-row.element-row').filter({ hasText: scaleName })).toHaveCount(0);
-  });
-});
+}

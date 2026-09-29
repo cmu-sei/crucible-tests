@@ -13,7 +13,7 @@
 // what the database happened to hold, and fell into a URL-only fallback when there was none.
 // It now seeds its own MSEL.
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import {
   getBlueprintToken,
   createMsel,
@@ -22,56 +22,59 @@ import {
   findMselRowByName,
 } from '../../test-helpers';
 
-test.describe('Event Dashboard and Navigation', () => {
-  let token: string;
-  let mselId: string | undefined;
+for (const theme of BLUEPRINT_THEMES) {
+  test.describe(`${theme} theme › Event Dashboard and Navigation`, () => {
+    let token: string;
+    let mselId: string | undefined;
 
-  test.afterEach(async () => {
-    if (mselId) await deleteMsel(token, mselId);
+    test.afterEach(async () => {
+      if (mselId) await deleteMsel(token, mselId);
+    });
+
+    test('Browser Back and Forward Navigation', async ({ blueprintAuthenticatedPage: page }) => {
+      await applyBlueprintTheme(page, theme);
+      token = await getBlueprintToken();
+      const mselName = tempBlueprintName('BackFwd');
+      mselId = (await createMsel(token, { name: mselName })).id;
+
+      // 1. Start on the dashboard.
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 30000 });
+      const dashboardCard = page.getByText('Manage an Event').first();
+      await expect(dashboardCard).toBeVisible({ timeout: 15000 });
+
+      // 2. Go to the /build list and open the seeded MSEL from it.
+      await page.goto(`${Services.Blueprint.UI}/build`);
+      const addBlankMsel = page.getByRole('button', { name: 'Add blank MSEL' });
+      await expect(addBlankMsel).toBeVisible({ timeout: 15000 });
+      const row = await findMselRowByName(page, mselName);
+      await row.getByRole('link', { name: mselName }).click();
+
+      // expect: the MSEL detail view is shown for that MSEL.
+      await expect(page).toHaveURL(new RegExp(`[?&]msel=${mselId}`), { timeout: 15000 });
+      const infoSection = page.locator('mat-list-item').filter({ hasText: 'Info' }).first();
+      const nameField = page.getByRole('textbox', { name: 'Name' });
+      await expect(infoSection).toBeVisible({ timeout: 15000 });
+      await expect(nameField).toHaveValue(mselName, { timeout: 15000 });
+
+      // 3. Back: the list is shown again, not the MSEL.
+      await page.goBack();
+      await expect(page).not.toHaveURL(/[?&]msel=/, { timeout: 10000 });
+      await expect(addBlankMsel).toBeVisible({ timeout: 15000 });
+      await expect(infoSection).toBeHidden();
+
+      // 4. Back again: the dashboard.
+      await page.goBack();
+      await expect(dashboardCard).toBeVisible({ timeout: 15000 });
+      await expect(addBlankMsel).toBeHidden();
+
+      // 5. Forward: the list.
+      await page.goForward();
+      await expect(addBlankMsel).toBeVisible({ timeout: 15000 });
+
+      // 6. Forward again: the same MSEL's detail view.
+      await page.goForward();
+      await expect(page).toHaveURL(new RegExp(`[?&]msel=${mselId}`), { timeout: 10000 });
+      await expect(nameField).toHaveValue(mselName, { timeout: 15000 });
+    });
   });
-
-  test('Browser Back and Forward Navigation', async ({ blueprintAuthenticatedPage: page }) => {
-    token = await getBlueprintToken();
-    const mselName = tempBlueprintName('BackFwd');
-    mselId = (await createMsel(token, { name: mselName })).id;
-
-    // 1. Start on the dashboard.
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 30000 });
-    const dashboardCard = page.getByText('Manage an Event').first();
-    await expect(dashboardCard).toBeVisible({ timeout: 15000 });
-
-    // 2. Go to the /build list and open the seeded MSEL from it.
-    await page.goto(`${Services.Blueprint.UI}/build`);
-    const addBlankMsel = page.getByRole('button', { name: 'Add blank MSEL' });
-    await expect(addBlankMsel).toBeVisible({ timeout: 15000 });
-    const row = await findMselRowByName(page, mselName);
-    await row.getByRole('link', { name: mselName }).click();
-
-    // expect: the MSEL detail view is shown for that MSEL.
-    await expect(page).toHaveURL(new RegExp(`[?&]msel=${mselId}`), { timeout: 15000 });
-    const infoSection = page.locator('mat-list-item').filter({ hasText: 'Info' }).first();
-    const nameField = page.getByRole('textbox', { name: 'Name' });
-    await expect(infoSection).toBeVisible({ timeout: 15000 });
-    await expect(nameField).toHaveValue(mselName, { timeout: 15000 });
-
-    // 3. Back: the list is shown again, not the MSEL.
-    await page.goBack();
-    await expect(page).not.toHaveURL(/[?&]msel=/, { timeout: 10000 });
-    await expect(addBlankMsel).toBeVisible({ timeout: 15000 });
-    await expect(infoSection).toBeHidden();
-
-    // 4. Back again: the dashboard.
-    await page.goBack();
-    await expect(dashboardCard).toBeVisible({ timeout: 15000 });
-    await expect(addBlankMsel).toBeHidden();
-
-    // 5. Forward: the list.
-    await page.goForward();
-    await expect(addBlankMsel).toBeVisible({ timeout: 15000 });
-
-    // 6. Forward again: the same MSEL's detail view.
-    await page.goForward();
-    await expect(page).toHaveURL(new RegExp(`[?&]msel=${mselId}`), { timeout: 10000 });
-    await expect(nameField).toHaveValue(mselName, { timeout: 15000 });
-  });
-});
+}
