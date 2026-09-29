@@ -45,12 +45,13 @@ for (const theme of BLUEPRINT_THEMES) {
       await expect(selectedTab).toHaveText(/New Page/, { timeout: 5000 });
       const newPageName = (await selectedTab.textContent())?.trim() || 'New Page';
 
-      // The page is in edit mode after creation — we need to save or cancel first
-      // Look for the cancel button to exit edit mode
-      const cancelButton = page.getByRole('button', { name: /Cancel/ }).first();
-      if (await cancelButton.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await cancelButton.click();
-      }
+      // A new page opens in edit mode, but only after a 100ms setTimeout in
+      // MselInfoComponent that follows the tab switch. Wait for the page's own Cancel
+      // Changes button and leave edit mode; an isVisible() probe does not wait and
+      // skipped the cancel whenever it ran inside that window.
+      const cancelButton = page.getByRole('tabpanel').getByRole('button', { name: 'Cancel Changes' });
+      await expect(cancelButton).toBeVisible({ timeout: 10000 });
+      await cancelButton.click();
 
       // Wait for delete button to become visible (proves edit mode exited)
       const deleteButton = page.getByRole('button', { name: `Delete ${newPageName}` });

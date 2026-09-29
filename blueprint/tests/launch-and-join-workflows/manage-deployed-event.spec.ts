@@ -137,9 +137,17 @@ for (const theme of BLUEPRINT_THEMES) {
         ),
         confirmButton.click(),
       ]);
-      // Read the body only on failure. On success the page navigates away and the browser drops
-      // the body; from Playwright 1.63, reading it then waits out the test timeout instead of rejecting.
-      expect(archiveResponse.status(), archiveResponse.status() === 200 ? '' : await archiveResponse.text().catch(() => '')).toBe(200);
+      // Read the body only on failure. On success /manage navigates to the dashboard at
+      // once, which discards the response body, and `response.text()` then never settles:
+      // the test hung here until the 300s timeout, teardown deleted the MSEL, and the
+      // orphaned poll below reported a misleading 500 from GET on the deleted MSEL.
+      if (archiveResponse.status() !== 200) {
+        const body = await Promise.race([
+          archiveResponse.text().catch(() => ''),
+          new Promise<string>((resolve) => setTimeout(() => resolve('<body unavailable>'), 5000)),
+        ]);
+        throw new Error(`DELETE /api/msels/${mselId}/archive returned ${archiveResponse.status()}: ${body}`);
+      }
 
       // expect: Event status changes from 'Deployed' to Archived.
       //

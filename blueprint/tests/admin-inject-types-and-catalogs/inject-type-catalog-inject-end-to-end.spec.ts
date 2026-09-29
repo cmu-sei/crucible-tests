@@ -99,12 +99,18 @@ for (const theme of BLUEPRINT_THEMES) {
       };
 
       // Helper: delete all items whose delete button title matches the given pattern
+      //
+      // The DELETE fires after the confirm dialog closes, so the deleted row lingers for a
+      // moment. Wait for the match count to drop before looping; otherwise the next pass
+      // re-selects the row being removed and its click times out once the row detaches.
       const deleteAllMatching = async (namePattern: RegExp) => {
-        let deleteBtn = page.getByRole('button', { name: namePattern }).first();
-        while (await deleteBtn.isVisible().catch(() => false)) {
-          await deleteBtn.click();
+        const matches = page.getByRole('button', { name: namePattern });
+        let remaining = await matches.count();
+        while (remaining > 0) {
+          await matches.first().click();
           await confirmDelete();
-          deleteBtn = page.getByRole('button', { name: namePattern }).first();
+          await expect(matches).toHaveCount(remaining - 1, { timeout: 15000 });
+          remaining -= 1;
         }
       };
 

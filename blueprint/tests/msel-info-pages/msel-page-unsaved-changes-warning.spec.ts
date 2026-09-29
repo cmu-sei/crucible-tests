@@ -44,12 +44,13 @@ for (const theme of BLUEPRINT_THEMES) {
       const selectedTab = page.getByRole('tab', { selected: true });
       await expect(selectedTab).toHaveText(/New Page/, { timeout: 5000 });
 
-      // Save the newly created page
-      const saveButtonInitial = page.getByRole('button', { name: /Save/ }).first();
-      const saveVisible = await saveButtonInitial.isVisible({ timeout: 2000 }).catch(() => false);
-      if (saveVisible) {
-        await saveButtonInitial.click();
-      }
+      // A new page opens in edit mode, but only after a 100ms setTimeout in
+      // MselInfoComponent that follows the tab switch. Wait for the page's own Save
+      // Changes button rather than probing with isVisible(), which does not wait and
+      // skipped the save whenever it ran inside that window.
+      const saveButtonInitial = page.getByRole('tabpanel').getByRole('button', { name: 'Save Changes' });
+      await expect(saveButtonInitial).toBeVisible({ timeout: 10000 });
+      await saveButtonInitial.click();
 
       // Wait for edit button to appear (proves save completed)
       const editButton = page.getByRole('button', { name: 'Edit Page' });
