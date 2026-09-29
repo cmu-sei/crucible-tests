@@ -153,3 +153,4 @@ for (const theme of BLUEPRINT_THEMES) {
     await expect(option).toBeVisible({ timeout: 10000 });
     await option.click();
   }
+}

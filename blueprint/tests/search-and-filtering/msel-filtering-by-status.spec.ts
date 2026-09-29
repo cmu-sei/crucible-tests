@@ -9,7 +9,10 @@ import {
   expect,
   Services,
   serviceUrlPattern,
-  selectMatSelectOption,, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
+  selectMatSelectOption,
+  BLUEPRINT_THEMES,
+  applyBlueprintTheme,
+} from '../../fixtures';
 import {
   getBlueprintToken,
   createMsel,
