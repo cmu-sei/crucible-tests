@@ -239,8 +239,8 @@ for (const theme of ALLOY_THEMES) {
           : settings.AppLightModePrimaryHexTextColor!;
 
       // Top bar: same pair in both themes, and actually painted on the toolbar.
-      expect(await cssVar(page, '--app-topbar-background')).toBe(settings.AppTopBarHexColor!.toUpperCase());
-      expect(await cssVar(page, '--app-topbar-text')).toBe(settings.AppTopBarHexTextColor!.toUpperCase());
+      expect(await cssVar(page, '--crucible-topbar-background')).toBe(settings.AppTopBarHexColor!.toUpperCase());
+      expect(await cssVar(page, '--crucible-topbar-text')).toBe(settings.AppTopBarHexTextColor!.toUpperCase());
       const toolbar = page.locator('mat-toolbar.toolbar');
       await expect(toolbar).toHaveCSS('background-color', hexToRgb(settings.AppTopBarHexColor!));
 

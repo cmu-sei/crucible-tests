@@ -1545,7 +1545,7 @@ not hardcoded.
     - expect: Dark theme renders light-on-dark text; light theme renders dark-on-light
     - expect: The "Add Event Template" icon meets WCAG 1.4.11 (3:1) against its surface
   2. Compare the applied CSS custom properties against the color settings
-    - expect: `--app-topbar-background` / `--app-topbar-text` equal `AppTopBarHexColor` / `AppTopBarHexTextColor` in both themes, and the top bar paints that background
+    - expect: `--crucible-topbar-background` / `--crucible-topbar-text` equal `AppTopBarHexColor` / `AppTopBarHexTextColor` in both themes, and the top bar paints that background
     - expect: In light mode, `--mat-sys-primary` / `--mat-sys-on-primary` equal `AppLightModePrimaryHexColor` / `AppLightModePrimaryHexTextColor`
     - expect: In dark mode, they equal `AppDarkModePrimaryHexColor` / `AppDarkModePrimaryHexTextColor`, falling back to the light-mode keys when absent
   3. Open the Create New Event Template dialog and fill the required fields without saving
