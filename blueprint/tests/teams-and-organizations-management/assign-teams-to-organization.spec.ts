@@ -71,6 +71,7 @@ for (const theme of BLUEPRINT_THEMES) {
     test('Teams and Organizations are scoped to their MSEL', async ({
       blueprintAuthenticatedPage: page,
     }) => {
+      await applyBlueprintTheme(page, theme);
       // The seeded team belongs to its MSEL, and only to it.
       const teams = await listTeams(token, mselId);
       expect(teams.map((t: any) => t.id)).toContain(teamId);

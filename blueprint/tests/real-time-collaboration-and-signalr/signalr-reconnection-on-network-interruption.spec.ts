@@ -81,6 +81,7 @@ for (const theme of BLUEPRINT_THEMES) {
       blueprintAuthenticatedPage: page,
       context,
     }) => {
+      await applyBlueprintTheme(page, theme);
       // The client only notices the drop when its 30s serverTimeout elapses, and the retry
       // policy can add another backoff step, so this needs more than the default budget.
       test.setTimeout(240000);

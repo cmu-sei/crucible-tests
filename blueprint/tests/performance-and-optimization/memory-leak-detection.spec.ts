@@ -80,6 +80,7 @@ for (const theme of BLUEPRINT_THEMES) {
     });
 
     test('Memory Leak Detection', async ({ blueprintAuthenticatedPage: page, context }) => {
+      await applyBlueprintTheme(page, theme);
       const client = await context.newCDPSession(page);
       await client.send('Performance.enable');
 

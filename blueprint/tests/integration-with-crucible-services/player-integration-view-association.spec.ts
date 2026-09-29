@@ -175,6 +175,7 @@ for (const theme of BLUEPRINT_THEMES) {
     test('Player Integration - View Name Displayed', async ({
       blueprintAuthenticatedPage: page,
     }) => {
+      await applyBlueprintTheme(page, theme);
       // `fetchIntegrationNames()` returns early unless the MSEL is Deployed, so that is a
       // real precondition for the name lookup and is seeded here.
       await updateMsel(token, mselId, { status: 'Deployed' });

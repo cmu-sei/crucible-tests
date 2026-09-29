@@ -62,6 +62,7 @@ for (const theme of BLUEPRINT_THEMES) {
     test('Steamfitter Integration - Scenario Automation', async ({
       blueprintAuthenticatedPage: page,
     }) => {
+      await applyBlueprintTheme(page, theme);
       await page.goto(`${Services.Blueprint.UI}/build?msel=${mselId}`, {
         waitUntil: 'domcontentloaded',
       });

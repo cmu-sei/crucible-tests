@@ -30,6 +30,7 @@ for (const theme of BLUEPRINT_THEMES) {
     });
 
     test('Network Error Handling', async ({ blueprintAuthenticatedPage: page, context }) => {
+      await applyBlueprintTheme(page, theme);
       // Navigate to the seeded MSEL's Config tab
       await navigateToMsel(page, mselId);
 

@@ -87,6 +87,7 @@ for (const theme of BLUEPRINT_THEMES) {
     test('Collaborative Editing Conflict Resolution', async ({
       blueprintAuthenticatedPage: page,
     }) => {
+      await applyBlueprintTheme(page, theme);
       // ── Window 1 ────────────────────────────────────────────────────────────────
       await navigateToMselSection(page, mselId, 'Scenario Events');
       await expect(page.getByText(ORIGINAL).first()).toBeVisible({ timeout: 20000 });

@@ -70,6 +70,7 @@ for (const theme of BLUEPRINT_THEMES) {
     test('API Integration - Blueprint API Endpoints', async ({
       blueprintAuthenticatedPage: page,
     }) => {
+      await applyBlueprintTheme(page, theme);
       const blueprintApiPattern = serviceUrlPattern(Services.Blueprint.API);
 
       interface CapturedRequest {
