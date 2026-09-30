@@ -4,24 +4,27 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, CASTER_THEMES, setCasterTheme } from '../../fixtures';
 
-test.describe('Projects Management', () => {
-  test('View Projects List', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Projects Management`, () => {
+    test('View Projects List', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
-    // 1. Navigate to http://localhost:4310/projects
-    // expect: Projects page loads successfully
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Caster.UI), { timeout: 30000 });
+      // 1. Navigate to http://localhost:4310/projects
+      // expect: Projects page loads successfully
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Caster.UI), { timeout: 30000 });
 
-    // expect: Projects list is displayed in a table format
-    await expect(page.getByText('My Projects')).toBeVisible();
-    await expect(page.getByRole('table')).toBeVisible();
+      // expect: Projects list is displayed in a table format
+      await expect(page.getByText('My Projects')).toBeVisible();
+      await expect(page.getByRole('table')).toBeVisible();
 
-    // expect: Each project shows its name and description.
-    await expect(page.getByRole('button', { name: 'Name' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Description' })).toBeVisible();
+      // expect: Each project shows its name and description.
+      await expect(page.getByRole('button', { name: 'Name' })).toBeVisible();
+      await expect(page.getByRole('columnheader', { name: 'Description' })).toBeVisible();
 
-    // expect: A search box is available
-    await expect(page.getByRole('textbox', { name: 'Search' })).toBeVisible();
+      // expect: A search box is available
+      await expect(page.getByRole('textbox', { name: 'Search' })).toBeVisible();
+    });
   });
-});
+}

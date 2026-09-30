@@ -4,27 +4,30 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, CASTER_THEMES, setCasterTheme } from '../../fixtures';
 
-test.describe('Accessibility and Usability', () => {
-  test('Keyboard Navigation', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Accessibility and Usability`, () => {
+    test('Keyboard Navigation', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
-    await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
 
-    // 2. Use Tab key to navigate
-    await page.keyboard.press('Tab');
-    await expect(page.locator(':focus').first()).toBeVisible();
+      // 2. Use Tab key to navigate
+      await page.keyboard.press('Tab');
+      await expect(page.locator(':focus').first()).toBeVisible();
 
-    await page.keyboard.press('Tab');
-    await expect(page.locator(':focus').first()).toBeVisible();
+      await page.keyboard.press('Tab');
+      await expect(page.locator(':focus').first()).toBeVisible();
 
-    // 3. Use Shift+Tab to navigate backwards
-    await page.keyboard.press('Shift+Tab');
-    await expect(page.locator(':focus').first()).toBeVisible();
+      // 3. Use Shift+Tab to navigate backwards
+      await page.keyboard.press('Shift+Tab');
+      await expect(page.locator(':focus').first()).toBeVisible();
 
-    // 4. Verify search field works with keyboard
-    const searchBox = page.getByRole('textbox', { name: 'Search' });
-    await searchBox.focus();
-    await expect(searchBox).toBeFocused();
+      // 4. Verify search field works with keyboard
+      const searchBox = page.getByRole('textbox', { name: 'Search' });
+      await searchBox.focus();
+      await expect(searchBox).toBeFocused();
+    });
   });
-});
+}

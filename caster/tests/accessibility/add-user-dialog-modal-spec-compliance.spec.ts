@@ -11,6 +11,7 @@ import {
   gotoCasterUsersAdmin,
   openAddUserDialog,
   setCasterTheme,
+  CASTER_THEMES,
 } from '../../fixtures';
 
 /**
@@ -45,15 +46,15 @@ import {
  * the dark surface) live in `add-user-dialog-theming.spec.ts`. The theme is restored
  * in `afterEach` because it persists per user, outside this page.
  */
-for (const theme of ['light', 'dark'] as const) {
-  test.describe('Accessibility and Usability', () => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Accessibility and Usability`, () => {
     test.afterEach(async ({ casterAuthenticatedPage: page }) => {
       // The theme is a persisted user preference, so leaving it flipped would bleed
       // into every later spec. Restore it even when the test above failed.
       await setCasterTheme(page, 'light');
     });
 
-    test(`Add User Modal - Crucible modal spec compliance (${theme} theme)`, async ({
+    test('Add User Modal - Crucible modal spec compliance', async ({
       casterAuthenticatedPage: page,
     }) => {
       await gotoCasterUsersAdmin(page);

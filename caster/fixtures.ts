@@ -583,6 +583,13 @@ export async function deleteCasterGroup(page: Page, name: string): Promise<void>
   await dialog.waitFor({ state: 'detached', timeout: 10000 });
 }
 
+/**
+ * Themes every Caster functional spec is parameterized over. Each spec runs once
+ * per entry so every screen is exercised in both light and dark mode.
+ */
+export const CASTER_THEMES = ['light', 'dark'] as const;
+export type CasterTheme = (typeof CASTER_THEMES)[number];
+
 /** Whether Caster is currently rendering the dark theme. */
 export async function casterIsDarkTheme(page: Page): Promise<boolean> {
   return page.evaluate(() => document.body.classList.contains('darkMode'));
@@ -592,6 +599,12 @@ export async function casterIsDarkTheme(page: Page): Promise<boolean> {
  * Switch Caster between light and dark theme through the user menu, and wait for
  * the change to actually land on `document.body`.
  *
+ * Caster persists the selected theme in the `auth.ui` slice of its Akita store,
+ * saved to localStorage under 'akita-project-ui'. So a theme set here survives the
+ * reloads and client-side navigations a test performs afterward, and only needs
+ * applying once, right after authentication. The saved auth state carries no
+ * localStorage, so every test's fresh browser context starts light.
+ *
  * Use the toggle rather than the `?theme=dark` query param: the param is read in
  * `AppComponent`'s constructor, so it only applies on a fresh app bootstrap and is
  * a no-op for a client-side navigation within an already-running app (verified
@@ -600,7 +613,7 @@ export async function casterIsDarkTheme(page: Page): Promise<boolean> {
  * No-ops when the requested theme is already active, so callers can use it to
  * restore state unconditionally.
  */
-export async function setCasterTheme(page: Page, theme: 'light' | 'dark'): Promise<void> {
+export async function setCasterTheme(page: Page, theme: CasterTheme): Promise<void> {
   const want = theme === 'dark';
   if ((await casterIsDarkTheme(page)) === want) return;
 
@@ -608,8 +621,11 @@ export async function setCasterTheme(page: Page, theme: 'light' | 'dark'): Promi
   const toggle = page.getByRole('switch', { name: 'Dark Theme' });
   await toggle.waitFor({ state: 'visible', timeout: 10000 });
   await toggle.click();
-  // Close the menu so its overlay can't intercept later clicks.
+  // Close the menu, and wait for its overlay to tear down so a lingering CDK
+  // backdrop can't silently intercept the test's next click.
   await page.keyboard.press('Escape');
+  await page.locator('.mat-mdc-menu-panel').waitFor({ state: 'detached', timeout: 5000 });
+  await page.locator('.cdk-overlay-backdrop').waitFor({ state: 'detached', timeout: 5000 });
 
   await page
     .locator('body')

@@ -4,17 +4,20 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, CASTER_THEMES, setCasterTheme } from '../../fixtures';
 
-test.describe('Accessibility and Usability', () => {
-  test('Responsive Layout - Mobile View', async ({ page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Accessibility and Usability`, () => {
+    test('Responsive Layout - Mobile View', async ({ page }) => {
 
-    await page.setViewportSize({ width: 375, height: 667 });
-    // Use raw auth since we need viewport set before auth
-    const { authenticateWithKeycloak } = await import('../../../shared-fixtures');
-    await authenticateWithKeycloak(page, Services.Caster.UI);
+      await page.setViewportSize({ width: 375, height: 667 });
+      // Use raw auth since we need viewport set before auth
+      const { authenticateWithKeycloak } = await import('../../../shared-fixtures');
+      await authenticateWithKeycloak(page, Services.Caster.UI);
+      await setCasterTheme(page, theme);
 
-    await expect(page.getByText('Caster').first()).toBeVisible();
-    await expect(page.getByRole('table')).toBeVisible();
+      await expect(page.getByText('Caster').first()).toBeVisible();
+      await expect(page.getByRole('table')).toBeVisible();
+    });
   });
-});
+}

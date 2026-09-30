@@ -4,28 +4,31 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, CASTER_THEMES, setCasterTheme } from '../../fixtures';
 
-test.describe('Projects Management', () => {
-  test('Sort Projects', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Projects Management`, () => {
+    test('Sort Projects', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
-    // 1. Navigate to Projects section
-    await expect(page.getByText('My Projects')).toBeVisible();
+      // 1. Navigate to Projects section
+      await expect(page.getByText('My Projects')).toBeVisible();
 
-    // expect: Projects list is visible
-    await expect(page.getByRole('table')).toBeVisible();
+      // expect: Projects list is visible
+      await expect(page.getByRole('table')).toBeVisible();
 
-    // 2. Click on the Name column header
-    await page.getByRole('button', { name: 'Name' }).click();
+      // 2. Click on the Name column header
+      await page.getByRole('button', { name: 'Name' }).click();
 
-    // expect: Projects are sorted alphabetically by name
-    // expect: A sort indicator shows the sort direction
-    await expect(page.getByRole('button', { name: 'Name' })).toBeVisible();
+      // expect: Projects are sorted alphabetically by name
+      // expect: A sort indicator shows the sort direction
+      await expect(page.getByRole('button', { name: 'Name' })).toBeVisible();
 
-    // 3. Click on the Name column header again
-    await page.getByRole('button', { name: 'Name' }).click();
+      // 3. Click on the Name column header again
+      await page.getByRole('button', { name: 'Name' }).click();
 
-    // expect: Projects are sorted in reverse alphabetical order
-    await expect(page.getByRole('button', { name: 'Name' })).toBeVisible();
+      // expect: Projects are sorted in reverse alphabetical order
+      await expect(page.getByRole('button', { name: 'Name' })).toBeVisible();
+    });
   });
-});
+}

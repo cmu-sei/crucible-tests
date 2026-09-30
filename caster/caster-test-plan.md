@@ -4,6 +4,22 @@
 
 Caster is an infrastructure orchestration application within the Crucible cybersecurity training and simulation platform. It provides Terraform-based infrastructure-as-code capabilities, enabling users to manage infrastructure through Projects, Directories (templates), Workspaces (isolated environments), Files, Runs (plan/apply/destroy operations), Modules, VLANs, Roles, Groups, and Users. Caster integrates with other Crucible services, particularly Alloy, to dynamically provision and tear down infrastructure for training exercises.
 
+## Theme Coverage
+
+Every functional scenario below runs **once per theme (light and dark)**: each spec loops
+over `CASTER_THEMES` from `caster/fixtures.ts`, reports under a `light theme ›` /
+`dark theme ›` describe prefix, and applies the theme through the user menu's "Dark Theme"
+switch (`setCasterTheme`) right after authentication. Caster persists the choice in
+localStorage (`akita-project-ui`), so it survives the reloads a test performs, and every
+test's fresh browser context starts light.
+
+Exceptions, which run once:
+  - 1.1 User Login Flow and 1.2 Unauthorized Access Redirect — they exercise the Keycloak
+    screens before any Caster UI (and its theme switch) exists.
+  - 2.4 Theme Toggle — the theme switch is its subject.
+  - 17.8 Add User Modal - Light and Dark Theming — it samples both themes within one test to
+    compare them.
+
 ## Test Scenarios
 
 ### 1. Authentication and Authorization

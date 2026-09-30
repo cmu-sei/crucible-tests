@@ -11,25 +11,30 @@ import {
   createCasterGroup,
   deleteCasterGroup,
   gotoCasterGroupsAdmin,
+  CASTER_THEMES,
+  setCasterTheme,
 } from '../../fixtures';
 
 const GROUP_NAMES = ['Bulk Delete 1', 'Bulk Delete 2'];
 
-test.describe('Groups Management', () => {
-  test('Bulk Delete Groups', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Groups Management`, () => {
+    test('Bulk Delete Groups', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
-    await gotoCasterGroupsAdmin(page);
+      await gotoCasterGroupsAdmin(page);
 
-    // 1. Create multiple groups
-    for (const groupName of GROUP_NAMES) {
-      await createCasterGroup(page, groupName);
-      await expect(casterGroupCell(page, groupName)).toBeVisible();
-    }
+      // 1. Create multiple groups
+      for (const groupName of GROUP_NAMES) {
+        await createCasterGroup(page, groupName);
+        await expect(casterGroupCell(page, groupName)).toBeVisible();
+      }
 
-    // 2. Delete each group individually (no bulk delete UI with checkboxes available)
-    for (const groupName of GROUP_NAMES) {
-      await deleteCasterGroup(page, groupName);
-      await expect(casterGroupCell(page, groupName)).toHaveCount(0);
-    }
+      // 2. Delete each group individually (no bulk delete UI with checkboxes available)
+      for (const groupName of GROUP_NAMES) {
+        await deleteCasterGroup(page, groupName);
+        await expect(casterGroupCell(page, groupName)).toHaveCount(0);
+      }
+    });
   });
-});
+}

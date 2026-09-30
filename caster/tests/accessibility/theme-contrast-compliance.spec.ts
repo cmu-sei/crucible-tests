@@ -12,6 +12,7 @@ import {
   gotoCasterUsersAdmin,
   openAddUserDialog,
   setCasterTheme,
+  CASTER_THEMES,
 } from '../../fixtures';
 
 /**
@@ -171,7 +172,7 @@ async function gotoHome(page: Page): Promise<void> {
   await expect(page.locator('.project-title')).toHaveText('My Projects', { timeout: 15000 });
 }
 
-for (const theme of ['light', 'dark'] as const) {
+for (const theme of CASTER_THEMES) {
   test.describe(`${theme} theme › Accessibility and Usability`, () => {
     test.afterEach(async ({ casterAuthenticatedPage: page }) => {
       // The theme is a persisted user preference, so leaving it flipped would bleed

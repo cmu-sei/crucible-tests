@@ -4,21 +4,24 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, CASTER_THEMES, setCasterTheme } from '../../fixtures';
 
-test.describe('Users and Permissions Management', () => {
-  test('Remove Permission from User', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Users and Permissions Management`, () => {
+    test('Remove Permission from User', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
-    await page.goto(Services.Caster.UI + '/admin');
-    await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible({ timeout: 10000 });
+      await page.goto(Services.Caster.UI + '/admin');
+      await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible({ timeout: 10000 });
 
-    await page.locator('mat-list-item').filter({ hasText: 'Users' }).click();
-    await expect(page).toHaveURL(/section=Users/);
-    await expect(page.getByRole('table')).toBeVisible();
+      await page.locator('mat-list-item').filter({ hasText: 'Users' }).click();
+      await expect(page).toHaveURL(/section=Users/);
+      await expect(page.getByRole('table')).toBeVisible();
 
-    const adminUser = page.getByRole('cell', { name: 'Admin User' });
-    if (await adminUser.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await adminUser.click();
-    }
+      const adminUser = page.getByRole('cell', { name: 'Admin User' });
+      if (await adminUser.isVisible({ timeout: 5000 }).catch(() => false)) {
+        await adminUser.click();
+      }
+    });
   });
-});
+}

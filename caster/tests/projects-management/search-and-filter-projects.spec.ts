@@ -5,7 +5,7 @@
 // seed: seed.spec.ts
 
 import type { Page } from '@playwright/test';
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, CASTER_THEMES, setCasterTheme } from '../../fixtures';
 
 /**
  * Create a project from the home page and return to the home page.
@@ -31,46 +31,49 @@ async function createProject(page: Page, name: string): Promise<string> {
   return projectData.id;
 }
 
-test.describe('Projects Management', () => {
-  test('Search and Filter Projects', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
-    // Two projects, because filtering can only be proven by what it *excludes*.
-    // Both are seeded by this test rather than assumed to exist: "My Projects"
-    // lists only projects the user is a member of, and every test in this suite
-    // deletes what it creates, so the list is empty at the start of a clean run.
-    const stamp = Date.now();
-    const matchingName = `Searchable Project ${stamp}`;
-    const otherName = `Unrelated Project ${stamp}`;
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Projects Management`, () => {
+    test('Search and Filter Projects', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+      await setCasterTheme(page, theme);
+      // Two projects, because filtering can only be proven by what it *excludes*.
+      // Both are seeded by this test rather than assumed to exist: "My Projects"
+      // lists only projects the user is a member of, and every test in this suite
+      // deletes what it creates, so the list is empty at the start of a clean run.
+      const stamp = Date.now();
+      const matchingName = `Searchable Project ${stamp}`;
+      const otherName = `Unrelated Project ${stamp}`;
 
-    // 1. Navigate to Projects section
-    await expect(page.getByText('My Projects')).toBeVisible();
+      // 1. Navigate to Projects section
+      await expect(page.getByText('My Projects')).toBeVisible();
 
-    cleanupCasterProject(await createProject(page, matchingName));
-    cleanupCasterProject(await createProject(page, otherName));
+      cleanupCasterProject(await createProject(page, matchingName));
+      cleanupCasterProject(await createProject(page, otherName));
 
-    const matchingRow = page.getByRole('link', { name: matchingName });
-    const otherRow = page.getByRole('link', { name: otherName });
+      const matchingRow = page.getByRole('link', { name: matchingName });
+      const otherRow = page.getByRole('link', { name: otherName });
 
-    // expect: Projects list is visible with multiple projects
-    await expect(matchingRow).toBeVisible();
-    await expect(otherRow).toBeVisible();
+      // expect: Projects list is visible with multiple projects
+      await expect(matchingRow).toBeVisible();
+      await expect(otherRow).toBeVisible();
 
-    // 2. Enter a search term in the search box
-    const searchBox = page.getByRole('textbox', { name: 'Search' });
-    await searchBox.fill(matchingName);
-    await searchBox.press('End');
+      // 2. Enter a search term in the search box
+      const searchBox = page.getByRole('textbox', { name: 'Search' });
+      await searchBox.fill(matchingName);
+      await searchBox.press('End');
 
-    // expect: The list filters to show only projects matching the search term
-    await expect(matchingRow).toBeVisible();
-    await expect(otherRow).not.toBeVisible();
+      // expect: The list filters to show only projects matching the search term
+      await expect(matchingRow).toBeVisible();
+      await expect(otherRow).not.toBeVisible();
 
-    // 3. Clear the search box
-    await searchBox.clear();
-    await searchBox.press('End');
+      // 3. Clear the search box
+      await searchBox.clear();
+      await searchBox.press('End');
 
-    // expect: All projects are displayed again
-    await expect(searchBox).toHaveValue('');
-    await expect(page.getByText(/No data matching the filter/)).not.toBeVisible();
-    await expect(matchingRow).toBeVisible();
-    await expect(otherRow).toBeVisible();
+      // expect: All projects are displayed again
+      await expect(searchBox).toHaveValue('');
+      await expect(page.getByText(/No data matching the filter/)).not.toBeVisible();
+      await expect(matchingRow).toBeVisible();
+      await expect(otherRow).toBeVisible();
+    });
   });
-});
+}

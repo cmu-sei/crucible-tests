@@ -4,50 +4,53 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, CASTER_THEMES, setCasterTheme } from '../../fixtures';
 
-test.describe('Error Handling and Validation', () => {
-  test('Duplicate Name Validation', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Error Handling and Validation`, () => {
+    test('Duplicate Name Validation', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+      await setCasterTheme(page, theme);
 
-    await expect(page.getByText('My Projects')).toBeVisible();
-
-    const projectName = `DupTest ${Date.now()}`;
-
-    // Helper: intercept the project-creation API response to capture the project ID
-    async function createProjectAndRegisterCleanup(name: string) {
-      const responsePromise = page.waitForResponse(
-        (resp) => resp.url().includes('/api/projects') && resp.request().method() === 'POST' && resp.status() === 201
-      );
-      await page.locator('button[mattooltip="Add New Project"]').click();
-      await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
-      await page.getByRole('textbox', { name: 'Name' }).fill(name);
-      await page.getByRole('button', { name: 'Save' }).click();
-      const response = await responsePromise;
-      const body = await response.json();
-      cleanupCasterProject(body.id);
-      await expectCasterProjectOpen(page, name);
-      await page.getByRole('link', { name: 'Caster' }).click();
       await expect(page.getByText('My Projects')).toBeVisible();
-      const searchBox = page.getByRole('textbox', { name: 'Search' });
-      await searchBox.fill(name);
-      await searchBox.press('End');
-    }
 
-    // 1. Create a project
-    await createProjectAndRegisterCleanup(projectName);
-    await expect(page.getByRole('link', { name: projectName })).toBeVisible({ timeout: 10000 });
+      const projectName = `DupTest ${Date.now()}`;
 
-    // 2. Attempt to create another with the same name
-    await page.getByRole('textbox', { name: 'Search' }).clear();
-    await createProjectAndRegisterCleanup(projectName);
+      // Helper: intercept the project-creation API response to capture the project ID
+      async function createProjectAndRegisterCleanup(name: string) {
+        const responsePromise = page.waitForResponse(
+          (resp) => resp.url().includes('/api/projects') && resp.request().method() === 'POST' && resp.status() === 201
+        );
+        await page.locator('button[mattooltip="Add New Project"]').click();
+        await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
+        await page.getByRole('textbox', { name: 'Name' }).fill(name);
+        await page.getByRole('button', { name: 'Save' }).click();
+        const response = await responsePromise;
+        const body = await response.json();
+        cleanupCasterProject(body.id);
+        await expectCasterProjectOpen(page, name);
+        await page.getByRole('link', { name: 'Caster' }).click();
+        await expect(page.getByText('My Projects')).toBeVisible();
+        const searchBox = page.getByRole('textbox', { name: 'Search' });
+        await searchBox.fill(name);
+        await searchBox.press('End');
+      }
 
-    // The app allows duplicate project names - the dialog closes and a second project appears.
-    // Wait for the dialog to close, confirming the save was accepted.
-    const dialog = page.getByRole('dialog', { name: 'Create New Project?' });
-    await expect(dialog).toBeHidden({ timeout: 10000 });
+      // 1. Create a project
+      await createProjectAndRegisterCleanup(projectName);
+      await expect(page.getByRole('link', { name: projectName })).toBeVisible({ timeout: 10000 });
 
-    // Verify both projects exist in the list
-    await expect(page.getByRole('link', { name: projectName }).first()).toBeVisible();
-    await expect(page.getByRole('link', { name: projectName }).nth(1)).toBeVisible();
+      // 2. Attempt to create another with the same name
+      await page.getByRole('textbox', { name: 'Search' }).clear();
+      await createProjectAndRegisterCleanup(projectName);
+
+      // The app allows duplicate project names - the dialog closes and a second project appears.
+      // Wait for the dialog to close, confirming the save was accepted.
+      const dialog = page.getByRole('dialog', { name: 'Create New Project?' });
+      await expect(dialog).toBeHidden({ timeout: 10000 });
+
+      // Verify both projects exist in the list
+      await expect(page.getByRole('link', { name: projectName }).first()).toBeVisible();
+      await expect(page.getByRole('link', { name: projectName }).nth(1)).toBeVisible();
+    });
   });
-});
+}

@@ -4,26 +4,29 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, CASTER_THEMES, setCasterTheme } from '../../fixtures';
 
-test.describe('Users and Permissions Management', () => {
-  test('Project-Level User Permissions', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Users and Permissions Management`, () => {
+    test('Project-Level User Permissions', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+      await setCasterTheme(page, theme);
 
-    await expect(page.getByText('My Projects')).toBeVisible();
+      await expect(page.getByText('My Projects')).toBeVisible();
 
-    await page.locator('button[mattooltip="Add New Project"]').click();
-    await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
-    await page.getByRole('textbox', { name: 'Name' }).fill('Permission Project');
+      await page.locator('button[mattooltip="Add New Project"]').click();
+      await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
+      await page.getByRole('textbox', { name: 'Name' }).fill('Permission Project');
 
-    const createResponsePromise = page.waitForResponse(resp =>
-      resp.url().includes('/api/projects') && resp.request().method() === 'POST' && resp.ok()
-    );
-    await page.getByRole('button', { name: 'Save' }).click();
+      const createResponsePromise = page.waitForResponse(resp =>
+        resp.url().includes('/api/projects') && resp.request().method() === 'POST' && resp.ok()
+      );
+      await page.getByRole('button', { name: 'Save' }).click();
 
-    const createResponse = await createResponsePromise;
-    const projectData = await createResponse.json();
-    cleanupCasterProject(projectData.id);
+      const createResponse = await createResponsePromise;
+      const projectData = await createResponse.json();
+      cleanupCasterProject(projectData.id);
 
-    await expectCasterProjectOpen(page, 'Permission Project');
+      await expectCasterProjectOpen(page, 'Permission Project');
+    });
   });
-});
+}

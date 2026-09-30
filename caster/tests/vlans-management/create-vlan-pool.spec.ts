@@ -4,31 +4,34 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, CASTER_THEMES, setCasterTheme } from '../../fixtures';
 
-test.describe('VLANs Management', () => {
-  test('Create VLAN Pool', async ({ casterAuthenticatedPage: page, cleanupCasterPool }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › VLANs Management`, () => {
+    test('Create VLAN Pool', async ({ casterAuthenticatedPage: page, cleanupCasterPool }) => {
+      await setCasterTheme(page, theme);
 
-    await page.goto(Services.Caster.UI + '/admin?section=VLANs');
-    await expect(page.getByRole('heading', { name: 'Pools' })).toBeVisible({ timeout: 10000 });
+      await page.goto(Services.Caster.UI + '/admin?section=VLANs');
+      await expect(page.getByRole('heading', { name: 'Pools' })).toBeVisible({ timeout: 10000 });
 
-    // Intercept the POST response so we can capture the new pool's ID for cleanup
-    const poolResponsePromise = page.waitForResponse(
-      resp => resp.url().includes('/api/vlans/pools') && resp.request().method() === 'POST'
-    );
+      // Intercept the POST response so we can capture the new pool's ID for cleanup
+      const poolResponsePromise = page.waitForResponse(
+        resp => resp.url().includes('/api/vlans/pools') && resp.request().method() === 'POST'
+      );
 
-    // Click the create/add pool button (+ icon) — this immediately creates a pool via API
-    const addButton = page.getByRole('tabpanel', { name: 'Pools' }).getByRole('button').first();
-    await addButton.click();
+      // Click the create/add pool button (+ icon) — this immediately creates a pool via API
+      const addButton = page.getByRole('tabpanel', { name: 'Pools' }).getByRole('button').first();
+      await addButton.click();
 
-    const poolResponse = await poolResponsePromise;
-    expect(poolResponse.status()).toBe(201);
+      const poolResponse = await poolResponsePromise;
+      expect(poolResponse.status()).toBe(201);
 
-    const pool = await poolResponse.json();
-    // Register the created pool for teardown deletion
-    cleanupCasterPool(pool.id);
+      const pool = await poolResponse.json();
+      // Register the created pool for teardown deletion
+      cleanupCasterPool(pool.id);
 
-    // Verify at least one pool with the returned name appears in the list
-    await expect(page.getByText(pool.name).first()).toBeVisible();
+      // Verify at least one pool with the returned name appears in the list
+      await expect(page.getByText(pool.name).first()).toBeVisible();
+    });
   });
-});
+}
