@@ -12,13 +12,13 @@ for (const theme of CASTER_THEMES) {
       await setCasterTheme(page, theme);
 
       await expect(page.getByText('My Projects')).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Admin User', exact: true })).toBeVisible();
       await expect(page.getByRole('table')).toBeVisible();
 
       // Resize to a smaller desktop
       await page.setViewportSize({ width: 1280, height: 720 });
       await expect(page.getByText('My Projects')).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Admin User', exact: true })).toBeVisible();
       await expect(page.getByRole('table')).toBeVisible();
 
       await page.setViewportSize({ width: 1920, height: 1080 });

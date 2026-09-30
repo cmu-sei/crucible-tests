@@ -18,7 +18,7 @@ for (const theme of CASTER_THEMES) {
       await expect(page).toHaveURL(/section=Users/);
       await expect(page.getByRole('table')).toBeVisible();
 
-      const adminUser = page.getByRole('cell', { name: 'Admin User' });
+      const adminUser = page.getByRole('cell', { name: 'Admin User', exact: true });
       if (await adminUser.isVisible({ timeout: 5000 }).catch(() => false)) {
         await adminUser.click();
       }

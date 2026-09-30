@@ -18,7 +18,7 @@ for (const theme of CASTER_THEMES) {
       await expect(page.getByRole('table')).toBeVisible({ timeout: 10000 });
 
       // 2. Verify user details are displayed in the table
-      await expect(page.getByRole('cell', { name: 'Admin User' })).toBeVisible();
+      await expect(page.getByRole('cell', { name: 'Admin User', exact: true })).toBeVisible();
 
       // expect: User's ID is displayed with a copy button
       const userRow = page.getByRole('row').filter({ hasText: 'Admin User' });

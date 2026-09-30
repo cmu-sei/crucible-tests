@@ -30,7 +30,7 @@ for (const theme of CASTER_THEMES) {
       await expect(page.getByRole('columnheader', { name: 'Role' })).toBeVisible();
 
       // expect: Admin User is visible in the list
-      await expect(page.getByRole('cell', { name: 'Admin User' })).toBeVisible();
+      await expect(page.getByRole('cell', { name: 'Admin User', exact: true })).toBeVisible();
 
       // expect: Pagination controls are visible
       await expect(page.getByRole('status')).toBeVisible();

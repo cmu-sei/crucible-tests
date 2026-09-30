@@ -20,7 +20,7 @@ for (const theme of CASTER_THEMES) {
       await expect(page.getByRole('table')).toBeVisible();
 
       // expect: Each project shows its name and description.
-      await expect(page.getByRole('button', { name: 'Name' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Name', exact: true })).toBeVisible();
       await expect(page.getByRole('columnheader', { name: 'Description' })).toBeVisible();
 
       // expect: A search box is available

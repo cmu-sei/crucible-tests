@@ -18,7 +18,7 @@ for (const theme of CASTER_THEMES) {
       await page.getByRole('textbox', { name: 'Name' }).fill('Long Running Test');
       await page.getByRole('button', { name: 'Save' }).click();
       await expectCasterProjectOpen(page, 'Long Running Test');
-      await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Admin User', exact: true })).toBeVisible();
 
       // Extract the project ID from the URL and register it for cleanup
       const projectId = page.url().match(/\/projects\/([a-f0-9-]+)/)?.[1];

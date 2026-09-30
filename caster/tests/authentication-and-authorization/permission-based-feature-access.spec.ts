@@ -13,7 +13,7 @@ for (const theme of CASTER_THEMES) {
 
       // 1. Log in as a user with Content Developer role
       // expect: Successfully authenticated
-      await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Admin User', exact: true })).toBeVisible();
 
       // 2. Navigate to the Projects section
       // expect: Projects list is visible

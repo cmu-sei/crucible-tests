@@ -11,7 +11,7 @@ for (const theme of CASTER_THEMES) {
     test('Loading States and Feedback', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
       await setCasterTheme(page, theme);
 
-      await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Admin User', exact: true })).toBeVisible();
 
       // The add-project button is the only button sibling of "My Projects" text
       await page.getByText('My Projects').locator('..').getByRole('button').click();

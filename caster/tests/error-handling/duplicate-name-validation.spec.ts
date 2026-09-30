@@ -28,7 +28,7 @@ for (const theme of CASTER_THEMES) {
         const body = await response.json();
         cleanupCasterProject(body.id);
         await expectCasterProjectOpen(page, name);
-        await page.getByRole('link', { name: 'Caster' }).click();
+        await page.getByRole('link', { name: 'Caster', exact: true }).click();
         await expect(page.getByText('My Projects')).toBeVisible();
         const searchBox = page.getByRole('textbox', { name: 'Search' });
         await searchBox.fill(name);

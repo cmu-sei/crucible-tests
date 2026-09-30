@@ -117,7 +117,7 @@ for (const theme of CASTER_THEMES) {
       await expect(dialog).not.toBeVisible();
       const newRow = page.getByRole('row').filter({ hasText: userId });
       await expect(newRow).toHaveCount(1);
-      await expect(newRow.getByRole('cell', { name: userName })).toBeVisible();
+      await expect(newRow.getByRole('cell', { name: userName, exact: true })).toBeVisible();
       await expect(newRow.getByRole('combobox')).toContainText('Observer');
     });
 

@@ -29,7 +29,7 @@ for (const theme of CASTER_THEMES) {
 
       // 4. Check Administrator All permission checkbox
       // expect: All permission is checked and disabled for Administrator
-      const allRow = page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'All', exact: true }) });
+      const allRow = page.getByRole('row').filter({ has: page.getByRole('button', { name: 'About All', exact: true }) });
       const adminAllCheckbox = allRow.getByRole('checkbox').first();
       await expect(adminAllCheckbox).toBeChecked();
       await expect(adminAllCheckbox).toBeDisabled();

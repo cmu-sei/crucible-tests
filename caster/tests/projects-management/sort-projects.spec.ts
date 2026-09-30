@@ -18,17 +18,17 @@ for (const theme of CASTER_THEMES) {
       await expect(page.getByRole('table')).toBeVisible();
 
       // 2. Click on the Name column header
-      await page.getByRole('button', { name: 'Name' }).click();
+      await page.getByRole('button', { name: 'Name', exact: true }).click();
 
       // expect: Projects are sorted alphabetically by name
       // expect: A sort indicator shows the sort direction
-      await expect(page.getByRole('button', { name: 'Name' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Name', exact: true })).toBeVisible();
 
       // 3. Click on the Name column header again
-      await page.getByRole('button', { name: 'Name' }).click();
+      await page.getByRole('button', { name: 'Name', exact: true }).click();
 
       // expect: Projects are sorted in reverse alphabetical order
-      await expect(page.getByRole('button', { name: 'Name' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Name', exact: true })).toBeVisible();
     });
   });
 }

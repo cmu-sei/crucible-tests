@@ -11,7 +11,7 @@ for (const theme of CASTER_THEMES) {
     test('Keyboard Navigation', async ({ casterAuthenticatedPage: page }) => {
       await setCasterTheme(page, theme);
 
-      await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Admin User', exact: true })).toBeVisible();
 
       // 2. Use Tab key to navigate
       await page.keyboard.press('Tab');

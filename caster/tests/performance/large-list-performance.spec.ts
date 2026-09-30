@@ -19,7 +19,7 @@ for (const theme of CASTER_THEMES) {
 
       const searchBox = page.getByRole('textbox', { name: 'Search' });
       await searchBox.fill('Admin');
-      await expect(page.getByRole('cell', { name: 'Admin User' })).toBeVisible();
+      await expect(page.getByRole('cell', { name: 'Admin User', exact: true })).toBeVisible();
 
       await searchBox.clear();
       await expect(page.getByRole('table')).toBeVisible();

@@ -19,7 +19,7 @@ for (const theme of CASTER_THEMES) {
       await page.getByRole('textbox', { name: 'Name' }).fill(projectName);
       await page.getByRole('button', { name: 'Save' }).click();
       cleanupCasterProject(await expectCasterProjectOpen(page, projectName));
-      await page.getByRole('link', { name: 'Caster' }).click();
+      await page.getByRole('link', { name: 'Caster', exact: true }).click();
 
       const searchBar = page.getByRole('textbox', { name: 'Search' });
       await expect(searchBar).toBeVisible();

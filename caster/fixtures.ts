@@ -424,7 +424,7 @@ export const test = base.extend<CasterFixtures>({
     }
     await page.goto(Services.Caster.UI, { waitUntil: 'domcontentloaded' });
 
-    const appShell = page.getByRole('button', { name: 'Admin User' });
+    const appShell = page.getByRole('button', { name: 'Admin User', exact: true });
     const keycloakField = page.locator('input[name="username"]');
     const winner = await waitForFirstVisible(
       page,
@@ -480,7 +480,7 @@ export async function gotoCasterUsersAdmin(page: Page): Promise<void> {
  * Mirrors clickAddRoleButton: the MatTooltip overlay can swallow the first click.
  */
 export async function openAddUserDialog(page: Page): Promise<Locator> {
-  const addButton = page.getByRole('button', { name: 'Add User' });
+  const addButton = page.getByRole('button', { name: 'Add User', exact: true });
   const dialog = page.getByRole('dialog', { name: 'Add User' });
 
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -617,7 +617,7 @@ export async function setCasterTheme(page: Page, theme: CasterTheme): Promise<vo
   const want = theme === 'dark';
   if ((await casterIsDarkTheme(page)) === want) return;
 
-  await page.getByRole('button', { name: 'Admin User' }).click();
+  await page.getByRole('button', { name: 'Admin User', exact: true }).click();
   const toggle = page.getByRole('switch', { name: 'Dark Theme' });
   await toggle.waitFor({ state: 'visible', timeout: 10000 });
   await toggle.click();

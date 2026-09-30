@@ -29,7 +29,7 @@ for (const theme of CASTER_THEMES) {
           const trimmed = text.trim().split('\n')[0].trim();
           if (trimmed === 'Content Developer') { cdCol = i; break; }
         }
-        const viewProjectsRow = page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'ViewProjects', exact: true }) });
+        const viewProjectsRow = page.getByRole('row').filter({ has: page.getByRole('button', { name: 'About ViewProjects', exact: true }) });
         return viewProjectsRow.getByRole('cell').nth(cdCol).getByRole('checkbox');
       };
 

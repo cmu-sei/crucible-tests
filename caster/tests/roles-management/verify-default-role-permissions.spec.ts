@@ -32,7 +32,7 @@ for (const theme of CASTER_THEMES) {
 
       // Helper: get the checkbox in a given permission row at a given column index
       const getCheckbox = (permName: string, colIndex: number) => {
-        const row = page.getByRole('row').filter({ has: page.getByRole('cell', { name: permName, exact: true }) });
+        const row = page.getByRole('row').filter({ has: page.getByRole('button', { name: `About ${permName}`, exact: true }) });
         return row.getByRole('cell').nth(colIndex).getByRole('checkbox');
       };
 

@@ -46,6 +46,6 @@ test.describe('Authentication and Authorization', () => {
     await expect(page.getByText('Caster').first()).toBeVisible({ timeout: 10000 });
 
     // expect: The topbar displays the username 'admin'
-    await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Admin User', exact: true })).toBeVisible();
   });
 });

@@ -20,7 +20,7 @@ for (const theme of CASTER_THEMES) {
       await expect(page.getByText('Caster').first()).toBeVisible({ timeout: 10000 });
 
       // expect: The user's username is displayed in the topbar
-      await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Admin User', exact: true })).toBeVisible();
 
       // expect: The main navigation menu is visible with sections: Projects
       await expect(page.getByText('My Projects')).toBeVisible();

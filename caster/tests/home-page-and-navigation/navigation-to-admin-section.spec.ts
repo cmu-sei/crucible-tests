@@ -13,7 +13,7 @@ for (const theme of CASTER_THEMES) {
 
       // 1. Log in as admin user
       // expect: Successfully authenticated on home page
-      await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Admin User', exact: true })).toBeVisible();
 
       // 2. Navigate to http://localhost:4310/admin
       await page.goto(Services.Caster.UI + '/admin');

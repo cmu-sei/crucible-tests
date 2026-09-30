@@ -33,7 +33,7 @@ for (const theme of CASTER_THEMES) {
       cleanupCasterProject(projectData.id);
 
       await expectCasterProjectOpen(page, projectName);
-      await page.getByRole('link', { name: 'Caster' }).click();
+      await page.getByRole('link', { name: 'Caster', exact: true }).click();
       const searchBox = page.getByRole('textbox', { name: 'Search' });
       await searchBox.fill(projectName);
       await searchBox.press('End');

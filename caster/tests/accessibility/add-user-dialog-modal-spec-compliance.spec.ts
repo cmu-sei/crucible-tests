@@ -378,7 +378,7 @@ for (const theme of CASTER_THEMES) {
       // ---- §7: focus returns to the opener on close ----
       await dialog.getByRole('button', { name: 'Cancel' }).click();
       await expect(dialog).not.toBeVisible();
-      await expect(page.getByRole('button', { name: 'Add User' })).toBeFocused();
+      await expect(page.getByRole('button', { name: 'Add User', exact: true })).toBeFocused();
     });
   });
 }

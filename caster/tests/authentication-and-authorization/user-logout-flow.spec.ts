@@ -17,10 +17,10 @@ for (const theme of CASTER_THEMES) {
 
       // 1. Log in as admin user
       // expect: Successfully authenticated and viewing the home page
-      await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Admin User', exact: true })).toBeVisible();
 
       // 2. Click on the user menu in the topbar
-      await page.getByRole('button', { name: 'Admin User' }).click();
+      await page.getByRole('button', { name: 'Admin User', exact: true }).click();
 
       // expect: A dropdown menu appears with logout option
       await expect(page.getByRole('menuitem', { name: 'Logout' })).toBeVisible();

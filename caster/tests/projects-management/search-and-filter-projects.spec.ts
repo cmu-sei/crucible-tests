@@ -26,7 +26,7 @@ async function createProject(page: Page, name: string): Promise<string> {
   const projectData = await (await createResponsePromise).json();
 
   await expectCasterProjectOpen(page, name);
-  await page.getByRole('link', { name: 'Caster' }).click();
+  await page.getByRole('link', { name: 'Caster', exact: true }).click();
 
   return projectData.id;
 }

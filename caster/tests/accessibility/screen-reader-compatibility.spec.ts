@@ -18,7 +18,7 @@ for (const theme of CASTER_THEMES) {
       expect(await buttons.count()).toBeGreaterThan(0);
 
       // Verify the "Admin User" button is accessible
-      await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Admin User', exact: true })).toBeVisible();
 
       // Verify links have accessible names
       const links = page.getByRole('link');
