@@ -337,24 +337,22 @@ for (const theme of ['light', 'dark'] as const) {
       // Scoped to the dialog so the admin page's pre-existing issues don't mask or
       // fail this check.
       //
-      // `color-contrast` is deliberately NOT in this list.
+      // `color-contrast` covers the outlined Cancel label and focused field labels,
+      // which are drawn in `--mat-sys-primary` on the dialog surface. Caster applies
+      // each mode's configured primary (the colors design spec), so those must clear
+      // WCAG 1.4.3 in both themes; theme-contrast-compliance.spec.ts checks the colour
+      // contract itself.
       //
-      // Pending upstream: Caster's AppComponent.setTheme overwrites the theme-generated
-      // --mat-sys-primary token with the branding colour from settings.json
-      // (AppTopBarHexColor, currently #E9831C). That token also drives foreground
-      // colours, so outlined-button labels drop to 2.58:1 and focused field labels to
-      // 2.10:1 against WCAG 1.4.3's 4.5:1. It reproduces on pre-existing dialogs such as
-      // "Create New Project?", so it is a theme-wide defect this modal neither owns nor
-      // can fix. Including the rule would make this spec permanently red for someone
-      // else's bug. Add it back once the branding colour is scoped to the top bar
-      // instead of the global token.
-      //
-      // The error colour is still asserted above (usesThemeErrorColor), the modal's own
-      // contrast requirements are asserted in add-user-dialog-theming.spec.ts, and every
-      // other accessible-name/ARIA rule stays enforced here.
+      // Material fades mat-error subscripts in, and axe measures whatever colour is
+      // painted at that instant, so let the dialog's running animations finish first
+      // or a half-faded error reads as a contrast failure.
+      await dialog.evaluate((el) =>
+        Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)),
+      );
       const axeResults = await new AxeBuilder({ page })
         .include('mat-dialog-container')
         .withRules([
+          'color-contrast',
           'aria-dialog-name',
           'aria-required-attr',
           'aria-valid-attr-value',
@@ -366,7 +364,11 @@ for (const theme of ['light', 'dark'] as const) {
 
       if (axeResults.violations.length > 0) {
         const detail = axeResults.violations
-          .map((v) => `- ${v.id} (${v.impact}): ${v.nodes.length} node(s) — ${v.help}`)
+          .map(
+            (v) =>
+              `- ${v.id} (${v.impact}): ${v.nodes.length} node(s) — ${v.help}` +
+              v.nodes.map((n) => `\n    ${n.target.join(' ')}: ${n.failureSummary}`).join(''),
+          )
           .join('\n');
         throw new Error(`Add User modal accessibility violations:\n${detail}`);
       }

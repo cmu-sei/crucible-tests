@@ -1621,7 +1621,8 @@ expectations are 17.8.
     - expect: The dialog stays open both times — `guardUnsavedWork` protects in-progress input, leaving Cancel as the deliberate way out (§7)
   9. Run axe against the open dialog
     - expect: No violations of dialog-name, label, button-name, ARIA-value, or ARIA-input-name rules (§7, §9)
-    - note: `color-contrast` is excluded — Caster fails it theme-wide (the branding colour overwrites `--mat-sys-primary`, and `--mat-sys-error` is hardcoded in `.darkMode`), so including it would make this spec permanently red for defects the modal does not own; the modal's own colour requirements are asserted in 17.8
+    - expect: No `color-contrast` violations (WCAG 1.4.3) — the outlined Cancel label and focused field labels are drawn in `--mat-sys-primary`, which takes each mode's configured primary (see 17.9)
+    - note: the dialog's running animations are awaited first; Material fades `mat-error` in, and axe would otherwise measure a half-faded colour
   10. Close via Cancel
     - expect: Focus returns to the Add User button that opened the dialog (§7)
 
@@ -1632,9 +1633,9 @@ expectations are 17.8.
 The modal spec requires dialogs to take their colours from M3 system tokens so both
 themes are correct automatically, and to be spot-checked in light and dark (§5, §7,
 §10). 17.7 runs the theme-agnostic rules in both themes; this scenario asserts what is
-specific to theming. Contrast is computed directly rather than delegated to axe, whose
-`color-contrast` rule is permanently red on Caster for theme defects the modal does not
-own.
+specific to theming. Contrast is computed directly here as well as by axe's
+`color-contrast` rule in 17.7: measuring the modal's own pairs also pins that the text
+tracks the theme token and that the palette inverts in the right direction.
 
 **Steps:**
   1. Open the modal in light theme, sample its colours, then repeat in dark theme
@@ -1648,7 +1649,37 @@ own.
   4. Trigger a validation error and measure its contrast in both themes
     - expect: The error colour differs between themes (M3 ships a light/dark pair)
     - expect: The error text meets 4.5:1 in both themes
-    - **pending upstream (dark):** measures 2.01:1 against a build where Caster's `styles.scss` hardcodes `--mat-sys-error` inside `.darkMode`, overriding the generated `light-dark()` pair; the generated dark tone gives 7.66:1. Asserts the requirement, not the bug — deleting that line in Caster is the whole fix.
+    - note: regression guard — a hardcoded `--mat-sys-error` inside `.darkMode` (overriding the generated `light-dark()` pair) measured 2.01:1 on the dark surface; the generated dark tone gives 7.66:1
+
+#### 17.9. Theme Contrast and Color Settings Compliance
+
+**File:** `tests/accessibility/theme-contrast-compliance.spec.ts`
+
+Checks real WCAG contrast on the home page and the Add User dialog, and the color
+settings contract from the Crucible colors design spec
+(`design-specs/angular/colors.md` in the crucible-development repository). Expected
+colours are read from the served `settings.json` / `settings.shared.json` /
+`settings.env.json` (deep-merged in that order), not hardcoded, so an environment that
+overrides them still passes as long as the app applies what it was given.
+
+Runs **once per theme (light and dark)**. Read-only: nothing is seeded, and the Add User
+dialog is dismissed via Cancel without submitting. The theme is restored to light
+afterwards because it persists per user.
+
+**Steps:**
+  1. Open the home page and measure text contrast (WCAG 1.4.3)
+    - expect: The "My Projects" title, a text column header, and the top bar text each meet 4.5:1 (3:1 for large text) against the surface they are painted on
+    - expect: The page content inverts the right way — dark-on-light in light theme, light-on-dark in dark theme
+  2. Measure the "Add New Project" icon button (WCAG 1.4.11)
+    - expect: Its colour is `--mat-sys-primary`
+    - expect: It meets 3:1 against its surface
+  3. Compare the applied colours with the effective settings
+    - expect: `AppTopBarHexColor`, `AppTopBarHexTextColor`, `AppLightModePrimaryHexColor`, and `AppLightModePrimaryHexTextColor` are defined
+    - expect: `--crucible-topbar-background` / `--crucible-topbar-text` equal the top-bar settings in both themes, and the toolbar is painted with them
+    - expect: `--mat-sys-primary` / `--mat-sys-on-primary` equal the active mode's settings verbatim; dark falls back to the light key when its own is absent
+  4. Open the Add User dialog, fill User ID (a GUID) and Name so Create enables, and measure the buttons without submitting
+    - expect: The filled Create button is painted `--mat-sys-primary` and its `on-primary` label meets 4.5:1
+    - expect: The outlined Cancel label is `--mat-sys-primary` and meets 4.5:1 on the dialog surface
 
 ### 18. Performance and Optimization
 
