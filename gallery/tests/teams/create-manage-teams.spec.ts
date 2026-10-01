@@ -13,6 +13,8 @@ import {
   apiCreateExhibit,
   apiDeleteCollectionById,
   Services,
+  GALLERY_THEMES,
+  setGalleryTheme,
 } from '../../fixtures';
 import { request as pwRequest, type APIRequestContext, type Page } from '@playwright/test';
 
@@ -123,140 +125,143 @@ async function openExhibitTeamsPanel(page: Page, collectionName: string, exhibit
   return teamsRegion;
 }
 
-test.describe('Team Management', () => {
-  // Every team name this spec asks the UI to create, registered *before* the create
-  // action so a mid-test failure still gets cleaned up. Both the original and the
-  // renamed name are tracked, because after step 2 the row answers to the new name.
-  let createdTeamNames: string[] = [];
-  // The dedicated collection this spec seeds. Deleting it cascades to the exhibit and
-  // any teams still attached (TeamConfiguration -> OnDelete(Cascade)), so it is the
-  // backstop even if the per-name team cleanup below misses something.
-  let ownCollectionId: string | undefined;
-  let ownExhibitId: string | undefined;
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Team Management`, () => {
+    // Every team name this spec asks the UI to create, registered *before* the create
+    // action so a mid-test failure still gets cleaned up. Both the original and the
+    // renamed name are tracked, because after step 2 the row answers to the new name.
+    let createdTeamNames: string[] = [];
+    // The dedicated collection this spec seeds. Deleting it cascades to the exhibit and
+    // any teams still attached (TeamConfiguration -> OnDelete(Cascade)), so it is the
+    // backstop even if the per-name team cleanup below misses something.
+    let ownCollectionId: string | undefined;
+    let ownExhibitId: string | undefined;
 
-  test.beforeEach(() => {
-    createdTeamNames = [];
-    ownCollectionId = undefined;
-    ownExhibitId = undefined;
+    test.beforeEach(() => {
+      createdTeamNames = [];
+      ownCollectionId = undefined;
+      ownExhibitId = undefined;
+    });
+
+    test.afterEach(async () => {
+      if (ownExhibitId) {
+        await apiDeleteExhibitTeamsByName(ownExhibitId, createdTeamNames);
+      }
+      if (ownCollectionId) {
+        await apiDeleteCollectionById(ownCollectionId, 'create-manage-teams collection');
+      }
+    });
+
+    test('Create and Manage Teams', async ({ galleryAuthenticatedPage: page }) => {
+      await setGalleryTheme(page, theme);
+      const unique = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+      const teamName = `Managed Team ${unique}`;
+      const teamShortName = `MT${unique}`.slice(0, 20);
+      const renamedTeamName = `Renamed Team ${unique}`;
+
+      // Seed the precondition records (a collection and an exhibit inside it) via the API;
+      // creating them through the UI is covered by the collection/exhibit specs.
+      // Register ids for teardown as soon as each one exists.
+      const collection = await apiCreateCollection(
+        `Manage Teams Collection ${unique}`,
+        'Collection for the create-manage-teams spec'
+      );
+      ownCollectionId = collection.id;
+      const exhibit = await apiCreateExhibit(collection.id, `Manage Teams Exhibit ${unique}`);
+      ownExhibitId = exhibit.id;
+
+      const teamsRegion = await openExhibitTeamsPanel(page, collection.name, exhibit.name);
+
+      // A brand-new exhibit has no teams, which is also what keeps the null-shortName sort
+      // crash described above out of the way.
+      await expect(teamsRegion.getByRole('button', { name: `Edit ${teamName}` })).toHaveCount(0);
+
+      // 1. Create a new team for the exhibit.
+      await teamsRegion.getByRole('button', { name: 'Add Team' }).click();
+
+      const addDialog = page.getByRole('dialog');
+      await expect(addDialog).toBeVisible();
+
+      // `exact: true` matters: "Name" would otherwise also match the "Short Name" field.
+      // Register the name before saving so teardown covers a partial create.
+      createdTeamNames.push(teamName);
+      await addDialog.getByLabel('Name', { exact: true }).fill(teamName);
+      await addDialog.getByLabel('Short Name', { exact: true }).fill(teamShortName);
+
+      // Save is gated on `!errorFree() || !form.dirty`, so it only enables once both
+      // required fields are filled — assert that rather than blind-clicking.
+      const saveButton = addDialog.getByRole('button', { name: 'Save' });
+      await expect(saveButton).toBeEnabled();
+
+      const createResponse = page.waitForResponse(
+        (r) => r.url().endsWith('/api/teams') && r.request().method() === 'POST'
+      );
+      await saveButton.click();
+
+      // expect: Team is created ...
+      const created = await createResponse;
+      expect(created.status()).toBe(201);
+      const createdTeam: { id: string; name: string; shortName: string; exhibitId: string } =
+        await created.json();
+      expect(createdTeam.name).toBe(teamName);
+      // The dialog seeds `exhibitId` from the `[exhibitId]` input, which is what scopes the
+      // new team to this exhibit rather than creating a dangling one.
+      expect(createdTeam.exhibitId).toBe(exhibit.id);
+
+      // expect: ... and appears in the team list.
+      await expect(addDialog).toHaveCount(0);
+      await expect(teamsRegion.getByText(teamName, { exact: true })).toBeVisible();
+      await expect(teamsRegion.getByText(teamShortName, { exact: true })).toBeVisible();
+      const editButton = teamsRegion.getByRole('button', { name: `Edit ${teamName}` });
+      await expect(editButton).toHaveCount(1);
+
+      // 2. Edit the team name.
+      createdTeamNames.push(renamedTeamName);
+      await editButton.click();
+
+      const editDialog = page.getByRole('dialog');
+      await expect(editDialog).toBeVisible();
+      // The dialog is pre-populated from the row, proving it opened on *this* team.
+      await expect(editDialog.getByLabel('Name', { exact: true })).toHaveValue(teamName);
+      await editDialog.getByLabel('Name', { exact: true }).fill(renamedTeamName);
+
+      const updateResponse = page.waitForResponse(
+        (r) => r.url().endsWith(`/api/teams/${createdTeam.id}`) && r.request().method() === 'PUT'
+      );
+      await editDialog.getByRole('button', { name: 'Save' }).click();
+
+      // expect: Team name is updated.
+      const updated = await updateResponse;
+      expect(updated.status()).toBe(200);
+      expect((await updated.json()).name).toBe(renamedTeamName);
+
+      await expect(editDialog).toHaveCount(0);
+      await expect(teamsRegion.getByText(renamedTeamName, { exact: true })).toBeVisible();
+      await expect(teamsRegion.getByText(teamName, { exact: true })).toHaveCount(0);
+
+      // 3. Delete the team.
+      await teamsRegion.getByRole('button', { name: `Delete ${renamedTeamName}` }).click();
+
+      // `deleteTeam` routes through CrucibleDialogService.confirm, so the destructive
+      // action is behind an explicit confirmation naming the team.
+      const confirmDialog = page.getByRole('dialog');
+      await expect(confirmDialog).toBeVisible();
+      await expect(confirmDialog).toContainText(renamedTeamName);
+
+      const deleteResponse = page.waitForResponse(
+        (r) => r.url().endsWith(`/api/teams/${createdTeam.id}`) && r.request().method() === 'DELETE'
+      );
+      await confirmDialog.getByRole('button', { name: 'Delete', exact: true }).click();
+
+      const deleted = await deleteResponse;
+      expect(deleted.status()).toBe(204);
+
+      // expect: Team is removed from the list.
+      await expect(confirmDialog).toHaveCount(0);
+      await expect(teamsRegion.getByText(renamedTeamName, { exact: true })).toHaveCount(0);
+      await expect(
+        teamsRegion.getByRole('button', { name: `Delete ${renamedTeamName}` })
+      ).toHaveCount(0);
+    });
   });
-
-  test.afterEach(async () => {
-    if (ownExhibitId) {
-      await apiDeleteExhibitTeamsByName(ownExhibitId, createdTeamNames);
-    }
-    if (ownCollectionId) {
-      await apiDeleteCollectionById(ownCollectionId, 'create-manage-teams collection');
-    }
-  });
-
-  test('Create and Manage Teams', async ({ galleryAuthenticatedPage: page }) => {
-    const unique = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-    const teamName = `Managed Team ${unique}`;
-    const teamShortName = `MT${unique}`.slice(0, 20);
-    const renamedTeamName = `Renamed Team ${unique}`;
-
-    // Seed the precondition records (a collection and an exhibit inside it) via the API;
-    // creating them through the UI is covered by the collection/exhibit specs.
-    // Register ids for teardown as soon as each one exists.
-    const collection = await apiCreateCollection(
-      `Manage Teams Collection ${unique}`,
-      'Collection for the create-manage-teams spec'
-    );
-    ownCollectionId = collection.id;
-    const exhibit = await apiCreateExhibit(collection.id, `Manage Teams Exhibit ${unique}`);
-    ownExhibitId = exhibit.id;
-
-    const teamsRegion = await openExhibitTeamsPanel(page, collection.name, exhibit.name);
-
-    // A brand-new exhibit has no teams, which is also what keeps the null-shortName sort
-    // crash described above out of the way.
-    await expect(teamsRegion.getByRole('button', { name: `Edit ${teamName}` })).toHaveCount(0);
-
-    // 1. Create a new team for the exhibit.
-    await teamsRegion.getByRole('button', { name: 'Add Team' }).click();
-
-    const addDialog = page.getByRole('dialog');
-    await expect(addDialog).toBeVisible();
-
-    // `exact: true` matters: "Name" would otherwise also match the "Short Name" field.
-    // Register the name before saving so teardown covers a partial create.
-    createdTeamNames.push(teamName);
-    await addDialog.getByLabel('Name', { exact: true }).fill(teamName);
-    await addDialog.getByLabel('Short Name', { exact: true }).fill(teamShortName);
-
-    // Save is gated on `!errorFree() || !form.dirty`, so it only enables once both
-    // required fields are filled — assert that rather than blind-clicking.
-    const saveButton = addDialog.getByRole('button', { name: 'Save' });
-    await expect(saveButton).toBeEnabled();
-
-    const createResponse = page.waitForResponse(
-      (r) => r.url().endsWith('/api/teams') && r.request().method() === 'POST'
-    );
-    await saveButton.click();
-
-    // expect: Team is created ...
-    const created = await createResponse;
-    expect(created.status()).toBe(201);
-    const createdTeam: { id: string; name: string; shortName: string; exhibitId: string } =
-      await created.json();
-    expect(createdTeam.name).toBe(teamName);
-    // The dialog seeds `exhibitId` from the `[exhibitId]` input, which is what scopes the
-    // new team to this exhibit rather than creating a dangling one.
-    expect(createdTeam.exhibitId).toBe(exhibit.id);
-
-    // expect: ... and appears in the team list.
-    await expect(addDialog).toHaveCount(0);
-    await expect(teamsRegion.getByText(teamName, { exact: true })).toBeVisible();
-    await expect(teamsRegion.getByText(teamShortName, { exact: true })).toBeVisible();
-    const editButton = teamsRegion.getByRole('button', { name: `Edit ${teamName}` });
-    await expect(editButton).toHaveCount(1);
-
-    // 2. Edit the team name.
-    createdTeamNames.push(renamedTeamName);
-    await editButton.click();
-
-    const editDialog = page.getByRole('dialog');
-    await expect(editDialog).toBeVisible();
-    // The dialog is pre-populated from the row, proving it opened on *this* team.
-    await expect(editDialog.getByLabel('Name', { exact: true })).toHaveValue(teamName);
-    await editDialog.getByLabel('Name', { exact: true }).fill(renamedTeamName);
-
-    const updateResponse = page.waitForResponse(
-      (r) => r.url().endsWith(`/api/teams/${createdTeam.id}`) && r.request().method() === 'PUT'
-    );
-    await editDialog.getByRole('button', { name: 'Save' }).click();
-
-    // expect: Team name is updated.
-    const updated = await updateResponse;
-    expect(updated.status()).toBe(200);
-    expect((await updated.json()).name).toBe(renamedTeamName);
-
-    await expect(editDialog).toHaveCount(0);
-    await expect(teamsRegion.getByText(renamedTeamName, { exact: true })).toBeVisible();
-    await expect(teamsRegion.getByText(teamName, { exact: true })).toHaveCount(0);
-
-    // 3. Delete the team.
-    await teamsRegion.getByRole('button', { name: `Delete ${renamedTeamName}` }).click();
-
-    // `deleteTeam` routes through CrucibleDialogService.confirm, so the destructive
-    // action is behind an explicit confirmation naming the team.
-    const confirmDialog = page.getByRole('dialog');
-    await expect(confirmDialog).toBeVisible();
-    await expect(confirmDialog).toContainText(renamedTeamName);
-
-    const deleteResponse = page.waitForResponse(
-      (r) => r.url().endsWith(`/api/teams/${createdTeam.id}`) && r.request().method() === 'DELETE'
-    );
-    await confirmDialog.getByRole('button', { name: 'Delete', exact: true }).click();
-
-    const deleted = await deleteResponse;
-    expect(deleted.status()).toBe(204);
-
-    // expect: Team is removed from the list.
-    await expect(confirmDialog).toHaveCount(0);
-    await expect(teamsRegion.getByText(renamedTeamName, { exact: true })).toHaveCount(0);
-    await expect(
-      teamsRegion.getByRole('button', { name: `Delete ${renamedTeamName}` })
-    ).toHaveCount(0);
-  });
-});
+}

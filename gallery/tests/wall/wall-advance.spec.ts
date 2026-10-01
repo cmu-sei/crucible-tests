@@ -5,7 +5,7 @@
 // seed: seed.spec.ts
 
 import { APIRequestContext, request as pwRequest } from '@playwright/test';
-import { test, expect, gotoExhibitSection, Services } from '../../fixtures';
+import { test, expect, gotoExhibitSection, Services, GALLERY_THEMES, setGalleryTheme } from '../../fixtures';
 import { getUserToken } from '../../../keycloak-admin';
 
 /**
@@ -145,109 +145,112 @@ async function seedWallExhibit(api: APIRequestContext): Promise<WallFixture> {
   };
 }
 
-test.describe('Wall View Functionality', () => {
-  let api: APIRequestContext;
-  let fixture: WallFixture;
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Wall View Functionality`, () => {
+    let api: APIRequestContext;
+    let fixture: WallFixture;
 
-  test.beforeEach(async () => {
-    const token = await getUserToken('admin', 'admin', 'gallery.ui', 'openid profile gallery');
-    api = await pwRequest.newContext({
-      ignoreHTTPSErrors: true,
-      extraHTTPHeaders: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    test.beforeEach(async () => {
+      const token = await getUserToken('admin', 'admin', 'gallery.ui', 'openid profile gallery');
+      api = await pwRequest.newContext({
+        ignoreHTTPSErrors: true,
+        extraHTTPHeaders: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      });
+      fixture = await seedWallExhibit(api);
     });
-    fixture = await seedWallExhibit(api);
-  });
 
-  test.afterEach(async () => {
-    try {
-      for (const id of fixture.articleIds) {
-        await api.delete(`${Services.Gallery.API}/api/articles/${id}`);
+    test.afterEach(async () => {
+      try {
+        for (const id of fixture.articleIds) {
+          await api.delete(`${Services.Gallery.API}/api/articles/${id}`);
+        }
+        for (const id of fixture.cardIds) {
+          await api.delete(`${Services.Gallery.API}/api/cards/${id}`);
+        }
+        await api.delete(`${Services.Gallery.API}/api/teams/${fixture.teamId}`);
+        await api.delete(`${Services.Gallery.API}/api/exhibits/${fixture.exhibitId}`);
+        await api.delete(`${Services.Gallery.API}/api/collections/${fixture.collectionId}`);
+      } finally {
+        await api.dispose();
       }
-      for (const id of fixture.cardIds) {
-        await api.delete(`${Services.Gallery.API}/api/cards/${id}`);
-      }
-      await api.delete(`${Services.Gallery.API}/api/teams/${fixture.teamId}`);
-      await api.delete(`${Services.Gallery.API}/api/exhibits/${fixture.exhibitId}`);
-      await api.delete(`${Services.Gallery.API}/api/collections/${fixture.collectionId}`);
-    } finally {
-      await api.dispose();
-    }
+    });
+
+    test('Wall Advance Move and Inject', async ({ galleryAuthenticatedPage: page }) => {
+      await setGalleryTheme(page, theme);
+      const [card1Name, card2Name, card3Name] = fixture.cardNames;
+
+      // 1. Navigate to an exhibit's Wall view that has the Advance button enabled.
+      await gotoExhibitSection(page, fixture.exhibitId, 'wall');
+      await expect(page).toHaveTitle('Gallery Wall');
+
+      // expect: The 'Advance' button is visible (the exhibit is seeded with
+      // showAdvanceButton: true and admin holds the manage permission).
+      const advanceButton = page.getByRole('button', { name: 'Advance' });
+      await expect(advanceButton).toBeVisible();
+
+      // expect: Current move and inject values are displayed. A freshly created exhibit
+      // starts at (0, 0).
+      await expect(page.getByText('Move 0, Inject 0')).toBeVisible();
+
+      const cards = page.locator('section.cards mat-card');
+      await expect(cards.locator('mat-card-title')).toHaveText([card1Name, card2Name, card3Name]);
+      const card2 = cards.filter({ hasText: card2Name });
+
+      // Card 2 lives at move 1, so at (0, 0) its articles are not yet released: no unread
+      // count and no Details button.
+      await expect(card2.getByRole('heading', { level: 3 })).toHaveText('No articles posted');
+      await expect(card2.getByRole('button', { name: 'Details' })).toHaveCount(0);
+      // Card 1 is released, which is what makes the "cards update" assertion below a
+      // change rather than a coincidence.
+      await expect(
+        cards.filter({ hasText: card1Name }).getByRole('heading', { level: 3 })
+      ).toHaveText('2 unread articles');
+
+      // 2. Click the 'Advance' button. Pair the click with the API round-trip so the
+      // assertions below run against a settled store rather than a fixed sleep.
+      const advanceUrl = (r: { url(): string }) =>
+        r.url().startsWith(`${Services.Gallery.API}/api/exhibits/`) && r.url().endsWith('/advance');
+
+      const [advanceResponse] = await Promise.all([
+        page.waitForResponse(advanceUrl),
+        advanceButton.click(),
+      ]);
+      expect(advanceResponse.status()).toBe(200);
+
+      // expect: The move/inject indicator updates to show the next move or inject values.
+      // Assert both the new value and the disappearance of the old one, so a stale
+      // indicator cannot pass.
+      await expect(page.getByText('Move 1, Inject 0')).toBeVisible();
+      await expect(page.getByText('Move 0, Inject 0')).toHaveCount(0);
+
+      // expect: The cards displayed on the wall update to reflect articles for the new
+      // move/inject — Card 2's two articles are now released.
+      await expect(card2.getByRole('heading', { level: 3 })).toHaveText('2 unread articles');
+      await expect(card2.getByRole('button', { name: 'Details' })).toBeVisible();
+
+      // Advance again: the exhibit steps along the inject axis this time, releasing Card 3
+      // at (1, 1). This proves the button keeps stepping rather than being a one-shot.
+      const card3 = cards.filter({ hasText: card3Name });
+      await expect(card3.getByRole('heading', { level: 3 })).toHaveText('No articles posted');
+
+      const [secondAdvance] = await Promise.all([
+        page.waitForResponse(advanceUrl),
+        advanceButton.click(),
+      ]);
+      expect(secondAdvance.status()).toBe(200);
+
+      await expect(page.getByText('Move 1, Inject 1')).toBeVisible();
+      await expect(page.getByText('Move 1, Inject 0')).toHaveCount(0);
+      await expect(card3.getByRole('heading', { level: 3 })).toHaveText('2 unread articles');
+      await expect(card3.getByRole('button', { name: 'Details' })).toBeVisible();
+
+      // The exhibit row itself really moved — the UI is not just re-rendering local state.
+      const exhibitResponse = await api.get(
+        `${Services.Gallery.API}/api/exhibits/${fixture.exhibitId}`
+      );
+      expect(exhibitResponse.status()).toBe(200);
+      const exhibitRow: { currentMove: number; currentInject: number } = await exhibitResponse.json();
+      expect(exhibitRow).toMatchObject({ currentMove: 1, currentInject: 1 });
+    });
   });
-
-  test('Wall Advance Move and Inject', async ({ galleryAuthenticatedPage: page }) => {
-    const [card1Name, card2Name, card3Name] = fixture.cardNames;
-
-    // 1. Navigate to an exhibit's Wall view that has the Advance button enabled.
-    await gotoExhibitSection(page, fixture.exhibitId, 'wall');
-    await expect(page).toHaveTitle('Gallery Wall');
-
-    // expect: The 'Advance' button is visible (the exhibit is seeded with
-    // showAdvanceButton: true and admin holds the manage permission).
-    const advanceButton = page.getByRole('button', { name: 'Advance' });
-    await expect(advanceButton).toBeVisible();
-
-    // expect: Current move and inject values are displayed. A freshly created exhibit
-    // starts at (0, 0).
-    await expect(page.getByText('Move 0, Inject 0')).toBeVisible();
-
-    const cards = page.locator('section.cards mat-card');
-    await expect(cards.locator('mat-card-title')).toHaveText([card1Name, card2Name, card3Name]);
-    const card2 = cards.filter({ hasText: card2Name });
-
-    // Card 2 lives at move 1, so at (0, 0) its articles are not yet released: no unread
-    // count and no Details button.
-    await expect(card2.getByRole('heading', { level: 3 })).toHaveText('No articles posted');
-    await expect(card2.getByRole('button', { name: 'Details' })).toHaveCount(0);
-    // Card 1 is released, which is what makes the "cards update" assertion below a
-    // change rather than a coincidence.
-    await expect(
-      cards.filter({ hasText: card1Name }).getByRole('heading', { level: 3 })
-    ).toHaveText('2 unread articles');
-
-    // 2. Click the 'Advance' button. Pair the click with the API round-trip so the
-    // assertions below run against a settled store rather than a fixed sleep.
-    const advanceUrl = (r: { url(): string }) =>
-      r.url().startsWith(`${Services.Gallery.API}/api/exhibits/`) && r.url().endsWith('/advance');
-
-    const [advanceResponse] = await Promise.all([
-      page.waitForResponse(advanceUrl),
-      advanceButton.click(),
-    ]);
-    expect(advanceResponse.status()).toBe(200);
-
-    // expect: The move/inject indicator updates to show the next move or inject values.
-    // Assert both the new value and the disappearance of the old one, so a stale
-    // indicator cannot pass.
-    await expect(page.getByText('Move 1, Inject 0')).toBeVisible();
-    await expect(page.getByText('Move 0, Inject 0')).toHaveCount(0);
-
-    // expect: The cards displayed on the wall update to reflect articles for the new
-    // move/inject — Card 2's two articles are now released.
-    await expect(card2.getByRole('heading', { level: 3 })).toHaveText('2 unread articles');
-    await expect(card2.getByRole('button', { name: 'Details' })).toBeVisible();
-
-    // Advance again: the exhibit steps along the inject axis this time, releasing Card 3
-    // at (1, 1). This proves the button keeps stepping rather than being a one-shot.
-    const card3 = cards.filter({ hasText: card3Name });
-    await expect(card3.getByRole('heading', { level: 3 })).toHaveText('No articles posted');
-
-    const [secondAdvance] = await Promise.all([
-      page.waitForResponse(advanceUrl),
-      advanceButton.click(),
-    ]);
-    expect(secondAdvance.status()).toBe(200);
-
-    await expect(page.getByText('Move 1, Inject 1')).toBeVisible();
-    await expect(page.getByText('Move 1, Inject 0')).toHaveCount(0);
-    await expect(card3.getByRole('heading', { level: 3 })).toHaveText('2 unread articles');
-    await expect(card3.getByRole('button', { name: 'Details' })).toBeVisible();
-
-    // The exhibit row itself really moved — the UI is not just re-rendering local state.
-    const exhibitResponse = await api.get(
-      `${Services.Gallery.API}/api/exhibits/${fixture.exhibitId}`
-    );
-    expect(exhibitResponse.status()).toBe(200);
-    const exhibitRow: { currentMove: number; currentInject: number } = await exhibitResponse.json();
-    expect(exhibitRow).toMatchObject({ currentMove: 1, currentInject: 1 });
-  });
-});
+}

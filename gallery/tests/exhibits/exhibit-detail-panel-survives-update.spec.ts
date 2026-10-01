@@ -14,6 +14,8 @@ import {
   apiCreateTeam,
   apiSetExhibitMoveAndInject,
   apiDeleteCollectionById,
+  GALLERY_THEMES,
+  setGalleryTheme,
 } from '../../fixtures';
 
 /**
@@ -56,100 +58,103 @@ import {
  * worker-scoped `seededExhibit`: it needs two exhibits in one collection, and it mutates
  * one of them.
  */
-test.describe('Exhibit Management', () => {
-  // Recorded as soon as the collection exists so `afterEach` removes it even when the
-  // test body throws partway through. Exhibit.CollectionId and Team.ExhibitId are both
-  // DeleteBehavior.Cascade, so deleting the collection removes both exhibits and the
-  // seeded team.
-  let collectionId: string | undefined;
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Exhibit Management`, () => {
+    // Recorded as soon as the collection exists so `afterEach` removes it even when the
+    // test body throws partway through. Exhibit.CollectionId and Team.ExhibitId are both
+    // DeleteBehavior.Cascade, so deleting the collection removes both exhibits and the
+    // seeded team.
+    let collectionId: string | undefined;
 
-  test.afterEach(async () => {
-    if (collectionId) {
-      await apiDeleteCollectionById(collectionId, 'Detail Panel Persistence Test collection');
-    }
-    collectionId = undefined;
+    test.afterEach(async () => {
+      if (collectionId) {
+        await apiDeleteCollectionById(collectionId, 'Detail Panel Persistence Test collection');
+      }
+      collectionId = undefined;
+    });
+
+    test('Expanded exhibit detail panel stays open across an exhibit update', async ({
+      galleryAuthenticatedPage: page,
+    }) => {
+      await setGalleryTheme(page, theme);
+      const suffix = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+      const collection = await apiCreateCollection(`Detail Panel Persistence Test ${suffix}`);
+      collectionId = collection.id;
+
+      // The exhibit whose detail panel is opened and must survive.
+      const watched = await apiCreateExhibit(collectionId, `Panel Watched Exhibit ${suffix}`);
+      // The exhibit that gets mutated to provoke the store emission. A sibling in the same
+      // collection, so it shares the table but is not the row being observed.
+      const sibling = await apiCreateExhibit(collectionId, `Panel Trigger Exhibit ${suffix}`);
+
+      // A team on the watched exhibit gives the "Exhibit Teams" panel visible content, so
+      // "panel still open" can be asserted on rendered data rather than on a CSS class
+      // alone — a panel that reopened empty would not satisfy this.
+      const teamShortName = `PANEL-${suffix}`;
+      const teamFullName = `Panel Team ${suffix}`;
+      await apiCreateTeam(watched.id, { name: teamFullName, shortName: teamShortName });
+
+      await gotoGalleryAdmin(page);
+      await gotoAdminSection(page, 'Exhibits');
+
+      // The exhibits table only renders once a collection is selected.
+      const collectionDropdown = page.getByRole('combobox', { name: 'Select a Collection' });
+      await collectionDropdown.click();
+      const option = page.getByRole('option', { name: collection.name, exact: true });
+      await expect(option).toBeVisible();
+      await option.click();
+
+      // 1. Expand the watched exhibit's row.
+      const watchedRow = page.getByRole('row').filter({ hasText: watched.name }).first();
+      await expect(watchedRow).toBeVisible();
+      await watchedRow.getByRole('cell', { name: watched.name }).click();
+
+      // 2. Expand the "Exhibit Teams" sub-panel and confirm its content is visible.
+      const exhibitTeamsHeader = page.getByRole('button', { name: 'Exhibit Teams' });
+      await expect(exhibitTeamsHeader).toBeVisible();
+      await exhibitTeamsHeader.click();
+
+      const teamsRegion = page.getByRole('region', { name: 'Exhibit Teams' });
+      await expect(teamsRegion).toBeVisible();
+      await expect(teamsRegion.getByText(teamShortName, { exact: true })).toBeVisible();
+      await expect(teamsRegion.getByText(teamFullName, { exact: true })).toBeVisible();
+      // `aria-expanded` is what mat-expansion-panel-header reflects its open state as, so
+      // this is the state that a row rebuild resets.
+      await expect(exhibitTeamsHeader).toHaveAttribute('aria-expanded', 'true');
+
+      // 3. Provoke an exhibit-store emission by mutating the sibling exhibit through the
+      //    API. Move/inject are rendered columns, so the change is observable in the DOM.
+      const siblingRow = page.getByRole('row').filter({ hasText: sibling.name }).first();
+      const siblingMoveCell = siblingRow.getByRole('cell').nth(4);
+      const siblingInjectCell = siblingRow.getByRole('cell').nth(5);
+      await expect(siblingMoveCell).toHaveText('0');
+      await expect(siblingInjectCell).toHaveText('0');
+
+      await apiSetExhibitMoveAndInject(sibling.id, 7, 3);
+
+      // expect: the emission actually reached this component. These two cells are rendered
+      // from `dataSource.data`, which only changes via the `exhibitQuery.selectAll()`
+      // subscription that `trackBy` governs — so this assertion is the guard against a
+      // vacuous pass below. If SignalR never delivered `ExhibitUpdated`, this fails here
+      // instead of silently making the panel assertion meaningless.
+      await expect(siblingMoveCell).toHaveText('7');
+      await expect(siblingInjectCell).toHaveText('3');
+
+      // expect: the sub-panel is still open with its content still visible. Without a
+      // `trackBy` the row rebuild destroys this DOM and the panel comes back collapsed,
+      // hiding the team rows even though `expandedExhibitId` still names the watched exhibit.
+      await expect(exhibitTeamsHeader).toHaveAttribute('aria-expanded', 'true');
+      await expect(teamsRegion).toBeVisible();
+      await expect(teamsRegion.getByText(teamShortName, { exact: true })).toBeVisible();
+      await expect(teamsRegion.getByText(teamFullName, { exact: true })).toBeVisible();
+
+      // A second emission confirms the row is genuinely being reused rather than having
+      // survived one diff by luck.
+      await apiSetExhibitMoveAndInject(sibling.id, 9, 4);
+      await expect(siblingMoveCell).toHaveText('9');
+      await expect(siblingInjectCell).toHaveText('4');
+      await expect(exhibitTeamsHeader).toHaveAttribute('aria-expanded', 'true');
+      await expect(teamsRegion.getByText(teamShortName, { exact: true })).toBeVisible();
+    });
   });
-
-  test('Expanded exhibit detail panel stays open across an exhibit update', async ({
-    galleryAuthenticatedPage: page,
-  }) => {
-    const suffix = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-    const collection = await apiCreateCollection(`Detail Panel Persistence Test ${suffix}`);
-    collectionId = collection.id;
-
-    // The exhibit whose detail panel is opened and must survive.
-    const watched = await apiCreateExhibit(collectionId, `Panel Watched Exhibit ${suffix}`);
-    // The exhibit that gets mutated to provoke the store emission. A sibling in the same
-    // collection, so it shares the table but is not the row being observed.
-    const sibling = await apiCreateExhibit(collectionId, `Panel Trigger Exhibit ${suffix}`);
-
-    // A team on the watched exhibit gives the "Exhibit Teams" panel visible content, so
-    // "panel still open" can be asserted on rendered data rather than on a CSS class
-    // alone — a panel that reopened empty would not satisfy this.
-    const teamShortName = `PANEL-${suffix}`;
-    const teamFullName = `Panel Team ${suffix}`;
-    await apiCreateTeam(watched.id, { name: teamFullName, shortName: teamShortName });
-
-    await gotoGalleryAdmin(page);
-    await gotoAdminSection(page, 'Exhibits');
-
-    // The exhibits table only renders once a collection is selected.
-    const collectionDropdown = page.getByRole('combobox', { name: 'Select a Collection' });
-    await collectionDropdown.click();
-    const option = page.getByRole('option', { name: collection.name, exact: true });
-    await expect(option).toBeVisible();
-    await option.click();
-
-    // 1. Expand the watched exhibit's row.
-    const watchedRow = page.getByRole('row').filter({ hasText: watched.name }).first();
-    await expect(watchedRow).toBeVisible();
-    await watchedRow.getByRole('cell', { name: watched.name }).click();
-
-    // 2. Expand the "Exhibit Teams" sub-panel and confirm its content is visible.
-    const exhibitTeamsHeader = page.getByRole('button', { name: 'Exhibit Teams' });
-    await expect(exhibitTeamsHeader).toBeVisible();
-    await exhibitTeamsHeader.click();
-
-    const teamsRegion = page.getByRole('region', { name: 'Exhibit Teams' });
-    await expect(teamsRegion).toBeVisible();
-    await expect(teamsRegion.getByText(teamShortName, { exact: true })).toBeVisible();
-    await expect(teamsRegion.getByText(teamFullName, { exact: true })).toBeVisible();
-    // `aria-expanded` is what mat-expansion-panel-header reflects its open state as, so
-    // this is the state that a row rebuild resets.
-    await expect(exhibitTeamsHeader).toHaveAttribute('aria-expanded', 'true');
-
-    // 3. Provoke an exhibit-store emission by mutating the sibling exhibit through the
-    //    API. Move/inject are rendered columns, so the change is observable in the DOM.
-    const siblingRow = page.getByRole('row').filter({ hasText: sibling.name }).first();
-    const siblingMoveCell = siblingRow.getByRole('cell').nth(4);
-    const siblingInjectCell = siblingRow.getByRole('cell').nth(5);
-    await expect(siblingMoveCell).toHaveText('0');
-    await expect(siblingInjectCell).toHaveText('0');
-
-    await apiSetExhibitMoveAndInject(sibling.id, 7, 3);
-
-    // expect: the emission actually reached this component. These two cells are rendered
-    // from `dataSource.data`, which only changes via the `exhibitQuery.selectAll()`
-    // subscription that `trackBy` governs — so this assertion is the guard against a
-    // vacuous pass below. If SignalR never delivered `ExhibitUpdated`, this fails here
-    // instead of silently making the panel assertion meaningless.
-    await expect(siblingMoveCell).toHaveText('7');
-    await expect(siblingInjectCell).toHaveText('3');
-
-    // expect: the sub-panel is still open with its content still visible. Without a
-    // `trackBy` the row rebuild destroys this DOM and the panel comes back collapsed,
-    // hiding the team rows even though `expandedExhibitId` still names the watched exhibit.
-    await expect(exhibitTeamsHeader).toHaveAttribute('aria-expanded', 'true');
-    await expect(teamsRegion).toBeVisible();
-    await expect(teamsRegion.getByText(teamShortName, { exact: true })).toBeVisible();
-    await expect(teamsRegion.getByText(teamFullName, { exact: true })).toBeVisible();
-
-    // A second emission confirms the row is genuinely being reused rather than having
-    // survived one diff by luck.
-    await apiSetExhibitMoveAndInject(sibling.id, 9, 4);
-    await expect(siblingMoveCell).toHaveText('9');
-    await expect(siblingInjectCell).toHaveText('4');
-    await expect(exhibitTeamsHeader).toHaveAttribute('aria-expanded', 'true');
-    await expect(teamsRegion.getByText(teamShortName, { exact: true })).toBeVisible();
-  });
-});
+}

@@ -4,7 +4,7 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoExhibitSection } from '../../fixtures';
+import { test, expect, gotoExhibitSection, GALLERY_THEMES, setGalleryTheme } from '../../fixtures';
 
 /**
  * Archive Functionality §4.1 — Archive Page Display.
@@ -24,54 +24,57 @@ import { test, expect, gotoExhibitSection } from '../../fixtures';
  * assertions below are the substantive ones and are unaffected. Tighten the title to an
  * exact "(2)" once the store is exhibit-scoped.
  */
-test.describe('Archive Functionality', () => {
-  test('Archive Page Display', async ({ galleryAuthenticatedPage: page, seededExhibit }) => {
-    // 1. Navigate to the seeded exhibit's Archive view.
-    await gotoExhibitSection(page, seededExhibit.exhibitId, 'archive');
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Archive Functionality`, () => {
+    test('Archive Page Display', async ({ galleryAuthenticatedPage: page, seededExhibit }) => {
+      await setGalleryTheme(page, theme);
+      // 1. Navigate to the seeded exhibit's Archive view.
+      await gotoExhibitSection(page, seededExhibit.exhibitId, 'archive');
 
-    // expect: The Archive page loads with the title 'Gallery Archive (N)'.
-    await expect(page).toHaveTitle(/^Gallery Archive \(\d+\)$/);
+      // expect: The Archive page loads with the title 'Gallery Archive (N)'.
+      await expect(page).toHaveTitle(/^Gallery Archive \(\d+\)$/);
 
-    // expect: Articles are displayed as cards showing source type icon, title,
-    // source name, date, description.
-    const articleCards = page.locator('section.cards mat-card');
-    await expect(articleCards.locator('.article-title')).toHaveText([
-      'News Article 1',
-      'Intel Article 1',
-    ]);
-    // Nothing from a later move/inject has been released yet.
-    for (const unreleased of ['Reporting Article 1', 'Social Article 1', 'Orders Article 1']) {
-      await expect(articleCards.filter({ hasText: unreleased })).toHaveCount(0);
-    }
+      // expect: Articles are displayed as cards showing source type icon, title,
+      // source name, date, description.
+      const articleCards = page.locator('section.cards mat-card');
+      await expect(articleCards.locator('.article-title')).toHaveText([
+        'News Article 1',
+        'Intel Article 1',
+      ]);
+      // Nothing from a later move/inject has been released yet.
+      for (const unreleased of ['Reporting Article 1', 'Social Article 1', 'Orders Article 1']) {
+        await expect(articleCards.filter({ hasText: unreleased })).toHaveCount(0);
+      }
 
-    const intelArticle = articleCards.filter({ hasText: 'Intel Article 1' });
-    await expect(intelArticle.locator('mat-icon.source-icon')).toHaveClass(/mdi-shield-lock/);
-    await expect(intelArticle.locator('.article-subtitle')).toHaveText('E2E Test Source');
-    await expect(intelArticle.getByText(/\d{1,2}\/\d{1,2}\/\d{2},? .*ET/)).toBeVisible();
-    await expect(intelArticle.locator('.summary-text')).toHaveText('E2E test intel article');
+      const intelArticle = articleCards.filter({ hasText: 'Intel Article 1' });
+      await expect(intelArticle.locator('mat-icon.source-icon')).toHaveClass(/mdi-shield-lock/);
+      await expect(intelArticle.locator('.article-subtitle')).toHaveText('E2E Test Source');
+      await expect(intelArticle.getByText(/\d{1,2}\/\d{1,2}\/\d{2},? .*ET/)).toBeVisible();
+      await expect(intelArticle.locator('.summary-text')).toHaveText('E2E test intel article');
 
-    // expect: Each article has 'View', 'Read', and 'Share' action buttons.
-    for (const articleName of ['Intel Article 1', 'News Article 1']) {
-      const card = articleCards.filter({ hasText: articleName });
-      await expect(card.getByRole('button', { name: 'View' })).toBeVisible();
-      await expect(card.getByRole('button', { name: 'Read' })).toBeVisible();
-      await expect(card.getByRole('button', { name: 'Share' })).toBeVisible();
-    }
+      // expect: Each article has 'View', 'Read', and 'Share' action buttons.
+      for (const articleName of ['Intel Article 1', 'News Article 1']) {
+        const card = articleCards.filter({ hasText: articleName });
+        await expect(card.getByRole('button', { name: 'View' })).toBeVisible();
+        await expect(card.getByRole('button', { name: 'Read' })).toBeVisible();
+        await expect(card.getByRole('button', { name: 'Share' })).toBeVisible();
+      }
 
-    // expect: Source type filter buttons are visible.
-    for (const sourceType of ['Intel', 'Reporting', 'Orders', 'News', 'Social', 'Phone', 'Email']) {
-      await expect(page.getByRole('button', { name: sourceType })).toBeVisible();
-    }
+      // expect: Source type filter buttons are visible.
+      for (const sourceType of ['Intel', 'Reporting', 'Orders', 'News', 'Social', 'Phone', 'Email']) {
+        await expect(page.getByRole('button', { name: sourceType })).toBeVisible();
+      }
 
-    // expect: A search field 'Search the Archive' is visible.
-    await expect(page.getByRole('textbox', { name: 'Search the Archive' })).toBeVisible();
+      // expect: A search field 'Search the Archive' is visible.
+      await expect(page.getByRole('textbox', { name: 'Search the Archive' })).toBeVisible();
 
-    // expect: A card filter dropdown 'All Cards' is visible, defaulting to All Cards.
-    const cardFilter = page.getByRole('combobox');
-    await expect(cardFilter).toBeVisible();
-    await expect(cardFilter).toHaveText('All Cards');
+      // expect: A card filter dropdown 'All Cards' is visible, defaulting to All Cards.
+      const cardFilter = page.getByRole('combobox');
+      await expect(cardFilter).toBeVisible();
+      await expect(cardFilter).toHaveText('All Cards');
 
-    // expect: Team indicator shows current team name.
-    await expect(page.locator('app-team-selector').getByText('Team:')).toBeVisible();
+      // expect: Team indicator shows current team name.
+      await expect(page.locator('app-team-selector').getByText('Team:')).toBeVisible();
+    });
   });
-});
+}

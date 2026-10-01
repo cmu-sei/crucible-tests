@@ -13,6 +13,8 @@ import {
   apiCreateExhibit,
   apiCreateTeam,
   apiDeleteCollectionById,
+  GALLERY_THEMES,
+  setGalleryTheme,
 } from '../../fixtures';
 import { openExhibitTeamsPanel, teamRowShortNames, teamRowFullNames } from './null-team-helpers';
 
@@ -53,72 +55,75 @@ import { openExhibitTeamsPanel, teamRowShortNames, teamRowFullNames } from './nu
  * deliberately malformed team into it, which would perturb `view-exhibit-teams` and
  * `team-selector` if it landed on the shared exhibit.
  */
-test.describe('Team Management', () => {
-  // Recorded as soon as the collection exists so `afterEach` removes it even when the
-  // test body throws partway through. Exhibit.CollectionId and Team.ExhibitId are both
-  // configured DeleteBehavior.Cascade, so deleting the collection removes the exhibit
-  // and every team seeded on it.
-  let collectionId: string | undefined;
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Team Management`, () => {
+    // Recorded as soon as the collection exists so `afterEach` removes it even when the
+    // test body throws partway through. Exhibit.CollectionId and Team.ExhibitId are both
+    // configured DeleteBehavior.Cascade, so deleting the collection removes the exhibit
+    // and every team seeded on it.
+    let collectionId: string | undefined;
 
-  test.afterEach(async () => {
-    if (collectionId) {
-      await apiDeleteCollectionById(collectionId, 'Null Name Team Sort Test collection');
-    }
-    collectionId = undefined;
+    test.afterEach(async () => {
+      if (collectionId) {
+        await apiDeleteCollectionById(collectionId, 'Null Name Team Sort Test collection');
+      }
+      collectionId = undefined;
+    });
+
+    test('Sorting Exhibit Teams by Full Name tolerates a team with no name', async ({
+      galleryAuthenticatedPage: page,
+    }) => {
+      await setGalleryTheme(page, theme);
+      const suffix = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+      const collection = await apiCreateCollection(`Null Name Team Sort Test ${suffix}`);
+      collectionId = collection.id;
+      const exhibit = await apiCreateExhibit(collectionId, `Null Name Sort Exhibit ${suffix}`);
+
+      // Short names are chosen so the default shortName-ascending order (AAA, BBB, CCC)
+      // differs from Full-Name-ascending order — the null name lowercases to '' and so
+      // sorts first, ahead of "Alpha" and "Zulu". If the click were a no-op the row order
+      // below would not change, so the order assertion also proves the sort really ran.
+      const nullNameShortName = `CCC-${suffix}`;
+      const alphaName = `Alpha Named ${suffix}`;
+      const zuluName = `Zulu Named ${suffix}`;
+      await apiCreateTeam(exhibit.id, { name: zuluName, shortName: `AAA-${suffix}` });
+      await apiCreateTeam(exhibit.id, { name: alphaName, shortName: `BBB-${suffix}` });
+      // The team under test: a real record whose `name` is null.
+      await apiCreateTeam(exhibit.id, { name: null, shortName: nullNameShortName });
+
+      await gotoGalleryAdmin(page);
+      await gotoAdminSection(page, 'Exhibits');
+      const teamsRegion = await openExhibitTeamsPanel(page, collection.name, exhibit.name);
+
+      // Baseline: all three teams render before the sort is touched. Establishing this
+      // first separates "the comparator broke the list" from "the list never loaded",
+      // which would otherwise both look like zero rows.
+      await expect(teamRowShortNames(teamsRegion)).toHaveText([
+        `AAA-${suffix}`,
+        `BBB-${suffix}`,
+        nullNameShortName,
+      ]);
+
+      // 1. Click the "Full Name" column header to sort by `name`.
+      await teamsRegion.getByRole('button', { name: 'Full Name' }).click();
+
+      // expect: the list still renders every team. Unguarded, the comparator throws and
+      // `sortedTeams` is never reassigned, leaving the @for loop with nothing to render.
+      // Asserting the exact expected order (null name first, then Alpha, then Zulu) is
+      // strictly stronger than a count: it fails on an empty list, on a dropped row, and
+      // on a sort that silently did not happen.
+      await expect(teamRowFullNames(teamsRegion)).toHaveText(['', alphaName, zuluName]);
+
+      // expect: the null-name team is still one of those rows, identified by the
+      // shortName it does carry. This is the assertion that would fail if the fix had
+      // filtered null-name teams out instead of ordering them.
+      await expect(teamsRegion.getByText(nullNameShortName, { exact: true })).toBeVisible();
+
+      // Sorting descending re-enters the same comparator with the arguments reversed, so
+      // it exercises the `b.name` side of the original unguarded expression too.
+      await teamsRegion.getByRole('button', { name: 'Full Name' }).click();
+      await expect(teamRowFullNames(teamsRegion)).toHaveText([zuluName, alphaName, '']);
+      await expect(teamsRegion.getByText(nullNameShortName, { exact: true })).toBeVisible();
+    });
   });
-
-  test('Sorting Exhibit Teams by Full Name tolerates a team with no name', async ({
-    galleryAuthenticatedPage: page,
-  }) => {
-    const suffix = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-    const collection = await apiCreateCollection(`Null Name Team Sort Test ${suffix}`);
-    collectionId = collection.id;
-    const exhibit = await apiCreateExhibit(collectionId, `Null Name Sort Exhibit ${suffix}`);
-
-    // Short names are chosen so the default shortName-ascending order (AAA, BBB, CCC)
-    // differs from Full-Name-ascending order — the null name lowercases to '' and so
-    // sorts first, ahead of "Alpha" and "Zulu". If the click were a no-op the row order
-    // below would not change, so the order assertion also proves the sort really ran.
-    const nullNameShortName = `CCC-${suffix}`;
-    const alphaName = `Alpha Named ${suffix}`;
-    const zuluName = `Zulu Named ${suffix}`;
-    await apiCreateTeam(exhibit.id, { name: zuluName, shortName: `AAA-${suffix}` });
-    await apiCreateTeam(exhibit.id, { name: alphaName, shortName: `BBB-${suffix}` });
-    // The team under test: a real record whose `name` is null.
-    await apiCreateTeam(exhibit.id, { name: null, shortName: nullNameShortName });
-
-    await gotoGalleryAdmin(page);
-    await gotoAdminSection(page, 'Exhibits');
-    const teamsRegion = await openExhibitTeamsPanel(page, collection.name, exhibit.name);
-
-    // Baseline: all three teams render before the sort is touched. Establishing this
-    // first separates "the comparator broke the list" from "the list never loaded",
-    // which would otherwise both look like zero rows.
-    await expect(teamRowShortNames(teamsRegion)).toHaveText([
-      `AAA-${suffix}`,
-      `BBB-${suffix}`,
-      nullNameShortName,
-    ]);
-
-    // 1. Click the "Full Name" column header to sort by `name`.
-    await teamsRegion.getByRole('button', { name: 'Full Name' }).click();
-
-    // expect: the list still renders every team. Unguarded, the comparator throws and
-    // `sortedTeams` is never reassigned, leaving the @for loop with nothing to render.
-    // Asserting the exact expected order (null name first, then Alpha, then Zulu) is
-    // strictly stronger than a count: it fails on an empty list, on a dropped row, and
-    // on a sort that silently did not happen.
-    await expect(teamRowFullNames(teamsRegion)).toHaveText(['', alphaName, zuluName]);
-
-    // expect: the null-name team is still one of those rows, identified by the
-    // shortName it does carry. This is the assertion that would fail if the fix had
-    // filtered null-name teams out instead of ordering them.
-    await expect(teamsRegion.getByText(nullNameShortName, { exact: true })).toBeVisible();
-
-    // Sorting descending re-enters the same comparator with the arguments reversed, so
-    // it exercises the `b.name` side of the original unguarded expression too.
-    await teamsRegion.getByRole('button', { name: 'Full Name' }).click();
-    await expect(teamRowFullNames(teamsRegion)).toHaveText([zuluName, alphaName, '']);
-    await expect(teamsRegion.getByText(nullNameShortName, { exact: true })).toBeVisible();
-  });
-});
+}

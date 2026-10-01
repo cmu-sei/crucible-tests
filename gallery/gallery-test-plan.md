@@ -4,6 +4,22 @@
 
 Gallery is a content management application for the Crucible cybersecurity training and simulation platform. It provides a My Exhibits landing page, Wall view for displaying cards with unread article counts, an Archive view for browsing and filtering articles, and comprehensive admin capabilities. The admin section includes Collection management (with copy/upload/download JSON), Exhibit management (with copy/upload/download JSON, move/inject progression), Card management, Article management, Team management, User management (with inline role assignment), Role management (with permission matrix for system roles, collection roles, and exhibit roles), and Group management. The application uses a granular permission model with SystemPermission, CollectionPermission, ExhibitPermission, and TeamPermission levels. Authentication is via Keycloak OIDC, and real-time updates are delivered via SignalR.
 
+## Theme Coverage
+
+Every functional scenario below runs **once per theme (light and dark)**: each spec loops
+over `GALLERY_THEMES` from `gallery/fixtures.ts`, reports under a `light theme ›` /
+`dark theme ›` describe prefix, and applies the theme through the user menu's "Dark Theme"
+switch (`setGalleryTheme`) right after authentication. Gallery persists the choice in
+localStorage (`akita-cite-ui`, the `auth.ui` slice), so it survives the reloads a test
+performs, and every test's fresh browser context starts light.
+
+Exceptions, which run once:
+  - 1.1 User Login and Session Management and 1.2 Unauthorized Access Prevention — they
+    exercise the Keycloak screens before any Gallery UI (and its theme switch) exists.
+  - 1.4 Dark Theme Toggle — the theme switch is its subject.
+  - 14.1 API Health Check, 14.2 Keycloak Authentication Integration, 14.5 and 14.6 —
+    API-only or Keycloak-only, so there is no themed Gallery UI to exercise.
+
 ## Test Scenarios
 
 ### 1. Authentication and Authorization
@@ -1319,3 +1335,33 @@ observer reviewing this one.
   4. Open a dialog, make changes, click 'Save'
     - expect: Dialog processes the action and closes
     - expect: Changes are persisted
+
+#### 16.4. Theme Contrast and Color Settings Compliance
+
+**File:** `tests/ui/theme-contrast-compliance.spec.ts`
+
+Checks real WCAG contrast on the home page and the Add Collection dialog, and the color
+settings contract from the Crucible colors design spec
+(`design-specs/angular/colors.md` in the crucible-development repository). Expected
+colours are read from the served `settings.json` / `settings.shared.json` /
+`settings.env.json` (deep-merged in that order), not hardcoded, so an environment that
+overrides them still passes as long as the app applies what it was given.
+
+Runs **once per theme (light and dark)**. Read-only: nothing is seeded, and the Add
+Collection dialog is dismissed via Cancel without saving.
+
+**Steps:**
+  1. Open the home page and measure text contrast (WCAG 1.4.3)
+    - expect: The "My Exhibits" title, the Name column header, and the top bar text each meet 4.5:1 (3:1 for large text) against the surface they are painted on
+    - expect: The page content inverts the right way — dark-on-light in light theme, light-on-dark in dark theme
+  2. Measure the home page's Administration icon button (WCAG 1.4.11)
+    - expect: Its colour is `--mat-sys-primary`
+    - expect: It meets 3:1 against its surface
+  3. Compare the applied colours with the effective settings
+    - expect: `AppTopBarHexColor`, `AppTopBarHexTextColor`, `AppLightModePrimaryHexColor`, and `AppLightModePrimaryHexTextColor` are defined
+    - expect: `--crucible-topbar-background` / `--crucible-topbar-text` equal the top-bar settings in both themes, and the toolbar is painted with them
+    - expect: `--mat-sys-primary` / `--mat-sys-on-primary` equal the active mode's settings verbatim; dark falls back to the light key when its own is absent
+  4. Open Admin → Collections → Add Collection, fill Name so Save enables, and measure the buttons without saving
+    - expect: The filled Save button is painted `--mat-sys-primary` and its `on-primary` label meets 4.5:1
+    - expect: The Cancel label is `--mat-sys-primary` and meets 4.5:1 on the dialog surface
+    - **pending upstream:** fails in both themes with the shipped palette — `#008740` on the light dialog surface `#F9F9F9` measures 4.39:1, and `#00A34D` on the dark surface `#313131` measures 3.93:1. Gallery's neutral palette is lighter in dark mode than the M3 baseline the design spec's shades were chosen against. Passes without a test change once the configured primaries (or the surfaces) are compliant.
