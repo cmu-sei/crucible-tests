@@ -4,17 +4,20 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, CASTER_THEMES, setCasterTheme } from '../../fixtures';
 
-test.describe('Modules Management', () => {
-  test('Create New Module', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Modules Management`, () => {
+    test('Create New Module', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
-    await page.goto(Services.Caster.UI + '/admin?section=Modules');
-    await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible({ timeout: 10000 });
+      await page.goto(Services.Caster.UI + '/admin?section=Modules');
+      await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible({ timeout: 10000 });
 
-    const externalModuleInput = page.getByRole('textbox', { name: 'External Module ID' });
-    await expect(externalModuleInput).toBeVisible();
-    await externalModuleInput.fill('test-module-id');
-    await expect(externalModuleInput).toHaveValue('test-module-id');
+      const externalModuleInput = page.getByRole('textbox', { name: 'External Module ID' });
+      await expect(externalModuleInput).toBeVisible();
+      await externalModuleInput.fill('test-module-id');
+      await expect(externalModuleInput).toHaveValue('test-module-id');
+    });
   });
-});
+}

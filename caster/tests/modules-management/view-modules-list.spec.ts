@@ -4,19 +4,22 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, CASTER_THEMES, setCasterTheme } from '../../fixtures';
 
-test.describe('Modules Management', () => {
-  test('View Modules List', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Modules Management`, () => {
+    test('View Modules List', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
-    await page.goto(Services.Caster.UI + '/admin?section=Modules');
+      await page.goto(Services.Caster.UI + '/admin?section=Modules');
 
-    await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible({ timeout: 10000 });
-    await expect(page.getByRole('columnheader', { name: 'Path' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Versions' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Date Loaded' })).toBeVisible();
-    await expect(page.getByRole('textbox', { name: 'Search' })).toBeVisible();
-    await expect(page.getByRole('combobox', { name: 'Items per page:' })).toBeVisible();
-    await expect(page.getByRole('textbox', { name: 'External Module ID' })).toBeVisible();
+      await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible({ timeout: 10000 });
+      await expect(page.getByRole('columnheader', { name: 'Path' })).toBeVisible();
+      await expect(page.getByRole('columnheader', { name: 'Versions' })).toBeVisible();
+      await expect(page.getByRole('columnheader', { name: 'Date Loaded' })).toBeVisible();
+      await expect(page.getByRole('textbox', { name: 'Search' })).toBeVisible();
+      await expect(page.getByRole('combobox', { name: 'Items per page:' })).toBeVisible();
+      await expect(page.getByRole('textbox', { name: 'External Module ID' })).toBeVisible();
+    });
   });
-});
+}

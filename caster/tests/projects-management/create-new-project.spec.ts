@@ -4,49 +4,52 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, CASTER_THEMES, setCasterTheme } from '../../fixtures';
 
-test.describe('Projects Management', () => {
-  test('Create New Project', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
-    const projectName = `Test Infrastructure Project ${Date.now()}`;
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Projects Management`, () => {
+    test('Create New Project', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+      await setCasterTheme(page, theme);
+      const projectName = `Test Infrastructure Project ${Date.now()}`;
 
-    // 1. Navigate to Projects section
-    // expect: Projects list is visible
-    await expect(page.getByText('My Projects')).toBeVisible();
+      // 1. Navigate to Projects section
+      // expect: Projects list is visible
+      await expect(page.getByText('My Projects')).toBeVisible();
 
-    // 2. Click 'Create Project' button (the + icon button near My Projects)
-    await page.locator('button[mattooltip="Add New Project"]').click();
+      // 2. Click 'Create Project' button (the + icon button near My Projects)
+      await page.locator('button[mattooltip="Add New Project"]').click();
 
-    // expect: A project creation dialog is displayed
-    await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Create New Project?' })).toBeVisible();
+      // expect: A project creation dialog is displayed
+      await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Create New Project?' })).toBeVisible();
 
-    // 3. Enter a unique project name in the Name field
-    const nameField = page.getByRole('textbox', { name: 'Name' });
-    await nameField.fill(projectName);
+      // 3. Enter a unique project name in the Name field
+      const nameField = page.getByRole('textbox', { name: 'Name' });
+      await nameField.fill(projectName);
 
-    // expect: The name field accepts input
-    await expect(nameField).toHaveValue(projectName);
+      // expect: The name field accepts input
+      await expect(nameField).toHaveValue(projectName);
 
-    // 4. Enter 'Test description' in the Description field
-    const descField = page.getByRole('textbox', { name: 'Description' });
-    await descField.fill('Test description');
+      // 4. Enter 'Test description' in the Description field
+      const descField = page.getByRole('textbox', { name: 'Description' });
+      await descField.fill('Test description');
 
-    // expect: The description field accepts input
-    await expect(descField).toHaveValue('Test description');
+      // expect: The description field accepts input
+      await expect(descField).toHaveValue('Test description');
 
-    // 5. Click 'Save' button
-    const createResponsePromise = page.waitForResponse(resp =>
-      resp.url().includes('/api/projects') && resp.request().method() === 'POST' && resp.ok()
-    );
-    await page.getByRole('button', { name: 'Save' }).click();
+      // 5. Click 'Save' button
+      const createResponsePromise = page.waitForResponse(resp =>
+        resp.url().includes('/api/projects') && resp.request().method() === 'POST' && resp.ok()
+      );
+      await page.getByRole('button', { name: 'Save' }).click();
 
-    // Capture project ID for cleanup
-    const createResponse = await createResponsePromise;
-    const projectData = await createResponse.json();
-    cleanupCasterProject(projectData.id);
+      // Capture project ID for cleanup
+      const createResponse = await createResponsePromise;
+      const projectData = await createResponse.json();
+      cleanupCasterProject(projectData.id);
 
-    // expect: The project is created successfully and opens in its detail view.
-    await expectCasterProjectOpen(page, projectName);
+      // expect: The project is created successfully and opens in its detail view.
+      await expectCasterProjectOpen(page, projectName);
+    });
   });
-});
+}

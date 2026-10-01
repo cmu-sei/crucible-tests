@@ -4,17 +4,20 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, CASTER_THEMES, setCasterTheme } from '../../fixtures';
 
-test.describe('Global Workspace Settings', () => {
-  test('Perform Actions on Active Runs', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Global Workspace Settings`, () => {
+    test('Perform Actions on Active Runs', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
-    await page.goto(Services.Caster.UI + '/admin?section=Workspaces');
-    await expect(page.getByRole('heading', { name: 'Active Runs' })).toBeVisible({ timeout: 10000 });
+      await page.goto(Services.Caster.UI + '/admin?section=Workspaces');
+      await expect(page.getByRole('heading', { name: 'Active Runs' })).toBeVisible({ timeout: 10000 });
 
-    await expect(page.getByRole('button', { name: 'Actions' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Created At' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'status' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Workspace ID' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Actions' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Created At' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'status' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Workspace ID' })).toBeVisible();
+    });
   });
-});
+}

@@ -4,33 +4,36 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, CASTER_THEMES, setCasterTheme } from '../../fixtures';
 
-test.describe('Accessibility and Usability', () => {
-  test('Focus Management in Dialogs', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Accessibility and Usability`, () => {
+    test('Focus Management in Dialogs', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
-    await expect(page.getByText('My Projects')).toBeVisible();
+      await expect(page.getByText('My Projects')).toBeVisible();
 
-    // The add-project button is the only button sibling of "My Projects" text
-    const addProjectButton = page.getByText('My Projects').locator('..').getByRole('button');
-    await addProjectButton.click();
+      // The add-project button is the only button sibling of "My Projects" text
+      const addProjectButton = page.getByText('My Projects').locator('..').getByRole('button');
+      await addProjectButton.click();
 
-    const dialog = page.getByRole('dialog', { name: 'Create New Project?' });
-    await expect(dialog).toBeVisible();
+      const dialog = page.getByRole('dialog', { name: 'Create New Project?' });
+      await expect(dialog).toBeVisible();
 
-    // expect: Focus is moved to the dialog when it opens
-    await expect(page.getByRole('textbox', { name: 'Name' })).toBeFocused();
+      // expect: Focus is moved to the dialog when it opens
+      await expect(page.getByRole('textbox', { name: 'Name' })).toBeFocused();
 
-    // The dialog has disableClose set, so Escape does not close it.
-    // Verify Cancel button closes the dialog instead.
-    await page.getByRole('button', { name: 'Cancel' }).click();
-    await expect(dialog).not.toBeVisible();
+      // The dialog has disableClose set, so Escape does not close it.
+      // Verify Cancel button closes the dialog instead.
+      await page.getByRole('button', { name: 'Cancel' }).click();
+      await expect(dialog).not.toBeVisible();
 
-    // Reopen dialog and verify focus management is consistent
-    await addProjectButton.click();
-    await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
-    await expect(page.getByRole('textbox', { name: 'Name' })).toBeFocused();
-    await page.getByRole('button', { name: 'Cancel' }).click();
-    await expect(page.getByRole('dialog', { name: 'Create New Project?' })).not.toBeVisible();
+      // Reopen dialog and verify focus management is consistent
+      await addProjectButton.click();
+      await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
+      await expect(page.getByRole('textbox', { name: 'Name' })).toBeFocused();
+      await page.getByRole('button', { name: 'Cancel' }).click();
+      await expect(page.getByRole('dialog', { name: 'Create New Project?' })).not.toBeVisible();
+    });
   });
-});
+}
