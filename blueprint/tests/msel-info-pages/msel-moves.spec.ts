@@ -30,6 +30,15 @@ for (const theme of BLUEPRINT_THEMES) {
 
       try {
         await navigateToMselSection(page, msel.id, 'Moves');
+        // The move list renders before its active-MSEL subscription fires. Until then
+        // `this.msel` is an empty MselPlus, so 'Add new move' posts a move with no mselId: the
+        // save fails and the row never appears, yet the dialog still pre-fills Move Number 1,
+        // so nothing in the dialog shows it. 'Switch to Real Time' is disabled until
+        // `msel.startTime` is set, which only happens when the MSEL is bound (createMsel seeds a
+        // start time), so its enabled state shows the list is ready.
+        await expect(page.getByRole('button', { name: 'Switch to Real Time' })).toBeEnabled({
+          timeout: 15000,
+        });
         const rows = page.locator('tbody tr');
         const rowFor = (description: string) => rows.filter({ hasText: description });
         const warning = page.getByText('** The moves are not in ascending start time order!');

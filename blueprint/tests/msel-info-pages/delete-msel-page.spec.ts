@@ -9,17 +9,20 @@ import {
   createMsel,
   deleteMsel,
   navigateToMsel,
+  waitForMselInfoLoaded,
 } from '../../test-helpers';
 
 for (const theme of BLUEPRINT_THEMES) {
     test.describe(`${theme} theme › MSEL Info Pages Management`, () => {
     let token: string;
     let mselId: string;
+    let mselName: string;
 
     test.beforeEach(async () => {
       token = await getBlueprintToken();
       const msel = await createMsel(token);
       mselId = msel.id;
+      mselName = msel.name;
     });
 
     test.afterEach(async () => {
@@ -34,6 +37,7 @@ for (const theme of BLUEPRINT_THEMES) {
     await applyBlueprintTheme(page, theme);
       // Navigate to the seeded MSEL
       await navigateToMsel(page, mselId);
+      await waitForMselInfoLoaded(page, mselName);
 
       // First, create a new page so we have one to safely delete
       const addPageTab = page.getByRole('tab', { name: 'Add Page' });

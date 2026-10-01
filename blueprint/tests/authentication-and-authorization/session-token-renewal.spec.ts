@@ -42,9 +42,16 @@ test.describe('Authentication and Authorization', () => {
     await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 70000 });
 
     // 1. The OIDC client stores a token of its own accord after login.
-    const rawInitial = await page
-      .waitForFunction((key) => sessionStorage.getItem(key), OIDC_STORAGE_KEY, { timeout: 20000 })
-      .then((handle) => handle.jsonValue() as Promise<string>);
+    //    Wait for the entry, then read it with evaluate(): on Firefox the waitForFunction
+    //    handle's jsonValue() does not come back as the stored string, and JSON.parse then
+    //    fails on "[object Object]".
+    await page.waitForFunction((key) => sessionStorage.getItem(key), OIDC_STORAGE_KEY, {
+      timeout: 20000,
+    });
+    const rawInitial = (await page.evaluate(
+      (key) => sessionStorage.getItem(key),
+      OIDC_STORAGE_KEY
+    )) as string;
 
     const initial = JSON.parse(rawInitial);
     expect(initial.access_token, 'OIDC entry must carry an access token').toBeTruthy();

@@ -53,6 +53,12 @@ import {
  */
 const HUB_PATH = '/hubs/main';
 
+// The interruption is simulated with `context.setOffline(true)`. On Firefox that does not
+// interrupt an already-open WebSocket, so the hub connection never drops and there is no
+// reconnection to observe (both themes fail "SignalR never reported losing the connection"
+// on Firefox, every attempt, while Chromium passes).
+test.skip(({ browserName }) => browserName !== 'chromium', 'setOffline does not drop open WebSockets on Firefox');
+
 for (const theme of BLUEPRINT_THEMES) {
     test.describe(`${theme} theme › Real-time Collaboration and SignalR`, () => {
     let token: string;

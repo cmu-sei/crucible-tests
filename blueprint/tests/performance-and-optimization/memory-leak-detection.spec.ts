@@ -55,6 +55,10 @@ import {
  * torn-down subscription yields a slope of 0.0 and a flat heap. The threshold below sits far
  * enough under a real leak's magnitude to catch a dropped `takeUntil` in any MSEL section.
  */
+// Heap snapshots and forced GC come from the Chrome DevTools Protocol, which Playwright only
+// exposes for Chromium (`newCDPSession` throws on Firefox/WebKit).
+test.skip(({ browserName }) => browserName !== 'chromium', 'needs CDP heap snapshots (Chromium only)');
+
 for (const theme of BLUEPRINT_THEMES) {
     test.describe(`${theme} theme › Performance and Optimization`, () => {
     let token: string;
