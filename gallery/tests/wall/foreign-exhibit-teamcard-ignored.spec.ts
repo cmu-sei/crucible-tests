@@ -19,6 +19,8 @@ import {
   apiAddUserToTeam,
   apiRemoveUserFromTeam,
   apiDeleteCollectionById,
+  GALLERY_THEMES,
+  setGalleryTheme,
 } from '../../fixtures';
 
 /**
@@ -130,172 +132,175 @@ import {
  * mutates team membership. Deleting the collection cascades to both exhibits, both
  * teams, the TeamUser rows, the cards and the TeamCards.
  */
-test.describe('Wall View Functionality', () => {
-  // Recorded as soon as the collection exists so `afterEach` removes it even when the
-  // test body throws partway through.
-  let collectionId: string | undefined;
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Wall View Functionality`, () => {
+    // Recorded as soon as the collection exists so `afterEach` removes it even when the
+    // test body throws partway through.
+    let collectionId: string | undefined;
 
-  test.afterEach(async () => {
-    if (collectionId) {
-      await apiDeleteCollectionById(collectionId, 'Foreign TeamCard Test collection');
-    }
-    collectionId = undefined;
-  });
-
-  test('A TeamCard for another exhibit does not change this Wall', async ({
-    galleryAuthenticatedPage: page,
-  }) => {
-    const suffix = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-    const adminUserId = await apiGetAdminUserId();
-
-    const collection = await apiCreateCollection(`Foreign TeamCard Test ${suffix}`);
-    collectionId = collection.id;
-
-    // Two exhibits in ONE collection: that shared collection is what lets a single
-    // card id be meaningful to both, which is the precondition for the leak.
-    const exhibitA = await apiCreateExhibit(collectionId, `Foreign TC Exhibit A ${suffix}`);
-    const exhibitB = await apiCreateExhibit(collectionId, `Foreign TC Exhibit B ${suffix}`);
-
-    const teamA = await apiCreateTeam(exhibitA.id, {
-      name: `Foreign TC Team A ${suffix}`,
-      shortName: `FTCA`,
-    });
-    const teamB = await apiCreateTeam(exhibitB.id, {
-      name: `Foreign TC Team B ${suffix}`,
-      shortName: `FTCB`,
+    test.afterEach(async () => {
+      if (collectionId) {
+        await apiDeleteCollectionById(collectionId, 'Foreign TeamCard Test collection');
+      }
+      collectionId = undefined;
     });
 
-    // Membership of BOTH teams is what puts this user in the per-user SignalR group
-    // that receives exhibit A's TeamCard events. Membership of B is dropped later; the
-    // membership of A is kept, because it is the reason the foreign frame is delivered.
-    await apiAddUserToTeam(teamA.id, adminUserId);
-    await apiAddUserToTeam(teamB.id, adminUserId);
+    test('A TeamCard for another exhibit does not change this Wall', async ({
+      galleryAuthenticatedPage: page,
+    }) => {
+      await setGalleryTheme(page, theme);
+      const suffix = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+      const adminUserId = await apiGetAdminUserId();
 
-    // The local card: belongs to B's team, and is the control + liveness marker.
-    const localCardName = `Foreign TC Local ${suffix}`;
-    const localCard = await apiCreateCard(collectionId, localCardName);
-    const localTeamCard = await apiCreateTeamCard(teamB.id, localCard.id, {
-      isShownOnWall: true,
-    });
+      const collection = await apiCreateCollection(`Foreign TeamCard Test ${suffix}`);
+      collectionId = collection.id;
 
-    // The foreign card: same collection, but its only TeamCard belongs to exhibit A's
-    // team. Created hidden so that flipping it on later is the event under test.
-    const foreignCardName = `Foreign TC Foreign ${suffix}`;
-    const foreignCard = await apiCreateCard(collectionId, foreignCardName);
-    const foreignTeamCard = await apiCreateTeamCard(teamA.id, foreignCard.id, {
-      isShownOnWall: false,
-    });
+      // Two exhibits in ONE collection: that shared collection is what lets a single
+      // card id be meaningful to both, which is the precondition for the leak.
+      const exhibitA = await apiCreateExhibit(collectionId, `Foreign TC Exhibit A ${suffix}`);
+      const exhibitB = await apiCreateExhibit(collectionId, `Foreign TC Exhibit B ${suffix}`);
 
-    const wallCardTitles = page.locator('section.cards mat-card mat-card-title');
-
-    // Record the TeamCardUpdated frames this tab actually receives, so delivery of the
-    // foreign event can be asserted rather than assumed. Registered before the first
-    // navigation so the Wall's connection is captured.
-    const teamCardFrames: string[] = [];
-    const cardFrames: string[] = [];
-    page.on('websocket', ws => {
-      ws.on('framereceived', frame => {
-        const payload = String(frame.payload);
-        if (payload.includes('"TeamCardUpdated"')) {
-          teamCardFrames.push(payload);
-        }
-        if (payload.includes('"CardUpdated"')) {
-          cardFrames.push(payload);
-        }
+      const teamA = await apiCreateTeam(exhibitA.id, {
+        name: `Foreign TC Team A ${suffix}`,
+        shortName: `FTCA`,
       });
+      const teamB = await apiCreateTeam(exhibitB.id, {
+        name: `Foreign TC Team B ${suffix}`,
+        shortName: `FTCB`,
+      });
+
+      // Membership of BOTH teams is what puts this user in the per-user SignalR group
+      // that receives exhibit A's TeamCard events. Membership of B is dropped later; the
+      // membership of A is kept, because it is the reason the foreign frame is delivered.
+      await apiAddUserToTeam(teamA.id, adminUserId);
+      await apiAddUserToTeam(teamB.id, adminUserId);
+
+      // The local card: belongs to B's team, and is the control + liveness marker.
+      const localCardName = `Foreign TC Local ${suffix}`;
+      const localCard = await apiCreateCard(collectionId, localCardName);
+      const localTeamCard = await apiCreateTeamCard(teamB.id, localCard.id, {
+        isShownOnWall: true,
+      });
+
+      // The foreign card: same collection, but its only TeamCard belongs to exhibit A's
+      // team. Created hidden so that flipping it on later is the event under test.
+      const foreignCardName = `Foreign TC Foreign ${suffix}`;
+      const foreignCard = await apiCreateCard(collectionId, foreignCardName);
+      const foreignTeamCard = await apiCreateTeamCard(teamA.id, foreignCard.id, {
+        isShownOnWall: false,
+      });
+
+      const wallCardTitles = page.locator('section.cards mat-card mat-card-title');
+
+      // Record the TeamCardUpdated frames this tab actually receives, so delivery of the
+      // foreign event can be asserted rather than assumed. Registered before the first
+      // navigation so the Wall's connection is captured.
+      const teamCardFrames: string[] = [];
+      const cardFrames: string[] = [];
+      page.on('websocket', ws => {
+        ws.on('framereceived', frame => {
+          const payload = String(frame.payload);
+          if (payload.includes('"TeamCardUpdated"')) {
+            teamCardFrames.push(payload);
+          }
+          if (payload.includes('"CardUpdated"')) {
+            cardFrames.push(payload);
+          }
+        });
+      });
+
+      // 1. Open B's Wall as a member of B's team. Only the local card is shown.
+      await gotoExhibitSection(page, exhibitB.id, 'wall');
+      await expect(wallCardTitles).toHaveText([localCardName]);
+
+      // 2. CONTROL 1 — flip B's OWN TeamCard off and on again, while the user is STILL a
+      //    member of B's team. Both transitions are observable, which proves
+      //    TeamCardUpdated frames arrive on this connection and that the Wall recomputes
+      //    from them. This must precede the membership drop in step 3: `GetGroups` sends a
+      //    TeamCard only to users on that TeamCard's own team, so afterwards B's own
+      //    TeamCard events would no longer be addressed to this user at all.
+      await apiSetTeamCardShownOnWall(localTeamCard.id, teamB.id, localCard.id, false);
+      await expect(wallCardTitles).toHaveCount(0);
+      await apiSetTeamCardShownOnWall(localTeamCard.id, teamB.id, localCard.id, true);
+      await expect(wallCardTitles).toHaveText([localCardName]);
+
+      // 3. Drop the membership of B's team, so `GET /api/exhibits/{B}/my-teams` becomes
+      //    an authoritative empty for this user. Membership of A is kept: it is what keeps
+      //    exhibit A's TeamCard events addressed to this user's group.
+      await apiRemoveUserFromTeam(teamB.id, adminUserId);
+
+      // 4. Re-enter the Wall through the in-app buttons so `loadMine(B)` re-runs and
+      //    records `loadedExhibitId = B` over an empty store, WITHOUT tearing down the
+      //    SignalR connection. `gotoArchive`/`gotoWallSection` emit `sectionSelected`,
+      //    which `home-app.component.ts#gotoSection` turns into a router navigation.
+      await page.getByRole('button', { name: 'Archive' }).click();
+      await expect(page.locator('app-archive')).toBeVisible();
+      await page.getByRole('button', { name: 'Wall' }).click();
+      await expect(page.locator('app-wall')).toBeVisible();
+
+      // The Wall still renders the local card: the teamCard store is not cleared by the
+      // navigation, so this is the same starting shape as step 1.
+      await expect(wallCardTitles).toHaveText([localCardName]);
+
+      // 5. Put the foreign card into B's card store. `CardUpdated` is filtered only by
+      //    collection (`isCardInActiveExhibit`), and the collection is shared, so this is
+      //    accepted by design — the card being *present* is correct. What must not happen
+      //    is a foreign TeamCard flipping it onto the wall.
+      cardFrames.length = 0;
+      await apiRenameCard(foreignCard.id, collectionId, foreignCardName, {
+        description: 'foreign card, now in the shared collection store',
+      });
+
+      // expect: the foreign card really did reach this tab's card store. This step is a
+      // *precondition* of the whole test, not a behaviour under test, and it must be
+      // asserted rather than assumed: `setShownCardList` iterates the card store and looks
+      // TeamCards up by `cardId`, so a leaked foreign TeamCard is invisible unless its Card
+      // is present too. Verified by experiment — with this step's effect absent, the spec
+      // goes GREEN even against the unguarded predicate, because there is no card for the
+      // leaked TeamCard to flip. If `CardHandler`'s fan-out is ever narrowed, or
+      // `isCardInActiveExhibit` starts rejecting cross-exhibit cards, this assertion fails
+      // loudly instead of the spec silently testing nothing.
+      await expect
+        .poll(
+          () => cardFrames.filter(payload => payload.includes(foreignCard.id)).length,
+          { message: 'the foreign CardUpdated frame should have been delivered to this tab' }
+        )
+        .toBeGreaterThan(0);
+
+      // 6. THE EVENT UNDER TEST — flip the FOREIGN TeamCard (exhibit A's team) to shown.
+      //    Unguarded this is accepted into the teamCard store and, because
+      //    `setShownCardList` matches on `cardId` alone, puts the foreign card on B's Wall.
+      teamCardFrames.length = 0;
+      await apiSetTeamCardShownOnWall(foreignTeamCard.id, teamA.id, foreignCard.id, true);
+
+      // 7. ORDERING GUARD — rename the local card. SignalR preserves frame order on a
+      //    single connection, so once this rename has rendered, the foreign frame from
+      //    step 6 has already been delivered and its handler has already decided. This is
+      //    what makes the assertion below deterministic without a fixed sleep. The rename
+      //    arrives as `CardUpdated`, whose group fan-out covers every user on a team in
+      //    any exhibit of the collection, so the surviving membership of A carries it.
+      const localCardRenamed = `Foreign TC Local Renamed ${suffix}`;
+      await apiRenameCard(localCard.id, collectionId, localCardRenamed);
+      // `toContainText` rather than the exact list: this wait exists only to establish
+      // ordering, and unguarded the leaked foreign card is also on the wall by now. Asserting
+      // the exact list here would fail at this line, which reads as "the rename never
+      // arrived" rather than "a foreign card leaked" — the property assertion below is
+      // where that failure belongs.
+      await expect(wallCardTitles).toContainText([localCardRenamed]);
+
+      // expect: the foreign TeamCard event really did reach this browser. Without this the
+      // spec could pass simply because nothing was delivered, which would make the
+      // assertion below meaningless. Asserted after the ordering guard above, so the frame
+      // has had its chance to arrive.
+      expect(
+        teamCardFrames.filter(payload => payload.includes(foreignTeamCard.id)),
+        'the foreign TeamCardUpdated frame should have been delivered to this tab'
+      ).not.toHaveLength(0);
+
+      // expect: the Wall shows ONLY B's own card. The exact-list form fails both on a
+      // leaked foreign card (the unguarded behaviour, which rendered two cards here) and on
+      // an over-corrected predicate that dropped B's legitimate TeamCard.
+      await expect(wallCardTitles).toHaveText([localCardRenamed]);
     });
-
-    // 1. Open B's Wall as a member of B's team. Only the local card is shown.
-    await gotoExhibitSection(page, exhibitB.id, 'wall');
-    await expect(wallCardTitles).toHaveText([localCardName]);
-
-    // 2. CONTROL 1 — flip B's OWN TeamCard off and on again, while the user is STILL a
-    //    member of B's team. Both transitions are observable, which proves
-    //    TeamCardUpdated frames arrive on this connection and that the Wall recomputes
-    //    from them. This must precede the membership drop in step 3: `GetGroups` sends a
-    //    TeamCard only to users on that TeamCard's own team, so afterwards B's own
-    //    TeamCard events would no longer be addressed to this user at all.
-    await apiSetTeamCardShownOnWall(localTeamCard.id, teamB.id, localCard.id, false);
-    await expect(wallCardTitles).toHaveCount(0);
-    await apiSetTeamCardShownOnWall(localTeamCard.id, teamB.id, localCard.id, true);
-    await expect(wallCardTitles).toHaveText([localCardName]);
-
-    // 3. Drop the membership of B's team, so `GET /api/exhibits/{B}/my-teams` becomes
-    //    an authoritative empty for this user. Membership of A is kept: it is what keeps
-    //    exhibit A's TeamCard events addressed to this user's group.
-    await apiRemoveUserFromTeam(teamB.id, adminUserId);
-
-    // 4. Re-enter the Wall through the in-app buttons so `loadMine(B)` re-runs and
-    //    records `loadedExhibitId = B` over an empty store, WITHOUT tearing down the
-    //    SignalR connection. `gotoArchive`/`gotoWallSection` emit `sectionSelected`,
-    //    which `home-app.component.ts#gotoSection` turns into a router navigation.
-    await page.getByRole('button', { name: 'Archive' }).click();
-    await expect(page.locator('app-archive')).toBeVisible();
-    await page.getByRole('button', { name: 'Wall' }).click();
-    await expect(page.locator('app-wall')).toBeVisible();
-
-    // The Wall still renders the local card: the teamCard store is not cleared by the
-    // navigation, so this is the same starting shape as step 1.
-    await expect(wallCardTitles).toHaveText([localCardName]);
-
-    // 5. Put the foreign card into B's card store. `CardUpdated` is filtered only by
-    //    collection (`isCardInActiveExhibit`), and the collection is shared, so this is
-    //    accepted by design — the card being *present* is correct. What must not happen
-    //    is a foreign TeamCard flipping it onto the wall.
-    cardFrames.length = 0;
-    await apiRenameCard(foreignCard.id, collectionId, foreignCardName, {
-      description: 'foreign card, now in the shared collection store',
-    });
-
-    // expect: the foreign card really did reach this tab's card store. This step is a
-    // *precondition* of the whole test, not a behaviour under test, and it must be
-    // asserted rather than assumed: `setShownCardList` iterates the card store and looks
-    // TeamCards up by `cardId`, so a leaked foreign TeamCard is invisible unless its Card
-    // is present too. Verified by experiment — with this step's effect absent, the spec
-    // goes GREEN even against the unguarded predicate, because there is no card for the
-    // leaked TeamCard to flip. If `CardHandler`'s fan-out is ever narrowed, or
-    // `isCardInActiveExhibit` starts rejecting cross-exhibit cards, this assertion fails
-    // loudly instead of the spec silently testing nothing.
-    await expect
-      .poll(
-        () => cardFrames.filter(payload => payload.includes(foreignCard.id)).length,
-        { message: 'the foreign CardUpdated frame should have been delivered to this tab' }
-      )
-      .toBeGreaterThan(0);
-
-    // 6. THE EVENT UNDER TEST — flip the FOREIGN TeamCard (exhibit A's team) to shown.
-    //    Unguarded this is accepted into the teamCard store and, because
-    //    `setShownCardList` matches on `cardId` alone, puts the foreign card on B's Wall.
-    teamCardFrames.length = 0;
-    await apiSetTeamCardShownOnWall(foreignTeamCard.id, teamA.id, foreignCard.id, true);
-
-    // 7. ORDERING GUARD — rename the local card. SignalR preserves frame order on a
-    //    single connection, so once this rename has rendered, the foreign frame from
-    //    step 6 has already been delivered and its handler has already decided. This is
-    //    what makes the assertion below deterministic without a fixed sleep. The rename
-    //    arrives as `CardUpdated`, whose group fan-out covers every user on a team in
-    //    any exhibit of the collection, so the surviving membership of A carries it.
-    const localCardRenamed = `Foreign TC Local Renamed ${suffix}`;
-    await apiRenameCard(localCard.id, collectionId, localCardRenamed);
-    // `toContainText` rather than the exact list: this wait exists only to establish
-    // ordering, and unguarded the leaked foreign card is also on the wall by now. Asserting
-    // the exact list here would fail at this line, which reads as "the rename never
-    // arrived" rather than "a foreign card leaked" — the property assertion below is
-    // where that failure belongs.
-    await expect(wallCardTitles).toContainText([localCardRenamed]);
-
-    // expect: the foreign TeamCard event really did reach this browser. Without this the
-    // spec could pass simply because nothing was delivered, which would make the
-    // assertion below meaningless. Asserted after the ordering guard above, so the frame
-    // has had its chance to arrive.
-    expect(
-      teamCardFrames.filter(payload => payload.includes(foreignTeamCard.id)),
-      'the foreign TeamCardUpdated frame should have been delivered to this tab'
-    ).not.toHaveLength(0);
-
-    // expect: the Wall shows ONLY B's own card. The exact-list form fails both on a
-    // leaked foreign card (the unguarded behaviour, which rendered two cards here) and on
-    // an over-corrected predicate that dropped B's legitimate TeamCard.
-    await expect(wallCardTitles).toHaveText([localCardRenamed]);
   });
-});
+}

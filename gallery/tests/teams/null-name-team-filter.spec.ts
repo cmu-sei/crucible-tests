@@ -13,6 +13,8 @@ import {
   apiCreateExhibit,
   apiCreateTeam,
   apiDeleteCollectionById,
+  GALLERY_THEMES,
+  setGalleryTheme,
 } from '../../fixtures';
 import { openExhibitTeamsPanel, teamRowShortNames, teamRowFullNames } from './null-team-helpers';
 
@@ -52,101 +54,104 @@ import { openExhibitTeamsPanel, teamRowShortNames, teamRowFullNames } from './nu
  * `seededExhibit`, because the team store is global and injecting malformed teams into
  * the shared exhibit would perturb `view-exhibit-teams` and `team-selector`.
  */
-test.describe('Team Management', () => {
-  // Recorded as soon as the collection exists so `afterEach` removes it even when the
-  // test body throws partway through. Exhibit.CollectionId and Team.ExhibitId are both
-  // DeleteBehavior.Cascade, so deleting the collection removes the exhibit and its teams.
-  let collectionId: string | undefined;
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Team Management`, () => {
+    // Recorded as soon as the collection exists so `afterEach` removes it even when the
+    // test body throws partway through. Exhibit.CollectionId and Team.ExhibitId are both
+    // DeleteBehavior.Cascade, so deleting the collection removes the exhibit and its teams.
+    let collectionId: string | undefined;
 
-  test.afterEach(async () => {
-    if (collectionId) {
-      await apiDeleteCollectionById(collectionId, 'Null Name Team Filter Test collection');
-    }
-    collectionId = undefined;
+    test.afterEach(async () => {
+      if (collectionId) {
+        await apiDeleteCollectionById(collectionId, 'Null Name Team Filter Test collection');
+      }
+      collectionId = undefined;
+    });
+
+    test('Searching Exhibit Teams tolerates a team with no name or no short name', async ({
+      galleryAuthenticatedPage: page,
+    }) => {
+      await setGalleryTheme(page, theme);
+      const suffix = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+      const collection = await apiCreateCollection(`Null Name Team Filter Test ${suffix}`);
+      collectionId = collection.id;
+      const exhibit = await apiCreateExhibit(collectionId, `Null Name Filter Exhibit ${suffix}`);
+
+      // Every seeded value carries the same unique `suffix`, so a search for the suffix
+      // alone matches all three teams and nothing any concurrently-running spec seeded.
+      const nullNameShortName = `NONAME-${suffix}`;
+      const nullShortNameFullName = `No Short Name ${suffix}`;
+      const bothSetShortName = `BOTH-${suffix}`;
+      const bothSetFullName = `Both Fields ${suffix}`;
+
+      await apiCreateTeam(exhibit.id, { name: bothSetFullName, shortName: bothSetShortName });
+      // Null `name`, real `shortName` — must still be findable via the shortName branch.
+      await apiCreateTeam(exhibit.id, { name: null, shortName: nullNameShortName });
+      // Null `shortName`, real `name` — unguarded, this throws on the *first* term.
+      await apiCreateTeam(exhibit.id, { name: nullShortNameFullName, shortName: null });
+
+      await gotoGalleryAdmin(page);
+      await gotoAdminSection(page, 'Exhibits');
+      const teamsRegion = await openExhibitTeamsPanel(page, collection.name, exhibit.name);
+
+      // The search input is bound to a reactive `formControl` whose `valueChanges`
+      // subscription re-runs `getFilteredTeams()`, so `fill()` alone drives the filter.
+      const searchBox = teamsRegion.getByRole('textbox', { name: 'Search' });
+
+      // Baseline: all three teams render with no filter applied. The default sort is
+      // shortName-ascending, and a null shortName lowercases to '' and sorts first.
+      await expect(teamRowShortNames(teamsRegion)).toHaveText([
+        '',
+        bothSetShortName,
+        nullNameShortName,
+      ]);
+
+      // 1. Filter by the null-name team's short name.
+      await searchBox.fill(nullNameShortName);
+
+      // expect: exactly that team is listed. Unguarded, the predicate throws on its null
+      // `name` and the list renders zero rows; a "guard by skipping nulls" approach would
+      // also render zero rows here. Only evaluating the shortName branch independently
+      // produces this row.
+      await expect(teamRowShortNames(teamsRegion)).toHaveText([nullNameShortName]);
+      // Its Full Name cell is present but empty — the row really is the null-name team,
+      // not some other record that happens to share the search string.
+      await expect(teamRowFullNames(teamsRegion)).toHaveText(['']);
+
+      // 2. Filter by the full name of the team whose `shortName` is null. Unguarded this
+      //    throws on `a.shortName.toLowerCase()`, the leading term, before the name branch
+      //    is reached — so it fails for a different reason than step 1 and is worth
+      //    asserting separately.
+      await searchBox.fill(nullShortNameFullName);
+      await expect(teamRowFullNames(teamsRegion)).toHaveText([nullShortNameFullName]);
+      await expect(teamRowShortNames(teamsRegion)).toHaveText(['']);
+
+      // 3. A filter broad enough to match all three teams runs the predicate over every
+      //    null-valued row in one pass, which is the state the admin UI is actually in
+      //    when someone types a partial name. Both null-valued teams and the fully
+      //    populated one must survive it.
+      await searchBox.fill(suffix);
+      await expect(teamRowShortNames(teamsRegion)).toHaveText([
+        '',
+        bothSetShortName,
+        nullNameShortName,
+      ]);
+
+      // 4. A filter matching nothing must yield an empty list rather than an error — this
+      //    pins the difference between "correctly filtered to zero" and the unguarded
+      //    "crashed to zero" that step 1 detects. Paired with step 3 it shows the empty
+      //    result tracks the search term rather than being the component's failure mode.
+      await searchBox.fill(`ZZZ-NO-SUCH-TEAM-${suffix}`);
+      await expect(teamRowShortNames(teamsRegion)).toHaveCount(0);
+
+      // 5. Clearing the search restores all three rows, proving the component survived
+      //    every step above with a live subscription rather than being left wedged.
+      await teamsRegion.getByRole('button', { name: 'Clear Search' }).click();
+      await expect(teamRowShortNames(teamsRegion)).toHaveText([
+        '',
+        bothSetShortName,
+        nullNameShortName,
+      ]);
+    });
   });
-
-  test('Searching Exhibit Teams tolerates a team with no name or no short name', async ({
-    galleryAuthenticatedPage: page,
-  }) => {
-    const suffix = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-    const collection = await apiCreateCollection(`Null Name Team Filter Test ${suffix}`);
-    collectionId = collection.id;
-    const exhibit = await apiCreateExhibit(collectionId, `Null Name Filter Exhibit ${suffix}`);
-
-    // Every seeded value carries the same unique `suffix`, so a search for the suffix
-    // alone matches all three teams and nothing any concurrently-running spec seeded.
-    const nullNameShortName = `NONAME-${suffix}`;
-    const nullShortNameFullName = `No Short Name ${suffix}`;
-    const bothSetShortName = `BOTH-${suffix}`;
-    const bothSetFullName = `Both Fields ${suffix}`;
-
-    await apiCreateTeam(exhibit.id, { name: bothSetFullName, shortName: bothSetShortName });
-    // Null `name`, real `shortName` — must still be findable via the shortName branch.
-    await apiCreateTeam(exhibit.id, { name: null, shortName: nullNameShortName });
-    // Null `shortName`, real `name` — unguarded, this throws on the *first* term.
-    await apiCreateTeam(exhibit.id, { name: nullShortNameFullName, shortName: null });
-
-    await gotoGalleryAdmin(page);
-    await gotoAdminSection(page, 'Exhibits');
-    const teamsRegion = await openExhibitTeamsPanel(page, collection.name, exhibit.name);
-
-    // The search input is bound to a reactive `formControl` whose `valueChanges`
-    // subscription re-runs `getFilteredTeams()`, so `fill()` alone drives the filter.
-    const searchBox = teamsRegion.getByRole('textbox', { name: 'Search' });
-
-    // Baseline: all three teams render with no filter applied. The default sort is
-    // shortName-ascending, and a null shortName lowercases to '' and sorts first.
-    await expect(teamRowShortNames(teamsRegion)).toHaveText([
-      '',
-      bothSetShortName,
-      nullNameShortName,
-    ]);
-
-    // 1. Filter by the null-name team's short name.
-    await searchBox.fill(nullNameShortName);
-
-    // expect: exactly that team is listed. Unguarded, the predicate throws on its null
-    // `name` and the list renders zero rows; a "guard by skipping nulls" approach would
-    // also render zero rows here. Only evaluating the shortName branch independently
-    // produces this row.
-    await expect(teamRowShortNames(teamsRegion)).toHaveText([nullNameShortName]);
-    // Its Full Name cell is present but empty — the row really is the null-name team,
-    // not some other record that happens to share the search string.
-    await expect(teamRowFullNames(teamsRegion)).toHaveText(['']);
-
-    // 2. Filter by the full name of the team whose `shortName` is null. Unguarded this
-    //    throws on `a.shortName.toLowerCase()`, the leading term, before the name branch
-    //    is reached — so it fails for a different reason than step 1 and is worth
-    //    asserting separately.
-    await searchBox.fill(nullShortNameFullName);
-    await expect(teamRowFullNames(teamsRegion)).toHaveText([nullShortNameFullName]);
-    await expect(teamRowShortNames(teamsRegion)).toHaveText(['']);
-
-    // 3. A filter broad enough to match all three teams runs the predicate over every
-    //    null-valued row in one pass, which is the state the admin UI is actually in
-    //    when someone types a partial name. Both null-valued teams and the fully
-    //    populated one must survive it.
-    await searchBox.fill(suffix);
-    await expect(teamRowShortNames(teamsRegion)).toHaveText([
-      '',
-      bothSetShortName,
-      nullNameShortName,
-    ]);
-
-    // 4. A filter matching nothing must yield an empty list rather than an error — this
-    //    pins the difference between "correctly filtered to zero" and the unguarded
-    //    "crashed to zero" that step 1 detects. Paired with step 3 it shows the empty
-    //    result tracks the search term rather than being the component's failure mode.
-    await searchBox.fill(`ZZZ-NO-SUCH-TEAM-${suffix}`);
-    await expect(teamRowShortNames(teamsRegion)).toHaveCount(0);
-
-    // 5. Clearing the search restores all three rows, proving the component survived
-    //    every step above with a live subscription rather than being left wedged.
-    await teamsRegion.getByRole('button', { name: 'Clear Search' }).click();
-    await expect(teamRowShortNames(teamsRegion)).toHaveText([
-      '',
-      bothSetShortName,
-      nullNameShortName,
-    ]);
-  });
-});
+}

@@ -4,7 +4,7 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, GALLERY_THEMES, setGalleryTheme } from '../../fixtures';
 
 /**
  * My Exhibits Landing Page §2.1 — My Exhibits Table Display.
@@ -25,64 +25,67 @@ import { test, expect, Services } from '../../fixtures';
  * seeded row is found by typing its unique name into the app's own Search box first.
  * The search input filters on `(keyup)`, so `fill()` must be followed by a key event.
  */
-test.describe('My Exhibits Landing Page', () => {
-  test('My Exhibits Table Display', async ({ galleryAuthenticatedPage: page, seededExhibit }) => {
-    // 1. Log in and navigate to the Gallery home page.
-    await page.goto(Services.Gallery.UI, { waitUntil: 'domcontentloaded' });
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › My Exhibits Landing Page`, () => {
+    test('My Exhibits Table Display', async ({ galleryAuthenticatedPage: page, seededExhibit }) => {
+      await setGalleryTheme(page, theme);
+      // 1. Log in and navigate to the Gallery home page.
+      await page.goto(Services.Gallery.UI, { waitUntil: 'domcontentloaded' });
 
-    // expect: The My Exhibits page loads with the Gallery logo and title.
-    await expect(page).toHaveTitle('Gallery');
-    await expect(page.locator('app-topbar').getByText('Gallery - Exercise Information Sharing'))
-      .toBeVisible();
-    await expect(page.locator('mat-icon.crucible-icon-gallery')).toBeVisible();
-    await expect(page.getByText('My Exhibits')).toBeVisible();
+      // expect: The My Exhibits page loads with the Gallery logo and title.
+      await expect(page).toHaveTitle('Gallery');
+      await expect(page.locator('app-topbar').getByText('Gallery - Exercise Information Sharing'))
+        .toBeVisible();
+      await expect(page.locator('mat-icon.crucible-icon-gallery')).toBeVisible();
+      await expect(page.getByText('My Exhibits')).toBeVisible();
 
-    // expect: A table is displayed with columns Name, Description, Collection, Created
-    // (see the note above about the plan's 'Created By').
-    await expect(page.getByRole('table')).toBeVisible();
-    await expect(page.locator('mat-header-cell')).toHaveText([
-      'Name',
-      'Description',
-      'Collection',
-      'Created',
-    ]);
+      // expect: A table is displayed with columns Name, Description, Collection, Created
+      // (see the note above about the plan's 'Created By').
+      await expect(page.getByRole('table')).toBeVisible();
+      await expect(page.locator('mat-header-cell')).toHaveText([
+        'Name',
+        'Description',
+        'Collection',
+        'Created',
+      ]);
 
-    // expect: Each row shows an exhibit with its name as a clickable link, collection
-    // name and creation date. Assert every cell of the seeded row, not just that the
-    // row exists.
-    const search = page.getByRole('textbox', { name: 'Search' });
-    await search.fill(seededExhibit.exhibitName);
-    await search.press('End');
+      // expect: Each row shows an exhibit with its name as a clickable link, collection
+      // name and creation date. Assert every cell of the seeded row, not just that the
+      // row exists.
+      const search = page.getByRole('textbox', { name: 'Search' });
+      await search.fill(seededExhibit.exhibitName);
+      await search.press('End');
 
-    const rows = page.locator('mat-row');
-    await expect(rows).toHaveCount(1);
-    const row = rows.first();
-    // The name cell is an anchor to `/?exhibit={id}&section=archive` — that is what makes
-    // it clickable. The explicit `section=archive` is load-bearing: the link used to carry
-    // no section at all, and `home-app.component.ts#getQueryParams` wrote the section into
-    // `localStorage['uiState']` as a side effect of rendering each row, clobbering every
-    // exhibit's remembered section. See `my-exhibits-navigation.spec.ts` for the
-    // navigation assertion.
-    const nameLink = row.locator('.mat-column-name a');
-    await expect(nameLink).toHaveText(seededExhibit.exhibitName);
-    await expect(nameLink).toHaveAttribute(
-      'href',
-      `/?exhibit=${seededExhibit.exhibitId}&section=archive`
-    );
-    await expect(row.locator('.mat-column-description')).toHaveText(
-      'Auto-seeded exhibit for Playwright tests'
-    );
-    await expect(row.locator('.mat-column-collection')).toHaveText(seededExhibit.collectionName);
-    // `dateCreated | date:'yyyy-MM-dd HH:mm'`.
-    await expect(row.locator('.mat-column-dateCreated')).toHaveText(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
+      const rows = page.locator('mat-row');
+      await expect(rows).toHaveCount(1);
+      const row = rows.first();
+      // The name cell is an anchor to `/?exhibit={id}&section=archive` — that is what makes
+      // it clickable. The explicit `section=archive` is load-bearing: the link used to carry
+      // no section at all, and `home-app.component.ts#getQueryParams` wrote the section into
+      // `localStorage['uiState']` as a side effect of rendering each row, clobbering every
+      // exhibit's remembered section. See `my-exhibits-navigation.spec.ts` for the
+      // navigation assertion.
+      const nameLink = row.locator('.mat-column-name a');
+      await expect(nameLink).toHaveText(seededExhibit.exhibitName);
+      await expect(nameLink).toHaveAttribute(
+        'href',
+        `/?exhibit=${seededExhibit.exhibitId}&section=archive`
+      );
+      await expect(row.locator('.mat-column-description')).toHaveText(
+        'Auto-seeded exhibit for Playwright tests'
+      );
+      await expect(row.locator('.mat-column-collection')).toHaveText(seededExhibit.collectionName);
+      // `dateCreated | date:'yyyy-MM-dd HH:mm'`.
+      await expect(row.locator('.mat-column-dateCreated')).toHaveText(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
 
-    // The paginator is rendered and wired up (its range label reflects the filtered set).
-    await expect(page.locator('mat-paginator')).toContainText('1 – 1 of 1');
+      // The paginator is rendered and wired up (its range label reflects the filtered set).
+      await expect(page.locator('mat-paginator')).toContainText('1 – 1 of 1');
 
-    // 2. Observe the Administration button (gear icon) above the table.
-    // expect: The Administration button is visible for admin users.
-    const adminButton = page.getByRole('button', { name: 'Administration' });
-    await expect(adminButton).toBeVisible();
-    await expect(adminButton.locator('mat-icon')).toHaveClass(/mdi-cog/);
+      // 2. Observe the Administration button (gear icon) above the table.
+      // expect: The Administration button is visible for admin users.
+      const adminButton = page.getByRole('button', { name: 'Administration' });
+      await expect(adminButton).toBeVisible();
+      await expect(adminButton.locator('mat-icon')).toHaveClass(/mdi-cog/);
+    });
   });
-});
+}

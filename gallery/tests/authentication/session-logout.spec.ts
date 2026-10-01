@@ -10,42 +10,47 @@ import {
   authenticateGalleryWithKeycloak,
   Services,
   serviceUrlPattern,
+  GALLERY_THEMES,
+  setGalleryTheme,
 } from '../../fixtures';
 
-test.describe('Authentication and Authorization', () => {
-  // Logout must be verified against a session this test established itself, so
-  // start from an empty context rather than the shared pre-authenticated state.
-  test.use({ storageState: { cookies: [], origins: [] } });
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Authentication and Authorization`, () => {
+    // Logout must be verified against a session this test established itself, so
+    // start from an empty context rather than the shared pre-authenticated state.
+    test.use({ storageState: { cookies: [], origins: [] } });
 
-  test('Session Logout', async ({ page }) => {
-    // 1. Log in successfully and verify the user's session
-    await authenticateGalleryWithKeycloak(page);
+    test('Session Logout', async ({ page }) => {
+      // 1. Log in successfully and verify the user's session
+      await authenticateGalleryWithKeycloak(page);
+      await setGalleryTheme(page, theme);
 
-    // expect: User is logged in and can see the My Exhibits page
-    await expect(page.getByText('My Exhibits')).toBeVisible();
+      // expect: User is logged in and can see the My Exhibits page
+      await expect(page.getByText('My Exhibits')).toBeVisible();
 
-    // 2. Click 'Admin User' button in the top navigation to open the user menu
-    await page.getByRole('button', { name: 'Admin User' }).click();
+      // 2. Click 'Admin User' button in the top navigation to open the user menu
+      await page.getByRole('button', { name: 'Admin User' }).click();
 
-    // expect: A dropdown menu appears with 'Administration', 'Logout', and 'Dark Theme' options
-    await expect(page.getByRole('menuitem', { name: 'Administration' })).toBeVisible();
-    await expect(page.getByRole('menuitem', { name: 'Logout' })).toBeVisible();
-    await expect(page.getByText('Dark Theme')).toBeVisible();
+      // expect: A dropdown menu appears with 'Administration', 'Logout', and 'Dark Theme' options
+      await expect(page.getByRole('menuitem', { name: 'Administration' })).toBeVisible();
+      await expect(page.getByRole('menuitem', { name: 'Logout' })).toBeVisible();
+      await expect(page.getByText('Dark Theme')).toBeVisible();
 
-    // 3. Click the 'Logout' menu item
-    await page.getByRole('menuitem', { name: 'Logout' }).click();
+      // 3. Click the 'Logout' menu item
+      await page.getByRole('menuitem', { name: 'Logout' }).click();
 
-    // expect: User is logged out and redirected to Keycloak login page or public landing page
-    // The OIDC logout redirects asynchronously, so we need to wait for the Keycloak URL first
-    await page.waitForURL(serviceUrlPattern(Services.Keycloak), { timeout: 30000 });
-    await page.getByRole('button', { name: 'Sign In' }).waitFor({ state: 'visible' });
+      // expect: User is logged out and redirected to Keycloak login page or public landing page
+      // The OIDC logout redirects asynchronously, so we need to wait for the Keycloak URL first
+      await page.waitForURL(serviceUrlPattern(Services.Keycloak), { timeout: 30000 });
+      await page.getByRole('button', { name: 'Sign In' }).waitFor({ state: 'visible' });
 
-    // 4. Attempt to access the Gallery UI after logout
-    await page.goto(Services.Gallery.UI);
+      // 4. Attempt to access the Gallery UI after logout
+      await page.goto(Services.Gallery.UI);
 
-    // expect: User is redirected to Keycloak login page
-    await page.waitForURL(serviceUrlPattern(Services.Keycloak), { timeout: 30000 });
-    await page.getByRole('button', { name: 'Sign In' }).waitFor({ state: 'visible' });
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak));
+      // expect: User is redirected to Keycloak login page
+      await page.waitForURL(serviceUrlPattern(Services.Keycloak), { timeout: 30000 });
+      await page.getByRole('button', { name: 'Sign In' }).waitFor({ state: 'visible' });
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak));
+    });
   });
-});
+}

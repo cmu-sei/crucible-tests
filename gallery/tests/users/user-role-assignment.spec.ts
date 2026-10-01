@@ -11,6 +11,8 @@ import {
   gotoAdminSection,
   openMatSelect,
   Services,
+  GALLERY_THEMES,
+  setGalleryTheme,
 } from '../../fixtures';
 import { request as pwRequest, APIRequestContext } from '@playwright/test';
 import { randomUUID } from 'crypto';
@@ -79,68 +81,71 @@ async function getGalleryUserRoleId(id: string): Promise<string | null> {
   });
 }
 
-test.describe('User Management', () => {
-  let userId: string;
-  let userName: string;
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › User Management`, () => {
+    let userId: string;
+    let userName: string;
 
-  test.beforeEach(async () => {
-    userId = randomUUID();
-    userName = `RoleAssignTest ${Date.now()}${Math.floor(Math.random() * 1e6)}`;
-    await createGalleryUser(userId, userName);
+    test.beforeEach(async () => {
+      userId = randomUUID();
+      userName = `RoleAssignTest ${Date.now()}${Math.floor(Math.random() * 1e6)}`;
+      await createGalleryUser(userId, userName);
+    });
+
+    // Deleting the disposable user removes the role assignment with it, so this
+    // single teardown covers every mid-test failure point.
+    test.afterEach(async () => {
+      await deleteGalleryUser(userId);
+    });
+
+    test('User Role Assignment', async ({ galleryAuthenticatedPage: page }) => {
+      await setGalleryTheme(page, theme);
+      await gotoGalleryAdmin(page);
+
+      // Navigate to Users section
+      await gotoAdminSection(page, 'Users');
+      await expect(page.getByRole('columnheader', { name: 'Role' })).toBeVisible();
+
+      // The list paginates at 20 rows, so filter down to the seeded user first.
+      // The search input filters on `keyup`, so fill() alone would not apply it.
+      const searchField = page.getByRole('textbox', { name: 'Search' });
+      await searchField.fill(userName);
+      await searchField.press('End');
+
+      const userRow = page.getByRole('row').filter({ hasText: userName });
+      await expect(userRow).toHaveCount(1);
+
+      // 1. Observe the Role dropdown for the user (a freshly-seeded user has no
+      //    local role, so it shows 'None Locally')
+      const roleDropdown = userRow.getByRole('combobox');
+      await expect(roleDropdown).toHaveText('None Locally');
+      expect(await getGalleryUserRoleId(userId)).toBeNull();
+
+      // 2. Click the Role dropdown for the user
+      // openMatSelect rather than a bare click: the reopen in step 4 would otherwise race
+      // this panel's exit animation, and its options — still in the DOM through that
+      // animation — would make the page-scoped `listbox` lookup ambiguous. See the helper.
+      const listbox = await openMatSelect(roleDropdown);
+
+      // expect: Available roles are listed, including the built-in system roles
+      await expect(listbox.getByRole('option', { name: 'None Locally' })).toBeVisible();
+      await expect(listbox.getByRole('option', { name: 'Administrator' })).toBeVisible();
+
+      // 3. Select a different role ('Content Developer')
+      await listbox.getByRole('option', { name: 'Content Developer' }).click();
+
+      // expect: The user's role is updated, both in the UI and server-side
+      await expect(roleDropdown).toHaveText('Content Developer');
+      expect(await getGalleryUserRoleId(userId)).not.toBeNull();
+
+      // 4. Change the role back to 'None Locally'
+      const listbox2 = await openMatSelect(roleDropdown);
+      await listbox2.getByRole('option', { name: 'None Locally' }).click();
+      await expect(listbox2).toHaveCount(0);
+
+      // expect: The user's role is reverted
+      await expect(roleDropdown).toHaveText('None Locally');
+      expect(await getGalleryUserRoleId(userId)).toBeNull();
+    });
   });
-
-  // Deleting the disposable user removes the role assignment with it, so this
-  // single teardown covers every mid-test failure point.
-  test.afterEach(async () => {
-    await deleteGalleryUser(userId);
-  });
-
-  test('User Role Assignment', async ({ galleryAuthenticatedPage: page }) => {
-    await gotoGalleryAdmin(page);
-
-    // Navigate to Users section
-    await gotoAdminSection(page, 'Users');
-    await expect(page.getByRole('columnheader', { name: 'Role' })).toBeVisible();
-
-    // The list paginates at 20 rows, so filter down to the seeded user first.
-    // The search input filters on `keyup`, so fill() alone would not apply it.
-    const searchField = page.getByRole('textbox', { name: 'Search' });
-    await searchField.fill(userName);
-    await searchField.press('End');
-
-    const userRow = page.getByRole('row').filter({ hasText: userName });
-    await expect(userRow).toHaveCount(1);
-
-    // 1. Observe the Role dropdown for the user (a freshly-seeded user has no
-    //    local role, so it shows 'None Locally')
-    const roleDropdown = userRow.getByRole('combobox');
-    await expect(roleDropdown).toHaveText('None Locally');
-    expect(await getGalleryUserRoleId(userId)).toBeNull();
-
-    // 2. Click the Role dropdown for the user
-    // openMatSelect rather than a bare click: the reopen in step 4 would otherwise race
-    // this panel's exit animation, and its options — still in the DOM through that
-    // animation — would make the page-scoped `listbox` lookup ambiguous. See the helper.
-    const listbox = await openMatSelect(roleDropdown);
-
-    // expect: Available roles are listed, including the built-in system roles
-    await expect(listbox.getByRole('option', { name: 'None Locally' })).toBeVisible();
-    await expect(listbox.getByRole('option', { name: 'Administrator' })).toBeVisible();
-
-    // 3. Select a different role ('Content Developer')
-    await listbox.getByRole('option', { name: 'Content Developer' }).click();
-
-    // expect: The user's role is updated, both in the UI and server-side
-    await expect(roleDropdown).toHaveText('Content Developer');
-    expect(await getGalleryUserRoleId(userId)).not.toBeNull();
-
-    // 4. Change the role back to 'None Locally'
-    const listbox2 = await openMatSelect(roleDropdown);
-    await listbox2.getByRole('option', { name: 'None Locally' }).click();
-    await expect(listbox2).toHaveCount(0);
-
-    // expect: The user's role is reverted
-    await expect(roleDropdown).toHaveText('None Locally');
-    expect(await getGalleryUserRoleId(userId)).toBeNull();
-  });
-});
+}
