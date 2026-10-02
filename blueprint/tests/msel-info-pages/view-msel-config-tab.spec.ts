@@ -3,7 +3,7 @@
 
 // spec: specs/blueprint-test-plan.md
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import {
   getBlueprintToken,
   createMsel,
@@ -11,68 +11,71 @@ import {
   navigateToMsel,
 } from '../../test-helpers';
 
-test.describe('MSEL Info Pages Management', () => {
-  let token: string;
-  let mselId: string;
+for (const theme of BLUEPRINT_THEMES) {
+    test.describe(`${theme} theme › MSEL Info Pages Management`, () => {
+    let token: string;
+    let mselId: string;
 
-  test.beforeEach(async () => {
-    token = await getBlueprintToken();
-    const msel = await createMsel(token);
-    mselId = msel.id;
-  });
+    test.beforeEach(async () => {
+      token = await getBlueprintToken();
+      const msel = await createMsel(token);
+      mselId = msel.id;
+    });
 
-  test.afterEach(async () => {
-    try {
-      if (mselId) await deleteMsel(token, mselId);
-    } catch (err) {
-      console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
-    }
-  });
+    test.afterEach(async () => {
+      try {
+        if (mselId) await deleteMsel(token, mselId);
+      } catch (err) {
+        console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+      }
+    });
 
-  test('View MSEL Config Tab', async ({ blueprintAuthenticatedPage: page }) => {
-    // 1. Navigate to the seeded MSEL
-    await navigateToMsel(page, mselId);
+    test('View MSEL Config Tab', async ({ blueprintAuthenticatedPage: page }) => {
+    await applyBlueprintTheme(page, theme);
+      // 1. Navigate to the seeded MSEL
+      await navigateToMsel(page, mselId);
 
-    // expect: Config tab is selected by default and visible
-    const configTab = page.getByRole('tab', { name: 'Config' });
-    await expect(configTab).toBeVisible({ timeout: 5000 });
-    await expect(configTab).toHaveAttribute('aria-selected', 'true');
+      // expect: Config tab is selected by default and visible
+      const configTab = page.getByRole('tab', { name: 'Config' });
+      await expect(configTab).toBeVisible({ timeout: 5000 });
+      await expect(configTab).toHaveAttribute('aria-selected', 'true');
 
-    // expect: An 'Add Page' tab is shown (for creating custom MSEL info pages)
-    const addPageTab = page.getByRole('tab', { name: 'Add Page' });
-    await expect(addPageTab).toBeVisible({ timeout: 5000 });
+      // expect: An 'Add Page' tab is shown (for creating custom MSEL info pages)
+      const addPageTab = page.getByRole('tab', { name: 'Add Page' });
+      await expect(addPageTab).toBeVisible({ timeout: 5000 });
 
-    // 2. Review the Config tab content
-    // expect: Name field is visible
-    const nameField = page.getByRole('textbox', { name: 'Name' });
-    await expect(nameField).toBeVisible({ timeout: 5000 });
+      // 2. Review the Config tab content
+      // expect: Name field is visible
+      const nameField = page.getByRole('textbox', { name: 'Name' });
+      await expect(nameField).toBeVisible({ timeout: 5000 });
 
-    // expect: Name character count is shown
-    const nameCharCount = page.getByText(/\/ 70 characters/);
-    await expect(nameCharCount).toBeVisible({ timeout: 5000 });
+      // expect: Name character count is shown
+      const nameCharCount = page.getByText(/\/ 70 characters/);
+      await expect(nameCharCount).toBeVisible({ timeout: 5000 });
 
-    // expect: Description field is visible
-    const descField = page.getByRole('textbox', { name: 'Description' });
-    await expect(descField).toBeVisible({ timeout: 5000 });
+      // expect: Description field is visible
+      const descField = page.getByRole('textbox', { name: 'Description' });
+      await expect(descField).toBeVisible({ timeout: 5000 });
 
-    // expect: Description character count is shown
-    const descCharCount = page.getByText(/\/ 600 characters/);
-    await expect(descCharCount).toBeVisible({ timeout: 5000 });
+      // expect: Description character count is shown
+      const descCharCount = page.getByText(/\/ 600 characters/);
+      await expect(descCharCount).toBeVisible({ timeout: 5000 });
 
-    // expect: 'Is a Template' checkbox is visible
-    const templateCheckbox = page.getByRole('checkbox', { name: 'Is a Template' });
-    await expect(templateCheckbox).toBeVisible({ timeout: 5000 });
+      // expect: 'Is a Template' checkbox is visible
+      const templateCheckbox = page.getByRole('checkbox', { name: 'Is a Template' });
+      await expect(templateCheckbox).toBeVisible({ timeout: 5000 });
 
-    // expect: MSEL Status dropdown is visible
-    const statusDropdown = page.getByRole('combobox', { name: 'MSEL Status' });
-    await expect(statusDropdown).toBeVisible({ timeout: 5000 });
+      // expect: MSEL Status dropdown is visible
+      const statusDropdown = page.getByRole('combobox', { name: 'MSEL Status' });
+      await expect(statusDropdown).toBeVisible({ timeout: 5000 });
 
-    // expect: Exercise View URL section is visible
-    const exerciseViewUrl = page.getByText('Exercise View URL');
-    await expect(exerciseViewUrl).toBeVisible({ timeout: 5000 });
+      // expect: Exercise View URL section is visible
+      const exerciseViewUrl = page.getByText('Exercise View URL');
+      await expect(exerciseViewUrl).toBeVisible({ timeout: 5000 });
 
-    // expect: MSEL Starter URL section is visible
-    const starterUrl = page.getByText('MSEL Starter URL');
-    await expect(starterUrl).toBeVisible({ timeout: 5000 });
-  });
-});
+      // expect: MSEL Starter URL section is visible
+      const starterUrl = page.getByText('MSEL Starter URL');
+      await expect(starterUrl).toBeVisible({ timeout: 5000 });
+    });
+    });
+}

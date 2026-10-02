@@ -19,7 +19,7 @@
 // home link (routerLink "/"); `page.goto` or a reload would bypass it.
 
 import { Page } from '@playwright/test';
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import {
   getBlueprintToken,
   createMsel,
@@ -35,99 +35,104 @@ function homeLink(page: Page) {
   return page.locator('mat-toolbar a[href="/"]').first();
 }
 
-test.describe('Integration In Progress Navigation Guard', () => {
-  let token: string;
-  let mselId: string;
+for (const theme of BLUEPRINT_THEMES) {
+  test.describe(`${theme} theme › Integration In Progress Navigation Guard`, () => {
+    let token: string;
+    let mselId: string;
 
-  test.beforeEach(async () => {
-    token = await getBlueprintToken();
-    mselId = (await createMsel(token)).id;
-  });
-
-  test.afterEach(async () => {
-    if (mselId) await deleteMsel(token, mselId);
-  });
-
-  test('Dismissing the confirmation keeps the user on the MSEL during a push', async ({
-    blueprintAuthenticatedPage: page,
-  }) => {
-    await updateMsel(token, mselId, { integrationStatus: 'Pushing Integrations' });
-
-    // 1. Open the MSEL
-    await navigateToMsel(page, mselId);
-
-    // expect: the push in progress is shown
-    await expect(page.getByText('Processing integrations ...')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Cancel Push' })).toBeVisible();
-
-    // 2. Click the topbar home link and dismiss the confirmation
-    const dialogs: { type: string; message: string }[] = [];
-    page.once('dialog', async (dialog) => {
-      dialogs.push({ type: dialog.type(), message: dialog.message() });
-      await dialog.dismiss();
+    test.beforeEach(async () => {
+      token = await getBlueprintToken();
+      mselId = (await createMsel(token)).id;
     });
-    await homeLink(page).click();
 
-    // expect: a native confirm warning about the push was shown
-    await expect.poll(() => dialogs.length).toBe(1);
-    expect(dialogs[0].type).toBe('confirm');
-    expect(dialogs[0].message).toContain(GUARD_MESSAGE);
-
-    // expect: navigation was cancelled — still on this MSEL with the push status showing
-    await expect(page).toHaveURL(new RegExp(`/build\\?msel=${mselId}`));
-    await expect(page.getByText('Processing integrations ...')).toBeVisible();
-  });
-
-  test('Accepting the confirmation leaves the MSEL during a push', async ({
-    blueprintAuthenticatedPage: page,
-  }) => {
-    await updateMsel(token, mselId, { integrationStatus: 'Pushing Integrations' });
-
-    // 1. Open the MSEL
-    await navigateToMsel(page, mselId);
-    await expect(page.getByText('Processing integrations ...')).toBeVisible();
-
-    // 2. Click the topbar home link and accept the confirmation
-    const dialogs: { type: string; message: string }[] = [];
-    page.once('dialog', async (dialog) => {
-      dialogs.push({ type: dialog.type(), message: dialog.message() });
-      await dialog.accept();
+    test.afterEach(async () => {
+      if (mselId) await deleteMsel(token, mselId);
     });
-    await homeLink(page).click();
 
-    // expect: the confirm was shown, and accepting it navigated to the dashboard
-    await expect.poll(() => dialogs.length).toBe(1);
-    expect(dialogs[0].type).toBe('confirm');
-    expect(dialogs[0].message).toContain(GUARD_MESSAGE);
-    await expect(page).not.toHaveURL(/\/build/);
-    await expect(page).toHaveURL(new RegExp(`^${Services.Blueprint.UI.replace(/\/$/, '')}/?$`));
-  });
+    test('Dismissing the confirmation keeps the user on the MSEL during a push', async ({
+      blueprintAuthenticatedPage: page,
+    }) => {
+      await applyBlueprintTheme(page, theme);
+      await updateMsel(token, mselId, { integrationStatus: 'Pushing Integrations' });
 
-  test('A failed integration does not block leaving the MSEL', async ({
-    blueprintAuthenticatedPage: page,
-  }) => {
-    // An ERROR status means nothing is running any more, so the guard lets the user go.
-    await updateMsel(token, mselId, { integrationStatus: 'ERROR: Player push failed' });
+      // 1. Open the MSEL
+      await navigateToMsel(page, mselId);
 
-    // 1. Open the MSEL
-    await navigateToMsel(page, mselId);
+      // expect: the push in progress is shown
+      await expect(page.getByText('Processing integrations ...')).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Cancel Push' })).toBeVisible();
 
-    // expect: the failure is shown, not a push in progress
-    await expect(page.getByText('Integration Failed')).toBeVisible();
-    await expect(page.getByText('Processing integrations ...')).toBeHidden();
+      // 2. Click the topbar home link and dismiss the confirmation
+      const dialogs: { type: string; message: string }[] = [];
+      page.once('dialog', async (dialog) => {
+        dialogs.push({ type: dialog.type(), message: dialog.message() });
+        await dialog.dismiss();
+      });
+      await homeLink(page).click();
 
-    // 2. Click the topbar home link
-    // An unexpected confirm would be auto-dismissed by Playwright and block the navigation;
-    // recording it makes the failure say why.
-    const dialogs: string[] = [];
-    page.on('dialog', async (dialog) => {
-      dialogs.push(dialog.message());
-      await dialog.dismiss();
+      // expect: a native confirm warning about the push was shown
+      await expect.poll(() => dialogs.length).toBe(1);
+      expect(dialogs[0].type).toBe('confirm');
+      expect(dialogs[0].message).toContain(GUARD_MESSAGE);
+
+      // expect: navigation was cancelled — still on this MSEL with the push status showing
+      await expect(page).toHaveURL(new RegExp(`/build\\?msel=${mselId}`));
+      await expect(page.getByText('Processing integrations ...')).toBeVisible();
     });
-    await homeLink(page).click();
 
-    // expect: navigation happens with no confirmation
-    await expect(page).not.toHaveURL(/\/build/);
-    expect(dialogs, 'no confirmation for a failed integration').toEqual([]);
+    test('Accepting the confirmation leaves the MSEL during a push', async ({
+      blueprintAuthenticatedPage: page,
+    }) => {
+      await applyBlueprintTheme(page, theme);
+      await updateMsel(token, mselId, { integrationStatus: 'Pushing Integrations' });
+
+      // 1. Open the MSEL
+      await navigateToMsel(page, mselId);
+      await expect(page.getByText('Processing integrations ...')).toBeVisible();
+
+      // 2. Click the topbar home link and accept the confirmation
+      const dialogs: { type: string; message: string }[] = [];
+      page.once('dialog', async (dialog) => {
+        dialogs.push({ type: dialog.type(), message: dialog.message() });
+        await dialog.accept();
+      });
+      await homeLink(page).click();
+
+      // expect: the confirm was shown, and accepting it navigated to the dashboard
+      await expect.poll(() => dialogs.length).toBe(1);
+      expect(dialogs[0].type).toBe('confirm');
+      expect(dialogs[0].message).toContain(GUARD_MESSAGE);
+      await expect(page).not.toHaveURL(/\/build/);
+      await expect(page).toHaveURL(new RegExp(`^${Services.Blueprint.UI.replace(/\/$/, '')}/?$`));
+    });
+
+    test('A failed integration does not block leaving the MSEL', async ({
+      blueprintAuthenticatedPage: page,
+    }) => {
+      await applyBlueprintTheme(page, theme);
+      // An ERROR status means nothing is running any more, so the guard lets the user go.
+      await updateMsel(token, mselId, { integrationStatus: 'ERROR: Player push failed' });
+
+      // 1. Open the MSEL
+      await navigateToMsel(page, mselId);
+
+      // expect: the failure is shown, not a push in progress
+      await expect(page.getByText('Integration Failed')).toBeVisible();
+      await expect(page.getByText('Processing integrations ...')).toBeHidden();
+
+      // 2. Click the topbar home link
+      // An unexpected confirm would be auto-dismissed by Playwright and block the navigation;
+      // recording it makes the failure say why.
+      const dialogs: string[] = [];
+      page.on('dialog', async (dialog) => {
+        dialogs.push(dialog.message());
+        await dialog.dismiss();
+      });
+      await homeLink(page).click();
+
+      // expect: navigation happens with no confirmation
+      await expect(page).not.toHaveURL(/\/build/);
+      expect(dialogs, 'no confirmation for a failed integration').toEqual([]);
+    });
   });
-});
+}

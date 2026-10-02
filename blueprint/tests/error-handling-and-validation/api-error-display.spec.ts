@@ -3,7 +3,7 @@
 
 // spec: specs/blueprint-test-plan.md
 
-import { test, expect } from '../../fixtures';
+import { test, expect, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import {
   getBlueprintToken,
   createMsel,
@@ -25,71 +25,74 @@ import {
  * Blueprint reports errors in a MatBottomSheet (`SystemMessageService` → `SystemMessageComponent`),
  * not a snackbar, so this asserts on `role="alert"` rather than on any snackbar container.
  */
-test.describe('Error Handling and Validation', () => {
-  let token: string;
-  let mselId: string;
-  let originalDescription: string;
+for (const theme of BLUEPRINT_THEMES) {
+    test.describe(`${theme} theme › Error Handling and Validation`, () => {
+    let token: string;
+    let mselId: string;
+    let originalDescription: string;
 
-  test.beforeEach(async () => {
-    token = await getBlueprintToken();
-    originalDescription = 'Seeded description';
-    const msel = await createMsel(token, {
-      name: tempBlueprintName('TestBP-ApiError'),
-      description: originalDescription,
+    test.beforeEach(async () => {
+      token = await getBlueprintToken();
+      originalDescription = 'Seeded description';
+      const msel = await createMsel(token, {
+        name: tempBlueprintName('TestBP-ApiError'),
+        description: originalDescription,
+      });
+      mselId = msel.id;
     });
-    mselId = msel.id;
-  });
 
-  test.afterEach(async () => {
-    try {
-      if (mselId) await deleteMsel(token, mselId);
-    } catch (err) {
-      console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
-    }
-  });
+    test.afterEach(async () => {
+      try {
+        if (mselId) await deleteMsel(token, mselId);
+      } catch (err) {
+        console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+      }
+    });
 
-  test('API Error Display', async ({ blueprintAuthenticatedPage: page }) => {
-    await navigateToMsel(page, mselId);
+    test('API Error Display', async ({ blueprintAuthenticatedPage: page }) => {
+    await applyBlueprintTheme(page, theme);
+      await navigateToMsel(page, mselId);
 
-    const descriptionField = page.getByRole('textbox', { name: 'Description' });
-    const saveButton = page.getByRole('button', { name: /Save Changes/i });
-    await expect(descriptionField).toBeVisible({ timeout: 15000 });
+      const descriptionField = page.getByRole('textbox', { name: 'Description' });
+      const saveButton = page.getByRole('button', { name: /Save Changes/i });
+      await expect(descriptionField).toBeVisible({ timeout: 15000 });
 
-    // Type (don't fill) so the Config tab's keypress handlers mark the form dirty.
-    await descriptionField.click();
-    await descriptionField.fill('');
-    await descriptionField.pressSequentially('This edit must not be lost silently');
-    await expect(saveButton).toBeEnabled({ timeout: 10000 });
+      // Type (don't fill) so the Config tab's keypress handlers mark the form dirty.
+      await descriptionField.click();
+      await descriptionField.fill('');
+      await descriptionField.pressSequentially('This edit must not be lost silently');
+      await expect(saveButton).toBeEnabled({ timeout: 10000 });
 
-    // Force the save to fail.
-    await page.route('**/api/msels/**', (route) =>
-      route.request().method() === 'PUT'
-        ? route.fulfill({
-            status: 500,
-            contentType: 'application/json',
-            body: JSON.stringify({ title: 'Internal Server Error' }),
-          })
-        : route.continue()
-    );
+      // Force the save to fail.
+      await page.route('**/api/msels/**', (route) =>
+        route.request().method() === 'PUT'
+          ? route.fulfill({
+              status: 500,
+              contentType: 'application/json',
+              body: JSON.stringify({ title: 'Internal Server Error' }),
+            })
+          : route.continue()
+      );
 
-    await saveButton.click();
+      await saveButton.click();
 
-    // expect: the user is told the save failed.
-    const errorAlert = page.getByRole('alert');
-    await expect(errorAlert).toBeVisible({ timeout: 10000 });
-    await expect(errorAlert).toContainText(/Internal Server Error/i);
+      // expect: the user is told the save failed.
+      const errorAlert = page.getByRole('alert');
+      await expect(errorAlert).toBeVisible({ timeout: 10000 });
+      await expect(errorAlert).toContainText(/Internal Server Error/i);
 
-    // Dismiss the alert before looking at the form again. Material sets aria-hidden="true" on
-    // app-root for as long as an overlay is open, so every role-based locator behind the sheet
-    // resolves to zero elements — Save Changes is still rendered and enabled, just not in the
-    // accessibility tree. Asserting on it through the open sheet would fail as "not found".
-    await page.getByRole('button', { name: 'Close' }).click();
-    await expect(errorAlert).toBeHidden({ timeout: 5000 });
+      // Dismiss the alert before looking at the form again. Material sets aria-hidden="true" on
+      // app-root for as long as an overlay is open, so every role-based locator behind the sheet
+      // resolves to zero elements — Save Changes is still rendered and enabled, just not in the
+      // accessibility tree. Asserting on it through the open sheet would fail as "not found".
+      await page.getByRole('button', { name: 'Close' }).click();
+      await expect(errorAlert).toBeHidden({ timeout: 5000 });
 
-    // expect: the form stays dirty so the edit can be retried rather than retyped.
-    await expect(saveButton).toBeEnabled();
+      // expect: the form stays dirty so the edit can be retried rather than retyped.
+      await expect(saveButton).toBeEnabled();
 
-    // expect: nothing was persisted.
-    expect((await getMsel(token, mselId)).description).toBe(originalDescription);
-  });
-});
+      // expect: nothing was persisted.
+      expect((await getMsel(token, mselId)).description).toBe(originalDescription);
+    });
+    });
+}

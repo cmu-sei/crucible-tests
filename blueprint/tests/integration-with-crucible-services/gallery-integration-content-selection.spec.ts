@@ -3,7 +3,7 @@
 
 // spec: specs/blueprint-test-plan.md
 
-import { test, expect } from '../../fixtures';
+import { test, expect, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import {
   getBlueprintToken,
   createMsel,
@@ -38,91 +38,94 @@ import {
  * behaviour asserted at the end, and it is why the spec re-reads the options rather than assuming
  * a fixed list.
  */
-test.describe('Integration with Crucible Services', () => {
-  let token: string;
-  let mselId: string;
+for (const theme of BLUEPRINT_THEMES) {
+    test.describe(`${theme} theme › Integration with Crucible Services`, () => {
+    let token: string;
+    let mselId: string;
 
-  test.beforeEach(async () => {
-    token = await getBlueprintToken();
-    const msel = await createMsel(token, { name: tempBlueprintName('TestBP-GalleryContent') });
-    mselId = msel.id;
+    test.beforeEach(async () => {
+      token = await getBlueprintToken();
+      const msel = await createMsel(token, { name: tempBlueprintName('TestBP-GalleryContent') });
+      mselId = msel.id;
 
-    // Gallery must be on for the Integration column to offer article parameters.
-    await updateMsel(token, mselId, { useGallery: true });
-    await seedMselDataFields(token, mselId);
-  });
-
-  test.afterEach(async () => {
-    try {
-      if (mselId) await deleteMsel(token, mselId);
-    } catch (err) {
-      console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
-    }
-  });
-
-  test('Gallery Integration - Content Selection', async ({ blueprintAuthenticatedPage: page }) => {
-    // expect: the fixture has DataFields to map, so what follows is not vacuous.
-    const fields = await listMselDataFields(token, mselId);
-    expect(fields.length, 'seeded DataField count').toBeGreaterThan(0);
-
-    await navigateToMselSection(page, mselId, 'Data Fields');
-
-    // expect: the Integration column exists — this is the Gallery content-selection surface.
-    await expect(page.getByText('Integration', { exact: true }).first()).toBeVisible({
-      timeout: 30000,
+      // Gallery must be on for the Integration column to offer article parameters.
+      await updateMsel(token, mselId, { useGallery: true });
+      await seedMselDataFields(token, mselId);
     });
 
-    const integrationSelects = page.locator('mat-select.integration');
-    await expect(integrationSelects.first()).toBeVisible({ timeout: 30000 });
+    test.afterEach(async () => {
+      try {
+        if (mselId) await deleteMsel(token, mselId);
+      } catch (err) {
+        console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+      }
+    });
 
-    // 1. Open the first field's Integration dropdown.
-    await integrationSelects.first().click();
+    test('Gallery Integration - Content Selection', async ({ blueprintAuthenticatedPage: page }) => {
+    await applyBlueprintTheme(page, theme);
+      // expect: the fixture has DataFields to map, so what follows is not vacuous.
+      const fields = await listMselDataFields(token, mselId);
+      expect(fields.length, 'seeded DataField count').toBeGreaterThan(0);
 
-    const options = page.getByRole('option');
-    await expect(options.first()).toBeVisible({ timeout: 15000 });
+      await navigateToMselSection(page, mselId, 'Data Fields');
 
-    // expect: Gallery article parameters are offered, labelled "Gallery <Parameter>"
-    // (data-field-list.component.html:267).
-    const galleryOptions = options.filter({ hasText: /^Gallery / });
-    const galleryOptionCount = await galleryOptions.count();
-    expect(
-      galleryOptionCount,
-      'the Integration dropdown should offer Gallery article parameters'
-    ).toBeGreaterThan(0);
+      // expect: the Integration column exists — this is the Gallery content-selection surface.
+      await expect(page.getByText('Integration', { exact: true }).first()).toBeVisible({
+        timeout: 30000,
+      });
 
-    // 2. Select one and confirm it sticks.
-    const chosenLabel = (await galleryOptions.first().textContent())?.trim() ?? '';
-    expect(chosenLabel).toMatch(/^Gallery /);
-    const chosenParameter = chosenLabel.replace(/^Gallery\s+/, '');
+      const integrationSelects = page.locator('mat-select.integration');
+      await expect(integrationSelects.first()).toBeVisible({ timeout: 30000 });
 
-    await galleryOptions.first().click();
-    await expect(options.first()).toBeHidden({ timeout: 15000 });
+      // 1. Open the first field's Integration dropdown.
+      await integrationSelects.first().click();
 
-    // expect: the selection is reflected in the field's control.
-    await expect(integrationSelects.first()).toContainText(chosenParameter, { timeout: 15000 });
+      const options = page.getByRole('option');
+      await expect(options.first()).toBeVisible({ timeout: 15000 });
 
-    // expect: it persisted server-side — `(selectionChange)="saveChange(element)"` saves
-    // immediately, so this is asserted through the API rather than from the UI label alone.
-    await expect
-      .poll(
-        async () => {
-          const after = await listMselDataFields(token, mselId);
-          return after.some((f: any) => f.galleryArticleParameter === chosenParameter);
-        },
-        {
-          timeout: 30000,
-          intervals: [250, 500, 1000],
-          message: `a DataField should now carry galleryArticleParameter "${chosenParameter}"`,
-        }
-      )
-      .toBe(true);
+      // expect: Gallery article parameters are offered, labelled "Gallery <Parameter>"
+      // (data-field-list.component.html:267).
+      const galleryOptions = options.filter({ hasText: /^Gallery / });
+      const galleryOptionCount = await galleryOptions.count();
+      expect(
+        galleryOptionCount,
+        'the Integration dropdown should offer Gallery article parameters'
+      ).toBeGreaterThan(0);
 
-    // 3. expect: the parameter is no longer offered elsewhere — the dropdown lists only unused
-    //    options, so a Gallery property cannot be double-assigned.
-    await integrationSelects.nth(1).click();
-    await expect(page.getByRole('option').first()).toBeVisible({ timeout: 15000 });
-    await expect(
-      page.getByRole('option').filter({ hasText: new RegExp(`^Gallery ${chosenParameter}$`) })
-    ).toHaveCount(0);
-  });
-});
+      // 2. Select one and confirm it sticks.
+      const chosenLabel = (await galleryOptions.first().textContent())?.trim() ?? '';
+      expect(chosenLabel).toMatch(/^Gallery /);
+      const chosenParameter = chosenLabel.replace(/^Gallery\s+/, '');
+
+      await galleryOptions.first().click();
+      await expect(options.first()).toBeHidden({ timeout: 15000 });
+
+      // expect: the selection is reflected in the field's control.
+      await expect(integrationSelects.first()).toContainText(chosenParameter, { timeout: 15000 });
+
+      // expect: it persisted server-side — `(selectionChange)="saveChange(element)"` saves
+      // immediately, so this is asserted through the API rather than from the UI label alone.
+      await expect
+        .poll(
+          async () => {
+            const after = await listMselDataFields(token, mselId);
+            return after.some((f: any) => f.galleryArticleParameter === chosenParameter);
+          },
+          {
+            timeout: 30000,
+            intervals: [250, 500, 1000],
+            message: `a DataField should now carry galleryArticleParameter "${chosenParameter}"`,
+          }
+        )
+        .toBe(true);
+
+      // 3. expect: the parameter is no longer offered elsewhere — the dropdown lists only unused
+      //    options, so a Gallery property cannot be double-assigned.
+      await integrationSelects.nth(1).click();
+      await expect(page.getByRole('option').first()).toBeVisible({ timeout: 15000 });
+      await expect(
+        page.getByRole('option').filter({ hasText: new RegExp(`^Gallery ${chosenParameter}$`) })
+      ).toHaveCount(0);
+    });
+    });
+}

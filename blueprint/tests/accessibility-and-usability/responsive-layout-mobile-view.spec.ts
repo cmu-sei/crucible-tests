@@ -52,57 +52,60 @@
 // The old body also wrapped nearly every check in `if (count > 0)` / `if (box)`, so on a page
 // where the elements were missing it asserted nothing at all. Those guards are gone.
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 
 const MOBILE = { width: 375, height: 667 };
 
-test.describe('Accessibility and Usability', () => {
-  test('Responsive Layout - Mobile View', async ({ blueprintAuthenticatedPage: page }) => {
-    await page.setViewportSize(MOBILE);
+for (const theme of BLUEPRINT_THEMES) {
+    test.describe(`${theme} theme › Accessibility and Usability`, () => {
+    test('Responsive Layout - Mobile View', async ({ blueprintAuthenticatedPage: page }) => {
+    await applyBlueprintTheme(page, theme);
+      await page.setViewportSize(MOBILE);
 
-    for (const route of ['', '/build', '/admin']) {
-      await page.goto(`${Services.Blueprint.UI}${route}`, { waitUntil: 'domcontentloaded' });
+      for (const route of ['', '/build', '/admin']) {
+        await page.goto(`${Services.Blueprint.UI}${route}`, { waitUntil: 'domcontentloaded' });
 
-      // Wait for the shell so layout has settled before measuring — not a sleep.
-      await expect(page.locator('app-topbar, mat-toolbar').first()).toBeVisible({
-        timeout: 20000,
-      });
+        // Wait for the shell so layout has settled before measuring — not a sleep.
+        await expect(page.locator('app-topbar, mat-toolbar').first()).toBeVisible({
+          timeout: 20000,
+        });
 
-      // expect: nothing the user is meant to interact with sits outside the viewport.
-      const overflowing = await page.evaluate((viewportWidth) => {
-        const interactive = Array.from(
-          document.querySelectorAll('button, a, input, textarea, select')
-        );
-        return interactive
-          .filter((el) => {
-            const r = el.getBoundingClientRect();
-            const visible = r.width > 0 && r.height > 0;
-            return visible && Math.round(r.right) > viewportWidth;
-          })
-          .map((el) => ({
-            tag: el.tagName,
-            cls: (el as HTMLElement).className?.toString().slice(0, 40) ?? '',
-            right: Math.round(el.getBoundingClientRect().right),
-          }))
-          .slice(0, 10);
-      }, MOBILE.width);
+        // expect: nothing the user is meant to interact with sits outside the viewport.
+        const overflowing = await page.evaluate((viewportWidth) => {
+          const interactive = Array.from(
+            document.querySelectorAll('button, a, input, textarea, select')
+          );
+          return interactive
+            .filter((el) => {
+              const r = el.getBoundingClientRect();
+              const visible = r.width > 0 && r.height > 0;
+              return visible && Math.round(r.right) > viewportWidth;
+            })
+            .map((el) => ({
+              tag: el.tagName,
+              cls: (el as HTMLElement).className?.toString().slice(0, 40) ?? '',
+              right: Math.round(el.getBoundingClientRect().right),
+            }))
+            .slice(0, 10);
+        }, MOBILE.width);
 
-      expect(
-        overflowing,
-        `route "${route || '/'}": interactive elements extend past the ${MOBILE.width}px viewport`
-      ).toEqual([]);
+        expect(
+          overflowing,
+          `route "${route || '/'}": interactive elements extend past the ${MOBILE.width}px viewport`
+        ).toEqual([]);
 
-      // expect: and where content does overflow, the page must at least be scrollable to it.
-      // Both conditions failing together is what makes this an accessibility defect rather
-      // than a cosmetic one.
-      const { docScrollWidth, clientWidth } = await page.evaluate(() => ({
-        docScrollWidth: document.documentElement.scrollWidth,
-        clientWidth: document.documentElement.clientWidth,
-      }));
-      expect(
-        docScrollWidth,
-        `route "${route || '/'}": document must not require horizontal scrolling`
-      ).toBeLessThanOrEqual(clientWidth);
-    }
-  });
-});
+        // expect: and where content does overflow, the page must at least be scrollable to it.
+        // Both conditions failing together is what makes this an accessibility defect rather
+        // than a cosmetic one.
+        const { docScrollWidth, clientWidth } = await page.evaluate(() => ({
+          docScrollWidth: document.documentElement.scrollWidth,
+          clientWidth: document.documentElement.clientWidth,
+        }));
+        expect(
+          docScrollWidth,
+          `route "${route || '/'}": document must not require horizontal scrolling`
+        ).toBeLessThanOrEqual(clientWidth);
+      }
+    });
+    });
+}

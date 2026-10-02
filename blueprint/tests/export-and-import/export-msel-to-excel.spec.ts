@@ -3,7 +3,7 @@
 
 // spec: specs/blueprint-test-plan.md
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import fs from 'fs';
 import {
   getBlueprintToken,
@@ -27,51 +27,54 @@ import {
  * Now the MSEL is seeded (with a scenario event, so the workbook has content), located by
  * name via the list's search box, exported, and deleted in teardown.
  */
-test.describe('Export and Import', () => {
-  let token: string;
-  let mselId: string;
-  let mselName: string;
+for (const theme of BLUEPRINT_THEMES) {
+    test.describe(`${theme} theme › Export and Import`, () => {
+    let token: string;
+    let mselId: string;
+    let mselName: string;
 
-  test.beforeEach(async () => {
-    token = await getBlueprintToken();
-    mselName = tempBlueprintName('TestBP-Xlsx');
-    const msel = await createMsel(token, {
-      name: mselName,
-      description: 'Seeded for xlsx export',
+    test.beforeEach(async () => {
+      token = await getBlueprintToken();
+      mselName = tempBlueprintName('TestBP-Xlsx');
+      const msel = await createMsel(token, {
+        name: mselName,
+        description: 'Seeded for xlsx export',
+      });
+      mselId = msel.id;
+
+      await createRenderableScenarioEvent(token, mselId, 'Event in the workbook', {
+        deltaSeconds: 600,
+      });
     });
-    mselId = msel.id;
 
-    await createRenderableScenarioEvent(token, mselId, 'Event in the workbook', {
-      deltaSeconds: 600,
+    test.afterEach(async () => {
+      try {
+        if (mselId) await deleteMsel(token, mselId);
+      } catch (err) {
+        console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+      }
     });
-  });
 
-  test.afterEach(async () => {
-    try {
-      if (mselId) await deleteMsel(token, mselId);
-    } catch (err) {
-      console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
-    }
-  });
+    test('Export MSEL to Excel', async ({ blueprintAuthenticatedPage: page }) => {
+    await applyBlueprintTheme(page, theme);
+      await page.goto(`${Services.Blueprint.UI}/build`, { waitUntil: 'domcontentloaded' });
+      await expect(page.getByRole('table').first()).toBeVisible({ timeout: 15000 });
 
-  test('Export MSEL to Excel', async ({ blueprintAuthenticatedPage: page }) => {
-    await page.goto(`${Services.Blueprint.UI}/build`, { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('table').first()).toBeVisible({ timeout: 15000 });
+      const mselRow = await findMselRowByName(page, mselName);
+      await expect(mselRow).toBeVisible();
 
-    const mselRow = await findMselRowByName(page, mselName);
-    await expect(mselRow).toBeVisible();
+      const download = await downloadMselFile(page, mselRow, /Download xlsx file/i);
 
-    const download = await downloadMselFile(page, mselRow, /Download xlsx file/i);
+      expect(download.suggestedFilename()).toMatch(/\.xlsx$/i);
 
-    expect(download.suggestedFilename()).toMatch(/\.xlsx$/i);
+      const downloadPath = await download.path();
+      expect(downloadPath, 'xlsx download produced no file on disk').toBeTruthy();
 
-    const downloadPath = await download.path();
-    expect(downloadPath, 'xlsx download produced no file on disk').toBeTruthy();
-
-    // A real workbook, not a zero-byte or error placeholder. xlsx is a zip archive, so the
-    // first two bytes must be the local-file-header magic "PK".
-    const contents = fs.readFileSync(downloadPath!);
-    expect(contents.length).toBeGreaterThan(0);
-    expect(contents.subarray(0, 2).toString('latin1')).toBe('PK');
-  });
-});
+      // A real workbook, not a zero-byte or error placeholder. xlsx is a zip archive, so the
+      // first two bytes must be the local-file-header magic "PK".
+      const contents = fs.readFileSync(downloadPath!);
+      expect(contents.length).toBeGreaterThan(0);
+      expect(contents.subarray(0, 2).toString('latin1')).toBe('PK');
+    });
+    });
+}

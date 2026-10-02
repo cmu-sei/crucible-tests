@@ -1098,6 +1098,29 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
   2. Switch theme from the user menu and repeat the sweep
     - expect: The same holds in the other theme
 
+#### 16.4. Theme Contrast Compliance
+
+**File:** `blueprint/tests/accessibility-and-usability/theme-contrast-compliance.spec.ts`
+
+Runs once per theme (light and dark). Follows the Crucible colors design spec
+(`crucible-development/design-specs/angular/colors.md`). Expected colors are read from the
+app's layered settings files as served (`settings.json`, deep-merged with
+`settings.shared.json` then `settings.env.json`), not hardcoded. Read-only: nothing is seeded.
+
+**Steps:**
+  1. Log in, apply the theme, and navigate to the Build page (`/build`)
+    - expect: The "My MSELs" / "All MSELs" title, a text column header, and the top bar text meet WCAG 1.4.3 (4.5:1 normal, 3:1 large text)
+    - expect: Dark theme renders light-on-dark page text; light theme renders dark-on-light
+    - expect: The enabled "Add blank MSEL" icon button is painted in `--mat-sys-primary` and meets WCAG 1.4.11 (3:1) against its surface
+  2. Compare the applied CSS custom properties against the color settings
+    - expect: `--crucible-topbar-background` / `--crucible-topbar-text` equal `AppTopBarHexColor` / `AppTopBarHexTextColor` in both themes, and the top bar paints that pair
+    - expect: In light mode, `--mat-sys-primary` / `--mat-sys-on-primary` equal `AppLightModePrimaryHexColor` / `AppLightModePrimaryHexTextColor`
+    - expect: In dark mode, they equal `AppDarkModePrimaryHexColor` / `AppDarkModePrimaryHexTextColor`, falling back to the light-mode keys when absent
+  3. Open Administration → Units → "Add Unit" and fill Name and Short Name without saving
+    - expect: The filled Save button paints `--mat-sys-primary`, and its `on-primary` label meets 4.5:1
+    - expect: The outlined Cancel button label is painted in `--mat-sys-primary` and meets 4.5:1 against the dialog surface
+    - expect: Cancel closes the dialog without creating a unit
+
 ### 17. Admin - Competencies and Proficiency
 
 **Seed:** `/mnt/data/crucible-tests/blueprint/tests/seed.setup.ts`

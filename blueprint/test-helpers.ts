@@ -1361,6 +1361,25 @@ export async function navigateToMsel(page: Page, mselId: string): Promise<void> 
 }
 
 /**
+ * Wait until the MSEL Info view has actually bound the active MSEL, before acting on it.
+ *
+ * The Config / page tabs (including "Add Page") render before `MselInfoComponent`'s
+ * active-MSEL subscription has fired. Until it does, `originalMsel` is an empty `MselPlus`,
+ * so selecting "Add Page" posts `{"name":"New Page",...}` with no `mselId` and the API
+ * answers 404 "Msel Entity not found" (reproduced: 1 in 4 runs on the first test in a fresh
+ * worker). The same subscription fills the Config tab's Name field, so that field showing
+ * the seeded name is a user-visible signal that `originalMsel` is populated.
+ *
+ * @param page - Playwright Page object, on the MSEL's Info section
+ * @param mselName - The name the MSEL was created with
+ */
+export async function waitForMselInfoLoaded(page: Page, mselName: string): Promise<void> {
+  await expect(page.getByRole('textbox', { name: 'Name' })).toHaveValue(mselName, {
+    timeout: 15000,
+  });
+}
+
+/**
  * Replace the contents of a MSEL Config-tab text field the way a user would, with real key
  * events.
  *
