@@ -27,7 +27,7 @@ for (const theme of ALLOY_THEMES) {
 
       // 2. Verify the page rendered correctly
       await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
-      await expect(page.getByText('Alloy')).toBeVisible();
+      await expect(page.locator('app-topbar .view-text')).toHaveText('Alloy');
     });
   });
 }

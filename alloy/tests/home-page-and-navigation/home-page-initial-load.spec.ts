@@ -19,7 +19,7 @@ for (const theme of ALLOY_THEMES) {
 
       // expect: The topbar is visible with application branding
       // expect: The topbar displays 'Alloy' or configured AppTopBarText
-      await expect(page.getByText('Alloy')).toBeVisible();
+      await expect(page.locator('app-topbar .view-text')).toHaveText('Alloy');
 
       // expect: Home link is visible in topbar
       await expect(page.getByRole('link', { name: 'Home' })).toBeVisible();
