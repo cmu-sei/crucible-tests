@@ -6,48 +6,51 @@
 
 import { test, expect } from '@playwright/test';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
-import { createTestEventTemplate, deleteEventTemplateByName } from '../../test-helpers';
+import { ALLOY_THEMES, applyAlloyTheme, createTestEventTemplate, deleteEventTemplateByName } from '../../test-helpers';
 
-test.describe('Error Handling and Validation', () => {
-  // Track the template seeded for this test so it can be cleaned up.
-  let seededTemplateName: string | null = null;
+for (const theme of ALLOY_THEMES) {
+  test.describe(`${theme} theme › Error Handling and Validation`, () => {
+    // Track the template seeded for this test so it can be cleaned up.
+    let seededTemplateName: string | null = null;
 
-  test.afterEach(async ({ page }) => {
-    if (seededTemplateName) {
-      await deleteEventTemplateByName(page, seededTemplateName);
-      seededTemplateName = null;
-    }
+    test.afterEach(async ({ page }) => {
+      if (seededTemplateName) {
+        await deleteEventTemplateByName(page, seededTemplateName);
+        seededTemplateName = null;
+      }
+    });
+
+    test('API Error Display', async ({ page }) => {
+      // 1. Navigate to admin
+      await authenticateWithKeycloak(page, Services.Alloy.UI);
+      await applyAlloyTheme(page, theme);
+      await page.goto(`${Services.Alloy.UI}/admin`);
+      await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
+
+      // 2. Seed a template so the test never depends on pre-existing data — an
+      //    empty list previously made the `Edit: .first()` click time out.
+      await expect(page.getByRole('table')).toBeVisible();
+      seededTemplateName = `API Error Test ${Date.now()}`;
+      await createTestEventTemplate(page, seededTemplateName);
+
+      // Open the seeded template's edit dialog
+      await page.getByRole('button', { name: `Edit: ${seededTemplateName}` }).click();
+      await expect(page.getByRole('dialog', { name: 'Edit Event Template' })).toBeVisible();
+
+      // The Name field is required - verify it's marked as required
+      const nameField = page.getByRole('textbox', { name: 'Name (required)' });
+      await expect(nameField).toBeVisible();
+
+      // Fill in some data and attempt to save
+      await nameField.fill('API Error Test');
+      await page.getByRole('spinbutton', { name: 'Duration Hours' }).fill('1');
+
+      // expect: The form is operational
+      await expect(page.getByRole('button', { name: 'Save' })).toBeVisible();
+
+      // Cancel without saving
+      await page.getByRole('button', { name: 'Cancel' }).first().click();
+      await expect(page.getByRole('dialog', { name: 'Edit Event Template' })).not.toBeVisible();
+    });
   });
-
-  test('API Error Display', async ({ page }) => {
-    // 1. Navigate to admin
-    await authenticateWithKeycloak(page, Services.Alloy.UI);
-    await page.goto(`${Services.Alloy.UI}/admin`);
-    await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
-
-    // 2. Seed a template so the test never depends on pre-existing data — an
-    //    empty list previously made the `Edit: .first()` click time out.
-    await expect(page.getByRole('table')).toBeVisible();
-    seededTemplateName = `API Error Test ${Date.now()}`;
-    await createTestEventTemplate(page, seededTemplateName);
-
-    // Open the seeded template's edit dialog
-    await page.getByRole('button', { name: `Edit: ${seededTemplateName}` }).click();
-    await expect(page.getByRole('dialog', { name: 'Edit Event Template' })).toBeVisible();
-
-    // The Name field is required - verify it's marked as required
-    const nameField = page.getByRole('textbox', { name: 'Name (required)' });
-    await expect(nameField).toBeVisible();
-
-    // Fill in some data and attempt to save
-    await nameField.fill('API Error Test');
-    await page.getByRole('spinbutton', { name: 'Duration Hours' }).fill('1');
-
-    // expect: The form is operational
-    await expect(page.getByRole('button', { name: 'Save' })).toBeVisible();
-
-    // Cancel without saving
-    await page.getByRole('button', { name: 'Cancel' }).first().click();
-    await expect(page.getByRole('dialog', { name: 'Edit Event Template' })).not.toBeVisible();
-  });
-});
+}

@@ -6,30 +6,34 @@
 
 import { test, expect } from '@playwright/test';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
+import { ALLOY_THEMES, applyAlloyTheme } from '../../test-helpers';
 
-test.describe('Events Management', () => {
-  test('Event Lifecycle - End Event', async ({ page }) => {
-    // Note: This test requires an active event to exist.
-    // It verifies the admin Events section UI for ending events.
+for (const theme of ALLOY_THEMES) {
+  test.describe(`${theme} theme › Events Management`, () => {
+    test('Event Lifecycle - End Event', async ({ page }) => {
+      // Note: This test requires an active event to exist.
+      // It verifies the admin Events section UI for ending events.
 
-    // 1. Navigate to admin Events section
-    await authenticateWithKeycloak(page, Services.Alloy.UI);
-    await page.goto(`${Services.Alloy.UI}/admin`);
-    await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
+      // 1. Navigate to admin Events section
+      await authenticateWithKeycloak(page, Services.Alloy.UI);
+      await applyAlloyTheme(page, theme);
+      await page.goto(`${Services.Alloy.UI}/admin`);
+      await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
 
-    await page.locator('mat-list-item').filter({ hasText: 'Events' }).click();
+      await page.locator('mat-list-item').filter({ hasText: 'Events' }).click();
 
-    // expect: Events list is visible
-    await expect(page.getByRole('table')).toBeVisible();
+      // expect: Events list is visible
+      await expect(page.getByRole('table')).toBeVisible();
 
-    // 2. Verify Active filter shows active events
-    await expect(page.getByRole('checkbox', { name: 'Active' })).toBeChecked();
+      // 2. Verify Active filter shows active events
+      await expect(page.getByRole('checkbox', { name: 'Active' })).toBeChecked();
 
-    // 3. Check Ended filter to see ended events
-    await page.getByRole('checkbox', { name: 'Ended' }).check();
-    await expect(page.getByRole('checkbox', { name: 'Ended' })).toBeChecked();
+      // 3. Check Ended filter to see ended events
+      await page.getByRole('checkbox', { name: 'Ended' }).check();
+      await expect(page.getByRole('checkbox', { name: 'Ended' })).toBeChecked();
 
-    // Restore filter
-    await page.getByRole('checkbox', { name: 'Ended' }).uncheck();
+      // Restore filter
+      await page.getByRole('checkbox', { name: 'Ended' }).uncheck();
+    });
   });
-});
+}
