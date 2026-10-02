@@ -4,16 +4,19 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, CASTER_THEMES, setCasterTheme } from '../../fixtures';
 
-test.describe('VLANs Management', () => {
-  test('Assign VLAN Pool to Project', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › VLANs Management`, () => {
+    test('Assign VLAN Pool to Project', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
-    await page.goto(Services.Caster.UI + '/admin?section=VLANs');
-    await expect(page.getByRole('tab', { name: 'Projects' })).toBeVisible({ timeout: 10000 });
+      await page.goto(Services.Caster.UI + '/admin?section=VLANs');
+      await expect(page.getByRole('tab', { name: 'Projects' })).toBeVisible({ timeout: 10000 });
 
-    await page.getByRole('tab', { name: 'Projects' }).click();
-    await expect(page.getByRole('tab', { name: 'Projects', selected: true })).toBeVisible();
-    await expect(page.getByRole('tabpanel')).toBeVisible();
+      await page.getByRole('tab', { name: 'Projects' }).click();
+      await expect(page.getByRole('tab', { name: 'Projects', selected: true })).toBeVisible();
+      await expect(page.getByRole('tabpanel')).toBeVisible();
+    });
   });
-});
+}

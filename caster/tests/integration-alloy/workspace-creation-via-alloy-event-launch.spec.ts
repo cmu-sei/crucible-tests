@@ -4,30 +4,33 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, CASTER_THEMES, setCasterTheme } from '../../fixtures';
 
-test.describe('Integration with Alloy', () => {
-  test('Workspace Creation via Alloy Event Launch', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
-    const projectName = `Alloy Integration Project ${Date.now()}`;
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Integration with Alloy`, () => {
+    test('Workspace Creation via Alloy Event Launch', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+      await setCasterTheme(page, theme);
+      const projectName = `Alloy Integration Project ${Date.now()}`;
 
-    await expect(page.getByText('My Projects')).toBeVisible();
+      await expect(page.getByText('My Projects')).toBeVisible();
 
-    await page.locator('button').filter({ has: page.locator('mat-icon[fonticon="mdi-plus-circle"]') }).first().click();
-    await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
-    await page.getByRole('textbox', { name: 'Name' }).fill(projectName);
-    await page.getByRole('button', { name: 'Save' }).click();
-    cleanupCasterProject(await expectCasterProjectOpen(page, projectName));
+      await page.locator('button').filter({ has: page.locator('mat-icon[fonticon="mdi-plus-circle"]') }).first().click();
+      await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
+      await page.getByRole('textbox', { name: 'Name' }).fill(projectName);
+      await page.getByRole('button', { name: 'Save' }).click();
+      cleanupCasterProject(await expectCasterProjectOpen(page, projectName));
 
-    await page.getByTitle('Add New Directory').click();
-    await expect(page.getByRole('dialog', { name: 'Create New Directory?' })).toBeVisible();
-    await page.getByRole('textbox', { name: 'Name' }).fill('Alloy Dir');
-    await page.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByRole('button', { name: 'Alloy Dir' })).toBeVisible({ timeout: 10000 });
+      await page.getByTitle('Add New Directory').click();
+      await expect(page.getByRole('dialog', { name: 'Create New Directory?' })).toBeVisible();
+      await page.getByRole('textbox', { name: 'Name' }).fill('Alloy Dir');
+      await page.getByRole('button', { name: 'Save' }).click();
+      await expect(page.getByRole('button', { name: 'Alloy Dir' })).toBeVisible({ timeout: 10000 });
 
-    await page.getByRole('button', { name: 'Alloy Dir' }).click();
-    const workspacesButton = page.getByRole('button', { name: /WORKSPACES/i });
-    await expect(workspacesButton).toBeVisible({ timeout: 10000 });
-    await workspacesButton.click();
-    await expect(page.getByText('Add Workspace')).toBeVisible({ timeout: 10000 });
+      await page.getByRole('button', { name: 'Alloy Dir' }).click();
+      const workspacesButton = page.getByRole('button', { name: /WORKSPACES/i });
+      await expect(workspacesButton).toBeVisible({ timeout: 10000 });
+      await workspacesButton.click();
+      await expect(page.getByText('Add Workspace')).toBeVisible({ timeout: 10000 });
+    });
   });
-});
+}

@@ -4,19 +4,22 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, CASTER_THEMES, setCasterTheme } from '../../fixtures';
 
-test.describe('Groups Management', () => {
-  test('Sort Groups', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Groups Management`, () => {
+    test('Sort Groups', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
-    await page.goto(Services.Caster.UI + '/admin?section=Groups');
-    await expect(page.getByRole('columnheader', { name: 'Group Name' })).toBeVisible({ timeout: 10000 });
+      await page.goto(Services.Caster.UI + '/admin?section=Groups');
+      await expect(page.getByRole('columnheader', { name: 'Group Name' })).toBeVisible({ timeout: 10000 });
 
-    // 2. Click on the Group Name column header
-    await page.getByRole('button', { name: 'Group Name' }).click();
+      // 2. Click on the Group Name column header
+      await page.getByRole('button', { name: 'Group Name' }).click();
 
-    // 3. Click on the Group Name column header again
-    await page.getByRole('button', { name: 'Group Name' }).click();
-    await expect(page.getByRole('button', { name: 'Group Name' })).toBeVisible();
+      // 3. Click on the Group Name column header again
+      await page.getByRole('button', { name: 'Group Name' }).click();
+      await expect(page.getByRole('button', { name: 'Group Name' })).toBeVisible();
+    });
   });
-});
+}

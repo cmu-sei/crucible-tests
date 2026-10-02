@@ -4,42 +4,45 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, CASTER_THEMES, setCasterTheme } from '../../fixtures';
 
-test.describe('Projects Management', () => {
-  test('View Project Details', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
-    const projectName = `Project For Details ${Date.now()}`;
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Projects Management`, () => {
+    test('View Project Details', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+      await setCasterTheme(page, theme);
+      const projectName = `Project For Details ${Date.now()}`;
 
-    // 1. Navigate to Projects section
-    await expect(page.getByText('My Projects')).toBeVisible();
+      // 1. Navigate to Projects section
+      await expect(page.getByText('My Projects')).toBeVisible();
 
-    // Create a project if needed
-    await page.locator('button[mattooltip="Add New Project"]').click();
-    await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
-    await page.getByRole('textbox', { name: 'Name' }).fill(projectName);
+      // Create a project if needed
+      await page.locator('button[mattooltip="Add New Project"]').click();
+      await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
+      await page.getByRole('textbox', { name: 'Name' }).fill(projectName);
 
-    const createResponsePromise = page.waitForResponse(resp =>
-      resp.url().includes('/api/projects') && resp.request().method() === 'POST' && resp.ok()
-    );
-    await page.getByRole('button', { name: 'Save' }).click();
+      const createResponsePromise = page.waitForResponse(resp =>
+        resp.url().includes('/api/projects') && resp.request().method() === 'POST' && resp.ok()
+      );
+      await page.getByRole('button', { name: 'Save' }).click();
 
-    // Capture project ID for cleanup
-    const createResponse = await createResponsePromise;
-    const projectData = await createResponse.json();
-    cleanupCasterProject(projectData.id);
+      // Capture project ID for cleanup
+      const createResponse = await createResponsePromise;
+      const projectData = await createResponse.json();
+      cleanupCasterProject(projectData.id);
 
-    // expect: The project detail view is displayed after creation.
-    await expectCasterProjectOpen(page, projectName);
+      // expect: The project detail view is displayed after creation.
+      await expectCasterProjectOpen(page, projectName);
 
-    // expect: Project name is shown in the topbar
-    await expect(page.getByText(projectName, { exact: true })).toBeVisible();
+      // expect: Project name is shown in the topbar
+      await expect(page.getByText(projectName, { exact: true })).toBeVisible();
 
-    // expect: Sidebar options are available for: Add Directory, Export Project, Import Project
-    await expect(page.getByText('Add Directory', { exact: true })).toBeVisible();
-    await expect(page.getByText('Export Project', { exact: true })).toBeVisible();
-    await expect(page.getByText('Import Project', { exact: true })).toBeVisible();
+      // expect: Sidebar options are available for: Add Directory, Export Project, Import Project
+      await expect(page.getByText('Add Directory', { exact: true })).toBeVisible();
+      await expect(page.getByText('Export Project', { exact: true })).toBeVisible();
+      await expect(page.getByText('Import Project', { exact: true })).toBeVisible();
 
-    // expect: Main content shows placeholder when no file/workspace is selected
-    await expect(page.getByText('Please open a file or workspace')).toBeVisible();
+      // expect: Main content shows placeholder when no file/workspace is selected
+      await expect(page.getByText('Please open a file or workspace')).toBeVisible();
+    });
   });
-});
+}

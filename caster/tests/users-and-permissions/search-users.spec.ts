@@ -4,29 +4,32 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, CASTER_THEMES, setCasterTheme } from '../../fixtures';
 
-test.describe('Users and Permissions Management', () => {
-  test('Search Users', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Users and Permissions Management`, () => {
+    test('Search Users', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
-    // 1. Navigate to admin Users section
-    await page.goto(Services.Caster.UI + '/admin?section=Users');
+      // 1. Navigate to admin Users section
+      await page.goto(Services.Caster.UI + '/admin?section=Users');
 
-    // expect: Users list is visible
-    await expect(page.getByRole('table')).toBeVisible({ timeout: 10000 });
-    await expect(page.getByRole('cell', { name: 'Admin User' })).toBeVisible();
+      // expect: Users list is visible
+      await expect(page.getByRole('table')).toBeVisible({ timeout: 10000 });
+      await expect(page.getByRole('cell', { name: 'Admin User', exact: true })).toBeVisible();
 
-    // 2. Enter a search term in the search box
-    const searchBox = page.getByRole('textbox', { name: 'Search' });
-    await searchBox.fill('Admin');
+      // 2. Enter a search term in the search box
+      const searchBox = page.getByRole('textbox', { name: 'Search' });
+      await searchBox.fill('Admin');
 
-    // expect: The list filters to show only matching users
-    await expect(page.getByRole('cell', { name: 'Admin User' })).toBeVisible();
+      // expect: The list filters to show only matching users
+      await expect(page.getByRole('cell', { name: 'Admin User', exact: true })).toBeVisible();
 
-    // 3. Clear the search box
-    await searchBox.clear();
+      // 3. Clear the search box
+      await searchBox.clear();
 
-    // expect: All users are displayed again
-    await expect(page.getByRole('cell', { name: 'Admin User' })).toBeVisible();
+      // expect: All users are displayed again
+      await expect(page.getByRole('cell', { name: 'Admin User', exact: true })).toBeVisible();
+    });
   });
-});
+}

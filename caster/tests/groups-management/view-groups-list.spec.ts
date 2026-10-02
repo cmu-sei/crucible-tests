@@ -4,25 +4,28 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, CASTER_THEMES, setCasterTheme } from '../../fixtures';
 
-test.describe('Groups Management', () => {
-  test('View Groups List', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Groups Management`, () => {
+    test('View Groups List', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
-    // 1. Navigate to Admin section and click on Groups in the sidebar
-    await page.goto(Services.Caster.UI + '/admin?section=Groups');
+      // 1. Navigate to Admin section and click on Groups in the sidebar
+      await page.goto(Services.Caster.UI + '/admin?section=Groups');
 
-    // expect: Groups page loads
-    await expect(page).toHaveURL(/section=Groups/);
+      // expect: Groups page loads
+      await expect(page).toHaveURL(/section=Groups/);
 
-    // expect: Groups table is displayed with columns: selection checkbox, Group Name
-    await expect(page.getByRole('columnheader', { name: 'Group Name' })).toBeVisible({ timeout: 10000 });
+      // expect: Groups table is displayed with columns: selection checkbox, Group Name
+      await expect(page.getByRole('columnheader', { name: 'Group Name' })).toBeVisible({ timeout: 10000 });
 
-    // expect: Search Groups textbox is available at the top
-    await expect(page.getByRole('textbox', { name: 'Search Groups' })).toBeVisible();
+      // expect: Search Groups textbox is available at the top
+      await expect(page.getByRole('textbox', { name: 'Search Groups' })).toBeVisible();
 
-    // expect: Create group button is visible
-    const createButton = page.getByRole('table').getByRole('button').first();
-    await expect(createButton).toBeVisible();
+      // expect: Create group button is visible
+      const createButton = page.getByRole('table').getByRole('button').first();
+      await expect(createButton).toBeVisible();
+    });
   });
-});
+}

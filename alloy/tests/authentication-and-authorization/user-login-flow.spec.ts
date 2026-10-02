@@ -31,7 +31,7 @@ test.describe('Authentication and Authorization', () => {
     await expect(page).toHaveURL(serviceUrlPattern(Services.Alloy.UI));
 
     // expect: The main application interface loads
-    await expect(page.getByText('Alloy')).toBeVisible();
+    await expect(page.locator('app-topbar .view-text')).toHaveText('Alloy');
 
     // expect: The topbar displays the username 'admin'
     await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();

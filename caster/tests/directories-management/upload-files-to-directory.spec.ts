@@ -4,36 +4,39 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, CASTER_THEMES, setCasterTheme } from '../../fixtures';
 
-test.describe('Directories Management', () => {
-  test('Upload Files to Directory', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
-    const uniqueSuffix = Date.now().toString();
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Directories Management`, () => {
+    test('Upload Files to Directory', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+      await setCasterTheme(page, theme);
+      const uniqueSuffix = Date.now().toString();
 
-    await expect(page.getByText('My Projects')).toBeVisible();
+      await expect(page.getByText('My Projects')).toBeVisible();
 
-    await page.locator('button:has(.mdi-plus-circle)').click();
-    await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
-    await page.getByRole('textbox', { name: 'Name' }).fill(`Upload File Project ${uniqueSuffix}`);
-    await page.getByRole('button', { name: 'Save' }).click();
-    await expectCasterProjectOpen(page, `Upload File Project ${uniqueSuffix}`);
+      await page.locator('button:has(.mdi-plus-circle)').click();
+      await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
+      await page.getByRole('textbox', { name: 'Name' }).fill(`Upload File Project ${uniqueSuffix}`);
+      await page.getByRole('button', { name: 'Save' }).click();
+      await expectCasterProjectOpen(page, `Upload File Project ${uniqueSuffix}`);
 
-    // Register project for cleanup after test completes
-    const projectId = page.url().match(/\/projects\/([a-f0-9-]+)/)?.[1];
-    if (projectId) cleanupCasterProject(projectId);
+      // Register project for cleanup after test completes
+      const projectId = page.url().match(/\/projects\/([a-f0-9-]+)/)?.[1];
+      if (projectId) cleanupCasterProject(projectId);
 
-    await page.getByText('Add Directory').first().click();
-    await expect(page.getByRole('dialog', { name: 'Create New Directory?' })).toBeVisible();
-    await page.getByRole('textbox', { name: 'Name' }).fill('Upload Dir');
-    await page.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByRole('button', { name: 'Upload Dir' })).toBeVisible({ timeout: 10000 });
+      await page.getByText('Add Directory').first().click();
+      await expect(page.getByRole('dialog', { name: 'Create New Directory?' })).toBeVisible();
+      await page.getByRole('textbox', { name: 'Name' }).fill('Upload Dir');
+      await page.getByRole('button', { name: 'Save' }).click();
+      await expect(page.getByRole('button', { name: 'Upload Dir' })).toBeVisible({ timeout: 10000 });
 
-    await page.getByRole('button', { name: 'Upload Dir' }).click();
-    await page.getByRole('button', { name: 'FILES' }).click();
+      await page.getByRole('button', { name: 'Upload Dir' }).click();
+      await page.getByRole('button', { name: 'FILES' }).click();
 
-    const uploadButton = page.getByText('Upload File');
-    if (await uploadButton.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await uploadButton.click();
-    }
+      const uploadButton = page.getByText('Upload File');
+      if (await uploadButton.isVisible({ timeout: 5000 }).catch(() => false)) {
+        await uploadButton.click();
+      }
+    });
   });
-});
+}

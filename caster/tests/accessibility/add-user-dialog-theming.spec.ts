@@ -26,14 +26,11 @@ import {
  *   2. In each theme the dialog's own text tracks `--mat-sys-on-surface` and stays
  *      readable against the surface it is actually painted on (WCAG 1.4.3).
  *
- * Contrast is computed here rather than delegated to axe on purpose. Caster fails
- * axe's `color-contrast` theme-wide for two app-side reasons this modal does not own
- * and cannot fix — `AppComponent.setTheme` overwrites the generated
- * `--mat-sys-primary` with the branding orange, and `styles.scss` hardcodes
- * `--mat-sys-error` inside `.darkMode` — so a blanket axe assertion would be
- * permanently red and tell us nothing. Measuring the specific pairs the modal is
- * responsible for keeps a real signal: the dialog's body text and title must meet AA
- * in both themes, and they do.
+ * Contrast is computed here as well as by axe's `color-contrast` rule in
+ * `add-user-dialog-modal-spec-compliance.spec.ts`. Axe reports that a pair fails;
+ * measuring the specific pairs the modal is responsible for also pins *why* — that
+ * the text tracks the theme token and that the palette inverts in the right
+ * direction — which a pass/fail rule cannot express.
  *
  * Read-only: the modal is dismissed via Cancel and never submitted, so no user is
  * created. The theme is a persisted user preference, so it is restored in afterEach.
@@ -183,18 +180,11 @@ test.describe('Accessibility and Usability', () => {
   /**
    * Validation error text must stay readable in both themes.
    *
-   * Pending upstream: Caster's `src/styles/styles.scss` sets `--mat-sys-error: #ba1a1a`
-   * inside its `.darkMode` block, overriding the `light-dark(#ba1a1a, #ffb4ab)` pair
-   * that `mat.theme()` generates. One red cannot be readable on both surfaces, so dark
-   * mode paints a dark red on a dark background: the error measures 2.01:1 where the
-   * generated dark tone gives 7.66:1. WCAG 2.1 AA 1.4.3 requires 4.5:1, and Section 508
-   * incorporates it.
-   *
-   * This test therefore FAILS IN DARK MODE against a build that still has that line,
-   * and asserts the correct requirement rather than the broken behavior (per AGENTS.md,
-   * "never adjust a test to work around an app bug"). Deleting the override in Caster is
-   * the whole fix and makes both halves pass — no change is needed here when it lands.
-   * Not skipped: the light half passes, and skipping would bury a Section 508 defect.
+   * `mat.theme()` generates `--mat-sys-error` as a `light-dark(#ba1a1a, #ffb4ab)` pair,
+   * because one red cannot be readable on both surfaces. This guards against an app
+   * stylesheet pinning a single red again: a hardcoded `#ba1a1a` inside `.darkMode`
+   * measured 2.01:1 on the dark surface, where the generated dark tone gives 7.66:1.
+   * WCAG 2.1 AA 1.4.3 requires 4.5:1, and Section 508 incorporates it.
    */
   test('Add User Modal - error text contrast in both themes', async ({
     casterAuthenticatedPage: page,
@@ -259,8 +249,7 @@ test.describe('Accessibility and Usability', () => {
     expect(
       dark.color,
       'error colour should differ between themes — a single hardcoded red cannot ' +
-        'be readable on both a light and a dark surface (see the Pending upstream ' +
-        'note on this test)',
+        'be readable on both a light and a dark surface',
     ).not.toBe(light.color);
 
     for (const [themeName, sample] of [

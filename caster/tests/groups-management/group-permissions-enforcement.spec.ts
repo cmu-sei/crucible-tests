@@ -4,19 +4,22 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, CASTER_THEMES, setCasterTheme } from '../../fixtures';
 
-test.describe('Groups Management', () => {
-  test('Group Permissions Enforcement', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Groups Management`, () => {
+    test('Group Permissions Enforcement', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
-    await page.goto(Services.Caster.UI + '/admin?section=Groups');
+      await page.goto(Services.Caster.UI + '/admin?section=Groups');
 
-    await expect(page.getByRole('columnheader', { name: 'Group Name' })).toBeVisible({ timeout: 10000 });
-    await expect(page.getByRole('table')).toBeVisible();
-    await expect(page.getByRole('textbox', { name: 'Search Groups' })).toBeVisible();
+      await expect(page.getByRole('columnheader', { name: 'Group Name' })).toBeVisible({ timeout: 10000 });
+      await expect(page.getByRole('table')).toBeVisible();
+      await expect(page.getByRole('textbox', { name: 'Search Groups' })).toBeVisible();
 
-    // expect: As admin, create group button is available
-    const createButton = page.getByRole('table').getByRole('button').first();
-    await expect(createButton).toBeVisible();
+      // expect: As admin, create group button is available
+      const createButton = page.getByRole('table').getByRole('button').first();
+      await expect(createButton).toBeVisible();
+    });
   });
-});
+}
