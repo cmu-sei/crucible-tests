@@ -6,30 +6,34 @@
 
 import { test, expect } from '@playwright/test';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
+import { ALLOY_THEMES, applyAlloyTheme } from '../../test-helpers';
 
-test.describe('Events Management', () => {
-  test('Event Lifecycle - Creating to Active', async ({ page }) => {
-    // Note: This test requires Player, Caster, and Steamfitter services to be
-    // fully configured and running. It verifies the event creation flow from
-    // the admin Events section.
+for (const theme of ALLOY_THEMES) {
+  test.describe(`${theme} theme › Events Management`, () => {
+    test('Event Lifecycle - Creating to Active', async ({ page }) => {
+      // Note: This test requires Player, Caster, and Steamfitter services to be
+      // fully configured and running. It verifies the event creation flow from
+      // the admin Events section.
 
-    // 1. Navigate to admin Events section
-    await authenticateWithKeycloak(page, Services.Alloy.UI);
-    await page.goto(`${Services.Alloy.UI}/admin`);
-    await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
+      // 1. Navigate to admin Events section
+      await authenticateWithKeycloak(page, Services.Alloy.UI);
+      await applyAlloyTheme(page, theme);
+      await page.goto(`${Services.Alloy.UI}/admin`);
+      await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
 
-    await page.locator('mat-list-item').filter({ hasText: 'Events' }).click();
+      await page.locator('mat-list-item').filter({ hasText: 'Events' }).click();
 
-    // expect: Events list is visible with status columns
-    await expect(page.getByRole('table')).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Status', exact: true })).toBeVisible();
+      // expect: Events list is visible with status columns
+      await expect(page.getByRole('table')).toBeVisible();
+      await expect(page.getByRole('columnheader', { name: 'Status', exact: true })).toBeVisible();
 
-    // 2. Verify event status filter checkboxes are present
-    await expect(page.getByRole('checkbox', { name: 'Active' })).toBeVisible();
-    await expect(page.getByRole('checkbox', { name: 'Ended' })).toBeVisible();
-    await expect(page.getByRole('checkbox', { name: 'Failed' })).toBeVisible();
+      // 2. Verify event status filter checkboxes are present
+      await expect(page.getByRole('checkbox', { name: 'Active' })).toBeVisible();
+      await expect(page.getByRole('checkbox', { name: 'Ended' })).toBeVisible();
+      await expect(page.getByRole('checkbox', { name: 'Failed' })).toBeVisible();
 
-    // expect: Active events are shown by default
-    await expect(page.getByRole('checkbox', { name: 'Active' })).toBeChecked();
+      // expect: Active events are shown by default
+      await expect(page.getByRole('checkbox', { name: 'Active' })).toBeChecked();
+    });
   });
-});
+}
