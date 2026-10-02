@@ -19,7 +19,7 @@ for (const theme of ALLOY_THEMES) {
       // expect: Page layout utilizes desktop space effectively
       await expect(page.getByText('My Events')).toBeVisible();
       await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
-      await expect(page.getByText('Alloy')).toBeVisible();
+      await expect(page.locator('app-topbar .view-text')).toHaveText('Alloy');
 
       // 2. Navigate to admin section
       await page.goto(`${Services.Alloy.UI}/admin`);

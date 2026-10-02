@@ -17,7 +17,7 @@ for (const theme of ALLOY_THEMES) {
 
       // expect: Page has proper structure for screen readers
       // Verify semantic HTML elements are present
-      await expect(page.getByText('Alloy')).toBeVisible();
+      await expect(page.locator('app-topbar .view-text')).toHaveText('Alloy');
       await expect(page.getByRole('link', { name: 'Home' })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
 
