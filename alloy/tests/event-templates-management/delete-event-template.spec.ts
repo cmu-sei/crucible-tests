@@ -6,7 +6,7 @@
 
 import { test, expect } from '@playwright/test';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
-import { ALLOY_THEMES, applyAlloyTheme, deleteEventTemplatesByPattern } from '../../test-helpers';
+import { ALLOY_THEMES, applyAlloyTheme, deleteEventTemplatesByPattern, waitForDialogOpen } from '../../test-helpers';
 
 for (const theme of ALLOY_THEMES) {
   test.describe(`${theme} theme › Event Templates Management`, () => {
@@ -29,7 +29,7 @@ for (const theme of ALLOY_THEMES) {
       const uniqueName = `${DELETE_PREFIX} ${Date.now()}`;
       const createDialog = page.getByRole('dialog', { name: 'Create New Event Template' });
       await page.getByRole('button', { name: 'Add Event Template' }).click();
-      await expect(createDialog).toBeVisible();
+      await waitForDialogOpen(createDialog);
 
       await createDialog.getByRole('textbox', { name: /^Name/ }).fill(uniqueName);
       await createDialog.getByRole('spinbutton', { name: 'Duration Hours' }).fill('1');
