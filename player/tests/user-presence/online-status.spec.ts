@@ -11,34 +11,39 @@ import {
   seededPrimaryViewName,
   findPlayerHomeViewLink,
   clickWithoutOverlayInterference,
+  PLAYER_THEMES,
+  setPlayerTheme,
 } from '../../fixtures';
 
-test.describe('User Presence', () => {
-  test('User Presence - Online Status', async ({ playerAuthenticatedPage: page }) => {
-    const primaryViewName = seededPrimaryViewName();
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › User Presence`, () => {
+    test('User Presence - Online Status', async ({ playerAuthenticatedPage: page }) => {
+      await setPlayerTheme(page, theme);
+      const primaryViewName = seededPrimaryViewName();
 
-    // 1. Navigate to a view and check user presence via Users dialog
-    await (await findPlayerHomeViewLink(page, primaryViewName)).click();
-    await expect(page).toHaveURL(/\/view\//, { timeout: 10000 });
+      // 1. Navigate to a view and check user presence via Users dialog
+      await (await findPlayerHomeViewLink(page, primaryViewName)).click();
+      await expect(page).toHaveURL(/\/view\//, { timeout: 10000 });
 
-    // Open the Users dialog to see online status
-    await clickWithoutOverlayInterference(page, page.getByRole('button', { name: 'Users' }));
+      // Open the Users dialog to see online status
+      await clickWithoutOverlayInterference(page, page.getByRole('button', { name: 'Users' }));
 
-    const dialog = page.getByRole('dialog');
-    await expect(dialog).toBeVisible();
+      const dialog = page.getByRole('dialog');
+      await expect(dialog).toBeVisible();
 
-    // Expand a team to see user status
-    await dialog.getByRole('button', { name: /Admin Count:/ }).click();
+      // Expand a team to see user status
+      await dialog.getByRole('button', { name: /Admin Count:/ }).click();
 
-    // expect: User presence list displays
-    // expect: Current user appears as online/present
-    const adminRegion = dialog.getByRole('region', { name: /Admin Count:/ });
-    await expect(adminRegion.getByRole('cell', { name: 'Admin User' })).toBeVisible();
+      // expect: User presence list displays
+      // expect: Current user appears as online/present
+      const adminRegion = dialog.getByRole('region', { name: /Admin Count:/ });
+      await expect(adminRegion.getByRole('cell', { name: 'Admin User' })).toBeVisible();
 
-    // expect: Online status indicator is visible
-    await expect(adminRegion.getByText('Online')).toBeVisible();
+      // expect: Online status indicator is visible
+      await expect(adminRegion.getByText('Online')).toBeVisible();
 
-    // Close dialog
-    await dialog.getByRole('button', { name: 'Close' }).click();
+      // Close dialog
+      await dialog.getByRole('button', { name: 'Close' }).click();
+    });
   });
-});
+}

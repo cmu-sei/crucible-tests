@@ -4,40 +4,43 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
 
-test.describe('Responsive Design and Accessibility', () => {
-  test('Focus Management - Modal Dialogs', async ({ playerAuthenticatedPage: page }) => {
-    // 1. Open a modal dialog (e.g., create view)
-    const createButton = page.locator('button:has(.mdi-plus-circle)');
-    await createButton.click();
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Responsive Design and Accessibility`, () => {
+    test('Focus Management - Modal Dialogs', async ({ playerAuthenticatedPage: page }) => {
+      await setPlayerTheme(page, theme);
+      // 1. Open a modal dialog (e.g., create view)
+      const createButton = page.locator('button:has(.mdi-plus-circle)');
+      await createButton.click();
 
-    const dialog = page.getByRole('dialog', { name: 'Create New View?' });
+      const dialog = page.getByRole('dialog', { name: 'Create New View?' });
 
-    // expect: Focus moves to modal when opened
-    await expect(dialog).toBeVisible();
+      // expect: Focus moves to modal when opened
+      await expect(dialog).toBeVisible();
 
-    // expect: Focus is trapped within modal
-    // The Name field should be focused (active) when dialog opens
-    const nameField = dialog.getByRole('textbox', { name: 'Name' });
-    await expect(nameField).toBeVisible();
+      // expect: Focus is trapped within modal
+      // The Name field should be focused (active) when dialog opens
+      const nameField = dialog.getByRole('textbox', { name: 'Name' });
+      await expect(nameField).toBeVisible();
 
-    // Tab through modal elements - focus should stay within the dialog
-    await page.keyboard.press('Tab');
-    await page.keyboard.press('Tab');
-    await page.keyboard.press('Tab');
+      // Tab through modal elements - focus should stay within the dialog
+      await page.keyboard.press('Tab');
+      await page.keyboard.press('Tab');
+      await page.keyboard.press('Tab');
 
-    // expect: Background content is not accessible via Tab
-    // The focus should still be within the dialog
-    // Verify dialog is still the active container
+      // expect: Background content is not accessible via Tab
+      // The focus should still be within the dialog
+      // Verify dialog is still the active container
 
-    // 2. Close modal
-    await dialog.getByRole('button', { name: 'Cancel' }).click();
+      // 2. Close modal
+      await dialog.getByRole('button', { name: 'Cancel' }).click();
 
-    // expect: Focus returns to element that triggered modal
-    await expect(dialog).not.toBeVisible();
+      // expect: Focus returns to element that triggered modal
+      await expect(dialog).not.toBeVisible();
 
-    // The page should be functional after modal close
-    await expect(page.getByText('My Views')).toBeVisible();
+      // The page should be functional after modal close
+      await expect(page.getByText('My Views')).toBeVisible();
+    });
   });
-});
+}

@@ -4,25 +4,28 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
 
-test.describe('Administration - Users', () => {
-  test('Assign Role to User', async ({ playerAuthenticatedPage: page }) => {
-    // 1. Log in as admin and navigate to Administration > Users
-    await page.getByRole('button', { name: 'Menu' }).click();
-    await page.getByRole('menuitem', { name: 'Administration' }).click();
-    await page.getByRole('button', { name: 'Users Users' }).click();
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Administration - Users`, () => {
+    test('Assign Role to User', async ({ playerAuthenticatedPage: page }) => {
+      await setPlayerTheme(page, theme);
+      // 1. Log in as admin and navigate to Administration > Users
+      await page.getByRole('button', { name: 'Menu' }).click();
+      await page.getByRole('menuitem', { name: 'Administration' }).click();
+      await page.getByRole('button', { name: 'Users Users' }).click();
 
-    // expect: The Users section is displayed
-    await expect(page.getByRole('columnheader', { name: 'Role' })).toBeVisible();
+      // expect: The Users section is displayed
+      await expect(page.getByRole('columnheader', { name: 'Role' })).toBeVisible();
 
-    // 2. Click the role dropdown for a user showing 'None'
-    const roleDropdown = page.getByRole('combobox', { name: 'Role' }).first();
-    await expect(roleDropdown).toBeVisible();
-    await roleDropdown.click();
+      // 2. Click the role dropdown for a user showing 'None'
+      const roleDropdown = page.getByRole('combobox', { name: 'Role' }).first();
+      await expect(roleDropdown).toBeVisible();
+      await roleDropdown.click();
 
-    // expect: A dropdown opens showing available roles
-    // Available roles should be listed (e.g., None, Administrator, Content Developer)
-    await expect(page.getByRole('option', { name: 'Administrator' })).toBeVisible({ timeout: 5000 });
+      // expect: A dropdown opens showing available roles
+      // Available roles should be listed (e.g., None, Administrator, Content Developer)
+      await expect(page.getByRole('option', { name: 'Administrator' })).toBeVisible({ timeout: 5000 });
+    });
   });
-});
+}

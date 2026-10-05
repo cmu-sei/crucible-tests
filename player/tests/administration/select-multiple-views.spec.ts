@@ -4,51 +4,54 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
 
-test.describe('Administration - Views', () => {
-  test('Select Multiple Views', async ({ playerAuthenticatedPage: page }) => {
-    // 1. Log in as admin and navigate to Administration > Views
-    await page.getByRole('button', { name: 'Menu' }).click();
-    await page.getByRole('menuitem', { name: 'Administration' }).click();
-    await expect(page).toHaveURL(/\/admin/, { timeout: 10000 });
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Administration - Views`, () => {
+    test('Select Multiple Views', async ({ playerAuthenticatedPage: page }) => {
+      await setPlayerTheme(page, theme);
+      // 1. Log in as admin and navigate to Administration > Views
+      await page.getByRole('button', { name: 'Menu' }).click();
+      await page.getByRole('menuitem', { name: 'Administration' }).click();
+      await expect(page).toHaveURL(/\/admin/, { timeout: 10000 });
 
-    // expect: The Views admin section is displayed
-    await expect(page.getByRole('heading', { name: 'Views' })).toBeVisible();
+      // expect: The Views admin section is displayed
+      await expect(page.getByRole('heading', { name: 'Views' })).toBeVisible();
 
-    // 2. Click the checkbox in the header row
-    const headerCheckbox = page
-      .locator('app-admin-view-search mat-header-row mat-checkbox')
-      .getByRole('checkbox');
-    await headerCheckbox.focus();
-    await page.keyboard.press('Space');
+      // 2. Click the checkbox in the header row
+      const headerCheckbox = page
+        .locator('app-admin-view-search mat-header-row mat-checkbox')
+        .getByRole('checkbox');
+      await headerCheckbox.focus();
+      await page.keyboard.press('Space');
 
-    // expect: All views are selected
-    // expect: All individual checkboxes are checked
-    const rowCheckboxes = page.locator(
-      'app-admin-view-search mat-row mat-checkbox input[type="checkbox"]',
-    );
-    const count = await rowCheckboxes.count();
-    expect(count).toBeGreaterThan(0);
-    for (let i = 0; i < count; i++) {
-      await expect(rowCheckboxes.nth(i)).toBeChecked();
-    }
+      // expect: All views are selected
+      // expect: All individual checkboxes are checked
+      const rowCheckboxes = page.locator(
+        'app-admin-view-search mat-row mat-checkbox input[type="checkbox"]',
+      );
+      const count = await rowCheckboxes.count();
+      expect(count).toBeGreaterThan(0);
+      for (let i = 0; i < count; i++) {
+        await expect(rowCheckboxes.nth(i)).toBeChecked();
+      }
 
-    // 3. Click the header checkbox again
-    await headerCheckbox.focus();
-    await page.keyboard.press('Space');
+      // 3. Click the header checkbox again
+      await headerCheckbox.focus();
+      await page.keyboard.press('Space');
 
-    // expect: All views are deselected
-    for (let i = 0; i < count; i++) {
-      await expect(rowCheckboxes.nth(i)).not.toBeChecked();
-    }
+      // expect: All views are deselected
+      for (let i = 0; i < count; i++) {
+        await expect(rowCheckboxes.nth(i)).not.toBeChecked();
+      }
 
-    // 4. Click individual view checkboxes
-    const firstRowCheckbox = rowCheckboxes.first();
-    await firstRowCheckbox.focus();
-    await page.keyboard.press('Space');
+      // 4. Click individual view checkboxes
+      const firstRowCheckbox = rowCheckboxes.first();
+      await firstRowCheckbox.focus();
+      await page.keyboard.press('Space');
 
-    // expect: Only selected views have checked checkboxes
-    await expect(firstRowCheckbox).toBeChecked();
+      // expect: Only selected views have checked checkboxes
+      await expect(firstRowCheckbox).toBeChecked();
+    });
   });
-});
+}

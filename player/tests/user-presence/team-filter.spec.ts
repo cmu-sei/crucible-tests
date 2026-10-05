@@ -11,41 +11,46 @@ import {
   seededPrimaryViewName,
   findPlayerHomeViewLink,
   clickWithoutOverlayInterference,
+  PLAYER_THEMES,
+  setPlayerTheme,
 } from '../../fixtures';
 
-test.describe('User Presence', () => {
-  test('User Presence - Team Filter', async ({ playerAuthenticatedPage: page }) => {
-    const primaryViewName = seededPrimaryViewName();
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › User Presence`, () => {
+    test('User Presence - Team Filter', async ({ playerAuthenticatedPage: page }) => {
+      await setPlayerTheme(page, theme);
+      const primaryViewName = seededPrimaryViewName();
 
-    // 1. Navigate to user presence page in a view with multiple teams
-    await (await findPlayerHomeViewLink(page, primaryViewName)).click();
-    await expect(page).toHaveURL(/\/view\//, { timeout: 10000 });
+      // 1. Navigate to user presence page in a view with multiple teams
+      await (await findPlayerHomeViewLink(page, primaryViewName)).click();
+      await expect(page).toHaveURL(/\/view\//, { timeout: 10000 });
 
-    // Open the Users dialog
-    await clickWithoutOverlayInterference(page, page.getByRole('button', { name: 'Users' }));
-    const dialog = page.getByRole('dialog');
-    await expect(dialog).toBeVisible();
+      // Open the Users dialog
+      await clickWithoutOverlayInterference(page, page.getByRole('button', { name: 'Users' }));
+      const dialog = page.getByRole('dialog');
+      await expect(dialog).toBeVisible();
 
-    // expect: User presence page displays multiple teams
-    await expect(dialog.getByRole('button', { name: /Admin Count:/ })).toBeVisible();
-    await expect(dialog.getByRole('button', { name: /Exercise Control Count:/ })).toBeVisible();
+      // expect: User presence page displays multiple teams
+      await expect(dialog.getByRole('button', { name: /Admin Count:/ })).toBeVisible();
+      await expect(dialog.getByRole('button', { name: /Exercise Control Count:/ })).toBeVisible();
 
-    // 2. Select a specific team from filter/dropdown
-    // Use the "Hide Offline" checkbox to filter presence
-    const hideOfflineCheckbox = dialog.getByRole('checkbox', { name: 'Hide Offline' });
-    await hideOfflineCheckbox.click();
+      // 2. Select a specific team from filter/dropdown
+      // Use the "Hide Offline" checkbox to filter presence
+      const hideOfflineCheckbox = dialog.getByRole('checkbox', { name: 'Hide Offline' });
+      await hideOfflineCheckbox.click();
 
-    // expect: User list filters to show only online members
-    // expect: Team members' presence status is displayed
+      // expect: User list filters to show only online members
+      // expect: Team members' presence status is displayed
 
-    // Expand a team to verify filtering
-    await dialog.getByRole('button', { name: 'Expand All' }).click();
+      // Expand a team to verify filtering
+      await dialog.getByRole('button', { name: 'Expand All' }).click();
 
-    // The Admin team should show online users
-    const adminRegion = dialog.getByRole('region', { name: /Admin Count:/ });
-    await expect(adminRegion.getByRole('cell', { name: 'Admin User' })).toBeVisible();
+      // The Admin team should show online users
+      const adminRegion = dialog.getByRole('region', { name: /Admin Count:/ });
+      await expect(adminRegion.getByRole('cell', { name: 'Admin User' })).toBeVisible();
 
-    // Close dialog
-    await dialog.getByRole('button', { name: 'Close' }).click();
+      // Close dialog
+      await dialog.getByRole('button', { name: 'Close' }).click();
+    });
   });
-});
+}

@@ -4,32 +4,35 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink, typeIntoSearch } from '../../fixtures';
+import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink, typeIntoSearch, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
 
-test.describe('Error Handling and Edge Cases', () => {
-  test('Empty Views List', async ({ playerAuthenticatedPage: page }) => {
-    const primaryViewName = seededPrimaryViewName();
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Error Handling and Edge Cases`, () => {
+    test('Empty Views List', async ({ playerAuthenticatedPage: page }) => {
+      await setPlayerTheme(page, theme);
+      const primaryViewName = seededPrimaryViewName();
 
-    // 1. Log in as a user with no assigned views
-    // Note: Using admin user who has views; simulate empty list via search
-    await expect(page.getByText('My Views')).toBeVisible();
+      // 1. Log in as a user with no assigned views
+      // Note: Using admin user who has views; simulate empty list via search
+      await expect(page.getByText('My Views')).toBeVisible();
 
-    // Verify the views table is visible with data
-    const dataRows = page.getByRole('row').filter({ hasNot: page.getByRole('columnheader') });
-    await expect(dataRows).not.toHaveCount(0);
+      // Verify the views table is visible with data
+      const dataRows = page.getByRole('row').filter({ hasNot: page.getByRole('columnheader') });
+      await expect(dataRows).not.toHaveCount(0);
 
-    // Simulate empty-like state by searching for a non-existent view
-    const searchField = page.getByRole('textbox', { name: 'Search' });
-    await typeIntoSearch(searchField, 'NonExistentViewXYZ123');
+      // Simulate empty-like state by searching for a non-existent view
+      const searchField = page.getByRole('textbox', { name: 'Search' });
+      await typeIntoSearch(searchField, 'NonExistentViewXYZ123');
 
-    // expect: The search field accepts input without errors
-    await expect(searchField).toHaveValue('NonExistentViewXYZ123');
+      // expect: The search field accepts input without errors
+      await expect(searchField).toHaveValue('NonExistentViewXYZ123');
 
-    // expect: The page remains stable (no crash, table still rendered)
-    await expect(page.getByRole('table')).toBeVisible();
+      // expect: The page remains stable (no crash, table still rendered)
+      await expect(page.getByRole('table')).toBeVisible();
 
-    // Clear search to restore
-    await searchField.clear();
-    await findPlayerHomeViewLink(page, primaryViewName);
+      // Clear search to restore
+      await searchField.clear();
+      await findPlayerHomeViewLink(page, primaryViewName);
+    });
   });
-});
+}

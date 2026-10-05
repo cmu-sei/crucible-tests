@@ -4,27 +4,30 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
 
-test.describe('Error Handling and Edge Cases', () => {
-  test('Large Data Set Handling - Pagination', async ({ playerAuthenticatedPage: page }) => {
-    // 1. Navigate to a list with items (e.g., admin users list with pagination)
-    await page.getByRole('button', { name: 'Menu' }).click();
-    await page.getByRole('menuitem', { name: 'Administration' }).click();
-    await page.getByRole('button', { name: 'Users Users' }).click();
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Error Handling and Edge Cases`, () => {
+    test('Large Data Set Handling - Pagination', async ({ playerAuthenticatedPage: page }) => {
+      await setPlayerTheme(page, theme);
+      // 1. Navigate to a list with items (e.g., admin users list with pagination)
+      await page.getByRole('button', { name: 'Menu' }).click();
+      await page.getByRole('menuitem', { name: 'Administration' }).click();
+      await page.getByRole('button', { name: 'Users Users' }).click();
 
-    // expect: List loads with pagination
-    await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
-    await expect(page.getByText(/of \d+/)).toBeVisible();
+      // expect: List loads with pagination
+      await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
+      await expect(page.getByText(/of \d+/)).toBeVisible();
 
-    // 2. Navigate through pages or interact with pagination
-    const itemsPerPage = page.getByRole('combobox', { name: 'Items per page:' });
-    await expect(itemsPerPage).toBeVisible();
+      // 2. Navigate through pages or interact with pagination
+      const itemsPerPage = page.getByRole('combobox', { name: 'Items per page:' });
+      await expect(itemsPerPage).toBeVisible();
 
-    // expect: Data loads smoothly without freezing
-    // expect: Performance remains acceptable
-    // expect: All items are accessible
-    const nextButton = page.getByRole('button', { name: 'Next page' });
-    await expect(nextButton).toBeVisible();
+      // expect: Data loads smoothly without freezing
+      // expect: Performance remains acceptable
+      // expect: All items are accessible
+      const nextButton = page.getByRole('button', { name: 'Next page' });
+      await expect(nextButton).toBeVisible();
+    });
   });
-});
+}
