@@ -4,35 +4,38 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
 
-test.describe('Responsive Design and Accessibility', () => {
-  test('Keyboard Navigation - Enter Key Submission', async ({ playerAuthenticatedPage: page }) => {
-    // 1. Navigate to a form (e.g., create view dialog)
-    const createButton = page.locator('button:has(.mdi-plus-circle)');
-    await createButton.click();
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Responsive Design and Accessibility`, () => {
+    test('Keyboard Navigation - Enter Key Submission', async ({ playerAuthenticatedPage: page }) => {
+      await setPlayerTheme(page, theme);
+      // 1. Navigate to a form (e.g., create view dialog)
+      const createButton = page.locator('button:has(.mdi-plus-circle)');
+      await createButton.click();
 
-    // expect: Form is displayed
-    const dialog = page.getByRole('dialog', { name: 'Create New View?' });
-    await expect(dialog).toBeVisible();
+      // expect: Form is displayed
+      const dialog = page.getByRole('dialog', { name: 'Create New View?' });
+      await expect(dialog).toBeVisible();
 
-    // 2. Fill in form fields using keyboard only
-    const nameField = dialog.getByRole('textbox', { name: 'Name' });
-    await nameField.focus();
-    await page.keyboard.type('Keyboard Test View');
+      // 2. Fill in form fields using keyboard only
+      const nameField = dialog.getByRole('textbox', { name: 'Name' });
+      await nameField.focus();
+      await page.keyboard.type('Keyboard Test View');
 
-    // expect: Fields can be filled via keyboard
-    await expect(nameField).toHaveValue('Keyboard Test View');
+      // expect: Fields can be filled via keyboard
+      await expect(nameField).toHaveValue('Keyboard Test View');
 
-    // 3. Press Enter key to submit
-    // Tab to the Save button and press Enter
-    await page.keyboard.press('Tab');
-    await page.keyboard.press('Enter');
+      // 3. Press Enter key to submit
+      // Tab to the Save button and press Enter
+      await page.keyboard.press('Tab');
+      await page.keyboard.press('Enter');
 
-    // expect: Form submits successfully without mouse click
-    // Or cancel the dialog to clean up
-    // If the save was triggered, the dialog would close
-    // If not, press Escape to cancel
-    await page.keyboard.press('Escape');
+      // expect: Form submits successfully without mouse click
+      // Or cancel the dialog to clean up
+      // If the save was triggered, the dialog would close
+      // If not, press Escape to cancel
+      await page.keyboard.press('Escape');
+    });
   });
-});
+}

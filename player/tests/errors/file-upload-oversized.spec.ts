@@ -4,25 +4,28 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
 
-test.describe('Error Handling and Edge Cases', () => {
-  test('File Upload - Oversized File', async ({ playerAuthenticatedPage: page }) => {
-    // 1. Navigate to file upload interface
-    await page.getByRole('button', { name: 'Menu' }).click();
-    await page.getByRole('menuitem', { name: 'Administration' }).click();
-    await expect(page).toHaveURL(/\/admin/, { timeout: 10000 });
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Error Handling and Edge Cases`, () => {
+    test('File Upload - Oversized File', async ({ playerAuthenticatedPage: page }) => {
+      await setPlayerTheme(page, theme);
+      // 1. Navigate to file upload interface
+      await page.getByRole('button', { name: 'Menu' }).click();
+      await page.getByRole('menuitem', { name: 'Administration' }).click();
+      await expect(page).toHaveURL(/\/admin/, { timeout: 10000 });
 
-    // expect: Upload interface is displayed
-    await expect(page.getByRole('heading', { name: 'Views', level: 3 })).toBeVisible();
-    const importButton = page.locator('button:has(mat-icon[fonticon="mdi-file-import"])');
-    await expect(importButton).toBeVisible();
+      // expect: Upload interface is displayed
+      await expect(page.getByRole('heading', { name: 'Views', level: 3 })).toBeVisible();
+      const importButton = page.locator('button:has(mat-icon[fonticon="mdi-file-import"])');
+      await expect(importButton).toBeVisible();
 
-    // 2. Verify import functionality is available
-    // expect: Import button is present and enabled
-    await expect(importButton).toBeEnabled();
+      // 2. Verify import functionality is available
+      // expect: Import button is present and enabled
+      await expect(importButton).toBeEnabled();
 
-    // Note: Testing oversized file upload requires creating a large temp file
-    // and handling the file chooser dialog, which is environment-dependent
+      // Note: Testing oversized file upload requires creating a large temp file
+      // and handling the file chooser dialog, which is environment-dependent
+    });
   });
-});
+}

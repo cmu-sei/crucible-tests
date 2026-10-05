@@ -4,6 +4,25 @@
 
 The Player application is the main learning platform in the Crucible ecosystem. It provides views (training scenarios/exercises), team management, user roles and permissions, application templates for integrating with other Crucible services, and webhook subscriptions. The application uses Keycloak for authentication and supports multiple teams per view with different permission levels.
 
+## Theme Coverage
+
+Every authenticated functional scenario below runs **once per theme (light and dark)**: each
+spec loops over `PLAYER_THEMES` from `player/fixtures.ts`, reports under a `light theme ›` /
+`dark theme ›` describe prefix, and applies the theme through the top bar user menu's
+"Dark Theme" switch (`setPlayerTheme`) right after authentication. Player persists the
+choice in localStorage (`akita-player-ui`), so it survives the reloads and navigations a
+test performs, and every test's fresh browser context starts light.
+
+Exceptions, which run once:
+  - 1.1 User Login, 1.3 Invalid Login Credentials, 1.4 Failed Authentication - Empty
+    Credentials, 1.6 Unauthorized Access Protection, and 13.12 Deep Link Access — they run
+    unauthenticated and exercise the Keycloak screens before any Player UI (and its theme
+    switch) exists.
+  - 2.5 Dark Theme Toggle and 15.8 Color Contrast — they toggle the theme themselves as
+    the behavior under test.
+  - 15.10 Theme Contrast and Color Settings Compliance — it is parameterized over the
+    themes itself.
+
 ## Test Scenarios
 
 ### 1. Authentication
@@ -912,7 +931,7 @@ The Player application is the main learning platform in the Crucible ecosystem. 
     - expect: The Team Roles tab becomes active
     - expect: A permissions matrix is displayed showing team-specific roles
     - expect: Columns show 'View Admin', 'Observer', and 'View Member' roles
-    - expect: Rows show team permissions like 'All', 'EditTeam', 'EditView', 'ManageTeam', 'ManageView', 'ViewTeam', 'ViewView', 'DownloadVmFiles', 'ManageNetworks', 'RevertVms', 'UploadTeamIsos', 'UploadViewIsos', 'UploadVmFiles', 'ViewNetworks'
+    - expect: Rows show team permissions like 'All', 'ManageTeam', 'ManageView', 'ViewTeam', 'ViewView', 'ControlTeamVms', 'ViewTeamVms', 'ViewTeamMaps', 'DownloadVmFiles', 'ManageNetworks', 'RevertVms', 'UploadTeamIsos', 'UploadViewIsos', 'UploadVmFiles', 'ViewNetworks'
 
 #### 10.8. Modify Team Role Permissions
 
@@ -1431,3 +1450,34 @@ The Player application is the main learning platform in the Crucible ecosystem. 
     - expect: Background content is not accessible via Tab
   2. Close modal
     - expect: Focus returns to element that triggered modal
+
+#### 15.10. Theme Contrast and Color Settings Compliance
+
+**File:** `player/tests/accessibility/theme-contrast-compliance.spec.ts`
+
+Checks real WCAG contrast on the home page and its "Create New View?" dialog, and the
+color settings contract from the Crucible colors design spec (`design-specs/angular/colors.md`
+in the crucible-development repository). Expected colours are read from the served
+`settings.json` / `settings.shared.json` / `settings.env.json` (deep-merged in that order),
+not hardcoded, so an environment that overrides them still passes as long as the app
+applies what it was given.
+
+Runs **once per theme (light and dark)**. Read-only: it seeds nothing beyond the fixture's
+own views, and the dialog is dismissed via Cancel without submitting. The theme is restored
+to light afterwards.
+
+**Steps:**
+  1. Open the home page and measure text contrast (WCAG 1.4.3)
+    - expect: The "My Views" title, a text column header, and the top bar title and user menu each meet 4.5:1 (3:1 for large text) against the surface they are painted on
+    - expect: The page content inverts the right way — dark-on-light in light theme, light-on-dark in dark theme
+  2. Measure the "Add New View" icon button (WCAG 1.4.11)
+    - expect: Its colour is `--mat-sys-primary`
+    - expect: It meets 3:1 against its surface
+  3. Compare the applied colours with the effective settings
+    - expect: `AppTopBarHexColor`, `AppTopBarHexTextColor`, `AppLightModePrimaryHexColor`, and `AppLightModePrimaryHexTextColor` are defined
+    - expect: `--crucible-topbar-background` / `--crucible-topbar-text` equal the top-bar settings in both themes, and the toolbar is painted with them
+    - expect: The "Player home" logo is drawn in the top-bar colour on a disc of the top-bar text colour, in both themes
+    - expect: `--mat-sys-primary` / `--mat-sys-on-primary` equal the active mode's settings verbatim; dark falls back to the light key when its own is absent
+  4. Click "Add New View", fill the name so Save enables, and measure the buttons without submitting
+    - expect: The filled Save button is painted `--mat-sys-primary` and its `on-primary` label meets 4.5:1
+    - expect: The Cancel label is `--mat-sys-primary` and meets 4.5:1 on the dialog surface

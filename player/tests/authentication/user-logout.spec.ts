@@ -4,28 +4,31 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
 
-test.describe('Authentication', () => {
-  test('User Logout', async ({ playerAuthenticatedPage: page }) => {
-    // 1. Log in as admin user
-    // expect: User is successfully authenticated and on the home page
-    await expect(page.getByText('My Views')).toBeVisible();
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Authentication`, () => {
+    test('User Logout', async ({ playerAuthenticatedPage: page }) => {
+      await setPlayerTheme(page, theme);
+      // 1. Log in as admin user
+      // expect: User is successfully authenticated and on the home page
+      await expect(page.getByText('My Views')).toBeVisible();
 
-    // 2. Click the Menu button with user name
-    await page.getByRole('button', { name: 'Menu' }).click();
+      // 2. Click the Menu button with user name
+      await page.getByRole('button', { name: 'Menu' }).click();
 
-    // expect: A dropdown menu appears with 'Administration', 'Logout', and 'Dark Theme' options
-    await expect(page.getByRole('menuitem', { name: 'Administration' })).toBeVisible();
-    await expect(page.getByRole('menuitem', { name: 'Logout' })).toBeVisible();
-    await expect(page.getByRole('switch', { name: 'Dark Theme' })).toBeVisible();
+      // expect: A dropdown menu appears with 'Administration', 'Logout', and 'Dark Theme' options
+      await expect(page.getByRole('menuitem', { name: 'Administration' })).toBeVisible();
+      await expect(page.getByRole('menuitem', { name: 'Logout' })).toBeVisible();
+      await expect(page.getByRole('switch', { name: 'Dark Theme' })).toBeVisible();
 
-    // 3. Click the 'Logout' option
-    await page.getByRole('menuitem', { name: 'Logout' }).click();
+      // 3. Click the 'Logout' option
+      await page.getByRole('menuitem', { name: 'Logout' }).click();
 
-    // Keycloak SSO immediately establishes a fresh Player session after the
-    // application logout completes, returning the user to the home page.
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Player.UI), { timeout: 30000 });
-    await expect(page.getByText('My Views')).toBeVisible();
+      // Keycloak SSO immediately establishes a fresh Player session after the
+      // application logout completes, returning the user to the home page.
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Player.UI), { timeout: 30000 });
+      await expect(page.getByText('My Views')).toBeVisible();
+    });
   });
-});
+}

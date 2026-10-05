@@ -4,26 +4,29 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink } from '../../fixtures';
+import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
 
-test.describe('Error Handling and Edge Cases', () => {
-  test('Long View Names Display', async ({ playerAuthenticatedPage: page }) => {
-    const primaryViewName = seededPrimaryViewName();
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Error Handling and Edge Cases`, () => {
+    test('Long View Names Display', async ({ playerAuthenticatedPage: page }) => {
+      await setPlayerTheme(page, theme);
+      const primaryViewName = seededPrimaryViewName();
 
-    // 1. Log in and view a list containing views
-    await expect(page.getByText('My Views')).toBeVisible();
+      // 1. Log in and view a list containing views
+      await expect(page.getByText('My Views')).toBeVisible();
 
-    // expect: The table layout remains intact
-    await expect(page.getByRole('table')).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Description' })).toBeVisible();
+      // expect: The table layout remains intact
+      await expect(page.getByRole('table')).toBeVisible();
+      await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
+      await expect(page.getByRole('columnheader', { name: 'Description' })).toBeVisible();
 
-    // Verify that the existing long view name displays correctly
-    // The seeded fixture name remains long enough to verify table layout.
-    await findPlayerHomeViewLink(page, primaryViewName);
+      // Verify that the existing long view name displays correctly
+      // The seeded fixture name remains long enough to verify table layout.
+      await findPlayerHomeViewLink(page, primaryViewName);
 
-    // The fixture description remains associated with the view in its own row.
-    const viewRow = page.getByRole('row').filter({ hasText: primaryViewName });
-    await expect(viewRow.getByRole('cell').nth(1)).toContainText('E2E fixture data');
+      // The fixture description remains associated with the view in its own row.
+      const viewRow = page.getByRole('row').filter({ hasText: primaryViewName });
+      await expect(viewRow.getByRole('cell').nth(1)).toContainText('E2E fixture data');
+    });
   });
-});
+}

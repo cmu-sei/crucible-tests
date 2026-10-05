@@ -4,26 +4,29 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern, seededPrimaryViewName, findPlayerHomeViewLink } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, seededPrimaryViewName, findPlayerHomeViewLink, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
 
-test.describe('View Details', () => {
-  test('Return to Home from View', async ({ playerAuthenticatedPage: page }) => {
-    const primaryViewName = seededPrimaryViewName();
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › View Details`, () => {
+    test('Return to Home from View', async ({ playerAuthenticatedPage: page }) => {
+      await setPlayerTheme(page, theme);
+      const primaryViewName = seededPrimaryViewName();
 
-    // 1. Log in and navigate to a view
-    await (await findPlayerHomeViewLink(page, primaryViewName)).click();
+      // 1. Log in and navigate to a view
+      await (await findPlayerHomeViewLink(page, primaryViewName)).click();
 
-    // expect: User is on the view details page
-    await expect(page).toHaveURL(/\/view\//, { timeout: 10000 });
+      // expect: User is on the view details page
+      await expect(page).toHaveURL(/\/view\//, { timeout: 10000 });
 
-    // 2. Click the 'Player' link in the header
-    await page.getByRole('link', { name: 'Player' }).click();
+      // 2. Click the 'Player' link in the header
+      await page.getByRole('link', { name: 'Player', exact: true }).click();
 
-    // expect: User is navigated back to the home page
-    // expect: The URL changes to '/'
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Player.UI), { timeout: 10000 });
+      // expect: User is navigated back to the home page
+      // expect: The URL changes to '/'
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Player.UI), { timeout: 10000 });
 
-    // expect: The 'My Views' list is displayed
-    await expect(page.getByText('My Views')).toBeVisible();
+      // expect: The 'My Views' list is displayed
+      await expect(page.getByText('My Views')).toBeVisible();
+    });
   });
-});
+}

@@ -4,25 +4,28 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
 
-test.describe('Administration - Views', () => {
-  test('Copy View ID', async ({ playerAuthenticatedPage: page }) => {
-    // 1. Log in as admin and navigate to Administration > Views
-    await page.getByRole('button', { name: 'Menu' }).click();
-    await page.getByRole('menuitem', { name: 'Administration' }).click();
-    await expect(page).toHaveURL(/\/admin/, { timeout: 10000 });
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Administration - Views`, () => {
+    test('Copy View ID', async ({ playerAuthenticatedPage: page }) => {
+      await setPlayerTheme(page, theme);
+      // 1. Log in as admin and navigate to Administration > Views
+      await page.getByRole('button', { name: 'Menu' }).click();
+      await page.getByRole('menuitem', { name: 'Administration' }).click();
+      await expect(page).toHaveURL(/\/admin/, { timeout: 10000 });
 
-    // expect: The Views admin section is displayed
-    await expect(page.getByRole('heading', { name: 'Views' })).toBeVisible();
+      // expect: The Views admin section is displayed
+      await expect(page.getByRole('heading', { name: 'Views' })).toBeVisible();
 
-    // 2. Click the copy icon next to a view
-    const copyButton = page.getByTitle(/^Copy:/).first();
-    await expect(copyButton).toBeVisible();
-    await copyButton.click();
+      // 2. Click the copy icon next to a view
+      const copyButton = page.getByTitle(/^Copy:/).first();
+      await expect(copyButton).toBeVisible();
+      await copyButton.click();
 
-    // expect: The view's ID is copied to the clipboard
-    // expect: A visual confirmation may appear
-    // Clipboard verification is limited in Playwright, but we confirm the button is clickable
+      // expect: The view's ID is copied to the clipboard
+      // expect: A visual confirmation may appear
+      // Clipboard verification is limited in Playwright, but we confirm the button is clickable
+    });
   });
-});
+}
