@@ -4,36 +4,39 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, CITE_THEMES, setCiteTheme } from '../../fixtures';
 import { navigateToAdminSection, deleteTeamTypeByName } from '../../test-helpers';
 
-test.describe('Administration - Team Types', () => {
+for (const theme of CITE_THEMES) {
+  test.describe(`${theme} theme › Administration - Team Types`, () => {
 
-  const TEST_TEAM_TYPE = 'Test Team Type Automation';
+    const TEST_TEAM_TYPE = 'Test Team Type Automation';
 
-  test('Create Team Type', async ({ citeAuthenticatedPage: page }) => {
+    test('Create Team Type', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
 
-    await navigateToAdminSection(page, 'Team Types');
+      await navigateToAdminSection(page, 'Team Types');
 
-    const addButton = page.getByRole('button', { name: 'Add TeamType' });
-    await expect(addButton).toBeVisible({ timeout: 10000 });
-    await addButton.click();
+      const addButton = page.getByRole('button', { name: 'Add TeamType' });
+      await expect(addButton).toBeVisible({ timeout: 10000 });
+      await addButton.click();
 
-    const dialog = page.getByRole('dialog');
-    await expect(dialog).toBeVisible({ timeout: 5000 });
+      const dialog = page.getByRole('dialog');
+      await expect(dialog).toBeVisible({ timeout: 5000 });
 
-    const nameField = dialog.getByRole('textbox').first();
-    await nameField.fill(TEST_TEAM_TYPE);
+      const nameField = dialog.getByRole('textbox').first();
+      await nameField.fill(TEST_TEAM_TYPE);
 
-    const saveButton = dialog.getByRole('button', { name: 'Save' });
-    await expect(saveButton).toBeEnabled({ timeout: 5000 });
-    await saveButton.click();
+      const saveButton = dialog.getByRole('button', { name: 'Save' });
+      await expect(saveButton).toBeEnabled({ timeout: 5000 });
+      await saveButton.click();
 
-    await expect(dialog).not.toBeVisible({ timeout: 10000 });
-    await page.waitForTimeout(1000);
+      await expect(dialog).not.toBeVisible({ timeout: 10000 });
+      await page.waitForTimeout(1000);
+    });
+
+    test.afterEach(async ({ citeAuthenticatedPage: page }) => {
+      await deleteTeamTypeByName(page, TEST_TEAM_TYPE);
+    });
   });
-
-  test.afterEach(async ({ citeAuthenticatedPage: page }) => {
-    await deleteTeamTypeByName(page, TEST_TEAM_TYPE);
-  });
-});
+}

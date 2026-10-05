@@ -4,28 +4,31 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, CITE_THEMES, setCiteTheme } from '../../fixtures';
 import { navigateToAdminSection } from '../../test-helpers';
 
-test.describe('Administration - Evaluations', () => {
-  test('Filter Evaluations by Status', async ({ citeAuthenticatedPage: page }) => {
+for (const theme of CITE_THEMES) {
+  test.describe(`${theme} theme › Administration - Evaluations`, () => {
+    test('Filter Evaluations by Status', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
 
-    await navigateToAdminSection(page);
+      await navigateToAdminSection(page);
 
-    const statusFilter = page.getByRole('combobox', { name: 'Statuses' });
-    await expect(statusFilter).toBeVisible({ timeout: 5000 });
-    await statusFilter.click();
+      const statusFilter = page.getByRole('combobox', { name: 'Statuses' });
+      await expect(statusFilter).toBeVisible({ timeout: 5000 });
+      await statusFilter.click();
 
-    const options = page.locator('mat-option');
-    await expect(options.first()).toBeVisible({ timeout: 5000 });
+      const options = page.locator('mat-option');
+      await expect(options.first()).toBeVisible({ timeout: 5000 });
 
-    const activeOption = options.filter({ hasText: 'Active' });
-    if (await activeOption.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await activeOption.click();
-    } else {
-      await options.first().click();
-    }
+      const activeOption = options.filter({ hasText: 'Active' });
+      if (await activeOption.isVisible({ timeout: 2000 }).catch(() => false)) {
+        await activeOption.click();
+      } else {
+        await options.first().click();
+      }
 
-    await page.waitForTimeout(500);
+      await page.waitForTimeout(500);
+    });
   });
-});
+}

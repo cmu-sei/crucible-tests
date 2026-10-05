@@ -373,9 +373,13 @@ export async function ensureTeamTypeExists(
       headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
     });
     if (listResponse.ok()) {
-      const teamTypes: Array<{ id: string }> = await listResponse.json();
-      if (teamTypes.length > 0) {
-        return teamTypes[0].id;
+      // Match on the name rather than reusing whichever team type comes first: other
+      // specs create and delete their own team types, and a team saved against one of
+      // those after it is deleted fails with a 500.
+      const teamTypes: Array<{ id: string; name: string }> = await listResponse.json();
+      const existing = teamTypes.find(t => t.name === name);
+      if (existing) {
+        return existing.id;
       }
     }
   } finally {
@@ -818,6 +822,72 @@ export const test = base.extend<CiteFixtures>({
     await use(page);
   },
 });
+
+/**
+ * Themes every CITE functional spec is parameterized over. Each spec runs once
+ * per entry so every screen is exercised in both light and dark mode.
+ */
+export const CITE_THEMES = ['light', 'dark'] as const;
+export type CiteTheme = (typeof CITE_THEMES)[number];
+
+/** Whether CITE is currently rendering the dark theme. */
+export async function citeIsDarkTheme(page: Page): Promise<boolean> {
+  return page.evaluate(() => document.body.classList.contains('darkMode'));
+}
+
+/**
+ * Switch CITE between light and dark theme through the user menu, and wait for
+ * the change to actually land on `document.body`.
+ *
+ * CITE persists the selected theme in the `auth.ui` slice of its Akita store,
+ * saved to localStorage under 'akita-cite-ui'. So a theme set here survives the
+ * reloads and client-side navigations a test performs afterward, and only needs
+ * applying once, right after authentication. The saved auth state carries no
+ * Akita store, so every test's fresh browser context starts light.
+ *
+ * Use the toggle rather than the `?theme=dark` query param: the param is read in
+ * `AppComponent`'s constructor, so it only applies on a fresh app bootstrap and is
+ * a no-op for a client-side navigation within an already-running app.
+ *
+ * No-ops when the requested theme is already active, so callers can use it to
+ * restore state unconditionally.
+ */
+export async function setCiteTheme(page: Page, theme: CiteTheme): Promise<void> {
+  const want = theme === 'dark';
+  if ((await citeIsDarkTheme(page)) === want) return;
+
+  // The user menu is the top bar's name button (its label is the current user's name).
+  await page.locator('.options-text button.menu-trigger').click();
+  const toggle = page.getByRole('switch', { name: 'Dark Theme' });
+  await toggle.waitFor({ state: 'visible', timeout: 10000 });
+  await toggle.click();
+  // Close the menu, and wait for its overlay to tear down so a lingering CDK
+  // backdrop can't silently intercept the test's next click.
+  await page.keyboard.press('Escape');
+  await page.locator('.mat-mdc-menu-panel').waitFor({ state: 'detached', timeout: 5000 });
+  await page.locator('.cdk-overlay-backdrop').waitFor({ state: 'detached', timeout: 5000 });
+
+  await page
+    .locator('body')
+    .evaluate(
+      (body, expected) =>
+        new Promise<void>((resolve, reject) => {
+          if (body.classList.contains('darkMode') === expected) return resolve();
+          const observer = new MutationObserver(() => {
+            if (body.classList.contains('darkMode') === expected) {
+              observer.disconnect();
+              resolve();
+            }
+          });
+          observer.observe(body, { attributes: true, attributeFilter: ['class'] });
+          setTimeout(() => {
+            observer.disconnect();
+            reject(new Error(`Theme did not become ${expected ? 'dark' : 'light'}`));
+          }, 10000);
+        }),
+      want,
+    );
+}
 
 export { expect } from '@playwright/test';
 export { Services, serviceUrlPattern, oidcStorageKey, waitForFirstVisible, settleForResponse };

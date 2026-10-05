@@ -4,40 +4,44 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern, seedCompleteEvaluation, cleanupCompleteEvaluation } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, seedCompleteEvaluation, cleanupCompleteEvaluation, CITE_THEMES, setCiteTheme } from '../../fixtures';
 
-test.describe('Home Page and Evaluation List', () => {
+for (const theme of CITE_THEMES) {
+  test.describe(`${theme} theme › Home Page and Evaluation List`, () => {
 
-  test('Navigate to Evaluation from List', async ({ citeAuthenticatedPage: page }) => {
-    // 1. Seed a complete evaluation via API with admin as member
-    const timestamp = Date.now();
-    const evalName = `E2E Navigate Test ${timestamp}`;
-    const seededData = await seedCompleteEvaluation(evalName, 0);
+    test('Navigate to Evaluation from List', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
 
-    // 2. Navigate to home page
-    await page.goto(Services.Cite.UI);
-    await page.waitForLoadState('domcontentloaded');
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
+      // 1. Seed a complete evaluation via API with admin as member
+      const timestamp = Date.now();
+      const evalName = `E2E Navigate Test ${timestamp}`;
+      const seededData = await seedCompleteEvaluation(evalName, 0);
 
-    const myEvalsHeading = page.locator('text=My Evaluations');
-    await expect(myEvalsHeading).toBeVisible({ timeout: 10000 });
+      // 2. Navigate to home page
+      await page.goto(Services.Cite.UI);
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
 
-    // 3. Verify evaluation list displays at least one evaluation
-    const rows = page.locator('mat-row, tbody tr').filter({ hasNot: page.locator('th') });
-    await expect(rows.first()).toBeVisible({ timeout: 15000 });
+      const myEvalsHeading = page.locator('text=My Evaluations');
+      await expect(myEvalsHeading).toBeVisible({ timeout: 10000 });
 
-    // 4. Click on the evaluation row
-    await rows.first().click();
+      // 3. Verify evaluation list displays at least one evaluation
+      const rows = page.locator('mat-row, tbody tr').filter({ hasNot: page.locator('th') });
+      await expect(rows.first()).toBeVisible({ timeout: 15000 });
 
-    // 5. Verify navigation to evaluation dashboard
-    await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(2000);
+      // 4. Click on the evaluation row
+      await rows.first().click();
 
-    // Evaluation interface loads with dashboard content
-    const evaluationContent = page.locator('[class*="evaluation"], [class*="dashboard"], mat-tab-group, [class*="move"]').first();
-    await expect(evaluationContent).toBeVisible({ timeout: 10000 });
+      // 5. Verify navigation to evaluation dashboard
+      await page.waitForLoadState('domcontentloaded');
+      await page.waitForTimeout(2000);
 
-    // Cleanup
-    await cleanupCompleteEvaluation(seededData);
+      // Evaluation interface loads with dashboard content
+      const evaluationContent = page.locator('[class*="evaluation"], [class*="dashboard"], mat-tab-group, [class*="move"]').first();
+      await expect(evaluationContent).toBeVisible({ timeout: 10000 });
+
+      // Cleanup
+      await cleanupCompleteEvaluation(seededData);
+    });
   });
-});
+}

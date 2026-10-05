@@ -6,6 +6,7 @@
 
 import { test, expect, APIRequestContext } from '@playwright/test';
 import { Services, authenticateWithKeycloak } from '../../../shared-fixtures';
+import { CITE_THEMES, setCiteTheme } from '../../fixtures';
 async function getApiToken(request: APIRequestContext): Promise<string> {
   const resp = await request.post(`${Services.Keycloak}/realms/crucible/protocol/openid-connect/token`, {
     form: {
@@ -56,40 +57,44 @@ async function deleteEvaluation(request: APIRequestContext, token: string, id: s
   });
 }
 
-test.describe('Real-time Collaboration Features', () => {
-  test('Real-time Team Changes', async ({ browser, request }) => {
-    // Setup: Create evaluation via API
-    const apiToken = await getApiToken(request);
-    const evaluationId = await createEvaluation(request, apiToken);
+for (const theme of CITE_THEMES) {
+  test.describe(`${theme} theme › Real-time Collaboration Features`, () => {
+    test('Real-time Team Changes', async ({ browser, request }) => {
+      // Setup: Create evaluation via API
+      const apiToken = await getApiToken(request);
+      const evaluationId = await createEvaluation(request, apiToken);
 
-    try {
-      // 1. Open two browser instances with users viewing the same evaluation
-      const context1 = await browser.newContext({ ignoreHTTPSErrors: true });
-      const context2 = await browser.newContext({ ignoreHTTPSErrors: true });
-      const page1 = await context1.newPage();
-      const page2 = await context2.newPage();
+      try {
+        // 1. Open two browser instances with users viewing the same evaluation
+        const context1 = await browser.newContext({ ignoreHTTPSErrors: true });
+        const context2 = await browser.newContext({ ignoreHTTPSErrors: true });
+        const page1 = await context1.newPage();
+        const page2 = await context2.newPage();
 
-      await authenticateWithKeycloak(page1, Services.Cite.UI);
-      await authenticateWithKeycloak(page2, Services.Cite.UI);
+        await authenticateWithKeycloak(page1, Services.Cite.UI);
+        await setCiteTheme(page1, theme);
+        await authenticateWithKeycloak(page2, Services.Cite.UI);
+        await setCiteTheme(page2, theme);
 
-      // Both navigate to admin page where the evaluation is visible
-      for (const page of [page1, page2]) {
-        await page.goto(`${Services.Cite.UI}/admin`);
-        await expect(page).toHaveURL(/\/admin/, { timeout: 15000 });
-        const evalRow = page.getByRole('row').filter({ hasText: 'E2E Test Evaluation' }).first();
-        await expect(evalRow).toBeVisible({ timeout: 15000 });
-        await evalRow.click();
+        // Both navigate to admin page where the evaluation is visible
+        for (const page of [page1, page2]) {
+          await page.goto(`${Services.Cite.UI}/admin`);
+          await expect(page).toHaveURL(/\/admin/, { timeout: 15000 });
+          const evalRow = page.getByRole('row').filter({ hasText: 'E2E Test Evaluation' }).first();
+          await expect(evalRow).toBeVisible({ timeout: 15000 });
+          await evalRow.click();
+        }
+
+        // expect: Both instances are viewing evaluation data
+        // 2. In admin interface in first instance, modify team membership
+        // 3. Observe second instance - team changes reflected automatically
+
+        await context1.close();
+        await context2.close();
+      } finally {
+        // Cleanup: Delete evaluation
+        await deleteEvaluation(request, apiToken, evaluationId);
       }
-
-      // expect: Both instances are viewing evaluation data
-      // 2. In admin interface in first instance, modify team membership
-      // 3. Observe second instance - team changes reflected automatically
-
-      await context1.close();
-      await context2.close();
-    } finally {
-      // Cleanup: Delete evaluation
-      await deleteEvaluation(request, apiToken, evaluationId);
-    }
+    });
   });
-});
+}

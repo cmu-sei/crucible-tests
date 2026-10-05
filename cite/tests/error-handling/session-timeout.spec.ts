@@ -4,22 +4,25 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, CITE_THEMES, setCiteTheme } from '../../fixtures';
 
-test.describe('Error Handling and Edge Cases', () => {
-  test('Session Timeout', async ({ citeAuthenticatedPage: page }) => {
+for (const theme of CITE_THEMES) {
+  test.describe(`${theme} theme › Error Handling and Edge Cases`, () => {
+    test('Session Timeout', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
 
-    // 1. Log in successfully
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
+      // 1. Log in successfully
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
 
-    // 2. Manually invalidate session by clearing cookies
-    await page.context().clearCookies();
+      // 2. Manually invalidate session by clearing cookies
+      await page.context().clearCookies();
 
-    // 3. Attempt to perform an action
-    await page.reload();
+      // 3. Attempt to perform an action
+      await page.reload();
 
-    // expect: User is notified of session expiration
-    // expect: User is redirected to login page
-    await page.waitForURL(serviceUrlPattern(Services.Cite.UI), { timeout: 30000 });
+      // expect: User is notified of session expiration
+      // expect: User is redirected to login page
+      await page.waitForURL(serviceUrlPattern(Services.Cite.UI), { timeout: 30000 });
+    });
   });
-});
+}

@@ -4,26 +4,29 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, CITE_THEMES, setCiteTheme } from '../../fixtures';
 
-test.describe('Performance', () => {
-  test('Page Load Performance - Home Page', async ({ citeAuthenticatedPage: page }) => {
+for (const theme of CITE_THEMES) {
+  test.describe(`${theme} theme › Performance`, () => {
+    test('Page Load Performance - Home Page', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
 
-    // 1. Measure time from navigation to home page until page is fully loaded
-    const startTime = Date.now();
-    await page.goto(Services.Cite.UI);
-    await page.waitForLoadState('domcontentloaded');
+      // 1. Measure time from navigation to home page until page is fully loaded
+      const startTime = Date.now();
+      await page.goto(Services.Cite.UI);
+      await page.waitForLoadState('domcontentloaded');
 
-    // Wait for main content to render
-    const content = page.locator('mat-table, table, [class*="evaluation"], [class*="list"], mat-toolbar').first();
-    await expect(content).toBeVisible({ timeout: 10000 });
+      // Wait for main content to render
+      const content = page.locator('mat-table, table, [class*="evaluation"], [class*="list"], mat-toolbar').first();
+      await expect(content).toBeVisible({ timeout: 10000 });
 
-    const loadTime = Date.now() - startTime;
+      const loadTime = Date.now() - startTime;
 
-    // expect: Home page loads within acceptable time (e.g., under 3 seconds)
-    // Note: Using 10 seconds to account for dev environment
-    expect(loadTime).toBeLessThan(10000);
+      // expect: Home page loads within acceptable time (e.g., under 3 seconds)
+      // Note: Using 10 seconds to account for dev environment
+      expect(loadTime).toBeLessThan(10000);
 
-    // expect: No blocking resources delay rendering
+      // expect: No blocking resources delay rendering
+    });
   });
-});
+}

@@ -4,51 +4,54 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, CITE_THEMES, setCiteTheme } from '../../fixtures';
 
-test.describe('Performance', () => {
-  test('Memory Usage - Extended Session', async ({ citeAuthenticatedPage: page }) => {
+for (const theme of CITE_THEMES) {
+  test.describe(`${theme} theme › Performance`, () => {
+    test('Memory Usage - Extended Session', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
 
-    // 1. Log in and navigate through various pages and sections
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
+      // 1. Log in and navigate through various pages and sections
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
 
-    // Get initial memory usage
-    const initialMemory = await page.evaluate(() => {
-      if ((performance as any).memory) {
-        return (performance as any).memory.usedJSHeapSize;
-      }
-      return 0;
-    });
+      // Get initial memory usage
+      const initialMemory = await page.evaluate(() => {
+        if ((performance as any).memory) {
+          return (performance as any).memory.usedJSHeapSize;
+        }
+        return 0;
+      });
 
-    // Navigate through multiple pages
-    for (let i = 0; i < 5; i++) {
-      // Go to evaluation
-      const rows = page.locator('mat-row, tbody tr, [class*="evaluation-row"]');
-      if (await rows.first().isVisible({ timeout: 5000 }).catch(() => false)) {
-        await rows.first().click();
+      // Navigate through multiple pages
+      for (let i = 0; i < 5; i++) {
+        // Go to evaluation
+        const rows = page.locator('mat-row, tbody tr, [class*="evaluation-row"]');
+        if (await rows.first().isVisible({ timeout: 5000 }).catch(() => false)) {
+          await rows.first().click();
+          await page.waitForLoadState('domcontentloaded');
+          await page.waitForTimeout(500);
+        }
+
+        // Go back home
+        await page.goto(Services.Cite.UI);
         await page.waitForLoadState('domcontentloaded');
         await page.waitForTimeout(500);
       }
 
-      // Go back home
-      await page.goto(Services.Cite.UI);
-      await page.waitForLoadState('domcontentloaded');
-      await page.waitForTimeout(500);
-    }
+      // Get final memory usage
+      const finalMemory = await page.evaluate(() => {
+        if ((performance as any).memory) {
+          return (performance as any).memory.usedJSHeapSize;
+        }
+        return 0;
+      });
 
-    // Get final memory usage
-    const finalMemory = await page.evaluate(() => {
-      if ((performance as any).memory) {
-        return (performance as any).memory.usedJSHeapSize;
+      // expect: Memory usage remains stable (no more than 3x growth)
+      if (initialMemory > 0 && finalMemory > 0) {
+        expect(finalMemory).toBeLessThan(initialMemory * 3);
       }
-      return 0;
+
+      // expect: Application performance does not degrade over time
     });
-
-    // expect: Memory usage remains stable (no more than 3x growth)
-    if (initialMemory > 0 && finalMemory > 0) {
-      expect(finalMemory).toBeLessThan(initialMemory * 3);
-    }
-
-    // expect: Application performance does not degrade over time
   });
-});
+}

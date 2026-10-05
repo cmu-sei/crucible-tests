@@ -4,28 +4,31 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, CITE_THEMES, setCiteTheme } from '../../fixtures';
 
-test.describe('Error Handling and Edge Cases', () => {
-  test('API Error Handling - Network Failure', async ({ citeAuthenticatedPage: page }) => {
+for (const theme of CITE_THEMES) {
+  test.describe(`${theme} theme › Error Handling and Edge Cases`, () => {
+    test('API Error Handling - Network Failure', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
 
-    // 1. Log in successfully
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
+      // 1. Log in successfully
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
 
-    // 2. Simulate network failure (block API calls)
-    await page.route('**/api/**', (route) => route.abort('connectionrefused'));
+      // 2. Simulate network failure (block API calls)
+      await page.route('**/api/**', (route) => route.abort('connectionrefused'));
 
-    // 3. Attempt to perform an action that requires API call
-    await page.reload();
+      // 3. Attempt to perform an action that requires API call
+      await page.reload();
 
-    // expect: Application detects network failure
-    // expect: Error message is displayed to user
-    // expect: Application remains stable
-    await page.waitForTimeout(3000);
-    const body = page.locator('body');
-    await expect(body).toBeVisible();
+      // expect: Application detects network failure
+      // expect: Error message is displayed to user
+      // expect: Application remains stable
+      await page.waitForTimeout(3000);
+      const body = page.locator('body');
+      await expect(body).toBeVisible();
 
-    // Unroute to restore network
-    await page.unroute('**/api/**');
+      // Unroute to restore network
+      await page.unroute('**/api/**');
+    });
   });
-});
+}
