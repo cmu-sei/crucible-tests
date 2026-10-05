@@ -1,7 +1,7 @@
 // Copyright 2026 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
-import { test as base, Page, request as pwRequest, APIRequestContext } from '@playwright/test';
+import { test as base, expect, Page, request as pwRequest, APIRequestContext } from '@playwright/test';
 import fs from 'fs';
 import { randomUUID } from 'crypto';
 import {
@@ -804,6 +804,58 @@ export const test = base.extend<SteamfitterFixtures>({
     await use(page);
   },
 });
+
+/**
+ * Themes every Steamfitter functional spec is parameterized over. Each spec runs
+ * once per entry so every screen is exercised in both light and dark mode.
+ */
+export const STEAMFITTER_THEMES = ['light', 'dark'] as const;
+export type SteamfitterTheme = (typeof STEAMFITTER_THEMES)[number];
+
+/** Whether Steamfitter is currently rendering the dark theme. */
+export async function steamfitterIsDarkTheme(page: Page): Promise<boolean> {
+  return page.evaluate(() => document.body.classList.contains('darkMode'));
+}
+
+/**
+ * Switch Steamfitter between light and dark theme through the top bar user menu's
+ * "Dark Theme" switch, and wait for the change to land on `document.body`.
+ *
+ * Steamfitter persists the selected theme in the `auth.ui` slice of its Akita
+ * store, saved to localStorage under 'akita-steamfitter-ui' (`main.ts`). So a theme
+ * set here survives the reloads and `page.goto` calls a test performs afterward,
+ * and only needs applying once, right after authentication. The preference never
+ * reaches the server, and the saved auth state carries no Akita store, so every
+ * test's fresh browser context starts light.
+ *
+ * Use the switch rather than the `?theme=dark` query param: once the param has been
+ * seen, `AppComponent` writes it back onto the URL on every later theme change,
+ * which would leak it into the URL assertions several specs make.
+ *
+ * No-ops when the requested theme is already active, so callers can use it to
+ * restore state unconditionally.
+ */
+export async function setSteamfitterTheme(page: Page, theme: SteamfitterTheme): Promise<void> {
+  const want = theme === 'dark';
+  if ((await steamfitterIsDarkTheme(page)) === want) return;
+
+  // The user menu is the top bar's name button (its label is the current user's name).
+  await page.locator('app-topbar button.menu-trigger').first().click();
+  const toggle = page.getByRole('switch', { name: 'Dark Theme' });
+  await toggle.waitFor({ state: 'visible', timeout: 10000 });
+  await toggle.click();
+  // Close the menu, and wait for its overlay to tear down so a lingering CDK
+  // backdrop can't silently intercept the test's next click.
+  await page.keyboard.press('Escape');
+  await page.locator('.mat-mdc-menu-panel').waitFor({ state: 'detached', timeout: 5000 });
+  await page.locator('.cdk-overlay-backdrop').waitFor({ state: 'detached', timeout: 5000 });
+
+  if (want) {
+    await expect(page.locator('body')).toHaveClass(/\bdarkMode\b/, { timeout: 10000 });
+  } else {
+    await expect(page.locator('body')).not.toHaveClass(/\bdarkMode\b/, { timeout: 10000 });
+  }
+}
 
 export { expect } from '@playwright/test';
 export { Services, serviceUrlPattern, oidcStorageKey, waitForFirstVisible, settleForResponse };

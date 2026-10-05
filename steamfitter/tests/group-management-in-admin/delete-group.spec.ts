@@ -4,7 +4,7 @@
 // spec: steamfitter/steamfitter-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, STEAMFITTER_THEMES, setSteamfitterTheme } from '../../fixtures';
 import { seedGroup, deleteGroupsByPrefix } from '../../fixtures';
 import { navigateToAdminSection, respondToConfirmDialog } from '../../test-helpers';
 
@@ -13,42 +13,45 @@ import { navigateToAdminSection, respondToConfirmDialog } from '../../test-helpe
  * confirm dialog. This spec seeds a group, deletes it through the UI, and confirms its
  * row is gone. The API-prefix cleanup is a backstop in case the UI delete fails.
  */
-test.describe('Group Management in Admin', () => {
-  const GROUP_NAME = `E2E Delete Group ${Date.now()}`;
+for (const theme of STEAMFITTER_THEMES) {
+  test.describe(`${theme} theme › Group Management in Admin`, () => {
+    const GROUP_NAME = `E2E Delete Group ${Date.now()}`;
 
-  test.beforeEach(async () => {
-    await seedGroup(GROUP_NAME);
+    test.beforeEach(async () => {
+      await seedGroup(GROUP_NAME);
+    });
+
+    test.afterEach(async () => {
+      await deleteGroupsByPrefix(['E2E Delete Group']);
+    });
+
+    test('Delete a group', async ({ steamfitterAuthenticatedPage: page }) => {
+      await setSteamfitterTheme(page, theme);
+      await navigateToAdminSection(page, 'Groups');
+
+      // Isolate the seeded group's row.
+      const groupSearch = page.getByRole('textbox', { name: 'Search Groups' });
+      await groupSearch.fill(GROUP_NAME);
+      const groupRow = page.locator('tbody tr').filter({ hasText: GROUP_NAME }).first();
+      await expect(groupRow).toBeVisible({ timeout: 10000 });
+
+      // Delete via the per-row button, then confirm.
+      const deleteResponse = page.waitForResponse(
+        (response) =>
+          /\/api\/groups\//.test(response.url()) &&
+          response.request().method() === 'DELETE' &&
+          response.ok(),
+        { timeout: 15000 }
+      );
+      await groupRow.locator('button:has(mat-icon[fonticon*="trash"])').click();
+      await respondToConfirmDialog(page, true);
+      await deleteResponse;
+
+      // The group row should no longer be present.
+      await groupSearch.fill(GROUP_NAME);
+      await expect(
+        page.locator('tbody tr').filter({ hasText: GROUP_NAME })
+      ).toHaveCount(0, { timeout: 10000 });
+    });
   });
-
-  test.afterEach(async () => {
-    await deleteGroupsByPrefix(['E2E Delete Group']);
-  });
-
-  test('Delete a group', async ({ steamfitterAuthenticatedPage: page }) => {
-    await navigateToAdminSection(page, 'Groups');
-
-    // Isolate the seeded group's row.
-    const groupSearch = page.getByRole('textbox', { name: 'Search Groups' });
-    await groupSearch.fill(GROUP_NAME);
-    const groupRow = page.locator('tbody tr').filter({ hasText: GROUP_NAME }).first();
-    await expect(groupRow).toBeVisible({ timeout: 10000 });
-
-    // Delete via the per-row button, then confirm.
-    const deleteResponse = page.waitForResponse(
-      (response) =>
-        /\/api\/groups\//.test(response.url()) &&
-        response.request().method() === 'DELETE' &&
-        response.ok(),
-      { timeout: 15000 }
-    );
-    await groupRow.locator('button:has(mat-icon[fonticon*="trash"])').click();
-    await respondToConfirmDialog(page, true);
-    await deleteResponse;
-
-    // The group row should no longer be present.
-    await groupSearch.fill(GROUP_NAME);
-    await expect(
-      page.locator('tbody tr').filter({ hasText: GROUP_NAME })
-    ).toHaveCount(0, { timeout: 10000 });
-  });
-});
+}
