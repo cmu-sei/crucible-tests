@@ -4,7 +4,7 @@
 // spec: steamfitter/steamfitter-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, STEAMFITTER_THEMES, setSteamfitterTheme } from '../../fixtures';
 import { deleteGroupsByPrefix } from '../../fixtures';
 import { navigateToAdminSection } from '../../test-helpers';
 
@@ -13,36 +13,39 @@ import { navigateToAdminSection } from '../../test-helpers';
  * opens a NameDialog ("Create New Group?"). This spec creates a uniquely-named group
  * through the UI, then confirms its row appears in the table. Cleanup is by API prefix.
  */
-test.describe('Group Management in Admin', () => {
-  const GROUP_NAME = `E2E Create Group ${Date.now()}`;
+for (const theme of STEAMFITTER_THEMES) {
+  test.describe(`${theme} theme › Group Management in Admin`, () => {
+    const GROUP_NAME = `E2E Create Group ${Date.now()}`;
 
-  test.afterEach(async () => {
-    await deleteGroupsByPrefix(['E2E Create Group']);
-  });
+    test.afterEach(async () => {
+      await deleteGroupsByPrefix(['E2E Create Group']);
+    });
 
-  test('Create a new group', async ({ steamfitterAuthenticatedPage: page }) => {
-    await navigateToAdminSection(page, 'Groups');
+    test('Create a new group', async ({ steamfitterAuthenticatedPage: page }) => {
+      await setSteamfitterTheme(page, theme);
+      await navigateToAdminSection(page, 'Groups');
 
-    const table = page.locator('table');
-    await expect(table).toBeVisible({ timeout: 10000 });
+      const table = page.locator('table');
+      await expect(table).toBeVisible({ timeout: 10000 });
 
-    await page.locator('button[mattooltip="Add New Group"]').click();
+      await page.locator('button[mattooltip="Add New Group"]').click();
 
-    const dialog = page.getByRole('dialog', { name: 'Create New Group?' });
-    await expect(dialog).toBeVisible({ timeout: 5000 });
+      const dialog = page.getByRole('dialog', { name: 'Create New Group?' });
+      await expect(dialog).toBeVisible({ timeout: 5000 });
 
-    await dialog.getByRole('textbox', { name: 'Name' }).fill(GROUP_NAME);
+      await dialog.getByRole('textbox', { name: 'Name' }).fill(GROUP_NAME);
 
-    const saveButton = dialog.getByRole('button', { name: 'Save' });
-    await expect(saveButton).toBeEnabled({ timeout: 5000 });
-    await saveButton.click();
-    await expect(dialog).not.toBeVisible({ timeout: 10000 });
+      const saveButton = dialog.getByRole('button', { name: 'Save' });
+      await expect(saveButton).toBeEnabled({ timeout: 5000 });
+      await saveButton.click();
+      await expect(dialog).not.toBeVisible({ timeout: 10000 });
 
-    // The new group should surface via search.
-    const searchField = page.getByRole('textbox', { name: 'Search Groups' });
-    await searchField.fill(GROUP_NAME);
-    await expect(page.locator('tbody tr').filter({ hasText: GROUP_NAME }).first()).toBeVisible({
-      timeout: 10000,
+      // The new group should surface via search.
+      const searchField = page.getByRole('textbox', { name: 'Search Groups' });
+      await searchField.fill(GROUP_NAME);
+      await expect(page.locator('tbody tr').filter({ hasText: GROUP_NAME }).first()).toBeVisible({
+        timeout: 10000,
+      });
     });
   });
-});
+}
