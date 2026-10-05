@@ -4,21 +4,24 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, CITE_THEMES, setCiteTheme } from '../../fixtures';
 import { navigateToAdminSection } from '../../test-helpers';
 
-test.describe('Administration - Users', () => {
-  test('User Search', async ({ citeAuthenticatedPage: page }) => {
+for (const theme of CITE_THEMES) {
+  test.describe(`${theme} theme › Administration - Users`, () => {
+    test('User Search', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
 
-    await navigateToAdminSection(page, 'Users');
+      await navigateToAdminSection(page, 'Users');
 
-    const searchField = page.getByRole('textbox', { name: 'Search' });
-    await expect(searchField).toBeVisible({ timeout: 5000 });
+      const searchField = page.getByRole('textbox', { name: 'Search' });
+      await expect(searchField).toBeVisible({ timeout: 5000 });
 
-    await searchField.fill('admin');
-    await page.waitForTimeout(500);
+      await searchField.fill('admin');
+      await page.waitForTimeout(500);
 
-    const rows = page.locator('tbody tr');
-    await expect(rows.first()).toBeVisible({ timeout: 5000 });
+      const rows = page.locator('tbody tr');
+      await expect(rows.first()).toBeVisible({ timeout: 5000 });
+    });
   });
-});
+}

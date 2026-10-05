@@ -4,105 +4,108 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.setup.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, CITE_THEMES, setCiteTheme } from '../../fixtures';
 
-test.describe('Accessibility', () => {
-  test('Screen Reader Compatibility - Form Labels', async ({ citeAuthenticatedPage: page }) => {
+for (const theme of CITE_THEMES) {
+  test.describe(`${theme} theme › Accessibility`, () => {
+    test('Screen Reader Compatibility - Form Labels', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
 
-    // 1. Navigate to the home page and check form inputs
-    await page.waitForLoadState('networkidle');
-
-    // Wait for the page to be loaded with content
-    await expect(page.locator('text=My Evaluations')).toBeVisible({ timeout: 10000 });
-    await page.waitForTimeout(1000);
-
-    // expect: All form fields have associated labels
-    // Check all visible inputs on the main page
-    let inputs = page.locator('input:visible, select:visible, textarea:visible');
-    let inputCount = await inputs.count();
-
-    // The home page only shows form inputs (the search field) on the "My Evaluations"
-    // list view. A prior test may have left an evaluation selected (persisted in
-    // localStorage), opening the home page into that evaluation with no inputs. Reset
-    // to the list view rather than skipping.
-    if (inputCount === 0) {
-      await page.evaluate(() => {
-        try {
-          const raw = window.localStorage.getItem('uiState');
-          const state = raw ? JSON.parse(raw) : {};
-          state.selectedEvaluation = '';
-          window.localStorage.setItem('uiState', JSON.stringify(state));
-        } catch {
-          /* ignore */
-        }
-      });
-      await page.goto(Services.Cite.UI);
+      // 1. Navigate to the home page and check form inputs
       await page.waitForLoadState('networkidle');
+
+      // Wait for the page to be loaded with content
       await expect(page.locator('text=My Evaluations')).toBeVisible({ timeout: 10000 });
       await page.waitForTimeout(1000);
-      inputs = page.locator('input:visible, select:visible, textarea:visible');
-      inputCount = await inputs.count();
-    }
 
-    console.log(`Found ${inputCount} form inputs to check for labels`);
-    expect(inputCount).toBeGreaterThan(0);
+      // expect: All form fields have associated labels
+      // Check all visible inputs on the main page
+      let inputs = page.locator('input:visible, select:visible, textarea:visible');
+      let inputCount = await inputs.count();
 
-    const inputsWithoutLabels: string[] = [];
-
-    for (let i = 0; i < inputCount; i++) {
-      const input = inputs.nth(i);
-      const labelInfo = await input.evaluate((el: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) => {
-        // Skip hidden inputs
-        if (el.offsetParent === null) {
-          return { hasLabel: true, reason: 'hidden input', tagName: el.tagName, type: el.getAttribute('type') || 'unknown' };
-        }
-
-        const id = el.id;
-        const ariaLabel = el.getAttribute('aria-label');
-        const ariaLabelledBy = el.getAttribute('aria-labelledby');
-        const placeholder = el.getAttribute('placeholder');
-        const title = el.getAttribute('title');
-        const label = id ? document.querySelector(`label[for="${id}"]`) : null;
-
-        // Check if input is within a mat-form-field (Angular Material)
-        const matFormField = el.closest('mat-form-field');
-        const matLabel = matFormField ? matFormField.querySelector('mat-label') : null;
-
-        // Determine what kind of label exists
-        let reason = '';
-        if (label) reason = 'explicit label';
-        else if (matLabel) reason = 'mat-label';
-        else if (ariaLabel) reason = 'aria-label';
-        else if (ariaLabelledBy) reason = 'aria-labelledby';
-        else if (placeholder) reason = 'placeholder';
-        else if (title) reason = 'title attribute';
-        else reason = 'none';
-
-        const hasLabel = !!(label || ariaLabel || ariaLabelledBy || placeholder || matLabel || title);
-
-        return {
-          hasLabel,
-          reason,
-          tagName: el.tagName,
-          type: el.getAttribute('type') || 'unknown',
-          id: el.id || 'no-id',
-          name: el.getAttribute('name') || 'no-name'
-        };
-      });
-
-      if (!labelInfo.hasLabel) {
-        inputsWithoutLabels.push(`${labelInfo.tagName}[type="${labelInfo.type}"][id="${labelInfo.id}"][name="${labelInfo.name}"]`);
+      // The home page only shows form inputs (the search field) on the "My Evaluations"
+      // list view. A prior test may have left an evaluation selected (persisted in
+      // localStorage), opening the home page into that evaluation with no inputs. Reset
+      // to the list view rather than skipping.
+      if (inputCount === 0) {
+        await page.evaluate(() => {
+          try {
+            const raw = window.localStorage.getItem('uiState');
+            const state = raw ? JSON.parse(raw) : {};
+            state.selectedEvaluation = '';
+            window.localStorage.setItem('uiState', JSON.stringify(state));
+          } catch {
+            /* ignore */
+          }
+        });
+        await page.goto(Services.Cite.UI);
+        await page.waitForLoadState('networkidle');
+        await expect(page.locator('text=My Evaluations')).toBeVisible({ timeout: 10000 });
+        await page.waitForTimeout(1000);
+        inputs = page.locator('input:visible, select:visible, textarea:visible');
+        inputCount = await inputs.count();
       }
 
-      console.log(`Input ${i}: ${labelInfo.tagName}[${labelInfo.type}] - ${labelInfo.reason}`);
-    }
+      console.log(`Found ${inputCount} form inputs to check for labels`);
+      expect(inputCount).toBeGreaterThan(0);
 
-    // expect: Labels are programmatically linked to inputs
-    if (inputsWithoutLabels.length > 0) {
-      console.error('Inputs without labels:', inputsWithoutLabels);
-      expect(inputsWithoutLabels.length).toBe(0);
-    }
+      const inputsWithoutLabels: string[] = [];
 
-    expect(inputCount).toBeGreaterThan(0); // Ensure we actually found and checked some inputs
+      for (let i = 0; i < inputCount; i++) {
+        const input = inputs.nth(i);
+        const labelInfo = await input.evaluate((el: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement) => {
+          // Skip hidden inputs
+          if (el.offsetParent === null) {
+            return { hasLabel: true, reason: 'hidden input', tagName: el.tagName, type: el.getAttribute('type') || 'unknown' };
+          }
+
+          const id = el.id;
+          const ariaLabel = el.getAttribute('aria-label');
+          const ariaLabelledBy = el.getAttribute('aria-labelledby');
+          const placeholder = el.getAttribute('placeholder');
+          const title = el.getAttribute('title');
+          const label = id ? document.querySelector(`label[for="${id}"]`) : null;
+
+          // Check if input is within a mat-form-field (Angular Material)
+          const matFormField = el.closest('mat-form-field');
+          const matLabel = matFormField ? matFormField.querySelector('mat-label') : null;
+
+          // Determine what kind of label exists
+          let reason = '';
+          if (label) reason = 'explicit label';
+          else if (matLabel) reason = 'mat-label';
+          else if (ariaLabel) reason = 'aria-label';
+          else if (ariaLabelledBy) reason = 'aria-labelledby';
+          else if (placeholder) reason = 'placeholder';
+          else if (title) reason = 'title attribute';
+          else reason = 'none';
+
+          const hasLabel = !!(label || ariaLabel || ariaLabelledBy || placeholder || matLabel || title);
+
+          return {
+            hasLabel,
+            reason,
+            tagName: el.tagName,
+            type: el.getAttribute('type') || 'unknown',
+            id: el.id || 'no-id',
+            name: el.getAttribute('name') || 'no-name'
+          };
+        });
+
+        if (!labelInfo.hasLabel) {
+          inputsWithoutLabels.push(`${labelInfo.tagName}[type="${labelInfo.type}"][id="${labelInfo.id}"][name="${labelInfo.name}"]`);
+        }
+
+        console.log(`Input ${i}: ${labelInfo.tagName}[${labelInfo.type}] - ${labelInfo.reason}`);
+      }
+
+      // expect: Labels are programmatically linked to inputs
+      if (inputsWithoutLabels.length > 0) {
+        console.error('Inputs without labels:', inputsWithoutLabels);
+        expect(inputsWithoutLabels.length).toBe(0);
+      }
+
+      expect(inputCount).toBeGreaterThan(0); // Ensure we actually found and checked some inputs
+    });
   });
-});
+}

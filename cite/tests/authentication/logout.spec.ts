@@ -4,40 +4,43 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, CITE_THEMES, setCiteTheme } from '../../fixtures';
 
-test.describe('Authentication and Authorization', () => {
-  test('Logout Functionality', async ({ citeAuthenticatedPage: page }) => {
+for (const theme of CITE_THEMES) {
+  test.describe(`${theme} theme › Authentication and Authorization`, () => {
+    test('Logout Functionality', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
 
-    // 1. Log in with valid credentials (admin/admin)
-    // expect: User is successfully authenticated
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
+      // 1. Log in with valid credentials (admin/admin)
+      // expect: User is successfully authenticated
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
 
-    // 2. Click on user profile menu in top bar
-    const userMenuButton = page.locator('[class*="user-menu"], [class*="profile"], button:has-text("admin"), [matMenuTriggerFor]').first();
-    await userMenuButton.click();
+      // 2. Click on user profile menu in top bar
+      const userMenuButton = page.locator('[class*="user-menu"], [class*="profile"], button:has-text("admin"), [matMenuTriggerFor]').first();
+      await userMenuButton.click();
 
-    // expect: User menu dropdown opens
-    const menuPanel = page.locator('div[role="menu"]');
-    await expect(menuPanel).toBeVisible({ timeout: 5000 });
+      // expect: User menu dropdown opens
+      const menuPanel = page.locator('div[role="menu"]');
+      await expect(menuPanel).toBeVisible({ timeout: 5000 });
 
-    // 3. Click 'Logout' or 'Sign Out' option
-    const logoutButton = page.locator('button:has-text("Logout"), button:has-text("Sign Out"), button:has-text("Log Out")').first();
-    await logoutButton.click();
+      // 3. Click 'Logout' or 'Sign Out' option
+      const logoutButton = page.locator('button:has-text("Logout"), button:has-text("Sign Out"), button:has-text("Log Out")').first();
+      await logoutButton.click();
 
-    // expect: User is logged out
-    // expect: User is redirected to Keycloak or CITE home
-    await page.waitForURL(serviceUrlPattern(Services.Cite.UI), { timeout: 30000 });
+      // expect: User is logged out
+      // expect: User is redirected to Keycloak or CITE home
+      await page.waitForURL(serviceUrlPattern(Services.Cite.UI), { timeout: 30000 });
 
-    // expect: Authentication session is terminated
-    // 4. Attempt to navigate to CITE UI again
-    await page.goto(Services.Cite.UI);
+      // expect: Authentication session is terminated
+      // 4. Attempt to navigate to CITE UI again
+      await page.goto(Services.Cite.UI);
 
-    // expect: User is redirected to Keycloak login page
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 70000 });
+      // expect: User is redirected to Keycloak login page
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 70000 });
 
-    // expect: User must authenticate again
-    const usernameField = page.locator('#username');
-    await expect(usernameField).toBeVisible({ timeout: 10000 });
+      // expect: User must authenticate again
+      const usernameField = page.locator('#username');
+      await expect(usernameField).toBeVisible({ timeout: 10000 });
+    });
   });
-});
+}

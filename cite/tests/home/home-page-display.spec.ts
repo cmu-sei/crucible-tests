@@ -4,29 +4,32 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, CITE_THEMES, setCiteTheme } from '../../fixtures';
 
-test.describe('Home Page and Evaluation List', () => {
-  test('Home Page Display', async ({ citeAuthenticatedPage: page }) => {
+for (const theme of CITE_THEMES) {
+  test.describe(`${theme} theme › Home Page and Evaluation List`, () => {
+    test('Home Page Display', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
 
-    // 1. Log in and land on home page
-    // expect: Home page displays with 'CITE' icon and 'My Evaluations' title
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
+      // 1. Log in and land on home page
+      // expect: Home page displays with 'CITE' icon and 'My Evaluations' title
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
 
-    // expect: CITE branding is visible
-    const citeIcon = page.locator('img[src*="cite"], [class*="cite-logo"], mat-toolbar img, mat-toolbar [class*="icon"]').first();
-    await expect(citeIcon).toBeVisible({ timeout: 10000 });
+      // expect: CITE branding is visible
+      const citeIcon = page.locator('img[src*="cite"], [class*="cite-logo"], mat-toolbar img, mat-toolbar [class*="icon"]').first();
+      await expect(citeIcon).toBeVisible({ timeout: 10000 });
 
-    // expect: Evaluation list component is visible
-    const evaluationList = page.locator('mat-table, table, [class*="evaluation"], [class*="list"]').first();
-    await expect(evaluationList).toBeVisible({ timeout: 10000 });
+      // expect: Evaluation list component is visible
+      const evaluationList = page.locator('mat-table, table, [class*="evaluation"], [class*="list"]').first();
+      await expect(evaluationList).toBeVisible({ timeout: 10000 });
 
-    // expect: Navigation elements are present
-    const toolbar = page.locator('mat-toolbar, [class*="topbar"]').first();
-    await expect(toolbar).toBeVisible();
+      // expect: Navigation elements are present
+      const toolbar = page.locator('mat-toolbar, [class*="topbar"]').first();
+      await expect(toolbar).toBeVisible();
 
-    // expect: Administration button is visible for authorized users
-    const adminButton = page.locator('button:has-text("Administration"), a:has-text("Administration"), button:has-text("Admin"), a:has-text("Admin")').first();
-    await expect(adminButton).toBeVisible({ timeout: 5000 });
+      // expect: Administration button is visible for authorized users
+      const adminButton = page.locator('button:has-text("Administration"), a:has-text("Administration"), button:has-text("Admin"), a:has-text("Admin")').first();
+      await expect(adminButton).toBeVisible({ timeout: 5000 });
+    });
   });
-});
+}

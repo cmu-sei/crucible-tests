@@ -4,29 +4,32 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, CITE_THEMES, setCiteTheme } from '../../fixtures';
 
-test.describe('Error Handling and Edge Cases', () => {
-  test('API Error Handling - Server Error (500)', async ({ citeAuthenticatedPage: page }) => {
+for (const theme of CITE_THEMES) {
+  test.describe(`${theme} theme › Error Handling and Edge Cases`, () => {
+    test('API Error Handling - Server Error (500)', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
 
-    // 1. Log in successfully
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
+      // 1. Log in successfully
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
 
-    // 2. Trigger an API call that returns 500 error
-    await page.route('**/api/**', (route) =>
-      route.fulfill({ status: 500, body: 'Internal Server Error' })
-    );
+      // 2. Trigger an API call that returns 500 error
+      await page.route('**/api/**', (route) =>
+        route.fulfill({ status: 500, body: 'Internal Server Error' })
+      );
 
-    // Trigger an API call by navigating
-    await page.reload();
+      // Trigger an API call by navigating
+      await page.reload();
 
-    // expect: Application handles error gracefully
-    // expect: Error message is displayed to user
-    // expect: No uncaught exceptions in console
-    await page.waitForTimeout(3000);
-    const body = page.locator('body');
-    await expect(body).toBeVisible();
+      // expect: Application handles error gracefully
+      // expect: Error message is displayed to user
+      // expect: No uncaught exceptions in console
+      await page.waitForTimeout(3000);
+      const body = page.locator('body');
+      await expect(body).toBeVisible();
 
-    await page.unroute('**/api/**');
+      await page.unroute('**/api/**');
+    });
   });
-});
+}
