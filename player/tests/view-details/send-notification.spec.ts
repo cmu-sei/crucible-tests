@@ -10,58 +10,63 @@ import {
   seededPrimaryViewName,
   findPlayerHomeViewLink,
   clickWithoutOverlayInterference,
+  PLAYER_THEMES,
+  setPlayerTheme,
 } from '../../fixtures';
 
-test.describe('View Details', () => {
-  test('Send System Notification', async ({ playerAuthenticatedPage: page }) => {
-    const primaryViewName = seededPrimaryViewName();
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › View Details`, () => {
+    test('Send System Notification', async ({ playerAuthenticatedPage: page }) => {
+      await setPlayerTheme(page, theme);
+      const primaryViewName = seededPrimaryViewName();
 
-    // 1. Log in and navigate to a view
-    await (await findPlayerHomeViewLink(page, primaryViewName)).click();
+      // 1. Log in and navigate to a view
+      await (await findPlayerHomeViewLink(page, primaryViewName)).click();
 
-    // expect: User is on the view details page
-    await expect(page).toHaveURL(/\/view\//, { timeout: 10000 });
+      // expect: User is on the view details page
+      await expect(page).toHaveURL(/\/view\//, { timeout: 10000 });
 
-    // 2. Click the 'Notifications' button
-    const notificationsToggle = page.getByRole('button', { name: 'Notifications' });
-    await clickWithoutOverlayInterference(page, notificationsToggle);
-    await expect(notificationsToggle).toHaveAttribute('aria-expanded', 'true');
+      // 2. Click the 'Notifications' button
+      const notificationsToggle = page.getByRole('button', { name: 'Notifications' });
+      await clickWithoutOverlayInterference(page, notificationsToggle);
+      await expect(notificationsToggle).toHaveAttribute('aria-expanded', 'true');
 
-    // expect: A notification panel opens with its system notification field
-    const notificationInput = page.getByPlaceholder('Send system wide notification');
-    await expect(notificationInput).toBeVisible();
+      // expect: A notification panel opens with its system notification field
+      const notificationInput = page.getByPlaceholder('Send system wide notification');
+      await expect(notificationInput).toBeVisible();
 
-    // expect: A character counter shows '0 / 225'
-    await expect(page.getByText('0 / 225')).toBeVisible();
+      // expect: A character counter shows '0 / 225'
+      await expect(page.getByText('0 / 225')).toBeVisible();
 
-    // expect: A 'Send' button is visible
-    const sendButton = page.getByRole('button', { name: 'Send', exact: true });
-    await expect(sendButton).toBeVisible();
+      // expect: A 'Send' button is visible
+      const sendButton = page.getByRole('button', { name: 'Send', exact: true });
+      await expect(sendButton).toBeVisible();
 
-    // 3. Enter a notification message
-    await notificationInput.fill('Test notification message');
+      // 3. Enter a notification message
+      await notificationInput.fill('Test notification message');
 
-    // expect: The message is entered in the text field
-    await expect(notificationInput).toHaveValue('Test notification message');
+      // expect: The message is entered in the text field
+      await expect(notificationInput).toHaveValue('Test notification message');
 
-    // expect: The character counter updates to show characters used
-    await expect(page.getByText('25 / 225')).toBeVisible();
+      // expect: The character counter updates to show characters used
+      await expect(page.getByText('25 / 225')).toBeVisible();
 
-    // 4. Click the 'Send' button
-    await sendButton.click();
+      // 4. Click the 'Send' button
+      await sendButton.click();
 
-    // expect: A confirmation dialog explains the broadcast audience
-    const confirmationDialog = page.getByRole('dialog', { name: 'Confirm Message Send' });
-    await expect(confirmationDialog).toBeVisible();
-    await expect(confirmationDialog).toContainText(
-      'Are you sure that you want to send a system wide message to all users logged into this view?'
-    );
+      // expect: A confirmation dialog explains the broadcast audience
+      const confirmationDialog = page.getByRole('dialog', { name: 'Confirm Message Send' });
+      await expect(confirmationDialog).toBeVisible();
+      await expect(confirmationDialog).toContainText(
+        'Are you sure that you want to send a system wide message to all users logged into this view?'
+      );
 
-    // 5. Confirm the notification
-    await confirmationDialog.getByRole('button', { name: 'Send', exact: true }).click();
+      // 5. Confirm the notification
+      await confirmationDialog.getByRole('button', { name: 'Send', exact: true }).click();
 
-    // expect: The confirmation closes and the form is reset for another message
-    await expect(confirmationDialog).toBeHidden();
-    await expect(notificationInput).toHaveValue('');
+      // expect: The confirmation closes and the form is reset for another message
+      await expect(confirmationDialog).toBeHidden();
+      await expect(notificationInput).toHaveValue('');
+    });
   });
-});
+}

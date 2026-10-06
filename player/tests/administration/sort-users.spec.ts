@@ -4,36 +4,39 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
 
-test.describe('Administration - Users', () => {
-  test('Sort Users', async ({ playerAuthenticatedPage: page }) => {
-    // 1. Log in as admin and navigate to Administration > Users
-    await page.getByRole('button', { name: 'Menu' }).click();
-    await page.getByRole('menuitem', { name: 'Administration' }).click();
-    await page.getByRole('button', { name: 'Users Users' }).click();
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Administration - Users`, () => {
+    test('Sort Users', async ({ playerAuthenticatedPage: page }) => {
+      await setPlayerTheme(page, theme);
+      // 1. Log in as admin and navigate to Administration > Users
+      await page.getByRole('button', { name: 'Menu' }).click();
+      await page.getByRole('menuitem', { name: 'Administration' }).click();
+      await page.getByRole('button', { name: 'Users Users' }).click();
 
-    // expect: The Users section is displayed
-    await expect(page.getByRole('columnheader', { name: 'ID' })).toBeVisible();
-    const idHeader = page.getByRole('columnheader', { name: 'ID' });
-    const nameHeader = page.getByRole('columnheader', { name: 'Name' });
-    const getSortState = async (header: typeof idHeader) => (await header.getAttribute('aria-sort')) ?? 'none';
-    const nextSortState = (state: string) =>
-      state === 'ascending' ? 'descending' : state === 'descending' ? 'none' : 'ascending';
+      // expect: The Users section is displayed
+      await expect(page.getByRole('columnheader', { name: 'ID' })).toBeVisible();
+      const idHeader = page.getByRole('columnheader', { name: 'ID' });
+      const nameHeader = page.getByRole('columnheader', { name: 'Name' });
+      const getSortState = async (header: typeof idHeader) => (await header.getAttribute('aria-sort')) ?? 'none';
+      const nextSortState = (state: string) =>
+        state === 'ascending' ? 'descending' : state === 'descending' ? 'none' : 'ascending';
 
-    // 2. Click the 'ID' column header
-    const initialIdState = await getSortState(idHeader);
-    await idHeader.click();
+      // 2. Click the 'ID' column header
+      const initialIdState = await getSortState(idHeader);
+      await idHeader.click();
 
-    // expect: Users are sorted by ID
-    await expect.poll(() => getSortState(idHeader)).toBe(nextSortState(initialIdState));
+      // expect: Users are sorted by ID
+      await expect.poll(() => getSortState(idHeader)).toBe(nextSortState(initialIdState));
 
-    // 3. Click the 'Name' column header
-    const initialNameState = await getSortState(nameHeader);
-    await nameHeader.click();
+      // 3. Click the 'Name' column header
+      const initialNameState = await getSortState(nameHeader);
+      await nameHeader.click();
 
-    // expect: Users are sorted by name
-    await expect.poll(() => getSortState(nameHeader)).toBe(nextSortState(initialNameState));
-    await expect.poll(() => getSortState(idHeader)).toBe('none');
+      // expect: Users are sorted by name
+      await expect.poll(() => getSortState(nameHeader)).toBe(nextSortState(initialNameState));
+      await expect.poll(() => getSortState(idHeader)).toBe('none');
+    });
   });
-});
+}

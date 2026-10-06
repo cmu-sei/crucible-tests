@@ -4,42 +4,40 @@
 // spec: console/console-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
-import { getFirstVmId } from '../../fixtures';
+import { test, expect, gotoConsole, CONSOLE_THEMES } from '../../fixtures';
 
-test.describe('Console Rendering', () => {
-  // Regression: the console did not render until the window was clicked/focused
-  // because readOnly$ (bound via | async in an OnPush component) was assigned
-  // late, so change detection only ran on a window:focus event (console.ui
-  // #732). This test navigates to the console and asserts the component renders
-  // without any click or focus interaction.
-  test('Console renders without window focus', async ({
-    consoleAuthenticatedPage: page,
-  }) => {
-    // 1. Discover a real VM id from the first available view
-    const vmId = await getFirstVmId(page);
-    test.skip(!vmId, 'No VMs available for the admin user to test against');
+for (const theme of CONSOLE_THEMES) {
+  test.describe(`${theme} theme › Console Rendering`, () => {
+    // Regression: the console did not render until the window was clicked/focused
+    // because readOnly$ (bound via | async in an OnPush component) was assigned
+    // late, so change detection only ran on a window:focus event (console.ui
+    // #732). This test navigates to the console and asserts the component renders
+    // without any click or focus interaction.
+    test('Console renders without window focus', async ({
+      consoleAuthenticatedPage: page,
+      consoleVm: vm,
+    }) => {
+      // 1. Open the console route for the seeded VM record directly. Do not click
+      //    or focus anything after this — the component must render on its own.
+      //    The record has no hypervisor behind it, so the console never connects;
+      //    that is fine, the test is about the component rendering.
+      await gotoConsole(page, `/vm/${vm.id}/console`, theme);
 
-    // 2. Open the console route directly. Do not click or focus anything after
-    //    this — the component must render on its own.
-    await page.goto(`${Services.Console.UI}/vm/${vmId}/console`);
+      // 2. The console component renders without interaction. app-console is the
+      //    options bar + screen/overlay host; before the fix this stayed as bare
+      //    Angular placeholder comments until a window:focus event fired.
+      await expect(page.locator('app-console')).toBeVisible({ timeout: 30000 });
 
-    // 3. The console component renders without interaction. app-console is the
-    //    options bar + screen/overlay host; before the fix this stayed as bare
-    //    Angular placeholder comments until a window:focus event fired.
-    await expect(page.locator('app-console')).toBeVisible({ timeout: 30000 });
+      // 3. Real content rendered inside it: the options bar with its "Console
+      //    options" gear menu button, and the connecting overlay (the seeded record
+      //    has no hypervisor VM, so it never connects).
+      const optionsBar = page.locator('app-options-bar, app-options-bar2').first();
+      await expect(optionsBar).toBeVisible({ timeout: 30000 });
+      await expect(optionsBar.getByRole('button', { name: 'Console options' })).toBeVisible();
+      await expect(page.locator('app-console').getByText(/Connecting/)).toBeVisible({ timeout: 30000 });
 
-    // 4. Sanity-check that real content rendered inside it (options bar and/or
-    //    the connecting overlay), not an empty host. Any one of these proves
-    //    change detection ran without a focus event.
-    const consoleContent = page.locator(
-      'app-options-bar, app-options-bar2, app-novnc, #wmksContainer, #screen'
-    );
-    await expect(consoleContent.first()).toBeAttached({ timeout: 30000 });
-
-    // 5. The valid-VM console must not be showing the not-found page.
-    await expect(
-      page.getByRole('heading', { name: 'VM Not Found' })
-    ).toHaveCount(0);
+      // 4. The valid-VM console must not be showing the not-found page.
+      await expect(page.getByRole('heading', { name: 'VM Not Found' })).toHaveCount(0);
+    });
   });
-});
+}

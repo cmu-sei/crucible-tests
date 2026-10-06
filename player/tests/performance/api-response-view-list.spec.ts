@@ -4,31 +4,34 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink } from '../../fixtures';
+import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
 
-test.describe('Performance', () => {
-  test('API Response Time - View List', async ({ playerAuthenticatedPage: page }) => {
-    const primaryViewName = seededPrimaryViewName();
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Performance`, () => {
+    test('API Response Time - View List', async ({ playerAuthenticatedPage: page }) => {
+      await setPlayerTheme(page, theme);
+      const primaryViewName = seededPrimaryViewName();
 
-    // 1. Monitor network requests when loading view list
-    const apiRequests: { url: string; duration: number }[] = [];
+      // 1. Monitor network requests when loading view list
+      const apiRequests: { url: string; duration: number }[] = [];
 
-    page.on('response', async (response) => {
-      const url = response.url();
-      if (url.includes('/api/') && url.includes('view')) {
-        const timing = response.request().timing();
-        apiRequests.push({ url, duration: timing.responseEnd });
-      }
+      page.on('response', async (response) => {
+        const url = response.url();
+        if (url.includes('/api/') && url.includes('view')) {
+          const timing = response.request().timing();
+          apiRequests.push({ url, duration: timing.responseEnd });
+        }
+      });
+
+      // Reload to capture API calls
+      await page.reload();
+      await expect(page.getByText('My Views')).toBeVisible();
+      await expect(page.getByRole('table')).toBeVisible();
+
+      // expect: API response time is under acceptable threshold (e.g., 1 second)
+      // expect: No unnecessary API calls are made
+      // The page should load views within a reasonable time
+      await findPlayerHomeViewLink(page, primaryViewName);
     });
-
-    // Reload to capture API calls
-    await page.reload();
-    await expect(page.getByText('My Views')).toBeVisible();
-    await expect(page.getByRole('table')).toBeVisible();
-
-    // expect: API response time is under acceptable threshold (e.g., 1 second)
-    // expect: No unnecessary API calls are made
-    // The page should load views within a reasonable time
-    await findPlayerHomeViewLink(page, primaryViewName);
   });
-});
+}

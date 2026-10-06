@@ -4,26 +4,29 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
 
-test.describe('Error Handling and Edge Cases', () => {
-  test('Network Error Handling', async ({ playerAuthenticatedPage: page }) => {
-    // 1. Log in and navigate to home page
-    // expect: User is on the home page
-    await expect(page.getByText('My Views')).toBeVisible();
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Error Handling and Edge Cases`, () => {
+    test('Network Error Handling', async ({ playerAuthenticatedPage: page }) => {
+      await setPlayerTheme(page, theme);
+      // 1. Log in and navigate to home page
+      // expect: User is on the home page
+      await expect(page.getByText('My Views')).toBeVisible();
 
-    // 2. Simulate a network disconnection
-    await page.route('**/api/**', (route) => route.abort());
+      // 2. Simulate a network disconnection
+      await page.route('**/api/**', (route) => route.abort());
 
-    // Trigger a page action that makes an API call
-    await page.reload();
+      // Trigger a page action that makes an API call
+      await page.reload();
 
-    // expect: The application handles the error gracefully
-    // expect: No unhandled errors crash the page
-    // The page should still render even if API calls fail
-    await expect(page.locator('body')).toBeVisible();
+      // expect: The application handles the error gracefully
+      // expect: No unhandled errors crash the page
+      // The page should still render even if API calls fail
+      await expect(page.locator('body')).toBeVisible();
 
-    // Restore network
-    await page.unrouteAll();
+      // Restore network
+      await page.unrouteAll();
+    });
   });
-});
+}

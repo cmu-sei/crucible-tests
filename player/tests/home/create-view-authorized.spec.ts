@@ -4,36 +4,39 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
 
-test.describe('Home Page - My Views', () => {
-  test('Create New View - Authorized User', async ({ playerAuthenticatedPage: page }) => {
-    // 1. Log in as user with 'CreateViews' permission
-    // expect: User is on home page
-    await expect(page.getByText('My Views')).toBeVisible();
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Home Page - My Views`, () => {
+    test('Create New View - Authorized User', async ({ playerAuthenticatedPage: page }) => {
+      await setPlayerTheme(page, theme);
+      // 1. Log in as user with 'CreateViews' permission
+      // expect: User is on home page
+      await expect(page.getByText('My Views')).toBeVisible();
 
-    // 2. Look for 'Create' or 'New View' button (the + icon button next to "My Views")
-    const createButton = page.getByText('My Views').locator('..').locator('button');
+      // 2. Look for 'Create' or 'New View' button (the + icon button next to "My Views")
+      const createButton = page.getByText('My Views').locator('..').locator('button');
 
-    // expect: Button to create new view is visible and enabled
-    await expect(createButton).toBeVisible();
+      // expect: Button to create new view is visible and enabled
+      await expect(createButton).toBeVisible();
 
-    // 3. Click the create view button
-    await createButton.click();
+      // 3. Click the create view button
+      await createButton.click();
 
-    // expect: Create view dialog opens
-    const dialog = page.getByRole('dialog', { name: 'Create New View?' });
-    await expect(dialog).toBeVisible();
+      // expect: Create view dialog opens
+      const dialog = page.getByRole('dialog', { name: 'Create New View?' });
+      await expect(dialog).toBeVisible();
 
-    // expect: Dialog prompts for view name
-    await expect(dialog.getByRole('heading', { name: 'Create New View?' })).toBeVisible();
-    await expect(dialog.getByRole('textbox', { name: 'Name' })).toBeVisible();
+      // expect: Dialog prompts for view name
+      await expect(dialog.getByRole('heading', { name: 'Create New View?' })).toBeVisible();
+      await expect(dialog.getByRole('textbox', { name: 'Name' })).toBeVisible();
 
-    // Verify Save button is disabled when name is empty
-    await expect(dialog.getByRole('button', { name: 'Save' })).toBeDisabled();
+      // Verify Save button is disabled when name is empty
+      await expect(dialog.getByRole('button', { name: 'Save' })).toBeDisabled();
 
-    // Cancel the dialog
-    await dialog.getByRole('button', { name: 'Cancel' }).click();
-    await expect(dialog).not.toBeVisible();
+      // Cancel the dialog
+      await dialog.getByRole('button', { name: 'Cancel' }).click();
+      await expect(dialog).not.toBeVisible();
+    });
   });
-});
+}

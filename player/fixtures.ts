@@ -1,7 +1,6 @@
 // Copyright 2026 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
-import { createHash } from 'crypto';
 import { test as base, Page, Locator, request as pwRequest, APIRequestContext, TestInfo } from '@playwright/test';
 import fs from 'fs';
 import {
@@ -12,6 +11,7 @@ import {
   waitForFirstVisible,
 } from '../shared-fixtures';
 import { authSessionStatePath, authStatePath } from '../auth-paths';
+import { THEMES, Theme, isDarkTheme, expectBodyTheme, closeMenuAndWaitForOverlay, seededName } from '../theme-helpers';
 
 export async function authenticatePlayerWithKeycloak(
   page: Page,
@@ -33,21 +33,12 @@ interface PlayerView {
 const primaryViewBaseName = 'Project Lagoon TTX - Admin';
 const steamfitterViewBaseName = 'Steamfitter View';
 
-function buildSeededViewName(baseName: string, testInfo: TestInfo): string {
-  const seed = createHash('sha1')
-    .update(`${testInfo.project.name}:${testInfo.file}:${testInfo.title}:${testInfo.retry}`)
-    .digest('hex')
-    .slice(0, 8);
-
-  return `${baseName} [${testInfo.project.name}-w${testInfo.workerIndex}-r${testInfo.retry}-${seed}]`;
-}
-
 export function seededPrimaryViewName(): string {
-  return buildSeededViewName(primaryViewBaseName, test.info());
+  return seededName(primaryViewBaseName, test.info());
 }
 
 export function seededSteamfitterViewName(): string {
-  return buildSeededViewName(steamfitterViewBaseName, test.info());
+  return seededName(steamfitterViewBaseName, test.info());
 }
 
 export async function typeIntoSearch(searchField: Locator, value: string): Promise<void> {
@@ -191,8 +182,8 @@ async function deletePlayerView(
 async function seedLegacyPlayerData(token: string, testInfo: TestInfo): Promise<() => Promise<void>> {
   const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
   const viewIds: string[] = [];
-  const primaryViewName = buildSeededViewName(primaryViewBaseName, testInfo);
-  const steamfitterViewName = buildSeededViewName(steamfitterViewBaseName, testInfo);
+  const primaryViewName = seededName(primaryViewBaseName, testInfo);
+  const steamfitterViewName = seededName(steamfitterViewBaseName, testInfo);
 
   try {
     const primary = await createPlayerView(apiContext, token, primaryViewName);
@@ -314,6 +305,49 @@ export const test = base.extend<PlayerFixtures>({
     }
   },
 });
+
+/**
+ * Themes every authenticated Player functional spec is parameterized over. Each
+ * spec runs once per entry so every screen is exercised in both light and dark mode.
+ */
+export const PLAYER_THEMES = THEMES;
+export type PlayerTheme = Theme;
+
+/** Whether Player is currently rendering the dark theme. */
+export async function playerIsDarkTheme(page: Page): Promise<boolean> {
+  return isDarkTheme(page);
+}
+
+/**
+ * Switch Player between light and dark theme through the top bar user menu's
+ * "Dark Theme" switch, and wait for the change to land on `document.body`.
+ *
+ * Player persists the selected theme in the `auth` slice of its Akita store, saved
+ * to localStorage under 'akita-player-ui' (`{"auth":{"theme":"dark-theme"}}`). So a
+ * theme set here survives the reloads and `page.goto` calls a test performs
+ * afterward, and only needs applying once, right after authentication. The
+ * preference never reaches the server, and the saved auth state carries no Akita
+ * store, so every test's fresh browser context starts light.
+ *
+ * Use the switch rather than the `?theme=dark-theme` query param: once the param
+ * has been seen, `AppComponent` writes it back onto the URL on every later theme
+ * change, which would leak it into the URL assertions several specs make.
+ *
+ * No-ops when the requested theme is already active, so callers can use it to
+ * restore state unconditionally.
+ */
+export async function setPlayerTheme(page: Page, theme: PlayerTheme): Promise<void> {
+  if ((await playerIsDarkTheme(page)) === (theme === 'dark')) return;
+
+  // The user menu is the top bar's name button, labelled "Menu".
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  const toggle = page.getByRole('switch', { name: 'Dark Theme' });
+  await toggle.waitFor({ state: 'visible', timeout: 10000 });
+  await toggle.click();
+  await closeMenuAndWaitForOverlay(page);
+
+  await expectBodyTheme(page, theme);
+}
 
 export { expect } from '@playwright/test';
 export { Services, serviceUrlPattern, oidcStorageKey, waitForFirstVisible };
