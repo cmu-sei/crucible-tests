@@ -1,9 +1,18 @@
 // Copyright 2026 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
-import { createHash } from 'crypto';
-import { test as base, expect, Page, TestInfo, request as pwRequest } from '@playwright/test';
+import { test as base, expect, Page, request as pwRequest } from '@playwright/test';
 import { Services, authenticateWithKeycloak } from '../shared-fixtures';
+import {
+  THEMES,
+  Theme,
+  isDarkTheme,
+  expectBodyTheme,
+  closeMenuAndWaitForOverlay,
+  themedUrl,
+  seededName,
+  oidcAccessToken as accessToken,
+} from '../theme-helpers';
 
 const VIEW_LINK = 'a[href^="/view/"]';
 
@@ -67,33 +76,6 @@ export type PlayerVmFixtures = {
   playerVmView: SeededPlayerVmView;
 };
 
-function seededViewName(testInfo: TestInfo): string {
-  const seed = createHash('sha1')
-    .update(`${testInfo.project.name}:${testInfo.file}:${testInfo.titlePath.join(' > ')}:${testInfo.retry}`)
-    .digest('hex')
-    .slice(0, 8);
-  return `E2E PlayerVm View [${testInfo.project.name}-w${testInfo.workerIndex}-r${testInfo.retry}-${seed}]`;
-}
-
-/** The OIDC access token the authenticated page holds in browser storage. */
-async function accessToken(page: Page): Promise<string> {
-  const token = await page.evaluate(() => {
-    for (const storage of [localStorage, sessionStorage]) {
-      for (let i = 0; i < storage.length; i++) {
-        try {
-          const value = JSON.parse(storage.getItem(storage.key(i)!) ?? '');
-          if (typeof value?.access_token === 'string') return value.access_token as string;
-        } catch {
-          // Non-JSON application state shares browser storage with the OIDC user.
-        }
-      }
-    }
-    return null;
-  });
-  if (!token) throw new Error('Authenticated page did not contain an OIDC access token');
-  return token;
-}
-
 /**
  * Delete any VM API maps left on a seeded view (e.g. by a map test that failed
  * before its own delete step). Deleting the Player view does not remove them.
@@ -126,7 +108,7 @@ export const test = base.extend<PlayerVmFixtures>({
   playerVmView: async ({ playerVmAuthenticatedPage: page }, use, testInfo) => {
     const headers = { Authorization: `Bearer ${await accessToken(page)}`, 'Content-Type': 'application/json' };
     const api = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-    const name = seededViewName(testInfo);
+    const name = seededName('E2E PlayerVm View', testInfo);
     const response = await api.post(`${Services.Player.API}/api/views`, {
       headers,
       data: { name, description: `E2E fixture data for ${name}`, status: 'Active', isTemplate: false, createAdminTeam: true },
@@ -155,20 +137,12 @@ export const test = base.extend<PlayerVmFixtures>({
  * Themes every authenticated Player VM functional spec is parameterized over. Each
  * spec runs once per entry so every screen is exercised in both light and dark mode.
  */
-export const PLAYERVM_THEMES = ['light', 'dark'] as const;
-export type PlayerVmTheme = (typeof PLAYERVM_THEMES)[number];
+export const PLAYERVM_THEMES = THEMES;
+export type PlayerVmTheme = Theme;
 
 /** Whether the Player VM UI is currently rendering the dark theme. */
 export async function playerVmIsDarkTheme(page: Page): Promise<boolean> {
-  return page.evaluate(() => document.body.classList.contains('darkMode'));
-}
-
-async function expectBodyTheme(page: Page, theme: PlayerVmTheme): Promise<void> {
-  if (theme === 'dark') {
-    await expect(page.locator('body')).toHaveClass(/\bdarkMode\b/, { timeout: 10000 });
-  } else {
-    await expect(page.locator('body')).not.toHaveClass(/\bdarkMode\b/, { timeout: 10000 });
-  }
+  return isDarkTheme(page);
 }
 
 /**
@@ -191,23 +165,14 @@ export async function setPlayerVmTheme(page: Page, theme: PlayerVmTheme): Promis
   const toggle = page.locator('mat-slide-toggle button[role=switch]');
   await toggle.waitFor({ state: 'visible', timeout: 10000 });
   await toggle.click();
-  // Close the menu, and wait for its overlay to tear down so a lingering CDK
-  // backdrop can't silently intercept the test's next click.
-  await page.keyboard.press('Escape');
-  await page.locator('.mat-mdc-menu-panel').waitFor({ state: 'detached', timeout: 5000 });
-  await page.locator('.cdk-overlay-backdrop').waitFor({ state: 'detached', timeout: 5000 });
+  await closeMenuAndWaitForOverlay(page);
 
   await expectBodyTheme(page, theme);
 }
 
-/** `?theme=` values the VM UI's `AppComponent` understands. */
-const THEME_PARAM: Record<PlayerVmTheme, string> = { light: 'light-theme', dark: 'dark-theme' };
-
 /** A Player VM UI URL for `path` that boots straight into `theme`. */
 export function playerVmUrl(path: string, theme: PlayerVmTheme): string {
-  const url = new URL(path, Services.PlayerVM.UI);
-  url.searchParams.set('theme', THEME_PARAM[theme]);
-  return url.toString();
+  return themedUrl(Services.PlayerVM.UI, path, theme);
 }
 
 /**

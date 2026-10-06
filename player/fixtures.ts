@@ -1,8 +1,7 @@
 // Copyright 2026 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
-import { createHash } from 'crypto';
-import { test as base, expect, Page, Locator, request as pwRequest, APIRequestContext, TestInfo } from '@playwright/test';
+import { test as base, Page, Locator, request as pwRequest, APIRequestContext, TestInfo } from '@playwright/test';
 import fs from 'fs';
 import {
   Services,
@@ -12,6 +11,7 @@ import {
   waitForFirstVisible,
 } from '../shared-fixtures';
 import { authSessionStatePath, authStatePath } from '../auth-paths';
+import { THEMES, Theme, isDarkTheme, expectBodyTheme, closeMenuAndWaitForOverlay, seededName } from '../theme-helpers';
 
 export async function authenticatePlayerWithKeycloak(
   page: Page,
@@ -33,21 +33,12 @@ interface PlayerView {
 const primaryViewBaseName = 'Project Lagoon TTX - Admin';
 const steamfitterViewBaseName = 'Steamfitter View';
 
-function buildSeededViewName(baseName: string, testInfo: TestInfo): string {
-  const seed = createHash('sha1')
-    .update(`${testInfo.project.name}:${testInfo.file}:${testInfo.titlePath.join(' > ')}:${testInfo.retry}`)
-    .digest('hex')
-    .slice(0, 8);
-
-  return `${baseName} [${testInfo.project.name}-w${testInfo.workerIndex}-r${testInfo.retry}-${seed}]`;
-}
-
 export function seededPrimaryViewName(): string {
-  return buildSeededViewName(primaryViewBaseName, test.info());
+  return seededName(primaryViewBaseName, test.info());
 }
 
 export function seededSteamfitterViewName(): string {
-  return buildSeededViewName(steamfitterViewBaseName, test.info());
+  return seededName(steamfitterViewBaseName, test.info());
 }
 
 export async function typeIntoSearch(searchField: Locator, value: string): Promise<void> {
@@ -191,8 +182,8 @@ async function deletePlayerView(
 async function seedLegacyPlayerData(token: string, testInfo: TestInfo): Promise<() => Promise<void>> {
   const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
   const viewIds: string[] = [];
-  const primaryViewName = buildSeededViewName(primaryViewBaseName, testInfo);
-  const steamfitterViewName = buildSeededViewName(steamfitterViewBaseName, testInfo);
+  const primaryViewName = seededName(primaryViewBaseName, testInfo);
+  const steamfitterViewName = seededName(steamfitterViewBaseName, testInfo);
 
   try {
     const primary = await createPlayerView(apiContext, token, primaryViewName);
@@ -319,12 +310,12 @@ export const test = base.extend<PlayerFixtures>({
  * Themes every authenticated Player functional spec is parameterized over. Each
  * spec runs once per entry so every screen is exercised in both light and dark mode.
  */
-export const PLAYER_THEMES = ['light', 'dark'] as const;
-export type PlayerTheme = (typeof PLAYER_THEMES)[number];
+export const PLAYER_THEMES = THEMES;
+export type PlayerTheme = Theme;
 
 /** Whether Player is currently rendering the dark theme. */
 export async function playerIsDarkTheme(page: Page): Promise<boolean> {
-  return page.evaluate(() => document.body.classList.contains('darkMode'));
+  return isDarkTheme(page);
 }
 
 /**
@@ -346,25 +337,16 @@ export async function playerIsDarkTheme(page: Page): Promise<boolean> {
  * restore state unconditionally.
  */
 export async function setPlayerTheme(page: Page, theme: PlayerTheme): Promise<void> {
-  const want = theme === 'dark';
-  if ((await playerIsDarkTheme(page)) === want) return;
+  if ((await playerIsDarkTheme(page)) === (theme === 'dark')) return;
 
   // The user menu is the top bar's name button, labelled "Menu".
   await page.getByRole('button', { name: 'Menu', exact: true }).click();
   const toggle = page.getByRole('switch', { name: 'Dark Theme' });
   await toggle.waitFor({ state: 'visible', timeout: 10000 });
   await toggle.click();
-  // Close the menu, and wait for its overlay to tear down so a lingering CDK
-  // backdrop can't silently intercept the test's next click.
-  await page.keyboard.press('Escape');
-  await page.locator('.mat-mdc-menu-panel').waitFor({ state: 'detached', timeout: 5000 });
-  await page.locator('.cdk-overlay-backdrop').waitFor({ state: 'detached', timeout: 5000 });
+  await closeMenuAndWaitForOverlay(page);
 
-  if (want) {
-    await expect(page.locator('body')).toHaveClass(/\bdarkMode\b/, { timeout: 10000 });
-  } else {
-    await expect(page.locator('body')).not.toHaveClass(/\bdarkMode\b/, { timeout: 10000 });
-  }
+  await expectBodyTheme(page, theme);
 }
 
 export { expect } from '@playwright/test';

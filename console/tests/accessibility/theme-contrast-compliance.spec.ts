@@ -6,6 +6,7 @@
 
 import type { Locator, Page } from '@playwright/test';
 import { test, expect, gotoConsole, setConsoleTheme, CONSOLE_THEMES, ConsoleTheme } from '../../fixtures';
+import { luminance, contrastRatio, sample, assertReadable, effectiveColorSettings, cssVar, hexToRgb } from '../../../theme-helpers';
 
 /**
  * Accessibility — real WCAG contrast on the Console UI's "VM Not Found" page, a
@@ -33,135 +34,6 @@ import { test, expect, gotoConsole, setConsoleTheme, CONSOLE_THEMES, ConsoleThem
  * The "VM Not Found" page has no options bar, so it boots via `?theme=`. The
  * Console UI does not persist the theme, so nothing needs restoring afterwards.
  */
-
-/** WCAG relative luminance for an `rgb(...)` / `rgba(...)` string. */
-function luminance(rgb: string): number {
-  const [r, g, b] = rgb
-    .match(/\d+(\.\d+)?/g)!
-    .slice(0, 3)
-    .map((v) => {
-      const channel = Number(v) / 255;
-      return channel <= 0.03928 ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4);
-    });
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-}
-
-/** WCAG contrast ratio between two `rgb()` colours. */
-function contrastRatio(a: string, b: string): number {
-  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
-  return (hi + 0.05) / (lo + 0.05);
-}
-
-interface Sample {
-  color: string;
-  surface: string | null;
-  fontSizePx: number;
-  fontWeight: number;
-}
-
-/**
- * Sample the text colour, the first non-transparent painted background behind the
- * element, and the font metrics (so the caller can apply the large-text threshold).
- *
- * Walking up for a painted background matters: many M3 elements compute to a
- * transparent `background-color` and inherit the surface from an ancestor, so
- * comparing text against the element's own background would divide by the wrong
- * colour and report a bogus ratio.
- */
-async function sample(locator: Locator): Promise<Sample> {
-  return locator.evaluate((el) => {
-    const paintedBackground = (from: Element) => {
-      let node: Element | null = from;
-      while (node) {
-        const bg = getComputedStyle(node).backgroundColor;
-        if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return bg;
-        node = node.parentElement;
-      }
-      return null;
-    };
-    const style = getComputedStyle(el);
-    return {
-      color: style.color,
-      surface: paintedBackground(el),
-      fontSizePx: parseFloat(style.fontSize),
-      fontWeight: Number(style.fontWeight) || 400,
-    };
-  });
-}
-
-/** WCAG large-text bar: >= 24px, or >= 18.66px when bold. */
-function requiredRatio(s: Sample): number {
-  const isLarge = s.fontSizePx >= 24 || (s.fontSizePx >= 18.66 && s.fontWeight >= 700);
-  return isLarge ? 3 : 4.5;
-}
-
-async function assertReadable(locator: Locator, label: string, soft = false): Promise<number> {
-  const s = await sample(locator);
-  expect(s.surface, `${label}: could not find a painted background to measure against`).not.toBeNull();
-  const ratio = contrastRatio(s.color, s.surface!);
-  const min = requiredRatio(s);
-  (soft ? expect.soft : expect)(
-    ratio,
-    `${label}: contrast ${ratio.toFixed(2)}:1 (${s.color} on ${s.surface}, ` +
-      `${s.fontSizePx}px/${s.fontWeight}) must be >= ${min}:1 (WCAG 1.4.3)`
-  ).toBeGreaterThanOrEqual(min);
-  return ratio;
-}
-
-/** The six color keys defined by the colors design spec (§4). */
-interface ColorSettings {
-  AppTopBarHexColor?: string;
-  AppTopBarHexTextColor?: string;
-  AppLightModePrimaryHexColor?: string;
-  AppLightModePrimaryHexTextColor?: string;
-  AppDarkModePrimaryHexColor?: string;
-  AppDarkModePrimaryHexTextColor?: string;
-}
-
-/**
- * The effective settings, layered the way `ComnSettingsService` layers them:
- * `settings.json`, then `settings.shared.json`, then `settings.env.json`, each
- * deep-merged over the last. A missing overlay is skipped. Fetched from the app's
- * own origin so the result reflects what is actually served.
- */
-async function effectiveColorSettings(page: Page): Promise<ColorSettings> {
-  return page.evaluate(async () => {
-    const isObject = (v: unknown): v is Record<string, unknown> =>
-      !!v && typeof v === 'object' && !Array.isArray(v);
-    const deepMerge = (target: Record<string, unknown>, source: Record<string, unknown>) => {
-      const result: Record<string, unknown> = { ...target, ...source };
-      for (const key of Object.keys(source)) {
-        if (isObject(source[key]) && isObject(target[key])) {
-          result[key] = deepMerge(target[key] as Record<string, unknown>, source[key] as Record<string, unknown>);
-        }
-      }
-      return result;
-    };
-    let merged: Record<string, unknown> = {};
-    for (const file of ['settings.json', 'settings.shared.json', 'settings.env.json']) {
-      const res = await fetch(`/assets/config/${file}`, { cache: 'no-store' });
-      if (!res.ok) continue;
-      const body = await res.json().catch(() => null);
-      if (isObject(body)) merged = deepMerge(merged, body);
-    }
-    return merged;
-  });
-}
-
-/** Read a CSS custom property as set on `<body>`, trimmed and uppercased for comparison. */
-async function cssVar(page: Page, name: string): Promise<string> {
-  return page.evaluate(
-    (n) => getComputedStyle(document.body).getPropertyValue(n).trim().toUpperCase(),
-    name
-  );
-}
-
-/** `#rrggbb` → `rgb(r, g, b)`, matching how computed styles serialize colors. */
-function hexToRgb(hex: string): string {
-  const h = hex.replace('#', '');
-  const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
-  return `rgb(${r}, ${g}, ${b})`;
-}
 
 /** Contrast of `a` against `b`, asserted against the WCAG 1.4.11 3:1 non-text bar. */
 function assertNonText(fg: string, bg: string, label: string): void {
