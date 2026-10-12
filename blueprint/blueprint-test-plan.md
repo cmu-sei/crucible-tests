@@ -934,6 +934,52 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
     - expect: Responses are in expected JSON format
     - expect: Admin sidebar shows API version (e.g., 'Versions: UI 0.0.0, API 1.6.1')
 
+#### 12.6. Caster Integration Topology Teams
+
+**File:** `blueprint/tests/integration-with-crucible-services/caster-integration-topology-teams.spec.ts`
+
+**Steps:**
+  1. Seed a Caster directory with a variables-only template and ask Blueprint for its team variables
+    - expect: only the string and untyped variables come back; the Blueprint variables, a number, a sensitive variable and one terraform.tfvars assigns are left out
+  2. Ask for the team variables of a directory that does not exist
+    - expect: 403
+  3. Map a team to a topology team, then clear it, then try names tfvars cannot hold
+    - expect: 'blue_cell' is saved; a blank mapping saves as null ("By team name")
+    - expect: 'not valid!', '2nd_team', 'view_id' and 'user_id' are refused with 409 and the team is unchanged
+
+#### 12.7. Caster Integration Push and Remove
+
+**File:** `blueprint/tests/integration-with-crucible-services/caster-integration-push-and-remove.spec.ts`
+
+**Steps:**
+  1. Push a MSEL using Player and Caster, with one team mapped to a topology team and one taking its variable from its name
+    - expect: the MSEL reaches Deployed with a Player view, a Caster workspace in the MSEL's directory and an applied run
+    - expect: the workspace's blueprint-<msel id>.auto.tfvars writes view_id and each team's Player team ID under its variable, and the mapping replaces the name-derived variable
+  2. Remove Integrations
+    - expect: the Player view and workspace IDs are cleared and the workspace is gone from Caster
+  3. Push with two teams mapped to the same topology team
+    - expect: 409 naming both teams and the variable they share; nothing is deployed
+  4. Push a MSEL using Caster without Player
+    - expect: 409 'requires Player'
+
+#### 12.8. Caster Integration Config and Teams
+
+**File:** `blueprint/tests/integration-with-crucible-services/caster-integration-config-and-teams.spec.ts`
+
+**Steps:**
+  1. Open the Config tab of a MSEL using Caster without Player
+    - expect: 'Caster requires Player: the VMs are added to the Player view and its teams.' and Push Integrations is disabled
+  2. Turn on Player
+    - expect: 'Select the Caster directory to deploy.' and Push Integrations is disabled
+  3. Choose the directory from the Caster row's Directory select and Save Changes
+    - expect: the directory is saved, Push Integrations is enabled, and 'No Player application opens the VM UI…' is shown
+  4. Open the Teams section of a MSEL with a Caster directory
+    - expect: a Topology Team column with each team's variable, '(not in template)' for a name the template lacks, and a warning for a mapping the template no longer declares
+  5. Edit a mapped team and choose Topology Team 'By team name'
+    - expect: the mapping is cleared and 'Topology team "blue_cell" has no MSEL team. Its VMs will go to no team.' is shown
+  6. Edit another team and choose 'blue_cell'
+    - expect: the mapping is saved and the unmapped warning is gone
+
 ### 13. Real-time Collaboration and SignalR
 
 **Seed:** `/mnt/data/crucible-tests/blueprint/tests/seed.setup.ts`
