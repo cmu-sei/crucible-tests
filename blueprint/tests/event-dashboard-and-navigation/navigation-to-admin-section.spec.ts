@@ -61,6 +61,11 @@ test.describe('Event Dashboard and Navigation', () => {
       'Users',
       'Roles',
       'Groups',
+      // Rendered unconditionally by admin-container.component.html, not gated on the
+      // Gallery/CITE integrations being configured.
+      'Gallery Cards',
+      'CITE Actions',
+      'CITE Duties',
     ];
     for (const section of expectedSections) {
       await expect(
