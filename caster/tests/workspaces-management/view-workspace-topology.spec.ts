@@ -85,6 +85,10 @@ for (const theme of CASTER_THEMES) {
       await expect(view.locator('.legend')).toContainText('create');
       await expect(view.locator('.graph canvas').first()).toBeVisible();
 
+      // expect: the legend explains itself
+      await view.locator('.legend-item', { hasText: 'replace' }).hover();
+      await expect(page.locator('mat-tooltip-component')).toHaveText('Applying this plan destroys it and builds it again');
+
       // 2. Click the router
       const router = 'module.fw_edge.proxmox_virtual_environment_vm.vm';
       await expect
@@ -100,6 +104,43 @@ for (const theme of CASTER_THEMES) {
       await expect(details).toContainText('memory_mb');
       await expect(details.locator('tr', { hasText: 'nic0' })).toContainText('demo-outside');
       await expect(details.locator('tr', { hasText: 'nic3' })).toContainText('demo-mgmt');
+    });
+
+    test('View Workspace Topology After Apply', async ({ casterAuthenticatedPage: page, cleanupCasterProjectByName }) => {
+      await setCasterTheme(page, theme);
+
+      const projectName = 'Applied Topology WS Project';
+      await cleanupCasterProjectByName(projectName);
+
+      // The plan's run, already applied: its "create" outlines no longer describe anything.
+      await page.route('**/api/workspaces/*/runs*', (route) => {
+        const workspaceId = new URL(route.request().url()).pathname.split('/')[3];
+        return route.fulfill({
+          json: [
+            {
+              id: proxmoxTopology.runId,
+              workspaceId,
+              isDestroy: false,
+              status: 'Applied',
+              createdAt: proxmoxTopology.createdAt,
+            },
+          ],
+        });
+      });
+      await page.route('**/api/workspaces/*/topology', (route) => route.fulfill({ json: proxmoxTopology }));
+
+      await openNewWorkspace(page, projectName, 'Applied_Topology_Workspace');
+      await page.getByRole('radio', { name: 'topology' }).click();
+      const view = page.locator('cas-workspace-topology');
+
+      // expect: the plan's outcome in place of its changes
+      await expect(view.getByText('Plan from 2026-10-13 17:00 · Applied')).toBeVisible({ timeout: 10000 });
+      await expect(view.locator('.legend')).toHaveText('external');
+      await expect
+        .poll(() =>
+          view.locator('.graph').evaluate((c: any) => c._cyreg?.cy?.nodes('[action != ""][kind]').length ?? -1)
+        )
+        .toBe(0);
     });
 
     test('Export Workspace Topology', async ({ casterAuthenticatedPage: page, cleanupCasterProjectByName }, testInfo) => {
