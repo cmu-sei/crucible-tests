@@ -145,6 +145,33 @@ test.describe('Caster Integration', () => {
     expect(after.casterWorkspaceId).toBeFalsy();
   });
 
+  test('Push is refused when a required topology team has no MSEL team', async () => {
+    const msel = await createMsel(token);
+    mselId = msel.id;
+    await updateMsel(token, msel.id, {
+      usePlayer: true,
+      useCaster: true,
+      casterDirectoryId: template!.directoryId,
+    });
+
+    // blue_cell gets Blue Team; nothing writes red_cell, which has no default, or spare_cell, which has
+    await createTeam(token, msel.id, { name: 'Blue Cell', shortName: 'BLUE' });
+
+    // 1. Push
+    const push = await pushIntegrations(token, msel.id);
+
+    // expect: 409 naming red_cell only, and nothing is deployed
+    expect(push.status).toBe(409);
+    expect(push.data?.title).toBe(
+      'The Caster template requires topology team "red_cell", but no MSEL team is mapped to it. ' +
+      'Map a team to it, or give the variable a default in the template.'
+    );
+    const after = await waitForMsel(token, msel.id, () => true);
+    expect(after.status).not.toBe('Pushing');
+    expect(after.playerViewId).toBeFalsy();
+    expect(after.casterWorkspaceId).toBeFalsy();
+  });
+
   test('Push is refused when the MSEL uses Caster without Player', async () => {
     const msel = await createMsel(token);
     mselId = msel.id;

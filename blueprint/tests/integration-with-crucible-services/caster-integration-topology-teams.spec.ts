@@ -45,8 +45,9 @@ test.describe('Caster Integration', () => {
     // 1. Ask Blueprint for the directory's team variables
     const r = await getCasterTeamVariables(token, template!.directoryId);
 
-    // expect: the string and untyped variables only. The Blueprint variables, a number, a
-    // sensitive variable and a variable terraform.tfvars already assigns are all left out.
+    // expect: the string and untyped variables only, required unless they have a default. The
+    // Blueprint variables, a number, a sensitive variable and a variable terraform.tfvars already
+    // assigns are all left out.
     expect(r.ok, r.text).toBe(true);
     expect(r.data).toEqual(VARIABLES_ONLY_TEMPLATE_TEAM_VARIABLES);
   });

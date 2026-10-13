@@ -87,6 +87,10 @@ const BLUEPRINT_VARIABLES = [
   '# team variables',
   'variable "blue_cell" { type = string }',
   'variable "red_cell" {}',
+  'variable "spare_cell" {',
+  '  type    = string',
+  '  default = null',
+  '}',
   '',
   '# cannot take a team ID',
   'variable "vm_count" { type = number }',
@@ -98,8 +102,9 @@ const TERRAFORM_TFVARS = { name: 'terraform.tfvars', content: 'vm_count = 0\nreg
 
 /**
  * A template that only declares variables. The four Blueprint variables are what every push
- * writes; `blue_cell` and `red_cell` take team IDs; the rest are declarations that cannot take
- * a team ID, which the team-variables endpoint has to leave out.
+ * writes; `blue_cell`, `red_cell` and `spare_cell` take team IDs, the first two with no default,
+ * so a push needs a team for each; the rest are declarations that cannot take a team ID, which
+ * the team-variables endpoint has to leave out.
  *
  * `sensitive` needs terraform 0.14, and a directory with no terraform version of its own gets
  * Caster's default, 0.12.29, so this template is for reading only. Push with
@@ -127,7 +132,11 @@ export const APPLYABLE_TEMPLATE: Array<{ name: string; content: string }> = [
 ];
 
 /** The team variables `VARIABLES_ONLY_TEMPLATE` leaves open, as the API returns them. */
-export const VARIABLES_ONLY_TEMPLATE_TEAM_VARIABLES = ['blue_cell', 'red_cell'];
+export const VARIABLES_ONLY_TEMPLATE_TEAM_VARIABLES = [
+  { name: 'blue_cell', required: true },
+  { name: 'red_cell', required: true },
+  { name: 'spare_cell', required: false },
+];
 
 export interface CasterTemplate {
   projectId: string;
@@ -209,8 +218,8 @@ export async function getCasterRun(token: string, runId: string): Promise<any> {
 export async function getCasterTeamVariables(
   token: string,
   directoryId: string
-): Promise<{ ok: boolean; status: number; data: string[]; text: string }> {
-  return blueprintCall<string[]>(token, `/api/caster/directories/${directoryId}/team-variables`);
+): Promise<{ ok: boolean; status: number; data: Array<{ name: string; required: boolean }>; text: string }> {
+  return blueprintCall(token, `/api/caster/directories/${directoryId}/team-variables`);
 }
 
 /**

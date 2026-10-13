@@ -940,7 +940,7 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
 
 **Steps:**
   1. Seed a Caster directory with a variables-only template and ask Blueprint for its team variables
-    - expect: only the string and untyped variables come back; the Blueprint variables, a number, a sensitive variable and one terraform.tfvars assigns are left out
+    - expect: only the string and untyped variables come back, required unless they have a default; the Blueprint variables, a number, a sensitive variable and one terraform.tfvars assigns are left out
   2. Ask for the team variables of a directory that does not exist
     - expect: 403
   3. Map a team to a topology team, then clear it, then try names tfvars cannot hold
@@ -959,7 +959,9 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
     - expect: the Player view and workspace IDs are cleared and the workspace is gone from Caster
   3. Push with two teams mapped to the same topology team
     - expect: 409 naming both teams and the variable they share; nothing is deployed
-  4. Push a MSEL using Caster without Player
+  4. Push with no team for a topology team that has no default
+    - expect: 409 naming that variable only, not the one with a default; nothing is deployed
+  5. Push a MSEL using Caster without Player
     - expect: 409 'requires Player'
 
 #### 12.8. Caster Integration Config and Teams
@@ -974,9 +976,9 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
   3. Choose the directory from the Caster row's Directory select and Save Changes
     - expect: the directory is saved, Push Integrations is enabled, and 'No Player application opens the VM UI…' is shown
   4. Open the Teams section of a MSEL with a Caster directory
-    - expect: a Topology Team column with each team's variable, '(not in template)' for a name the template lacks, and a warning for a mapping the template no longer declares
+    - expect: a Topology Team column with each team's variable, '(not in template)' for a name the template lacks, a warning for a mapping the template no longer declares, and no warning for an unmapped topology team with a default
   5. Edit a mapped team and choose Topology Team 'By team name'
-    - expect: the mapping is cleared and 'Topology team "blue_cell" has no MSEL team. Its VMs will go to no team.' is shown
+    - expect: the mapping is cleared and 'Topology team "blue_cell" has no MSEL team. The Caster template requires one, so Push will be refused.' is shown
   6. Edit another team and choose 'blue_cell'
     - expect: the mapping is saved and the unmapped warning is gone
 

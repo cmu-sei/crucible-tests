@@ -119,6 +119,8 @@ test.describe('Caster Integration', () => {
     await expect(row('Red Cell')).toContainText('red_cell');
     await expect(row('Green Team')).toContainText('green_team (not in template)');
     await expect(row('Gold Team')).toContainText('retired_cell');
+    // spare_cell has no team either, but the template gives it a default
+    await expect(page.getByText(/^Topology team "spare_cell"/)).toHaveCount(0);
     await expect(
       page.getByText('Gold Team is mapped to topology team "retired_cell", which the Caster template no longer declares.')
     ).toBeVisible();
@@ -131,11 +133,11 @@ test.describe('Caster Integration', () => {
     await dialog.getByRole('button', { name: 'Save' }).click();
     await expect(dialog).toBeHidden();
 
-    // expect: the mapping is cleared and blue_cell has no team to deploy to
+    // expect: the mapping is cleared and blue_cell, which has no default, has no team to deploy to
     await expect.poll(async () => (await blueprintCall<any>(token, `/api/teams/${blue.id}`)).data.casterTeamVariable).toBeNull();
     await expect(row('Blue Team')).toContainText('blue_team (not in template)');
     await expect(
-      page.getByText('Topology team "blue_cell" has no MSEL team. Its VMs will go to no team.')
+      page.getByText('Topology team "blue_cell" has no MSEL team. The Caster template requires one, so Push will be refused.')
     ).toBeVisible();
 
     // 3. Map Green Team to blue_cell
