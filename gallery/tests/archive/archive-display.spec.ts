@@ -4,7 +4,7 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoExhibitSection } from '../../fixtures';
+import { test, expect, gotoExhibitSection, CARD_DATE_TEXT } from '../../fixtures';
 
 /**
  * Archive Functionality §4.1 — Archive Page Display.
@@ -46,8 +46,8 @@ test.describe('Archive Functionality', () => {
 
     const intelArticle = articleCards.filter({ hasText: 'Intel Article 1' });
     await expect(intelArticle.locator('mat-icon.source-icon')).toHaveClass(/mdi-shield-lock/);
-    await expect(intelArticle.locator('.article-subtitle')).toHaveText('E2E Test Source');
-    await expect(intelArticle.getByText(/\d{1,2}\/\d{1,2}\/\d{2},? .*ET/)).toBeVisible();
+    await expect(intelArticle.locator('.source-name')).toHaveText('E2E Test Source');
+    await expect(intelArticle.getByText(CARD_DATE_TEXT)).toBeVisible();
     await expect(intelArticle.locator('.summary-text')).toHaveText('E2E test intel article');
 
     // expect: Each article has 'View', 'Read', and 'Share' action buttons.

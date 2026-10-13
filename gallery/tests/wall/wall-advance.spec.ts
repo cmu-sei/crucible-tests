@@ -191,18 +191,18 @@ test.describe('Wall View Functionality', () => {
     await expect(page.getByText('Move 0, Inject 0')).toBeVisible();
 
     const cards = page.locator('section.cards mat-card');
-    await expect(cards.locator('mat-card-title')).toHaveText([card1Name, card2Name, card3Name]);
+    await expect(cards.locator('.card-title')).toHaveText([card1Name, card2Name, card3Name]);
     const card2 = cards.filter({ hasText: card2Name });
 
     // Card 2 lives at move 1, so at (0, 0) its articles are not yet released: no unread
     // count and no Details button.
-    await expect(card2.getByRole('heading', { level: 3 })).toHaveText('No articles posted');
+    await expect(card2.locator('.card-empty')).toHaveText('No articles posted');
     await expect(card2.getByRole('button', { name: 'Details' })).toHaveCount(0);
     // Card 1 is released, which is what makes the "cards update" assertion below a
     // change rather than a coincidence.
     await expect(
-      cards.filter({ hasText: card1Name }).getByRole('heading', { level: 3 })
-    ).toHaveText('2 unread articles');
+      cards.filter({ hasText: card1Name }).locator('.card-unread')
+    ).toHaveText('2 unread');
 
     // 2. Click the 'Advance' button. Pair the click with the API round-trip so the
     // assertions below run against a settled store rather than a fixed sleep.
@@ -223,13 +223,13 @@ test.describe('Wall View Functionality', () => {
 
     // expect: The cards displayed on the wall update to reflect articles for the new
     // move/inject — Card 2's two articles are now released.
-    await expect(card2.getByRole('heading', { level: 3 })).toHaveText('2 unread articles');
+    await expect(card2.locator('.card-unread')).toHaveText('2 unread');
     await expect(card2.getByRole('button', { name: 'Details' })).toBeVisible();
 
     // Advance again: the exhibit steps along the inject axis this time, releasing Card 3
     // at (1, 1). This proves the button keeps stepping rather than being a one-shot.
     const card3 = cards.filter({ hasText: card3Name });
-    await expect(card3.getByRole('heading', { level: 3 })).toHaveText('No articles posted');
+    await expect(card3.locator('.card-empty')).toHaveText('No articles posted');
 
     const [secondAdvance] = await Promise.all([
       page.waitForResponse(advanceUrl),
@@ -239,7 +239,7 @@ test.describe('Wall View Functionality', () => {
 
     await expect(page.getByText('Move 1, Inject 1')).toBeVisible();
     await expect(page.getByText('Move 1, Inject 0')).toHaveCount(0);
-    await expect(card3.getByRole('heading', { level: 3 })).toHaveText('2 unread articles');
+    await expect(card3.locator('.card-unread')).toHaveText('2 unread');
     await expect(card3.getByRole('button', { name: 'Details' })).toBeVisible();
 
     // The exhibit row itself really moved — the UI is not just re-rendering local state.

@@ -4,7 +4,7 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoExhibitSection } from '../../fixtures';
+import { test, expect, gotoExhibitSection, CARD_DATE_TEXT } from '../../fixtures';
 
 /**
  * Wall View Functionality §3.1 — Wall Page Display.
@@ -45,7 +45,7 @@ test.describe('Wall View Functionality', () => {
 
     // expect: Cards are displayed in a grid layout — one per seeded TeamCard.
     const cards = page.locator('section.cards mat-card');
-    await expect(cards.locator('mat-card-title').filter({ hasText: SEEDED_CARD })).toHaveText([
+    await expect(cards.locator('.card-title').filter({ hasText: SEEDED_CARD })).toHaveText([
       'Test Card 1',
       'Test Card 2',
       'Test Card 3',
@@ -54,8 +54,8 @@ test.describe('Wall View Functionality', () => {
     // expect: Each card shows: name, description, date posted, and unread article count.
     for (const cardName of ['Test Card 1', 'Test Card 2', 'Test Card 3']) {
       const card = cards.filter({ hasText: cardName });
-      await expect(card.locator('mat-card-title')).toHaveText(cardName);
-      await expect(card.locator('mat-card-subtitle')).toHaveText(
+      await expect(card.locator('.card-title')).toHaveText(cardName);
+      await expect(card.locator('.card-description')).toHaveText(
         'Auto-seeded card for Playwright tests'
       );
     }
@@ -63,12 +63,12 @@ test.describe('Wall View Functionality', () => {
     // Card 1's articles are released at (0, 0): simulated date/time, an unread count
     // and a Details button. Cards 2 and 3 are at later positions and say so.
     const card1 = cards.filter({ hasText: 'Test Card 1' });
-    await expect(card1.getByRole('heading', { level: 3 })).toHaveText('2 unread articles');
+    await expect(card1.locator('.card-unread')).toHaveText('2 unread');
     await expect(card1.locator('mat-icon[fontIcon="mdi-calendar-clock-outline"]')).toBeVisible();
-    await expect(card1.getByText(/\d{1,2}\/\d{1,2}\/\d{2},? .*ET/)).toBeVisible();
-    await expect(cards.filter({ hasText: 'Test Card 2' }).getByRole('heading', { level: 3 }))
+    await expect(card1.getByText(CARD_DATE_TEXT)).toBeVisible();
+    await expect(cards.filter({ hasText: 'Test Card 2' }).locator('.card-empty'))
       .toHaveText('No articles posted');
-    await expect(cards.filter({ hasText: 'Test Card 3' }).getByRole('heading', { level: 3 }))
+    await expect(cards.filter({ hasText: 'Test Card 3' }).locator('.card-empty'))
       .toHaveText('No articles posted');
 
     // 2. Observe the navigation controls at the top.

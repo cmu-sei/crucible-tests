@@ -35,7 +35,7 @@ test.describe('Wall View Functionality', () => {
     // either way. This is the same defect that made archive-card-filter.spec.ts
     // flaky on a literal option order; see the note there.
     const cards = page.locator('section.cards mat-card');
-    const seededTitles = cards.locator('mat-card-title').filter({ hasText: /^Test Card [123]$/ });
+    const seededTitles = cards.locator('.card-title').filter({ hasText: /^Test Card [123]$/ });
     for (const cardName of ['Test Card 1', 'Test Card 2', 'Test Card 3']) {
       await expect(seededTitles.filter({ hasText: cardName })).toHaveCount(1);
     }
@@ -64,7 +64,7 @@ test.describe('Wall View Functionality', () => {
     ]);
     // Each article renders its metadata and action buttons.
     const intelArticle = articleCards.filter({ hasText: 'Intel Article 1' });
-    await expect(intelArticle.locator('.article-subtitle')).toHaveText('E2E Test Source');
+    await expect(intelArticle.locator('.source-name')).toHaveText('E2E Test Source');
     await expect(intelArticle.getByText('E2E test intel article')).toBeVisible();
     await expect(intelArticle.getByRole('button', { name: 'View' })).toBeVisible();
   });

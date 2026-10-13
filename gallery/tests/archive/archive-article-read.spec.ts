@@ -86,7 +86,10 @@ test.describe('Archive Functionality', () => {
     const readButton = intelArticle.getByRole('button', { name: 'Read' });
     await expect(readButton).toBeVisible();
     await expect(readButton.locator('mat-icon')).toHaveClass(/mdi-checkbox-blank-outline/);
-    await expect(intelArticle.locator('mat-card-header')).toHaveClass(/article-unread/);
+    await expect(intelArticle).toHaveClass(/article-unread/);
+    // The filled source row is the visible cue; screen readers get a hidden "Unread".
+    const intelUnreadLabel = intelArticle.locator('.card-meta').getByText('Unread', { exact: true });
+    await expect(intelUnreadLabel).toHaveCount(1);
 
     // 2. Click the 'Read' button on an unread article.
     const isReadResponse = (r: { url(): string }) =>
@@ -98,15 +101,16 @@ test.describe('Archive Functionality', () => {
     expect(markReadResponse.status()).toBe(200);
 
     // expect: The Read button icon changes to checked/filled indicating the article is
-    // now read. The card header class and the tab-title unread count corroborate it.
+    // now read. The card class and the tab-title unread count corroborate it.
     await expect(readButton.locator('mat-icon')).toHaveClass(/mdi-checkbox-marked-outline/);
-    await expect(intelArticle.locator('mat-card-header')).toHaveClass(/article-read/);
+    await expect(intelArticle).toHaveClass(/article-read/);
+    await expect(intelUnreadLabel).toHaveCount(0);
     await expect
       .poll(async () => unreadFromTitle(await page.title()))
       .toBe(baselineUnread - 1);
 
     // Only the clicked article changed state.
-    await expect(newsArticle.locator('mat-card-header')).toHaveClass(/article-unread/);
+    await expect(newsArticle).toHaveClass(/article-unread/);
 
     // 3. Click the 'Read' button again to toggle back to unread.
     const [markUnreadResponse] = await Promise.all([
@@ -117,7 +121,7 @@ test.describe('Archive Functionality', () => {
 
     // expect: The Read button icon changes back to unchecked.
     await expect(readButton.locator('mat-icon')).toHaveClass(/mdi-checkbox-blank-outline/);
-    await expect(intelArticle.locator('mat-card-header')).toHaveClass(/article-unread/);
+    await expect(intelArticle).toHaveClass(/article-unread/);
     await expect.poll(async () => unreadFromTitle(await page.title())).toBe(baselineUnread);
   });
 });

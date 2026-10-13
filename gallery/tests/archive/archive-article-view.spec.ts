@@ -18,7 +18,7 @@ import { test, expect, gotoExhibitSection } from '../../fixtures';
  * restoration. Viewing does not mark the article read (that is the Read button), which
  * this spec asserts so a future regression there is caught here too.
  *
- * Note the read-state assertions are made per article (card header class + checkbox
+ * Note the read-state assertions are made per article (card class + checkbox
  * icon) rather than through the tab title's unread count: the Archive store is not
  * filtered by exhibit, so a UserArticle created for the same user in *any* exhibit while
  * this page is open is pushed into the list and inflates that count (see the
@@ -56,9 +56,9 @@ test.describe('Archive Functionality', () => {
     // silently mark the article read.
     await dialog.getByRole('button', { name: 'Cancel' }).click();
     await expect(dialog).toHaveCount(0);
-    await expect(intelArticle.locator('mat-card-header')).toHaveClass(/article-unread/);
+    await expect(intelArticle).toHaveClass(/article-unread/);
     await expect(
-      intelArticle.locator('button[title="Read/Unread"] mat-icon')
+      intelArticle.locator('button[title="Mark as read"] mat-icon')
     ).toHaveClass(/mdi-checkbox-blank-outline/);
   });
 });

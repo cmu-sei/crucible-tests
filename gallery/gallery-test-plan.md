@@ -184,7 +184,7 @@ Gallery is a content management application for the Crucible cybersecurity train
 
 **Steps:**
   1. Navigate to the Wall view and observe unread article counts on cards
-    - expect: Each card shows the unread article count (e.g. '5 unread articles', '1 unread article')
+    - expect: Each card shows the unread article count (e.g. '5 unread', '1 unread')
     - expect: Cards with unread articles display the count prominently
   2. Navigate to the Archive view and mark an article as 'Read' using the Read button
     - expect: The Read button toggles to indicate the article has been read
