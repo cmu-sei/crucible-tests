@@ -699,6 +699,35 @@ export async function deleteTeam(token: string, teamId: string): Promise<void> {
 }
 
 /**
+ * Create a Player application on the specified MSEL via the Blueprint API.
+ * Returns the application id — pair every call with `deletePlayerApplication` in test teardown.
+ */
+export async function createPlayerApplication(
+  token: string,
+  mselId: string,
+  name: string = tempBlueprintName('TestBP-App')
+): Promise<{ id: string; name: string }> {
+  const r = await blueprintCall<any>(token, '/api/playerApplications', {
+    method: 'POST',
+    body: { mselId, name, url: 'http://localhost', embeddable: true, loadInBackground: false },
+  });
+  if (!r.ok) {
+    throw new Error(`createPlayerApplication failed (${r.status}): ${r.text}`);
+  }
+  return { id: r.data.id as string, name: r.data.name as string };
+}
+
+/**
+ * Delete a Player application by id. Safe to call on a non-existent id — swallows 404.
+ */
+export async function deletePlayerApplication(token: string, id: string): Promise<void> {
+  const r = await blueprintCall(token, `/api/playerApplications/${id}`, { method: 'DELETE' });
+  if (!r.ok && r.status !== 404) {
+    console.warn(`deletePlayerApplication(${id}) returned ${r.status}: ${r.text}`);
+  }
+}
+
+/**
  * Put a user on a MSEL team. Returns the TeamUser join record, whose `id` is what
  * `removeUserFromTeam` takes. `POST /api/teamusers` answers **201**.
  *
