@@ -10,7 +10,8 @@
 // confirmations are all computed in the component. Blueprint.Api.Tests owns the
 // mselcompetencies endpoints; this spec asserts only what the tab shows.
 
-import { test, expect, Page } from '../../fixtures';
+import type { Page } from '@playwright/test';
+import { test, expect } from '../../fixtures';
 import {
   getBlueprintToken,
   tempBlueprintName,

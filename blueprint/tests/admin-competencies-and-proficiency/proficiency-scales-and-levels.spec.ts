@@ -10,7 +10,8 @@
 // status codes and persisted rows (ProficiencyScaleEndpointTests, ProficiencyLevelEndpointTests);
 // this spec only asserts what the page shows.
 
-import { test, expect, Page, Locator } from '../../fixtures';
+import type { Locator, Page } from '@playwright/test';
+import { test, expect } from '../../fixtures';
 import {
   getBlueprintToken,
   gotoBlueprintAdminSection,

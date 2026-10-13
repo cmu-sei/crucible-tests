@@ -12,7 +12,8 @@
 // asserts only what the dialog and the table show.
 
 import { randomUUID } from 'crypto';
-import { test, expect, Page } from '../../fixtures';
+import type { Page } from '@playwright/test';
+import { test, expect } from '../../fixtures';
 import {
   getBlueprintToken,
   gotoBlueprintAdminSection,
