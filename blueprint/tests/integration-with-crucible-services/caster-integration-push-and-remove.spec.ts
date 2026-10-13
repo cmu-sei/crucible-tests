@@ -3,7 +3,8 @@
 
 // spec: blueprint/blueprint-test-plan.md
 
-import { test, expect } from '../../fixtures';
+import { test, expect, Services } from '../../fixtures';
+import { request as playwrightRequest } from '@playwright/test';
 import {
   getBlueprintToken,
   createMsel,
@@ -25,6 +26,19 @@ import {
   CasterTemplate,
   APPLYABLE_TEMPLATE,
 } from '../../caster-helpers';
+
+async function getPlayerViewTeams(token: string, viewId: string): Promise<any[]> {
+  const ctx = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
+  try {
+    const res = await ctx.get(`${Services.Player.API.replace(/\/$/, '')}/api/views/${viewId}/teams`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    expect(res.ok(), `Player view teams: ${await res.text()}`).toBe(true);
+    return await res.json();
+  } finally {
+    await ctx.dispose();
+  }
+}
 
 // A push plans and applies a real Caster run, so leave room for a cold terraform job.
 test.describe.configure({ timeout: 600_000 });
@@ -145,7 +159,7 @@ test.describe('Caster Integration', () => {
     expect(after.casterWorkspaceId).toBeFalsy();
   });
 
-  test('Push is refused when a required topology team has no MSEL team', async () => {
+  test('A MSEL team named Admin takes the place of Player\'s Admin team', async () => {
     const msel = await createMsel(token);
     mselId = msel.id;
     await updateMsel(token, msel.id, {
@@ -154,22 +168,26 @@ test.describe('Caster Integration', () => {
       casterDirectoryId: template!.directoryId,
     });
 
-    // blue_cell gets Blue Team; nothing writes red_cell, which has no default, or spare_cell, which has
+    // blue_cell and red_cell have no default, so each gets a team by name
+    const admin = await createTeam(token, msel.id, { name: 'Admin', shortName: 'ADM' });
     await createTeam(token, msel.id, { name: 'Blue Cell', shortName: 'BLUE' });
+    await createTeam(token, msel.id, { name: 'Red Cell', shortName: 'RED' });
 
     // 1. Push
     const push = await pushIntegrations(token, msel.id);
+    expect(push.ok, push.text).toBe(true);
+    const deployed = await waitForMsel(token, msel.id, m => m.status === 'Deployed', 480_000);
 
-    // expect: 409 naming red_cell only, and nothing is deployed
-    expect(push.status).toBe(409);
-    expect(push.data?.title).toBe(
-      'The Caster template requires topology team "red_cell", but no MSEL team is mapped to it. ' +
-      'Map a team to it, or give the variable a default in the template.'
-    );
-    const after = await waitForMsel(token, msel.id, () => true);
-    expect(after.status).not.toBe('Pushing');
-    expect(after.playerViewId).toBeFalsy();
-    expect(after.casterWorkspaceId).toBeFalsy();
+    // expect: the view has one Admin team, the MSEL's, with the role Player gives its own
+    const teams = await getPlayerViewTeams(token, deployed.playerViewId);
+    const admins = teams.filter(t => t.name.trim().toLowerCase() === 'admin');
+    expect(admins.map(t => t.id)).toEqual([admin.id]);
+    expect(admins[0].roleName).toBe('View Admin');
+
+    // expect: the vars file sets admin once, to the MSEL's Admin team
+    const vars = await getBlueprintVarsFile(casterToken, template!.directoryId, deployed.casterWorkspaceId);
+    const adminLines = vars.split(/\r?\n/).filter(l => l.startsWith('admin '));
+    expect(adminLines).toEqual([`admin = "${admin.id}"`]);
   });
 
   test('Push is refused when the MSEL uses Caster without Player', async () => {

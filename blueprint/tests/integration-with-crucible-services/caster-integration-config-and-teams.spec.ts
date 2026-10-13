@@ -129,6 +129,9 @@ test.describe('Caster Integration', () => {
     await page.getByRole('button', { name: 'Edit Blue Team' }).click();
     let dialog = page.getByRole('dialog').first();
     await dialog.getByRole('combobox', { name: 'Topology Team' }).click();
+    // expect: each option names the other teams already deploying to it
+    await expect(page.getByRole('option', { name: 'red_cell (used by Red Cell)', exact: true })).toBeVisible();
+    await expect(page.getByRole('option', { name: 'spare_cell', exact: true })).toBeVisible();
     await page.getByRole('option', { name: 'By team name' }).click();
     await dialog.getByRole('button', { name: 'Save' }).click();
     await expect(dialog).toBeHidden();
@@ -137,7 +140,7 @@ test.describe('Caster Integration', () => {
     await expect.poll(async () => (await blueprintCall<any>(token, `/api/teams/${blue.id}`)).data.casterTeamVariable).toBeNull();
     await expect(row('Blue Team')).toContainText('blue_team (not in template)');
     await expect(
-      page.getByText('Topology team "blue_cell" has no MSEL team. The Caster template requires one, so Push will be refused.')
+      page.getByText('Topology team "blue_cell" has no MSEL team. The Caster template gives it no default, so the plan will fail unless Caster supplies it.')
     ).toBeVisible();
 
     // 3. Map Green Team to blue_cell
@@ -152,5 +155,20 @@ test.describe('Caster Integration', () => {
     await expect.poll(async () => (await blueprintCall<any>(token, `/api/teams/${green.id}`)).data.casterTeamVariable).toBe('blue_cell');
     await expect(row('Green Team')).toContainText('blue_cell');
     await expect(page.getByText(/^Topology team "blue_cell" has no MSEL team/)).toBeHidden();
+
+    // 4. Map Gold Team to blue_cell too
+    await page.getByRole('button', { name: 'Edit Gold Team' }).click();
+    dialog = page.getByRole('dialog').first();
+    await dialog.getByRole('combobox', { name: 'Topology Team' }).click();
+    await page.getByRole('option', { name: 'blue_cell (used by Green Team)', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Save' }).click();
+    await expect(dialog).toBeHidden();
+
+    // expect: both teams would write blue_cell, which Push refuses
+    await expect.poll(async () => (await blueprintCall<any>(token, `/api/teams/${gold.id}`)).data.casterTeamVariable).toBe('blue_cell');
+    // the teams are listed in load order, so match either
+    await expect(
+      page.getByText(/^("Green Team" and "Gold Team"|"Gold Team" and "Green Team") all become "blue_cell", so Push will be refused\./)
+    ).toBeVisible();
   });
 });

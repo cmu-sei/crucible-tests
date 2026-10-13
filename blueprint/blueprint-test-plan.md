@@ -959,8 +959,8 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
     - expect: the Player view and workspace IDs are cleared and the workspace is gone from Caster
   3. Push with two teams mapped to the same topology team
     - expect: 409 naming both teams and the variable they share; nothing is deployed
-  4. Push with no team for a topology team that has no default
-    - expect: 409 naming that variable only, not the one with a default; nothing is deployed
+  4. Push a MSEL with a team named Admin
+    - expect: the Player view has one Admin team, the MSEL's, with the View Admin role, and the vars file sets admin once, to it
   5. Push a MSEL using Caster without Player
     - expect: 409 'requires Player'
 
@@ -978,9 +978,12 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
   4. Open the Teams section of a MSEL with a Caster directory
     - expect: a Topology Team column with each team's variable, '(not in template)' for a name the template lacks, a warning for a mapping the template no longer declares, and no warning for an unmapped topology team with a default
   5. Edit a mapped team and choose Topology Team 'By team name'
-    - expect: the mapping is cleared and 'Topology team "blue_cell" has no MSEL team. The Caster template requires one, so Push will be refused.' is shown
+    - expect: the options name the other teams using them, e.g. 'red_cell (used by Red Cell)'
+    - expect: the mapping is cleared and 'Topology team "blue_cell" has no MSEL team. The Caster template gives it no default, so the plan will fail unless Caster supplies it.' is shown
   6. Edit another team and choose 'blue_cell'
     - expect: the mapping is saved and the unmapped warning is gone
+  7. Map a third team to the same topology team
+    - expect: the option reads 'blue_cell (used by Green Team)' and a warning says both teams 'all become "blue_cell", so Push will be refused.'
 
 ### 13. Real-time Collaboration and SignalR
 
