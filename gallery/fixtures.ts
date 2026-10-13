@@ -971,7 +971,7 @@ export async function apiCreateArticle(
         move: options.move ?? 0,
         inject: options.inject ?? 0,
         // Enums serialize as strings — Startup registers a JsonStringEnumConverter.
-        status: 'Open',
+        status: 'Green',
         sourceType: 'News',
         sourceName: 'Playwright',
         url: '',

@@ -152,7 +152,7 @@ test.describe('Article Management', () => {
         cardId: card.body.id,
         move: 0,
         inject: 0,
-        status: 'Unused',
+        status: 'Gray',
         sourceType: 'Intel',
         sourceName: 'Playwright',
         datePosted: new Date().toISOString(),

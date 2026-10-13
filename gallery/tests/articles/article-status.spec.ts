@@ -113,12 +113,12 @@ test.describe('Article Management', () => {
     const cardName = `Article Status Card ${unique}`;
     const articleName = `Status Article ${unique}`;
 
-    // The plan writes the statuses as numeric codes ('Open' (50), 'Affected'
-    // (40), ...). They are not numbers in this build: ItemStatus in the generated
-    // API model is a string union, and both the API and the dialog exchange
-    // 'Unused' | 'Open' | 'Affected' | 'Critical' | 'Closed'. The names are what
-    // is asserted; the plan's codes have no representation to assert against.
-    const statusWorkflow = ['Unused', 'Open', 'Affected', 'Critical', 'Closed'] as const;
+    // The plan writes the statuses as numeric codes. They are not numbers in this
+    // build: ItemStatus in the generated API model is a string union of color
+    // names, and both the API and the dialog exchange
+    // 'Gray' | 'Green' | 'Yellow' | 'Orange' | 'Red'. The names are what is
+    // asserted; the plan's codes have no representation to assert against.
+    const statusWorkflow = ['Gray', 'Green', 'Yellow', 'Orange', 'Red'] as const;
 
     // Setup: an own collection with a card and one collection-level article
     // (exhibitId null) so it is visible in the admin panel —
@@ -138,9 +138,11 @@ test.describe('Article Management', () => {
     });
     expect(card.status, 'seed card').toBe(201);
 
-    // Seeded as Critical, deliberately *not* the workflow's first status, so
-    // step 1's "set status to Unused" is a real change rather than a no-op the
-    // dirty-check would reject.
+    // Seeded as Orange, deliberately *not* the workflow's first status, so
+    // step 1's "set status to Gray" is a real change rather than a no-op the
+    // dirty-check would reject. It is sent under its legacy name, 'Critical':
+    // the API still accepts the old names (Unused, Open, Affected, Critical,
+    // Closed) for existing clients and answers with the color name.
     const seededArticle = await galleryApi('post', '/api/articles', {
       name: articleName,
       summary: `Summary for ${articleName}`,
@@ -156,6 +158,7 @@ test.describe('Article Management', () => {
       openInNewTab: false,
     });
     expect(seededArticle.status, 'seed article').toBe(201);
+    expect(seededArticle.body.status, 'legacy Critical comes back as Orange').toBe('Orange');
 
     await openCollectionArticlesPanel(page, collectionName);
 
@@ -178,14 +181,13 @@ test.describe('Article Management', () => {
       // getByRole('option') ambiguous. See the helper.
       const statusPanel = await openMatSelect(statusSelect);
 
-      // The dropdown offers exactly the five statuses, in the order
-      // admin-article-edit-dialog.component.ts declares itemStatusList.
+      // The dropdown offers exactly the five statuses, in severity order.
       await expect(statusPanel.getByRole('option')).toHaveText([
-        'Unused',
-        'Affected',
-        'Closed',
-        'Critical',
-        'Open',
+        'Gray',
+        'Green',
+        'Yellow',
+        'Orange',
+        'Red',
       ]);
       await statusPanel.getByRole('option', { name: status, exact: true }).click();
 
@@ -212,11 +214,11 @@ test.describe('Article Management', () => {
       expect(persisted.status, `persisted status after selecting ${status}`).toBe(status);
     };
 
-    // 1. Set status to 'Unused'   -> expect: status is set to Unused
-    // 2. Change status to 'Open'  -> expect: status updates to Open
-    // 3. Change to 'Affected'     -> expect: status updates to Affected
-    // 4. Change to 'Critical'     -> expect: status updates to Critical
-    // 5. Change to 'Closed'       -> expect: status updates to Closed
+    // 1. Set status to 'Gray'     -> expect: status is set to Gray
+    // 2. Change status to 'Green' -> expect: status updates to Green
+    // 3. Change to 'Yellow'       -> expect: status updates to Yellow
+    // 4. Change to 'Orange'       -> expect: status updates to Orange
+    // 5. Change to 'Red'          -> expect: status updates to Red
     for (const status of statusWorkflow) {
       await setStatusViaDialog(status);
     }
@@ -227,20 +229,18 @@ test.describe('Article Management', () => {
     await reopenPanel.getByRole('button', { name: `Edit ${articleName}` }).click({ force: true });
     await expect(page.getByRole('dialog', { name: 'Edit Article' })).toBeVisible();
     const reopened = page.getByRole('dialog', { name: 'Edit Article' });
-    await expect(reopened.getByRole('combobox', { name: 'Status' })).toContainText('Closed');
+    await expect(reopened.getByRole('combobox', { name: 'Status' })).toContainText('Red');
     await reopened.getByRole('button', { name: 'Cancel' }).click();
     await expect(reopened).toHaveCount(0);
 
     // ---------------------------------------------------------------------
     // 6. Verify status is displayed correctly in the archive and wall views
     //
-    // Only the wall is verifiable. wall.component.html renders the status purely
-    // as a CSS class:
-    //   [ngClass]="'card ' + card.displayedStatus.toLowerCase().replace(' ', '') + '-status'"
-    // and wall.component.scss defines .closed-status, .critical-status,
-    // .affected-status, .open-status and .notapplicable-status — so all five
-    // statuses are observable. getDisplayedStatus() maps ItemStatus.Unused to
-    // 'Not Applicable', which the class strips to `notapplicable-status`.
+    // Only the wall is verifiable. wall.component.html puts the status on the
+    // card as a `<color>-status` class (statusClass() lower-cases the status name)
+    // and draws a colored strip across the top. Every status but Gray shows an
+    // icon on the strip, which is a role="img" labelled "Status: <color>"; Gray
+    // has no icon and its strip is a hidden `card-status-none` spacer.
     //
     // The archive displays no status at all: archive.component.html renders each
     // userArticle's sourceType icon, name, sourceName, datePosted and summary
@@ -310,7 +310,7 @@ test.describe('Article Management', () => {
       cardId: card.body.id,
       move: 0,
       inject: 0,
-      status: 'Unused',
+      status: 'Gray',
       sourceType: 'Intel',
       sourceName: 'AST',
       datePosted: new Date().toISOString(),
@@ -319,12 +319,12 @@ test.describe('Article Management', () => {
     expect(wallArticle.status, 'seed wall article').toBe(201);
 
     // expect: Status indicator reflects the current status, for every status.
-    const expectedWallClass: Record<string, string> = {
-      Unused: 'notapplicable-status',
-      Open: 'open-status',
-      Affected: 'affected-status',
-      Critical: 'critical-status',
-      Closed: 'closed-status',
+    const expectedStripIcon: Record<string, string | null> = {
+      Gray: null,
+      Green: 'mdi-check-circle',
+      Yellow: 'mdi-alert',
+      Orange: 'mdi-alert-octagon',
+      Red: 'mdi-close-octagon',
     };
 
     for (const status of statusWorkflow) {
@@ -337,8 +337,21 @@ test.describe('Article Management', () => {
       await gotoExhibitSection(page, exhibit.body.id, 'wall');
       const wallCard = page.locator('mat-card.card').filter({ hasText: cardName });
       await expect(wallCard, `wall class for ${status}`).toHaveClass(
-        new RegExp(expectedWallClass[status])
+        new RegExp(`\\b${status.toLowerCase()}-status\\b`)
       );
+
+      const strip = wallCard.locator('.card-status');
+      const icon = expectedStripIcon[status];
+      if (icon) {
+        await expect(wallCard.getByRole('img', { name: `Status: ${status}` })).toBeVisible();
+        await expect(strip.locator('mat-icon')).toHaveClass(new RegExp(icon));
+        // The strip is color and icon only; the name is for screen readers.
+        await expect(strip).toHaveText('');
+      } else {
+        await expect(strip).toHaveClass(/card-status-none/);
+        await expect(strip).toHaveAttribute('aria-hidden', 'true');
+        await expect(wallCard.getByRole('img', { name: /^Status:/ })).toHaveCount(0);
+      }
     }
   });
 

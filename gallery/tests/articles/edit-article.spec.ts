@@ -143,7 +143,7 @@ test.describe('Article Management', () => {
       cardId: card.body.id,
       move: 0,
       inject: 0,
-      status: 'Unused',
+      status: 'Gray',
       sourceType: 'Intel',
       sourceName: 'Playwright',
       datePosted: new Date().toISOString(),
@@ -173,7 +173,7 @@ test.describe('Article Management', () => {
     await expect(summaryField).toHaveValue(articleSummary);
     await expect(descriptionEditor).toHaveText(articleDescription);
     await expect(dialog.getByRole('combobox', { name: 'Card' })).toContainText(cardName);
-    await expect(dialog.getByRole('combobox', { name: 'Status' })).toContainText('Unused');
+    await expect(dialog.getByRole('combobox', { name: 'Status' })).toContainText('Gray');
     await expect(dialog.getByRole('combobox', { name: 'Source Type' })).toContainText('Intel');
     await expect(dialog.getByRole('textbox', { name: 'Source Name' })).toHaveValue('Playwright');
 
@@ -206,19 +206,19 @@ test.describe('Article Management', () => {
 
     // 4. Change the status
     const statusPanel = await openMatSelect(dialog.getByRole('combobox', { name: 'Status' }));
-    // The plan lists the five statuses; admin-article-edit-dialog.component.ts
-    // renders them in this order. They are string values ('Unused', 'Open', ...)
-    // in the generated API model, not the numeric codes the plan mentions.
+    // The plan lists the five statuses; the dialog renders them in severity order.
+    // They are color-name strings ('Gray', 'Green', ...) in the generated API
+    // model, not the numeric codes the plan mentions.
     await expect(statusPanel.getByRole('option')).toHaveText([
-      'Unused',
-      'Affected',
-      'Closed',
-      'Critical',
-      'Open',
+      'Gray',
+      'Green',
+      'Yellow',
+      'Orange',
+      'Red',
     ]);
-    await statusPanel.getByRole('option', { name: 'Critical', exact: true }).click();
+    await statusPanel.getByRole('option', { name: 'Orange', exact: true }).click();
     // expect: Status dropdown allows selection
-    await expect(dialog.getByRole('combobox', { name: 'Status' })).toContainText('Critical');
+    await expect(dialog.getByRole('combobox', { name: 'Status' })).toContainText('Orange');
 
     // 5. Click 'Save'
     const [updateResponse] = await Promise.all([
@@ -249,17 +249,17 @@ test.describe('Article Management', () => {
     expect(persisted.summary).toBe(updatedSummary);
     expect(persisted.description).toBe(updatedDescription);
     expect(persisted.sourceType).toBe('Reporting');
-    expect(persisted.status).toBe('Critical');
+    expect(persisted.status).toBe('Orange');
 
     // ---------------------------------------------------------------------
     // expect: Changes are reflected in the archive and wall views
     //
     // Only the wall half is asserted here, and only for status.
     //
-    // Wall: wall.component.ts derives a card's `displayedStatus` from the most
-    // recent UserArticle's article status and renders it purely as a CSS class
-    // (`'card ' + displayedStatus.toLowerCase().replace(' ', '') + '-status'`).
-    // So the status edit above is observable as `.critical-status`.
+    // Wall: wall.component.ts takes a card's status from its most recent
+    // UserArticle's article status and puts it on the card as a `<color>-status`
+    // class (statusClass() lower-cases the name). So the status edit above is
+    // observable as `.orange-status`.
     //
     // Archive: archive.component.html renders sourceType icon, name, sourceName,
     // datePosted and summary — it never displays status at all (status appears
@@ -320,7 +320,7 @@ test.describe('Article Management', () => {
       'seed team card'
     ).toBe(201);
 
-    // The exhibit-scoped article starts Unused, mirroring the pre-edit state.
+    // The exhibit-scoped article starts Gray, mirroring the pre-edit state.
     const wallArticle = await galleryApi('post', '/api/articles', {
       name: `Wall ${articleName}`,
       summary: articleSummary,
@@ -330,7 +330,7 @@ test.describe('Article Management', () => {
       cardId: card.body.id,
       move: 0,
       inject: 0,
-      status: 'Unused',
+      status: 'Gray',
       sourceType: 'Intel',
       sourceName: 'AET',
       datePosted: new Date().toISOString(),
@@ -340,20 +340,18 @@ test.describe('Article Management', () => {
 
     await gotoExhibitSection(page, exhibit.body.id, 'wall');
     const wallCard = page.locator('mat-card.card').filter({ hasText: cardName });
-    // 'Not Applicable' is what getDisplayedStatus() maps ItemStatus.Unused to;
-    // the class strips the space.
-    await expect(wallCard).toHaveClass(/notapplicable-status/);
+    await expect(wallCard).toHaveClass(/\bgray-status\b/);
 
     // Apply the same status change the dialog made, then confirm the wall follows.
     const wallStatusUpdate = await galleryApi('put', `/api/articles/${wallArticle.body.id}`, {
       ...wallArticle.body,
-      status: 'Critical',
+      status: 'Orange',
     });
-    expect(wallStatusUpdate.status, 'set wall article status to Critical').toBe(200);
+    expect(wallStatusUpdate.status, 'set wall article status to Orange').toBe(200);
 
     await gotoExhibitSection(page, exhibit.body.id, 'wall');
     const wallCardAfter = page.locator('mat-card.card').filter({ hasText: cardName });
-    await expect(wallCardAfter).toHaveClass(/critical-status/);
+    await expect(wallCardAfter).toHaveClass(/\borange-status\b/);
   });
 
   // eslint-disable-next-line playwright/no-skipped-test
