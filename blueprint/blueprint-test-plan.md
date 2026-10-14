@@ -670,6 +670,16 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
     - expect: 'If you believe you should have permissions to manage this event, contact your administrator.' message is shown
     - expect: No management controls are visible
 
+#### 8.6. Launch by Invitation Uses One Player View
+
+**File:** `blueprint/tests/launch-and-join-workflows/launch-by-invitation-player-view.spec.ts`
+
+**Steps:**
+  1. Launch an approved template that uses Player, through an invitation for its team 'Blue Team'
+    - expect: The launch returns a Player view ID
+    - expect: The launched MSEL reaches status 'Deployed' and stores that same view ID
+    - expect: The Player view's teams include 'Blue Team'
+
 ### 9. Admin - Units Management
 
 **Seed:** `/mnt/data/crucible-tests/blueprint/tests/seed.setup.ts`
