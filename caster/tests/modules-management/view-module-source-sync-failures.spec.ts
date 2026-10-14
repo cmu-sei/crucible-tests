@@ -70,7 +70,7 @@ for (const theme of CASTER_THEMES) {
       await setCasterTheme(page, theme);
 
       // The sync itself answers with no body.
-      await page.route('**/api/modules/repository/modules', (route) => route.fulfill({ status: 200, body: '' }));
+      await page.route('**/api/repository/modules', (route) => route.fulfill({ status: 200, body: '' }));
 
       await page.goto(Services.Caster.UI + '/admin?section=Modules');
       await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible({ timeout: 10000 });
@@ -87,6 +87,72 @@ for (const theme of CASTER_THEMES) {
       await page.waitForTimeout(1500);
       await expect(page.locator('mat-bottom-sheet-container')).toHaveCount(0);
       await expect(page.getByRole('button', { name: 'Add/Update the Modules from this source' })).toBeEnabled();
+    });
+
+    test('Update Modules From A Module ID That Fails To Sync', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
+
+      // The source is configured, but syncing it fails.
+      await page.route('**/api/repository/modules', (route) =>
+        route.fulfill({
+          status: 502,
+          json: { title: 'Failed to sync Modules: fatal: repository not found', status: 502 },
+        })
+      );
+
+      await page.goto(Services.Caster.UI + '/admin?section=Modules');
+      await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible({ timeout: 10000 });
+
+      // 1. Update the Modules from the source
+      await page.getByRole('textbox', { name: 'External Module ID' }).fill('crucible-modules');
+      await page.getByRole('button', { name: 'Add/Update the Modules from this source' }).click();
+
+      // expect: why, in a snack bar, not the error sheet
+      await expect(page.locator('mat-snack-bar-container')).toContainText(
+        'Failed to sync Modules: fatal: repository not found'
+      );
+      await page.waitForTimeout(1500);
+      await expect(page.locator('mat-bottom-sheet-container')).toHaveCount(0);
+    });
+
+    test('Update All Modules When A Source Fails To Sync', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
+
+      await page.route('**/api/modules/sources', (route) =>
+        route.fulfill({
+          json: [
+            {
+              name: 'crucible-modules',
+              provider: 'Git',
+              lastAttempt: '2026-10-14T13:00:00Z',
+              lastSuccess: '2026-10-14T13:00:00Z',
+              error: null,
+            },
+            {
+              name: 'broken-source',
+              provider: 'Git',
+              lastAttempt: '2026-10-14T13:00:00Z',
+              lastSuccess: '2026-10-14T12:00:00Z',
+              error: 'fatal: repository not found',
+            },
+          ],
+        })
+      );
+
+      await page.goto(Services.Caster.UI + '/admin?section=Modules');
+
+      // expect: opening the page shows the warning, but no snack bar
+      await expect(page.getByRole('alert').filter({ hasText: 'failed to sync' })).toHaveCount(1, { timeout: 10000 });
+      await expect(page.locator('mat-snack-bar-container')).toHaveCount(0);
+
+      // 1. Update the Modules from every source
+      await page.getByRole('button', { name: 'Add/Update the Modules from every source' }).click();
+
+      // expect: the failing source, and only it, in a snack bar
+      const snackBar = page.locator('mat-snack-bar-container');
+      await expect(snackBar).toHaveText(/Module source broken-source failed to sync/);
+      await expect(snackBar).not.toContainText('crucible-modules');
+      await expect(page.locator('mat-bottom-sheet-container')).toHaveCount(0);
     });
 
     test('View Modules With No Module Source', async ({ casterAuthenticatedPage: page }) => {
