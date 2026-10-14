@@ -135,6 +135,27 @@ for (const theme of CASTER_THEMES) {
       await expect(details).toContainText('memory_mb');
       await expect(details.locator('tr', { hasText: 'nic0' })).toContainText('demo-outside');
       await expect(details.locator('tr', { hasText: 'nic3' })).toContainText('demo-mgmt');
+
+      // expect: the graph fits the tab, so the tab has nothing to scroll
+      const tabBody = page.locator('.mat-mdc-tab-body-active .mat-mdc-tab-body-content');
+      expect(await tabBody.evaluate((el) => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
+
+      // 3. Go full screen
+      // Away from the view toggle, whose tooltip covers the button.
+      await page.mouse.move(x, y + 100);
+      await view.getByRole('button', { name: 'Full screen' }).click();
+
+      // expect: the topology fills the screen, and its tooltips still show
+      await expect.poll(() => page.evaluate(() => document.fullscreenElement?.className)).toBe('topology');
+      await view.locator('.legend-item', { hasText: 'external' }).hover();
+      await expect(page.locator('mat-tooltip-component')).toHaveText(
+        'A network this workspace connects machines to but does not create'
+      );
+
+      // 4. Leave full screen
+      await view.getByRole('button', { name: 'Exit full screen' }).click();
+      await expect.poll(() => page.evaluate(() => document.fullscreenElement)).toBeNull();
+      await expect(view.getByRole('button', { name: 'Full screen' })).toBeVisible();
     });
 
     test('View Workspace Topology After Apply', async ({ casterAuthenticatedPage: page, cleanupCasterProjectByName }) => {
