@@ -25,6 +25,37 @@ const emptyTopology = {
   edges: [],
 };
 
+/** The topology once the plan's run is over: read from the state, so nothing has an action. */
+function appliedTopology(notCreated: string[] = []) {
+  return {
+    ...proxmoxTopology,
+    source: 'State',
+    nodes: proxmoxTopology.nodes.map((n: any) => ({
+      ...n,
+      action: null,
+      notCreated: notCreated.includes(n.id),
+    })),
+  };
+}
+
+/** Serve the workspace one run, the plan's, with this status. */
+async function routePlanRun(page: Page, status: string) {
+  await page.route('**/api/workspaces/*/runs*', (route) => {
+    const workspaceId = new URL(route.request().url()).pathname.split('/')[3];
+    return route.fulfill({
+      json: [
+        {
+          id: proxmoxTopology.runId,
+          workspaceId,
+          isDestroy: false,
+          status,
+          createdAt: proxmoxTopology.createdAt,
+        },
+      ],
+    });
+  });
+}
+
 async function openNewWorkspace(page: Page, projectName: string, workspaceName: string) {
   await expect(page.getByText('My Projects')).toBeVisible();
 
@@ -113,21 +144,8 @@ for (const theme of CASTER_THEMES) {
       await cleanupCasterProjectByName(projectName);
 
       // The plan's run, already applied: its "create" outlines no longer describe anything.
-      await page.route('**/api/workspaces/*/runs*', (route) => {
-        const workspaceId = new URL(route.request().url()).pathname.split('/')[3];
-        return route.fulfill({
-          json: [
-            {
-              id: proxmoxTopology.runId,
-              workspaceId,
-              isDestroy: false,
-              status: 'Applied',
-              createdAt: proxmoxTopology.createdAt,
-            },
-          ],
-        });
-      });
-      await page.route('**/api/workspaces/*/topology', (route) => route.fulfill({ json: proxmoxTopology }));
+      await routePlanRun(page, 'Applied');
+      await page.route('**/api/workspaces/*/topology', (route) => route.fulfill({ json: appliedTopology() }));
 
       await openNewWorkspace(page, projectName, 'Applied_Topology_Workspace');
       await page.getByRole('radio', { name: 'topology' }).click();
@@ -141,6 +159,50 @@ for (const theme of CASTER_THEMES) {
           view.locator('.graph').evaluate((c: any) => c._cyreg?.cy?.nodes('[action != ""][kind]').length ?? -1)
         )
         .toBe(0);
+    });
+
+    test('View Workspace Topology After Failed Apply', async ({
+      casterAuthenticatedPage: page,
+      cleanupCasterProjectByName,
+    }) => {
+      await setCasterTheme(page, theme);
+
+      const projectName = 'Failed Topology WS Project';
+      await cleanupCasterProjectByName(projectName);
+
+      // The apply failed before building the router and the web server.
+      const router = 'module.fw_edge.proxmox_virtual_environment_vm.vm';
+      const web = 'module.host["web"].proxmox_virtual_environment_vm.vm';
+      await routePlanRun(page, 'Failed');
+      await page.route('**/api/workspaces/*/topology', (route) =>
+        route.fulfill({ json: appliedTopology([router, web]) })
+      );
+
+      await openNewWorkspace(page, projectName, 'Failed_Topology_Workspace');
+      await page.getByRole('radio', { name: 'topology' }).click();
+      const view = page.locator('cas-workspace-topology');
+
+      // expect: the outcome, and a legend entry for what is missing
+      await expect(view.getByText('Plan from 2026-10-13 17:00 · Failed')).toBeVisible({ timeout: 10000 });
+      await expect(view.locator('.legend')).toContainText('not created');
+      await view.locator('.legend-item', { hasText: 'not created' }).hover();
+      await expect(page.locator('mat-tooltip-component')).toHaveText(
+        'The plan creates it, but the apply failed before it did'
+      );
+      await expect
+        .poll(() => view.locator('.graph').evaluate((c: any) => c._cyreg?.cy?.nodes('[?notCreated]').length ?? -1))
+        .toBe(2);
+
+      // 1. Click the router
+      const { x, y } = await nodePosition(page, router);
+      await page.mouse.click(x, y);
+
+      // expect: it says why it is drawn that way
+      const details = view.locator('.details');
+      await expect(details.locator('.details-title')).toHaveText('fw-edge-demo');
+      await expect(details.locator('tr', { hasText: 'Status' })).toContainText(
+        'Not created: the apply failed before it got to it'
+      );
     });
 
     test('Export Workspace Topology', async ({ casterAuthenticatedPage: page, cleanupCasterProjectByName }, testInfo) => {
