@@ -19,7 +19,7 @@ test.describe('Administration - Groups', () => {
     }, { timeout: 15000 });
 
     await page.evaluate(() => {
-      const items = Array.from(document.querySelectorAll('mat-list-item'));
+      const items = Array.from(document.querySelectorAll<HTMLElement>('mat-list-item'));
       const groupsItem = items.find(el => el.textContent?.trim() === 'Groups');
       if (groupsItem) {
         groupsItem.click();

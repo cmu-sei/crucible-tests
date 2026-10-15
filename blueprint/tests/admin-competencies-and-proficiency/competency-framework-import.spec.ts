@@ -12,7 +12,8 @@
 // asserts only what the dialog and the table show.
 
 import { randomUUID } from 'crypto';
-import { test, expect, Page, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
+import type { Page } from '@playwright/test';
+import { test, expect, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import {
   getBlueprintToken,
   gotoBlueprintAdminSection,

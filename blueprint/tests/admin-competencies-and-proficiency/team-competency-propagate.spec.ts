@@ -11,7 +11,8 @@
 // Blueprint.Api.Tests owns the teamcompetencies endpoints; this spec asserts what the tab
 // shows.
 
-import { test, expect, Page, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
+import type { Page } from '@playwright/test';
+import { test, expect, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import {
   getBlueprintToken,
   tempBlueprintName,

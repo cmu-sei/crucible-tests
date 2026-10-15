@@ -6,40 +6,44 @@
 
 import { test, expect } from '@playwright/test';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
+import { ALLOY_THEMES, applyAlloyTheme } from '../../test-helpers';
 
-test.describe('Home Page and Navigation', () => {
-  test('Browser Back and Forward Navigation', async ({ page }) => {
-    // 1. Navigate to http://localhost:4403/admin
-    await authenticateWithKeycloak(page, Services.Alloy.UI);
-    await page.goto(`${Services.Alloy.UI}/admin`);
+for (const theme of ALLOY_THEMES) {
+  test.describe(`${theme} theme › Home Page and Navigation`, () => {
+    test('Browser Back and Forward Navigation', async ({ page }) => {
+      // 1. Navigate to http://localhost:4403/admin
+      await authenticateWithKeycloak(page, Services.Alloy.UI);
+      await applyAlloyTheme(page, theme);
+      await page.goto(`${Services.Alloy.UI}/admin`);
 
-    // expect: Admin page loads
-    await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
+      // expect: Admin page loads
+      await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
 
-    // 2. Click on 'Events' in the sidebar
-    await page.locator('mat-list-item').filter({ hasText: 'Events' }).click();
+      // 2. Click on 'Events' in the sidebar
+      await page.locator('mat-list-item').filter({ hasText: 'Events' }).click();
 
-    // expect: Events section is displayed
-    await expect(page).toHaveURL(/section=Events/);
-    await expect(page.locator('mat-list').getByText('Events')).toBeVisible();
+      // expect: Events section is displayed
+      await expect(page).toHaveURL(/section=Events/);
+      await expect(page.locator('mat-list').getByText('Events')).toBeVisible();
 
-    // 3. Click on 'Users' in the sidebar
-    await page.locator('mat-list-item').filter({ hasText: 'Users' }).click();
+      // 3. Click on 'Users' in the sidebar
+      await page.locator('mat-list-item').filter({ hasText: 'Users' }).click();
 
-    // expect: Users section is displayed
-    await expect(page).toHaveURL(/section=Users/);
-    await expect(page.locator('mat-list').getByText('Users')).toBeVisible();
+      // expect: Users section is displayed
+      await expect(page).toHaveURL(/section=Users/);
+      await expect(page.locator('mat-list').getByText('Users')).toBeVisible();
 
-    // 4. Click browser back button
-    await page.goBack();
+      // 4. Click browser back button
+      await page.goBack();
 
-    // expect: Application navigates back to Events section
-    await expect(page).toHaveURL(/section=Events/);
+      // expect: Application navigates back to Events section
+      await expect(page).toHaveURL(/section=Events/);
 
-    // 5. Click browser forward button
-    await page.goForward();
+      // 5. Click browser forward button
+      await page.goForward();
 
-    // expect: Application navigates forward to Users section
-    await expect(page).toHaveURL(/section=Users/);
+      // expect: Application navigates forward to Users section
+      await expect(page).toHaveURL(/section=Users/);
+    });
   });
-});
+}

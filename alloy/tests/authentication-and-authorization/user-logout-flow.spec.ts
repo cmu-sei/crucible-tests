@@ -6,25 +6,29 @@
 
 import { test, expect } from '@playwright/test';
 import { authenticateWithKeycloak, Services, serviceUrlPattern } from '../../../shared-fixtures';
-test.describe('Authentication and Authorization', () => {
-  test('User Logout Flow', async ({ page }) => {
-    // 1. Log in as admin user
-    await authenticateWithKeycloak(page, Services.Alloy.UI);
+import { ALLOY_THEMES, applyAlloyTheme } from '../../test-helpers';
+for (const theme of ALLOY_THEMES) {
+  test.describe(`${theme} theme › Authentication and Authorization`, () => {
+    test('User Logout Flow', async ({ page }) => {
+      // 1. Log in as admin user
+      await authenticateWithKeycloak(page, Services.Alloy.UI);
+      await applyAlloyTheme(page, theme);
 
-    // expect: Successfully authenticated and viewing the home page
-    await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
+      // expect: Successfully authenticated and viewing the home page
+      await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
 
-    // 2. Click on the user menu in the topbar
-    await page.getByRole('button', { name: 'Admin User' }).click();
+      // 2. Click on the user menu in the topbar
+      await page.getByRole('button', { name: 'Admin User' }).click();
 
-    // expect: A dropdown menu appears with logout option
-    await expect(page.getByRole('menuitem', { name: 'Logout' })).toBeVisible();
+      // expect: A dropdown menu appears with logout option
+      await expect(page.getByRole('menuitem', { name: 'Logout' })).toBeVisible();
 
-    // 3. Click 'Logout' option
-    await page.getByRole('menuitem', { name: 'Logout' }).click();
+      // 3. Click 'Logout' option
+      await page.getByRole('menuitem', { name: 'Logout' }).click();
 
-    // expect: The user is redirected to the Keycloak login page
-    await expect(page.getByText('Sign in to your account')).toBeVisible({ timeout: 30000 });
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak));
+      // expect: The user is redirected to the Keycloak login page
+      await expect(page.getByText('Sign in to your account')).toBeVisible({ timeout: 30000 });
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak));
+    });
   });
-});
+}

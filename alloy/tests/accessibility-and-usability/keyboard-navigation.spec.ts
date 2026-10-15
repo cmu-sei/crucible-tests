@@ -6,32 +6,36 @@
 
 import { test, expect } from '@playwright/test';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
+import { ALLOY_THEMES, applyAlloyTheme } from '../../test-helpers';
 
-test.describe('Accessibility and Usability', () => {
-  test('Keyboard Navigation', async ({ page }) => {
-    // 1. Navigate to the home page
-    await authenticateWithKeycloak(page, Services.Alloy.UI);
+for (const theme of ALLOY_THEMES) {
+  test.describe(`${theme} theme › Accessibility and Usability`, () => {
+    test('Keyboard Navigation', async ({ page }) => {
+      // 1. Navigate to the home page
+      await authenticateWithKeycloak(page, Services.Alloy.UI);
+      await applyAlloyTheme(page, theme);
 
-    // expect: Home page is loaded
-    await expect(page.getByText('My Events')).toBeVisible();
+      // expect: Home page is loaded
+      await expect(page.getByText('My Events')).toBeVisible();
 
-    // 2. Use Tab key to navigate through interactive elements
-    await page.keyboard.press('Tab');
-    await page.keyboard.press('Tab');
-    await page.keyboard.press('Tab');
+      // 2. Use Tab key to navigate through interactive elements
+      await page.keyboard.press('Tab');
+      await page.keyboard.press('Tab');
+      await page.keyboard.press('Tab');
 
-    // expect: Focus moves sequentially through all interactive elements
-    // expect: All buttons, links, and form fields are accessible via keyboard
+      // expect: Focus moves sequentially through all interactive elements
+      // expect: All buttons, links, and form fields are accessible via keyboard
 
-    // 3. Use Shift+Tab to navigate backwards
-    await page.keyboard.press('Shift+Tab');
+      // 3. Use Shift+Tab to navigate backwards
+      await page.keyboard.press('Shift+Tab');
 
-    // expect: Focus moves backwards through interactive elements
+      // expect: Focus moves backwards through interactive elements
 
-    // 4. Use Enter to activate buttons and links
-    // Focus the search field and verify it's accessible
-    const searchBox = page.getByRole('textbox', { name: 'Search' });
-    await searchBox.focus();
-    await expect(searchBox).toBeFocused();
+      // 4. Use Enter to activate buttons and links
+      // Focus the search field and verify it's accessible
+      const searchBox = page.getByRole('textbox', { name: 'Search' });
+      await searchBox.focus();
+      await expect(searchBox).toBeFocused();
+    });
   });
-});
+}

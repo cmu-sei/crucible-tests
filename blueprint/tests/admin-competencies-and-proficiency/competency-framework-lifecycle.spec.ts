@@ -10,7 +10,8 @@
 // and the delete button's in-use lock. Blueprint.Api.Tests owns the endpoints' status codes,
 // the persisted rows and the can-delete rule itself; this spec asserts what the page shows.
 
-import { test, expect, Page, Locator, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
+import type { Locator, Page } from '@playwright/test';
+import { test, expect, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import {
   getBlueprintToken,
   gotoBlueprintAdminSection,
