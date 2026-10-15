@@ -8,18 +8,19 @@ reachable directly.
 Authentication is via Keycloak SSO through the Player UI (see `fixtures.ts`):
 the Player VM UI has no view list of its own, so tests authenticate on Player,
 then navigate into the VM UI routes. Specs that need a real view seed one with
-`seedView` / `seedViewWithVm` (`vm-helpers.ts`) in a `beforeAll` inside each
-theme's `describe`, so the light and dark runs each get their own view (the
-theme is part of the seeded name). The matching `afterAll` calls `cleanup()`,
+`seedView` / `seedViewWithVm` (`vm-helpers.ts`) in a `beforeAll`.
+Theme-parameterized specs seed inside each theme's `describe`, so the light and
+dark runs each get their own view (the theme is part of the seeded name); the
+others seed in a top-level `beforeAll`. The matching `afterAll` calls `cleanup()`,
 which deletes the view and, through the seeding token, any VM API maps left on
 it, wherever the page ended up.
 
 ## Theme Coverage
 
-Every Player VM spec is authenticated and runs once per theme: each file loops
-over `PLAYERVM_THEMES` (`light`, `dark`) and reports under a `light theme ›` /
-`dark theme ›` describe prefix. There are no unauthenticated or API-only Player
-VM specs, so none are left unwrapped.
+The theme-parameterized Player VM specs loop over `PLAYERVM_THEMES` (`light`,
+`dark`) and report under a `light theme ›` / `dark theme ›` describe prefix:
+the accessibility contrast spec and the Map specs. The VM list, realtime,
+usage, callback and contract specs run once, in the default theme.
 
 **Theme strategy — `?theme=` on every VM UI navigation.** The VM UI does not
 persist the theme: its localStorage entry (`akita-vm-ui`) holds only
