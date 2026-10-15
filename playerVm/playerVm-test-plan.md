@@ -353,9 +353,9 @@ Four things shape the file:
   read from Keycloak rather than checked in — and an address for the VM API that
   *the Player API's process* can reach.
 - **A subscription is deployment-wide while it exists.** Every view any spec
-  creates or deletes is delivered through it, and both browser projects and both
-  theme runs execute this file (each with its own subscription), so one event can
-  be delivered more than once. Nothing here asserts a count: a repeated delivery
+  creates or deletes is delivered through it, and both browser projects run this
+  file at once (the light and dark runs are sequential within a project, each with
+  its own subscription), so one event can be delivered more than once. Nothing here asserts a count: a repeated delivery
   clones a map again and is otherwise idempotent.
 - **A cloned view cannot be observed through the view's own endpoints.**
   `ViewEntity.Clone()` copies no memberships, so the caller has no primary team

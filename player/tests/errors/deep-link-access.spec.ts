@@ -4,7 +4,7 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern, PLAYER_THEMES, playerUrl, setPlayerTheme, dismissTransientOverlays } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, PLAYER_THEMES, playerUrl, expectBodyTheme, dismissTransientOverlays } from '../../fixtures';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -32,12 +32,11 @@ for (const theme of PLAYER_THEMES) {
 
       // The id names no view, and Player's view page sends an unknown view home (with
       // a "View Not Found" bottom sheet, when the deep link survived the login), so
-      // the session settles on the home page. Dismiss any sheet, then apply the theme
-      // now that the user menu exists (a no-op if the deep link's `?theme=` already
-      // took).
+      // the session settles on the home page. Dismiss any sheet, then check the deep
+      // link's `?theme=` survived the login and was applied.
       await expect(page.getByText('My Views')).toBeVisible({ timeout: 30000 });
       await dismissTransientOverlays(page);
-      await setPlayerTheme(page, theme);
+      await expectBodyTheme(page, theme);
     });
   });
 }

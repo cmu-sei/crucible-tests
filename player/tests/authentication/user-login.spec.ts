@@ -4,7 +4,7 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern, PLAYER_THEMES, playerUrl, setPlayerTheme } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, PLAYER_THEMES, playerUrl, expectBodyTheme } from '../../fixtures';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -47,9 +47,9 @@ for (const theme of PLAYER_THEMES) {
       // expect: The page displays 'My Views' section
       await expect(page.getByText('My Views')).toBeVisible();
 
-      // The URL matches on the callback hop too; 'My Views' means the app shell is up,
-      // so the user menu's theme switch is there to use.
-      await setPlayerTheme(page, theme);
+      // expect: The `?theme=` requested before login survived the Keycloak round trip
+      // (the auth guard keeps the full URL, query string included).
+      await expectBodyTheme(page, theme);
 
       // expect: The page shows the user's name 'Admin User' in the menu button
       await expect(page.getByRole('button', { name: 'Menu' })).toBeVisible();

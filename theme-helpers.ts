@@ -51,7 +51,9 @@ const THEME_PARAM: Record<Theme, string> = { light: 'light-theme', dark: 'dark-t
 
 /** A URL for `path` on `baseUrl` that boots straight into `theme` via `?theme=`. */
 export function themedUrl(baseUrl: string, path: string, theme: Theme): string {
-  const url = new URL(path, baseUrl);
+  // Append rather than resolve: `new URL('/x', 'https://host/player')` drops the
+  // `/player` prefix the minikube targets put every app under.
+  const url = new URL(`${baseUrl.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`);
   url.searchParams.set('theme', THEME_PARAM[theme]);
   return url.toString();
 }

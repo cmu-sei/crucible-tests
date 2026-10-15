@@ -310,4 +310,4 @@ export function playerUrl(path: string, theme: PlayerTheme): string {
 }
 
 export { expect } from '@playwright/test';
-export { Services, serviceUrlPattern, oidcStorageKey, waitForFirstVisible };
+export { Services, serviceUrlPattern, oidcStorageKey, waitForFirstVisible, expectBodyTheme };

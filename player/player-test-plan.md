@@ -23,11 +23,11 @@ Specs where the pattern had to be adapted:
     Link Access start with no session, so there is no user menu yet. They request the theme
     on the first navigation instead (`playerUrl(path, theme)`, which adds Player's
     `?theme=dark-theme` / `?theme=light-theme` boot param). 1.1 and 13.12 log in and land
-    back in Player, so they then call `setPlayerTheme` as well (a no-op if the param already
-    took); 13.12's unknown view id sends the session home with a "View Not Found" sheet, which
+    back in Player, then assert the param survived the Keycloak round trip and the theme is
+    applied; 13.12's unknown view id sends the session home with a "View Not Found" sheet, which
     it dismisses first. 1.3, 1.4 and 1.6 never get past Keycloak's own screens, which Player's
-    theme does not reach: they carry the param anyway and assert the redirect and the login
-    failure behave identically in both themes.
+    theme does not reach: they carry the param anyway and run their unchanged Keycloak
+    assertions under both theme titles.
   - **2.5 Dark Theme Toggle** tests the toggle itself, so the theme is its *starting* state:
     it sets the theme, checks the switch reflects it, toggles and asserts the page flips to the
     other theme, then toggles back and asserts it returns.
@@ -1233,7 +1233,8 @@ Runs once per theme, with that theme as the starting state.
     - expect: User is not authenticated
   3. Paste and navigate to deep link URL
     - expect: User is redirected to login
-    - expect: After login, user is redirected back to intended deep link
+    - expect: After login, the user returns to Player; the unknown view id sends them home
+      (with a "View Not Found" sheet) and "My Views" is visible in the requested theme
 
 #### 13.13. XSS Protection - Script Injection in Forms
 

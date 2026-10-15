@@ -54,8 +54,9 @@ import {
  *     exists, and the dev stack configures none (`SeedData.Subscriptions` is commented
  *     out) — so this feature has never run there at all. See `subscribeVmToViewEvents`
  *     for what that costs: while the subscription is up, every view any spec creates or
- *     deletes is delivered through it, and both browser projects and both theme
- *     variants run this file, so a single event can be delivered more than once.
+ *     deletes is delivered through it, and both browser projects run this file at
+ *     once (its light and dark variants run one after the other within a project),
+ *     so a single event can be delivered more than once.
  *     Nothing here asserts a count for that reason; a repeated delivery clones a map
  *     again and is otherwise idempotent.
  *   - **Every wait is bounded, and says why it gave up.** Delivery is a background queue
