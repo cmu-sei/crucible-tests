@@ -824,8 +824,8 @@ export const test = base.extend<CiteFixtures>({
 });
 
 /**
- * Themes every CITE functional spec is parameterized over. Each spec runs once
- * per entry so every screen is exercised in both light and dark mode.
+ * Themes every CITE spec is parameterized over. Each spec runs once per entry
+ * so every screen is exercised in both light and dark mode.
  */
 export const CITE_THEMES = ['light', 'dark'] as const;
 export type CiteTheme = (typeof CITE_THEMES)[number];
@@ -833,6 +833,22 @@ export type CiteTheme = (typeof CITE_THEMES)[number];
 /** Whether CITE is currently rendering the dark theme. */
 export async function citeIsDarkTheme(page: Page): Promise<boolean> {
   return page.evaluate(() => document.body.classList.contains('darkMode'));
+}
+
+/**
+ * `url` with CITE's `theme` query param set, for a spec's first navigation.
+ *
+ * `AppComponent` reads the param on bootstrap and saves it as the user's theme, so
+ * the app renders in `theme` from its first paint. Use it where the user-menu
+ * switch can't be reached right after load: a spec that needs the theme in place
+ * before something else covers the page (a system-message bottom sheet's backdrop
+ * blocks the top bar), and the unauthenticated specs, which request the theme on
+ * their entry URL and apply it with `setCiteTheme` once a login lands in CITE.
+ */
+export function citeThemeUrl(url: string, theme: CiteTheme): string {
+  const themed = new URL(url);
+  themed.searchParams.set('theme', theme);
+  return themed.toString();
 }
 
 /**
@@ -847,7 +863,9 @@ export async function citeIsDarkTheme(page: Page): Promise<boolean> {
  *
  * Use the toggle rather than the `?theme=dark` query param: the param is read in
  * `AppComponent`'s constructor, so it only applies on a fresh app bootstrap and is
- * a no-op for a client-side navigation within an already-running app.
+ * a no-op for a client-side navigation within an already-running app. The one
+ * place the param is the right tool is a spec's first navigation, before the app
+ * has bootstrapped; see `citeThemeUrl`.
  *
  * No-ops when the requested theme is already active, so callers can use it to
  * restore state unconditionally.

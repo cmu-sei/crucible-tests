@@ -6,20 +6,32 @@ CITE (Collaborative Incident Threat Evaluator) is a collaborative cyber incident
 
 ## Theme Coverage
 
-Every functional scenario below runs **once per theme (light and dark)**: each spec loops
-over `CITE_THEMES` from `cite/fixtures.ts`, reports under a `light theme ›` /
-`dark theme ›` describe prefix, and applies the theme through the user menu's "Dark Theme"
-switch (`setCiteTheme`) right after authentication. CITE persists the choice in
-localStorage (`akita-cite-ui`), so it survives the reloads a test performs, and every
-test's fresh browser context starts light. The multi-user scenarios (14.1–14.3, 15.8)
-apply the theme to each browser instance.
+Every CITE spec runs **once per theme (light and dark)**: each spec loops over
+`CITE_THEMES` from `cite/fixtures.ts` and reports under a `light theme ›` /
+`dark theme ›` describe prefix. There are no exceptions. How the theme is applied depends on
+what the spec drives:
 
-Exceptions, which run once:
-  - 1.1 Successful Authentication Flow, 1.2 Failed Authentication, 1.5 Unauthorized Access
-    Protection, and 15.6 Deep Link Access — they run unauthenticated and exercise the
-    Keycloak screens before any CITE UI (and its theme switch) exists.
-  - 17.5 Theme Contrast and Color Settings Compliance — it is parameterized over the themes
-    itself.
+  - **Authenticated UI specs** apply the theme through the user menu's "Dark Theme" switch
+    (`setCiteTheme`) right after authentication. CITE persists the choice in localStorage
+    (`akita-cite-ui`), so it survives the reloads a test performs, and every test's fresh
+    browser context starts light. The multi-user scenarios (14.1–14.3, 15.8) apply the
+    theme to each browser instance.
+  - **Unauthenticated specs** (1.1 Successful Authentication Flow, 1.2 Failed
+    Authentication, 1.5 Unauthorized Access Protection, 15.6 Deep Link Access) request the
+    theme on their entry URL with CITE's `?theme=` query param (`citeThemeUrl`), since the
+    Keycloak screens come before any CITE UI. Those that log in (1.1, 15.6) then call
+    `setCiteTheme` once CITE's shell is up.
+  - **Specs where the user menu can't be reached after load** (the hub-unavailable
+    messages, where the system-message bottom sheet's backdrop covers the top bar) open
+    CITE through `citeThemeUrl`, so the theme applies from the first paint, and assert it
+    took effect.
+  - **API-only specs** (the scoring-model import and not-found checks) open no browser
+    page, so there is no theme to apply. They still run under both theme titles, and name
+    the data they seed per theme so the two runs never share a row.
+  - **`tests/seed.spec.ts`**, the empty template the test generator starts from, follows
+    the authenticated pattern, so generated specs start out themed.
+  - **17.5 Theme Contrast and Color Settings Compliance** is parameterized over the themes
+    the same way, and checks the colors each theme renders.
 
 ## Test Scenarios
 
