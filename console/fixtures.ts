@@ -87,6 +87,12 @@ export interface SeededConsoleVm {
   teamId: string;
 }
 
+// There is deliberately no "find me a VM in this environment" helper here.
+// Discovery made the spec skip itself when no VM turned up, which reads as a
+// pass while asserting nothing about the console. Specs seed what they need:
+// the per-test `consoleVm` fixture below (used by the theme-parameterized
+// specs) or `seedViewWithVm` from `playerVm/vm-helpers.ts`.
+
 export type ConsoleFixtures = {
   consoleAuthenticatedPage: Page;
   /**

@@ -8,6 +8,11 @@ import { test, expect, gotoConsole, CONSOLE_THEMES } from '../../fixtures';
 
 for (const theme of CONSOLE_THEMES) {
   test.describe(`${theme} theme › Console Rendering`, () => {
+    // The console route needs a VM the authenticated user can read. This spec
+    // seeds its own (the `consoleVm` fixture) — a discovered VM would make the
+    // test conditional on whatever the environment holds, and "no VM found"
+    // would then report green while asserting nothing about rendering.
+    //
     // Regression: the console did not render until the window was clicked/focused
     // because readOnly$ (bound via | async in an OnPush component) was assigned
     // late, so change detection only ran on a window:focus event (console.ui
@@ -36,7 +41,9 @@ for (const theme of CONSOLE_THEMES) {
       await expect(optionsBar.getByRole('button', { name: 'Console options' })).toBeVisible();
       await expect(page.locator('app-console').getByText(/Connecting/)).toBeVisible({ timeout: 30000 });
 
-      // 4. The valid-VM console must not be showing the not-found page.
+      // 4. The valid-VM console must not be showing the not-found page. That page
+      //    is what a 403/404 on the VM lookup produces, so this also confirms the
+      //    seeded VM is readable by the browser session.
       await expect(page.getByRole('heading', { name: 'VM Not Found' })).toHaveCount(0);
     });
   });

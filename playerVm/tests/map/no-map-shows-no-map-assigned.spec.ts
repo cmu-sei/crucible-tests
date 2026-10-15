@@ -17,7 +17,9 @@ for (const theme of PLAYERVM_THEMES) {
       // 1. Open the Map application for a freshly seeded view, which has no map
       await gotoPlayerVm(page, `/views/${view.id}/map`, theme);
 
-      // 2. The no-map message is shown...
+      // 2. The no-map message is shown. Reaching it also proves the view
+      //    resolved: map-main renders app-page-not-found whenever it cannot find
+      //    a primary team for the view.
       await expect(
         page.getByRole('heading', { name: 'No Map is assigned to this Team' })
       ).toBeVisible({ timeout: 30000 });

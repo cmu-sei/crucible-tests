@@ -3,69 +3,125 @@
 
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
+//
+// Adding and removing unit members from an expanded Admin → Units row. The previous version
+// only checked that the two panels and an enabled Add button existed; it never clicked it.
+//
+// The expanded row shows two tables: "Users" (everyone *not* in the unit) and "Unit Members".
+// Adding a user moves them from the first to the second, and removing moves them back. Both
+// tables paginate, so the seeded user is always found by searching (these Search boxes are
+// formControls, so fill() is enough).
 
+import type { Locator, Page } from '@playwright/test';
 import { test, expect, Services } from '../../fixtures';
 import {
   getBlueprintToken,
   createUnit,
   deleteUnit,
+  createBlueprintUser,
+  deleteBlueprintUser,
   tempBlueprintName,
 } from '../../test-helpers';
 
+/** The "Users" or "Unit Members" half of the expanded row. */
+const panel = (detail: Locator, title: 'Users' | 'Unit Members') =>
+  detail
+    .locator('.user-list-container, .unit-list-container')
+    .filter({ has: detail.page().locator('mat-toolbar p', { hasText: new RegExp(`^${title}$`) }) });
+
+async function openUnit(page: Page, unitName: string): Promise<Locator> {
+  await page.goto(`${Services.Blueprint.UI}/admin`);
+  const unitsNav = page.locator('mat-list-item').filter({ hasText: 'Units' }).first();
+  await expect(unitsNav).toBeVisible({ timeout: 30000 });
+  await unitsNav.click();
+  const search = page.getByRole('textbox', { name: 'Search' }).first();
+  await expect(search).toBeVisible({ timeout: 15000 });
+  // The units list filters on (keyup), so type the term.
+  await search.pressSequentially(unitName);
+  const row = page.getByRole('row').filter({ hasText: unitName });
+  await expect(row).toHaveCount(1, { timeout: 15000 });
+  await row.click();
+  const detail = page.locator('app-admin-unit-users');
+  await expect(detail).toBeVisible();
+  return detail;
+}
+
 test.describe('Admin - Units Management', () => {
+  let token: string;
+  let unitId: string | undefined;
+  let userId: string | undefined;
+
+  test.afterEach(async () => {
+    if (unitId) await deleteUnit(token, unitId);
+    if (userId) await deleteBlueprintUser(token, userId);
+  });
+
   test('View and Manage Unit Users', async ({ blueprintAuthenticatedPage: page }) => {
-    const token = await getBlueprintToken();
-    const unitName = tempBlueprintName('ViewUsers');
-    const shortName = 'VU';
-    let unitId: string | undefined;
+    token = await getBlueprintToken();
+    const unitName = tempBlueprintName('UnitUsers');
+    unitId = (await createUnit(token, { name: unitName })).id;
+    const user = await createBlueprintUser(token);
+    userId = user.id;
 
-    try {
-      // Seed a unit via API
-      const unit = await createUnit(token, { name: unitName, shortName });
-      unitId = unit.id;
+    // 1. Expand the unit.
+    const detail = await openUnit(page, unitName);
+    const users = panel(detail, 'Users');
+    const members = panel(detail, 'Unit Members');
+    await users.getByPlaceholder('Search').fill(user.name);
+    await members.getByPlaceholder('Search').fill(user.name);
 
-      // Navigate to Admin → Units
-      await page.goto(`${Services.Blueprint.UI}/admin`);
-      const unitsNav = page.locator('mat-list-item').filter({ hasText: 'Units' }).first();
-      await expect(unitsNav).toBeVisible({ timeout: 10000 });
-      await unitsNav.click();
+    //    expect: the new user is offered under Users and is not yet a member.
+    await expect(users.getByRole('button', { name: `Add ${user.name}` })).toBeVisible({
+      timeout: 15000,
+    });
+    await expect(members.getByRole('button', { name: `Remove ${user.name}` })).toHaveCount(0);
 
-      // Wait for the table to be visible
-      const unitsTable = page.locator('table').first();
-      await expect(unitsTable).toBeVisible({ timeout: 5000 });
+    // 2. Add them.
+    await users.getByRole('button', { name: `Add ${user.name}` }).click();
+    //    expect: they move from Users to Unit Members.
+    await expect(members.getByRole('button', { name: `Remove ${user.name}` })).toBeVisible({
+      timeout: 15000,
+    });
+    await expect(users.getByRole('button', { name: `Add ${user.name}` })).toHaveCount(0);
 
-      // Click on the unit row to expand it
-      const unitRow = page.getByRole('row').filter({ hasText: unitName }).first();
-      await expect(unitRow).toBeVisible({ timeout: 5000 });
-      await unitRow.click();
+    // 3. Reload and reopen the unit.
+    //    expect: the membership persisted.
+    const reopened = await openUnit(page, unitName);
+    const reopenedMembers = panel(reopened, 'Unit Members');
+    await reopenedMembers.getByPlaceholder('Search').fill(user.name);
+    await expect(reopenedMembers.getByRole('button', { name: `Remove ${user.name}` })).toBeVisible({
+      timeout: 15000,
+    });
 
-      // expect: Row expands, showing the app-admin-unit-users component
-      const expandedDetail = page.locator('app-admin-unit-users').first();
-      await expect(expandedDetail).toBeVisible({ timeout: 5000 });
+    // 4. Remove them.
+    const reopenedUsers = panel(reopened, 'Users');
+    const usersSearch = reopenedUsers.getByPlaceholder('Search');
+    await usersSearch.fill(user.name);
+    await expect(reopenedUsers.locator('mat-row')).toHaveCount(0);
+    await reopenedMembers.getByRole('button', { name: `Remove ${user.name}` }).click();
+    await expect(reopenedMembers.getByRole('button', { name: `Remove ${user.name}` })).toHaveCount(0, {
+      timeout: 15000,
+    });
 
-      // expect: "Unit Members" panel is visible
-      const unitMembersPanel = expandedDetail.getByText('Unit Members');
-      await expect(unitMembersPanel).toBeVisible({ timeout: 5000 });
+    // Pending upstream: every membership change makes `setDataSources()` replace the Users
+    // table's `MatTableDataSource` with a fresh one that carries no filter, so the Search box
+    // keeps its text while the table goes back to listing every user, page 1. Asserting that
+    // the table no longer honours the search, then re-entering the term. When the component
+    // re-applies `filterControl.value` to the new data source, drop the re-entry and assert
+    // the user reappears under the search that is still in the box.
+    await expect(usersSearch).toHaveValue(user.name);
+    await expect(reopenedUsers.locator('mat-row').filter({ hasNotText: user.name }).first()).toBeVisible();
+    await usersSearch.fill('');
+    await usersSearch.fill(user.name);
 
-      // expect: "Users" panel (all users list for adding) is visible
-      const usersPanel = expandedDetail.getByText('Users');
-      await expect(usersPanel).toBeVisible({ timeout: 5000 });
+    //    expect: they move back to Users.
+    await expect(reopenedUsers.getByRole('button', { name: `Add ${user.name}` })).toBeVisible({
+      timeout: 15000,
+    });
 
-      // expect: Admin can manage — add-user buttons are present and enabled
-      const addUserButton = expandedDetail.locator('button[title^="Add "]').first();
-      await expect(addUserButton).toBeVisible({ timeout: 5000 });
-      await expect(addUserButton).toBeEnabled();
-
-      // Click on the row again to collapse it
-      await unitRow.click();
-
-      // expect: Expanded detail is no longer visible
-      await expect(expandedDetail).not.toBeVisible({ timeout: 3000 });
-    } finally {
-      // Cleanup via API
-      if (unitId) {
-        await deleteUnit(token, unitId);
-      }
-    }
+    // 5. Collapse the row.
+    //    expect: the member panels close.
+    await page.getByRole('row').filter({ hasText: unitName }).click();
+    await expect(reopened).toBeHidden();
   });
 });

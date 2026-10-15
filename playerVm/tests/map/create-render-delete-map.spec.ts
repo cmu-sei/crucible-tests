@@ -16,6 +16,11 @@ for (const theme of PLAYERVM_THEMES) {
       playerVmView: view,
     }, testInfo) => {
       // A freshly seeded view: no map yet, and the admin who created it can edit.
+      // Seeding rather than discovering is what makes the editor controls a
+      // guarantee: the creator holds the view-creator team role on its Admin
+      // team, so map-main's canEdit$ (ManageTeam | ManageView) is necessarily
+      // true. The fixture also deletes any map left behind by a failure (maps
+      // live in the VM API and are not cascaded by the view delete).
       await gotoPlayerVm(page, `/views/${view.id}/map`, theme);
 
       const newMapButton = page.getByRole('button', { name: 'New Map' });
