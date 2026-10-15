@@ -12,6 +12,7 @@ import {
   createPlayerView,
   deletePlayerView,
 } from '../../fixtures';
+import { requirePrecondition } from '../../../shared-fixtures';
 import {
   navigateToHomeSection,
   findHomeRowByText,
@@ -54,7 +55,13 @@ for (const theme of STEAMFITTER_THEMES) {
 
     test('Start then end a scenario', async ({ steamfitterAuthenticatedPage: page }) => {
       await setSteamfitterTheme(page, theme);
-      test.skip(!playerAvailable, 'Player API unavailable — scenario start/end requires a view.');
+      // Skips locally (Player is optional in a partial stack) but fails under CI,
+      // where the whole stack is expected up: a Player outage there is a real
+      // failure, not a reason to report this scenario as passing.
+      requirePrecondition(
+        playerAvailable,
+        'Player API unavailable — scenario start/end requires a view.'
+      );
 
       // Seed a ready, view-bound scenario so Start is available.
       await seedScenario(SCENARIO_NAME, 'Scenario exercised through start/end', {
