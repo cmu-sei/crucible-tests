@@ -10,18 +10,16 @@ which is also where the view/VM lists live.
 
 ## Test data
 
-Specs that need a real console page use the `consoleVm` fixture rather than
-discovering (or skipping for lack of) an existing VM. It seeds, per test:
-
-1. a Player view with its Admin team (Player API, Player UI token), then
-2. a VM API record with only `name` and `teamIds: [adminTeamId]` (VM API, which
-   rejects the Player UI token, so the fixture first loads a harmless Console
-   UI route to obtain the Console UI's own token).
+Specs that need a real console page seed one with `seedViewWithVm`
+(`playerVm/vm-helpers.ts`) rather than discovering (or skipping for lack of) an
+existing VM. It runs in a `beforeAll` inside each theme's `describe`, so the
+light and dark runs each get their own Player view (with its Admin team) and a
+VM API record on that team, with the theme in the seeded name. The seeding
+token comes from `getPlayerToken()` and covers both the Player and VM APIs.
 
 The record has no hypervisor VM behind it, so `/vm/{id}/console` renders the
-options bar and stays "Connecting". Names are
-`E2E Console [<project>-w<worker>-r<retry>-<hash>]`, unique per project, theme
-variant, worker and retry. The VM and the view are deleted after each test.
+options bar and stays "Connecting". The matching `afterAll` calls `cleanup()`,
+which deletes the VM and the view.
 
 ## Theme Coverage
 

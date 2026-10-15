@@ -1,7 +1,7 @@
 // Copyright 2026 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
-import { test as base, Page, request as pwRequest } from '@playwright/test';
+import { test as base, Page } from '@playwright/test';
 import { Services, authenticateWithKeycloak } from '../shared-fixtures';
 import {
   THEMES,
@@ -10,8 +10,6 @@ import {
   expectBodyTheme,
   closeMenuAndWaitForOverlay,
   themedUrl,
-  seededName,
-  oidcAccessToken as accessToken,
 } from '../theme-helpers';
 
 export async function authenticatePlayerVmWithKeycloak(
@@ -30,82 +28,19 @@ export async function authenticatePlayerVmWithKeycloak(
 // There is deliberately no "find me a view/VM in this environment" helper here.
 // Discovery made every VM-facing spec conditional — no views meant a self-skip
 // that reported green — and it made assertions depend on what the discovered
-// record happened to contain. Specs seed what they need instead: either the
-// per-test `playerVmView` fixture below (used by the theme-parameterized specs,
-// so the light and dark runs each get their own view) or `vm-helpers.ts`
-// (`seedView`, `seedViewWithVm`).
-
-/** A Player view seeded through the Player API for the duration of one test. */
-export interface SeededPlayerVmView {
-  id: string;
-  name: string;
-}
+// record happened to contain. Specs seed what they need instead: see
+// `vm-helpers.ts` (`seedView`, `seedViewWithVm`). A theme-parameterized spec
+// seeds inside each theme's `describe`, so the light and dark runs never share
+// a record.
 
 export type PlayerVmFixtures = {
   playerVmAuthenticatedPage: Page;
-  /**
-   * A fresh Player view (with its Admin team, which the creating admin user
-   * belongs to) seeded via the Player API and deleted after the test. Its name is
-   * unique per project, theme variant, worker and retry, so the light and dark
-   * runs of a spec never collide.
-   */
-  playerVmView: SeededPlayerVmView;
 };
-
-/**
- * Delete any VM API maps left on a seeded view (e.g. by a map test that failed
- * before its own delete step). Deleting the Player view does not remove them.
- *
- * The VM API only accepts the VM UI's token (the Player UI token gets 403), and
- * that token lives in the VM UI origin's storage, so this only runs when the
- * page is still on the VM UI. Tests that never left Player created no maps.
- */
-async function deleteViewMaps(page: Page, viewId: string): Promise<void> {
-  if (!page.url().startsWith(Services.PlayerVM.UI)) return;
-  const headers = { Authorization: `Bearer ${await accessToken(page)}` };
-  const api = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
-    const list = await api.get(`${Services.PlayerVM.API}/api/views/${viewId}/maps/all`, { headers });
-    if (!list.ok()) return;
-    for (const map of (await list.json()) as Array<{ id: string }>) {
-      await api.delete(`${Services.PlayerVM.API}/api/views/maps/${map.id}`, { headers });
-    }
-  } finally {
-    await api.dispose();
-  }
-}
 
 export const test = base.extend<PlayerVmFixtures>({
   playerVmAuthenticatedPage: async ({ page }, use) => {
     await authenticatePlayerVmWithKeycloak(page);
     await use(page);
-  },
-
-  playerVmView: async ({ playerVmAuthenticatedPage: page }, use, testInfo) => {
-    const headers = { Authorization: `Bearer ${await accessToken(page)}`, 'Content-Type': 'application/json' };
-    const api = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-    const name = seededName('E2E PlayerVm View', testInfo);
-    const response = await api.post(`${Services.Player.API}/api/views`, {
-      headers,
-      data: { name, description: `E2E fixture data for ${name}`, status: 'Active', isTemplate: false, createAdminTeam: true },
-    });
-    if (!response.ok()) {
-      await api.dispose();
-      throw new Error(`Failed to create Player view "${name}": ${response.status()} ${await response.text()}`);
-    }
-    const view: SeededPlayerVmView = await response.json();
-    try {
-      await use({ id: view.id, name });
-    } finally {
-      await deleteViewMaps(page, view.id).catch((error) =>
-        console.warn(`PlayerVm fixture map cleanup failed for view ${view.id}: ${error}`)
-      );
-      const del = await api.delete(`${Services.Player.API}/api/views/${view.id}`, { headers });
-      if (!del.ok() && del.status() !== 404) {
-        console.warn(`PlayerVm fixture cleanup failed for view ${view.id}: ${del.status()}`);
-      }
-      await api.dispose();
-    }
   },
 });
 

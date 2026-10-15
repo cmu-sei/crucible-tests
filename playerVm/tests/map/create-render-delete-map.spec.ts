@@ -5,23 +5,42 @@
 // seed: seed.spec.ts
 
 import { test, expect, gotoPlayerVm, PLAYERVM_THEMES } from '../../fixtures';
+import { deleteViewMaps, seedView } from '../../vm-helpers';
 
 for (const theme of PLAYERVM_THEMES) {
   test.describe(`${theme} theme › Map Application`, () => {
+    // The view is seeded rather than discovered, which is what makes the editor
+    // controls a guarantee instead of a guess: the seeding user creates the view,
+    // so they hold the view-creator team role on its Admin team and map-main's
+    // canEdit$ (ManageTeam | ManageView) is necessarily true. Seeded per theme so
+    // the light and dark runs each get their own view (and so their own maps).
+    let seeded: Awaited<ReturnType<typeof seedView>>;
+
+    test.beforeAll(async () => {
+      seeded = await seedView(`E2E Create Map ${theme}`);
+    });
+
+    test.afterEach(async () => {
+      // The test deletes its map through the UI as the final assertion; this is
+      // the safety net for a failure before that point, and it goes through the
+      // seeding token, so it runs wherever the page ended up. Maps live in the
+      // VM API's own database and are not cascaded by the view delete.
+      if (seeded) {
+        await deleteViewMaps(seeded.token, seeded.viewId);
+      }
+    });
+
+    test.afterAll(async () => {
+      await seeded?.cleanup();
+    });
+
     // Happy path for an editor: create a map for the team, confirm it renders on
     // the map page, then delete it (restoring the no-map state). Complements the
     // no-map and invalid-view tests.
     test('Editor can create, view, and delete a map', async ({
       playerVmAuthenticatedPage: page,
-      playerVmView: view,
     }, testInfo) => {
-      // A freshly seeded view: no map yet, and the admin who created it can edit.
-      // Seeding rather than discovering is what makes the editor controls a
-      // guarantee: the creator holds the view-creator team role on its Admin
-      // team, so map-main's canEdit$ (ManageTeam | ManageView) is necessarily
-      // true. The fixture also deletes any map left behind by a failure (maps
-      // live in the VM API and are not cascaded by the view delete).
-      await gotoPlayerVm(page, `/views/${view.id}/map`, theme);
+      await gotoPlayerVm(page, `/views/${seeded.viewId}/map`, theme);
 
       const newMapButton = page.getByRole('button', { name: 'New Map' });
       await expect(newMapButton).toBeVisible({ timeout: 30000 });

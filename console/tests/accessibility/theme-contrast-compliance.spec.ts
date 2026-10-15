@@ -7,6 +7,7 @@
 import type { Locator, Page } from '@playwright/test';
 import { test, expect, gotoConsole, setConsoleTheme, CONSOLE_THEMES, ConsoleTheme } from '../../fixtures';
 import { luminance, contrastRatio, sample, assertReadable, effectiveColorSettings, cssVar, hexToRgb } from '../../../theme-helpers';
+import { seedViewWithVm, SeededViewWithVm } from '../../../playerVm/vm-helpers';
 
 /**
  * Accessibility — real WCAG contrast on the Console UI's "VM Not Found" page, a
@@ -25,8 +26,9 @@ import { luminance, contrastRatio, sample, assertReadable, effectiveColorSetting
  * `on-primary` roles take each mode's configured value verbatim. Expected colors
  * are read from the app's own settings files rather than hardcoded.
  *
- * Console pages use a VM record the `consoleVm` fixture seeds (no hypervisor, so
- * the console stays "connecting") and deletes afterwards. The Send Text dialog is
+ * Console pages use a VM record seeded once per theme with `seedViewWithVm`
+ * (`playerVm/vm-helpers.ts`; no hypervisor, so the console stays "connecting")
+ * and deleted afterwards. The Send Text dialog is
  * filled in and cancelled, never sent.
  *
  * Theme: console pages load light, then `setConsoleTheme` flips the theme through
@@ -60,11 +62,20 @@ const INVALID_VM_ID = '00000000-0000-0000-0000-000000000000';
 
 for (const theme of CONSOLE_THEMES) {
   test.describe(`${theme} theme › Responsive Design and Accessibility`, () => {
+    let seeded: SeededViewWithVm;
+
+    test.beforeAll(async () => {
+      seeded = await seedViewWithVm(`E2E Console Contrast ${theme}`);
+    });
+
+    test.afterAll(async () => {
+      await seeded?.cleanup();
+    });
+
     // WCAG 1.4.3 — text contrast on the not-found page, the options bar and the
     // gear menu, plus a light/dark direction check.
     test('Theme Contrast Compliance (WCAG 1.4.3 text)', async ({
       consoleAuthenticatedPage: page,
-      consoleVm: vm,
     }) => {
       // 1. "VM Not Found" page: heading and description on the page surface.
       await gotoConsole(page, `/vm/${INVALID_VM_ID}/console`, theme);
@@ -91,7 +102,7 @@ for (const theme of CONSOLE_THEMES) {
       // 3. A console page: the connected-users label in the options bar (on
       //    --mat-sys-background). The VM name slot stays empty because the seeded
       //    record has no hypervisor VM behind it.
-      await openConsoleInTheme(page, vm.id, theme);
+      await openConsoleInTheme(page, seeded.vmId, theme);
       const optionsBar = page.locator('app-options-bar, app-options-bar2').first();
       const connectedUsers = optionsBar.locator('.connected-users');
       await expect(connectedUsers).toContainText('Connected:', { timeout: 30000 });
@@ -111,8 +122,8 @@ for (const theme of CONSOLE_THEMES) {
 
     // WCAG 1.4.11 — the "Console options" gear is a mat-icon-button whose glyph is
     // drawn in `--mat-sys-primary` on the options bar (`--mat-sys-background`).
-    test('Console options icon contrast (WCAG 1.4.11)', async ({ consoleAuthenticatedPage: page, consoleVm: vm }) => {
-      await openConsoleInTheme(page, vm.id, theme);
+    test('Console options icon contrast (WCAG 1.4.11)', async ({ consoleAuthenticatedPage: page }) => {
+      await openConsoleInTheme(page, seeded.vmId, theme);
 
       const gear = page.getByRole('button', { name: 'Console options' }).first();
       const primary = await cssVar(page, '--mat-sys-primary');
@@ -139,8 +150,8 @@ for (const theme of CONSOLE_THEMES) {
     // selected track (primary) against the menu panel when on (dark), and the
     // handle against the unselected track when off (light). M3 paints both on
     // pseudo-elements, so they are read with getComputedStyle(el, '::after').
-    test('Dark Theme switch contrast (WCAG 1.4.11)', async ({ consoleAuthenticatedPage: page, consoleVm: vm }) => {
-      await openConsoleInTheme(page, vm.id, theme);
+    test('Dark Theme switch contrast (WCAG 1.4.11)', async ({ consoleAuthenticatedPage: page }) => {
+      await openConsoleInTheme(page, seeded.vmId, theme);
       const panel = await openGearMenu(page);
       const toggle = panel.getByRole('switch', { name: 'Dark Theme' });
       await expect(toggle).toHaveAttribute('aria-checked', theme === 'dark' ? 'true' : 'false');
@@ -170,8 +181,8 @@ for (const theme of CONSOLE_THEMES) {
     // modes, and `primary` / `on-primary` take the active mode's settings verbatim
     // (dark falls back to light when its key is absent). Console has no brand top
     // bar, so nothing paints with the top-bar pair; only the properties are checked.
-    test('Color settings applied per theme (design spec)', async ({ consoleAuthenticatedPage: page, consoleVm: vm }) => {
-      await openConsoleInTheme(page, vm.id, theme);
+    test('Color settings applied per theme (design spec)', async ({ consoleAuthenticatedPage: page }) => {
+      await openConsoleInTheme(page, seeded.vmId, theme);
 
       const settings = await effectiveColorSettings(page);
       for (const key of [
@@ -210,9 +221,8 @@ for (const theme of CONSOLE_THEMES) {
     // Text dialog (the shared crucible-dialog), filled in but never sent.
     test('Primary and on-primary text contrast (WCAG 1.4.3)', async ({
       consoleAuthenticatedPage: page,
-      consoleVm: vm,
     }) => {
-      await openConsoleInTheme(page, vm.id, theme);
+      await openConsoleInTheme(page, seeded.vmId, theme);
 
       await openGearMenu(page);
       await page.getByRole('menuitem', { name: 'Keyboard', exact: true }).click();

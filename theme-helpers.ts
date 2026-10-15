@@ -74,25 +74,6 @@ export function seededName(baseName: string, testInfo: TestInfo): string {
   return `${baseName} [${testInfo.project.name}-w${testInfo.workerIndex}-r${testInfo.retry}-${seed}]`;
 }
 
-/** The OIDC access token the page holds in its current origin's browser storage. */
-export async function oidcAccessToken(page: Page): Promise<string> {
-  const token = await page.evaluate(() => {
-    for (const storage of [localStorage, sessionStorage]) {
-      for (let i = 0; i < storage.length; i++) {
-        try {
-          const value = JSON.parse(storage.getItem(storage.key(i)!) ?? '');
-          if (typeof value?.access_token === 'string') return value.access_token as string;
-        } catch {
-          // Non-JSON application state shares browser storage with the OIDC user.
-        }
-      }
-    }
-    return null;
-  });
-  if (!token) throw new Error('Authenticated page did not contain an OIDC access token');
-  return token;
-}
-
 // ---------------------------------------------------------------------------
 // WCAG contrast
 // ---------------------------------------------------------------------------

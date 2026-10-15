@@ -7,10 +7,12 @@ reachable directly.
 
 Authentication is via Keycloak SSO through the Player UI (see `fixtures.ts`):
 the Player VM UI has no view list of its own, so tests authenticate on Player,
-then navigate into the VM UI routes. Specs that need a real view use the
-`playerVmView` fixture, which seeds a fresh Player view (with its Admin team)
-through the Player API, names it uniquely per project, theme variant, worker
-and retry, and deletes it (plus any VM API maps left on it) after the test.
+then navigate into the VM UI routes. Specs that need a real view seed one with
+`seedView` / `seedViewWithVm` (`vm-helpers.ts`) in a `beforeAll` inside each
+theme's `describe`, so the light and dark runs each get their own view (the
+theme is part of the seeded name). The matching `afterAll` calls `cleanup()`,
+which deletes the view and, through the seeding token, any VM API maps left on
+it, wherever the page ended up.
 
 ## Theme Coverage
 

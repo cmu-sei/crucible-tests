@@ -5,14 +5,28 @@
 // seed: seed.spec.ts
 
 import { test, expect, gotoConsole, CONSOLE_THEMES } from '../../fixtures';
+import { seedViewWithVm, SeededViewWithVm } from '../../../playerVm/vm-helpers';
 
 for (const theme of CONSOLE_THEMES) {
   test.describe(`${theme} theme › Console Rendering`, () => {
     // The console route needs a VM the authenticated user can read. This spec
-    // seeds its own (the `consoleVm` fixture) — a discovered VM would make the
-    // test conditional on whatever the environment holds, and "no VM found"
-    // would then report green while asserting nothing about rendering.
-    //
+    // seeds its own, once per theme, so the light and dark runs never share a
+    // record — a discovered VM would make the test conditional on whatever the
+    // environment holds, and "no VM found" would then report green while
+    // asserting nothing about rendering. A seeded VM has `Type=Unknown`, which
+    // console.ui's template handles on the same branch as vSphere, so the
+    // console shell mounts exactly as it does for a real machine (it just never
+    // connects to a screen).
+    let seeded: SeededViewWithVm;
+
+    test.beforeAll(async () => {
+      seeded = await seedViewWithVm(`E2E Console Rendering ${theme}`);
+    });
+
+    test.afterAll(async () => {
+      await seeded?.cleanup();
+    });
+
     // Regression: the console did not render until the window was clicked/focused
     // because readOnly$ (bound via | async in an OnPush component) was assigned
     // late, so change detection only ran on a window:focus event (console.ui
@@ -20,13 +34,12 @@ for (const theme of CONSOLE_THEMES) {
     // without any click or focus interaction.
     test('Console renders without window focus', async ({
       consoleAuthenticatedPage: page,
-      consoleVm: vm,
     }) => {
       // 1. Open the console route for the seeded VM record directly. Do not click
       //    or focus anything after this — the component must render on its own.
       //    The record has no hypervisor behind it, so the console never connects;
       //    that is fine, the test is about the component rendering.
-      await gotoConsole(page, `/vm/${vm.id}/console`, theme);
+      await gotoConsole(page, `/vm/${seeded.vmId}/console`, theme);
 
       // 2. The console component renders without interaction. app-console is the
       //    options bar + screen/overlay host; before the fix this stayed as bare

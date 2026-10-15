@@ -7,6 +7,7 @@
 import type { Page } from '@playwright/test';
 import { test, expect, gotoPlayerVm, setPlayerVmTheme, PLAYERVM_THEMES, PlayerVmTheme } from '../../fixtures';
 import { luminance, contrastRatio, sample, assertReadable, effectiveColorSettings, cssVar, hexToRgb } from '../../../theme-helpers';
+import { seedView } from '../../vm-helpers';
 
 /**
  * Accessibility — real WCAG contrast on the Player VM UI's VM list and Map pages,
@@ -23,8 +24,8 @@ import { luminance, contrastRatio, sample, assertReadable, effectiveColorSetting
  * settings files rather than hardcoded, so an environment that overrides them
  * still passes as long as the app applies what it was given.
  *
- * Each test runs against a view the `playerVmView` fixture seeds through the
- * Player API (it has no VMs and no map) and deletes afterwards. The New Map
+ * Each theme's tests run against a view seeded once per theme with `seedView`
+ * (`vm-helpers.ts`; it has no VMs and no map) and deleted afterwards. The New Map
  * dialog is opened and cancelled, never saved.
  *
  * Theme: each page loads light, then `setPlayerVmTheme` flips it through the user
@@ -46,12 +47,21 @@ const NO_MAP_HEADING = 'No Map is assigned to this Team';
 
 for (const theme of PLAYERVM_THEMES) {
   test.describe(`${theme} theme › Responsive Design and Accessibility`, () => {
+    let seeded: Awaited<ReturnType<typeof seedView>>;
+
+    test.beforeAll(async () => {
+      seeded = await seedView(`E2E PlayerVm Contrast ${theme}`);
+    });
+
+    test.afterAll(async () => {
+      await seeded?.cleanup();
+    });
+
     // WCAG 1.4.3 — text contrast on the top bar and the page surface.
     test('Theme Contrast Compliance (WCAG 1.4.3 text)', async ({
       playerVmAuthenticatedPage: page,
-      playerVmView: view,
     }) => {
-      await openInTheme(page, `/views/${view.id}/map`, theme);
+      await openInTheme(page, `/views/${seeded.viewId}/map`, theme);
 
       // 1. Top bar text against the top bar (it keeps its brand pair in both themes).
       const toolbar = page.locator('app-topbar mat-toolbar.toolbar');
@@ -91,9 +101,8 @@ for (const theme of PLAYERVM_THEMES) {
     // stays generic: `primary` comes from each mode's configured setting.
     test('Primary action icon contrast (WCAG 1.4.11)', async ({
       playerVmAuthenticatedPage: page,
-      playerVmView: view,
     }) => {
-      await openInTheme(page, `/views/${view.id}`, theme);
+      await openInTheme(page, `/views/${seeded.viewId}`, theme);
 
       const search = page.getByRole('textbox', { name: 'Search' });
       await expect(search).toBeVisible({ timeout: 30000 });
@@ -126,9 +135,8 @@ for (const theme of PLAYERVM_THEMES) {
     // falls back to light when its key is absent). Nothing is derived or corrected.
     test('Color settings applied per theme (design spec)', async ({
       playerVmAuthenticatedPage: page,
-      playerVmView: view,
     }) => {
-      await openInTheme(page, `/views/${view.id}`, theme);
+      await openInTheme(page, `/views/${seeded.viewId}`, theme);
 
       const settings = await effectiveColorSettings(page);
       for (const key of [
@@ -181,9 +189,8 @@ for (const theme of PLAYERVM_THEMES) {
     // shared crucible-dialog) without submitting.
     test('Primary and on-primary text contrast (WCAG 1.4.3)', async ({
       playerVmAuthenticatedPage: page,
-      playerVmView: view,
     }) => {
-      await openInTheme(page, `/views/${view.id}/map`, theme);
+      await openInTheme(page, `/views/${seeded.viewId}/map`, theme);
 
       await page.getByRole('button', { name: 'New Map' }).click({ timeout: 30000 });
       const dialog = page.getByRole('dialog', { name: 'New Map' });

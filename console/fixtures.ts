@@ -1,7 +1,7 @@
 // Copyright 2026 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
-import { test as base, expect, Page, APIRequestContext, request as pwRequest } from '@playwright/test';
+import { test as base, Page } from '@playwright/test';
 import { Services, authenticateWithKeycloak } from '../shared-fixtures';
 import {
   THEMES,
@@ -10,8 +10,6 @@ import {
   expectBodyTheme,
   closeMenuAndWaitForOverlay,
   themedUrl,
-  seededName,
-  oidcAccessToken as accessToken,
 } from '../theme-helpers';
 
 export async function authenticateConsoleWithKeycloak(
@@ -79,94 +77,21 @@ export async function setConsoleTheme(page: Page, theme: ConsoleTheme): Promise<
   await expectBodyTheme(page, theme);
 }
 
-/** A VM record (plus the Player view and team it belongs to) seeded for one test. */
-export interface SeededConsoleVm {
-  id: string;
-  name: string;
-  viewId: string;
-  teamId: string;
-}
-
-// There is deliberately no "find me a VM in this environment" helper here.
-// Discovery made the spec skip itself when no VM turned up, which reads as a
-// pass while asserting nothing about the console. Specs seed what they need:
-// the per-test `consoleVm` fixture below (used by the theme-parameterized
-// specs) or `seedViewWithVm` from `playerVm/vm-helpers.ts`.
+// Console specs get their VM id from `playerVm/vm-helpers.ts` (`seedViewWithVm`),
+// not from scraping the VM list for whatever machine the environment happens to
+// have. Discovery made the spec skip itself when no VM turned up, which reads as
+// a pass while asserting nothing about the console. A theme-parameterized spec
+// seeds inside each theme's `describe`, so the light and dark runs never share
+// a VM.
 
 export type ConsoleFixtures = {
   consoleAuthenticatedPage: Page;
-  /**
-   * A VM record seeded for the duration of one test: a Player view (with its
-   * Admin team) through the Player API, then a VM API record with only `name`
-   * and `teamIds`. It has no hypervisor behind it, so `/vm/{id}/console`
-   * renders the options bar and stays "connecting". Names are unique per
-   * project, theme variant, worker and retry. Everything is deleted afterwards.
-   */
-  consoleVm: SeededConsoleVm;
 };
-
-async function okJson<T>(res: Awaited<ReturnType<APIRequestContext['get']>>, what: string): Promise<T> {
-  if (!res.ok()) throw new Error(`${what} failed: ${res.status()} ${await res.text()}`);
-  return (await res.json()) as T;
-}
 
 export const test = base.extend<ConsoleFixtures>({
   consoleAuthenticatedPage: async ({ page }, use) => {
     await authenticateConsoleWithKeycloak(page);
     await use(page);
-  },
-
-  consoleVm: async ({ consoleAuthenticatedPage: page }, use, testInfo) => {
-    const api = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-    const name = seededName('E2E Console', testInfo);
-    // The Player API takes the Player UI token (the page is on Player after auth).
-    const playerHeaders = { Authorization: `Bearer ${await accessToken(page)}`, 'Content-Type': 'application/json' };
-    let viewId: string | undefined;
-    let vmId: string | undefined;
-    let vmHeaders: Record<string, string> | undefined;
-    try {
-      const view = await okJson<{ id: string }>(
-        await api.post(`${Services.Player.API}/api/views`, {
-          headers: playerHeaders,
-          data: { name, description: `E2E fixture data for ${name}`, status: 'Active', isTemplate: false, createAdminTeam: true },
-        }),
-        `Create Player view "${name}"`
-      );
-      viewId = view.id;
-      const teams = await okJson<Array<{ id: string }>>(
-        await api.get(`${Services.Player.API}/api/views/${view.id}/teams`, { headers: playerHeaders }),
-        'List view teams'
-      );
-      if (teams.length === 0) throw new Error(`Seeded view ${view.id} has no team`);
-      const teamId = teams[0].id;
-
-      // The VM API rejects the Player UI token; use the Console UI's own token,
-      // which only exists in the Console UI origin's storage. Load a harmless
-      // console route (an unknown VM id) to complete its silent sign-in.
-      await page.goto(consoleUrl('/vm/00000000-0000-0000-0000-000000000000/console', 'light'));
-      await expect(page.getByRole('heading', { name: 'VM Not Found' })).toBeVisible({ timeout: 30000 });
-      vmHeaders = { Authorization: `Bearer ${await accessToken(page)}`, 'Content-Type': 'application/json' };
-      const vm = await okJson<{ id: string }>(
-        await api.post(`${Services.PlayerVM.API}/api/vms`, {
-          headers: vmHeaders,
-          data: { name, teamIds: [teamId] },
-        }),
-        `Create VM "${name}"`
-      );
-      vmId = vm.id;
-
-      await use({ id: vm.id, name, viewId: view.id, teamId });
-    } finally {
-      if (vmId && vmHeaders) {
-        const del = await api.delete(`${Services.PlayerVM.API}/api/vms/${vmId}`, { headers: vmHeaders });
-        if (!del.ok() && del.status() !== 404) console.warn(`Console fixture cleanup failed for VM ${vmId}: ${del.status()}`);
-      }
-      if (viewId) {
-        const del = await api.delete(`${Services.Player.API}/api/views/${viewId}`, { headers: playerHeaders });
-        if (!del.ok() && del.status() !== 404) console.warn(`Console fixture cleanup failed for view ${viewId}: ${del.status()}`);
-      }
-      await api.dispose();
-    }
   },
 });
 
