@@ -23,10 +23,13 @@ which deletes the VM and the view.
 
 ## Theme Coverage
 
-Every Console spec is authenticated and runs once per theme: each file loops
+Every Console spec runs once per theme, with no exceptions: each file loops
 over `CONSOLE_THEMES` (`light`, `dark`) and reports under a `light theme ›` /
-`dark theme ›` describe prefix. There are no unauthenticated or API-only
-Console specs, so none are left unwrapped.
+`dark theme ›` describe prefix. Every Console spec is authenticated, so none
+needed the pattern adapted. Player VM specs that open a console along the way
+(`playerVm/tests/usage-reporting`, `playerVm/tests/realtime`) navigate to it
+with the same `gotoConsole`, so those consoles run in the Player VM spec's
+theme too.
 
 **Theme strategy — `?theme=` on every Console UI navigation.** The Console UI
 does not persist the theme (it lives only in the in-memory store), so a theme

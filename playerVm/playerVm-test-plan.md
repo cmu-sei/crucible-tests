@@ -8,19 +8,21 @@ reachable directly.
 Authentication is via Keycloak SSO through the Player UI (see `fixtures.ts`):
 the Player VM UI has no view list of its own, so tests authenticate on Player,
 then navigate into the VM UI routes. Specs that need a real view seed one with
-`seedView` / `seedViewWithVm` (`vm-helpers.ts`) in a `beforeAll`.
-Theme-parameterized specs seed inside each theme's `describe`, so the light and
-dark runs each get their own view (the theme is part of the seeded name); the
-others seed in a top-level `beforeAll`. The matching `afterAll` calls `cleanup()`,
-which deletes the view and, through the seeding token, any VM API maps left on
-it, wherever the page ended up.
+`seedView` / `seedViewWithVm` (`vm-helpers.ts`) in a `beforeAll` (or a
+`beforeEach`, for a spec whose tests change what the view holds). Every spec is
+theme-parameterized and seeds inside each theme's `describe`, so the light and
+dark runs each get their own view (the theme is part of the seeded name, and of
+the name of anything else a test creates: VMs, teams, usage-logging sessions,
+maps, Keycloak users, callback subscriptions). The matching `afterAll` /
+`afterEach` calls `cleanup()`, which deletes the view and, through the seeding
+token, any VM API maps left on it, wherever the page ended up.
 
 ## Theme Coverage
 
-The theme-parameterized Player VM specs loop over `PLAYERVM_THEMES` (`light`,
-`dark`) and report under a `light theme ›` / `dark theme ›` describe prefix:
-the accessibility contrast spec and the Map specs. The VM list, realtime,
-usage, callback and contract specs run once, in the default theme.
+Every Player VM spec runs once per theme, with no exceptions: each file loops
+over `PLAYERVM_THEMES` (`light`, `dark`) and reports under a `light theme ›` /
+`dark theme ›` describe prefix. That covers the accessibility, Map, view-page
+(`vm-main/`), usage reporting, realtime, callback and contract specs alike.
 
 **Theme strategy — `?theme=` on every VM UI navigation.** The VM UI does not
 persist the theme: its localStorage entry (`akita-vm-ui`) holds only
@@ -30,7 +32,32 @@ theme)`, which appends `?theme=dark-theme` / `?theme=light-theme` (the same
 channel Player uses when it embeds the VM UI in an iframe) and asserts that
 `body.darkMode` is present or absent before continuing. The param stays on the
 URL, so it also survives a reload. The VM UI writes `?theme=` back onto the URL
-when the theme later changes; no Player VM spec asserts on the query string.
+when the theme later changes. The one spec that asserts on the URL
+(`open-vm-tab`, "the page did not navigate") expects the `?theme=` it was
+opened with.
+
+Specs where the pattern had to be adapted:
+
+- **Console pages.** Specs that also open the Console UI (`usage-reporting`,
+  `realtime/hub-invocations`, `realtime/console-presence`, including the second
+  user's console page) navigate there with `gotoConsole(page, path, theme)` from
+  `console/fixtures.ts`, so the console runs in the same theme.
+- **In-app navigation.** `realtime/hub-invocations` leaves routes through the
+  Angular router (pushState + Back/Forward) so `ngOnDestroy` runs. No document
+  loads, so the theme the page booted into stays in memory and those targets
+  carry no `?theme=`.
+- **Embedded and opened VMs.** `vm-main/tab-strip`'s iframe test frames
+  `playerVmUrl(path, theme)`, as Player does when it embeds the VM UI, and also
+  asserts the frame's `<body>` is in that theme. `vm-main/open-vm-tab` pins the
+  `?theme=` the VM UI adds to an opened VM's iframe `src` and popup URL to the
+  run's theme (`addThemeQueryParam` reads the theme the UI is rendering).
+- **API-only and source-reading specs.** `callback/view-event-callback` drives two
+  APIs and opens no page; `contract/` reads source and the served OpenAPI
+  document. They are wrapped anyway, so every test reports under both theme
+  titles. The theme changes nothing in them but the names of what the callback
+  spec creates (its views, maps, sessions and Player subscription), which keeps
+  the two runs off each other's records. Their `requireAppSources` /
+  `requirePrecondition` skips are unchanged and apply to each theme's run alike.
 
 `setPlayerVmTheme(page, theme)` switches the already-loaded page through the
 user menu's "Dark Theme" switch, waits for the menu panel and CDK backdrop to
@@ -326,9 +353,10 @@ Four things shape the file:
   read from Keycloak rather than checked in — and an address for the VM API that
   *the Player API's process* can reach.
 - **A subscription is deployment-wide while it exists.** Every view any spec
-  creates or deletes is delivered through it, and both browser projects run this
-  file, so one event can be delivered twice. Nothing here asserts a count: a
-  doubled delivery clones a map twice and is otherwise idempotent.
+  creates or deletes is delivered through it, and both browser projects and both
+  theme runs execute this file (each with its own subscription), so one event can
+  be delivered more than once. Nothing here asserts a count: a repeated delivery
+  clones a map again and is otherwise idempotent.
 - **A cloned view cannot be observed through the view's own endpoints.**
   `ViewEntity.Clone()` copies no memberships, so the caller has no primary team
   in the child and `getViewMaps` — which filters to the caller's visibility

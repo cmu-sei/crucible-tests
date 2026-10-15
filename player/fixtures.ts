@@ -11,7 +11,15 @@ import {
   waitForFirstVisible,
 } from '../shared-fixtures';
 import { authSessionStatePath, authStatePath } from '../auth-paths';
-import { THEMES, Theme, isDarkTheme, expectBodyTheme, closeMenuAndWaitForOverlay, seededName } from '../theme-helpers';
+import {
+  THEMES,
+  Theme,
+  isDarkTheme,
+  expectBodyTheme,
+  closeMenuAndWaitForOverlay,
+  seededName,
+  themedUrl,
+} from '../theme-helpers';
 import {
   addUserToTeam,
   createTeam,
@@ -281,6 +289,24 @@ export async function setPlayerTheme(page: Page, theme: PlayerTheme): Promise<vo
   await closeMenuAndWaitForOverlay(page);
 
   await expectBodyTheme(page, theme);
+}
+
+/**
+ * A Player URL for `path` that requests `theme` through the `?theme=` boot param.
+ *
+ * Only for a spec that starts *unauthenticated* (the authentication specs, and
+ * the deep-link spec): there is no user menu before login, so the entry URL is
+ * the only theme input such a visitor has. Whether the request survives the
+ * Keycloak round trip is up to the auth guard, so a spec that gets back into
+ * Player still calls {@link setPlayerTheme} afterwards (a no-op when the param
+ * already took). A spec that never leaves Keycloak's own screens is carrying the
+ * param only to show the redirect and the login page behave the same either way.
+ *
+ * Authenticated specs use {@link setPlayerTheme} instead, for the reason given
+ * there.
+ */
+export function playerUrl(path: string, theme: PlayerTheme): string {
+  return themedUrl(Services.Player.UI, path, theme);
 }
 
 export { expect } from '@playwright/test';

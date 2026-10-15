@@ -4,37 +4,44 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, PLAYER_THEMES, playerUrl } from '../../fixtures';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
-test.describe('Authentication', () => {
-  test('Invalid Login Credentials', async ({ page }) => {
-    // 1. Navigate to the Player UI
-    await page.goto(Services.Player.UI);
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Authentication`, () => {
+    test('Invalid Login Credentials', async ({ page }) => {
+      // 1. Navigate to the Player UI
+      // The login never succeeds, so Player's user-menu theme switch never exists.
+      // The theme is requested on the entry URL instead, the only theme input an
+      // unauthenticated visitor has; everything after it happens on Keycloak's own
+      // screens, so the assertions are the same in both themes and the point is
+      // that the redirect and the failure behave identically in each.
+      await page.goto(playerUrl('/', theme));
 
-    // expect: The application redirects to Keycloak login page
-    await page.getByText('Sign in to your account').first().waitFor({ state: 'visible' });
+      // expect: The application redirects to Keycloak login page
+      await page.getByText('Sign in to your account').first().waitFor({ state: 'visible' });
 
-    // 2. Enter 'invaliduser' as username and 'wrongpassword' as password
-    await page.getByRole('textbox', { name: 'Username or email' }).fill('invaliduser');
-    await page.getByRole('textbox', { name: 'Password' }).fill('wrongpassword');
+      // 2. Enter 'invaliduser' as username and 'wrongpassword' as password
+      await page.getByRole('textbox', { name: 'Username or email' }).fill('invaliduser');
+      await page.getByRole('textbox', { name: 'Password' }).fill('wrongpassword');
 
-    // expect: The credentials are entered in the fields
-    await expect(page.getByRole('textbox', { name: 'Username or email' })).toHaveValue('invaliduser');
-    await expect(page.getByRole('textbox', { name: 'Password' })).toHaveValue('wrongpassword');
+      // expect: The credentials are entered in the fields
+      await expect(page.getByRole('textbox', { name: 'Username or email' })).toHaveValue('invaliduser');
+      await expect(page.getByRole('textbox', { name: 'Password' })).toHaveValue('wrongpassword');
 
-    // 3. Click the 'Sign In' button
-    await page.getByRole('button', { name: 'Sign In' }).click();
+      // 3. Click the 'Sign In' button
+      await page.getByRole('button', { name: 'Sign In' }).click();
 
-    // expect: An error message is displayed
-    const errorMessage = page.locator('.alert-error, #input-error, .kc-feedback-text');
-    await expect(errorMessage).toBeVisible({ timeout: 5000 });
+      // expect: An error message is displayed
+      const errorMessage = page.locator('.alert-error, #input-error, .kc-feedback-text');
+      await expect(errorMessage).toBeVisible({ timeout: 5000 });
 
-    // expect: User remains on the login page
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 5000 });
+      // expect: User remains on the login page
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 5000 });
 
-    // expect: User is not authenticated
-    await expect(page.getByRole('textbox', { name: 'Username or email' })).toBeVisible();
+      // expect: User is not authenticated
+      await expect(page.getByRole('textbox', { name: 'Username or email' })).toBeVisible();
+    });
   });
-});
+}

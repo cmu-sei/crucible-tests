@@ -94,8 +94,8 @@ export function playerVmUrl(path: string, theme: PlayerVmTheme): string {
  * the VM UI keeps the theme only in memory: switching via the menu would be lost
  * on every `page.goto` or reload, whereas the param is re-read on every boot (and
  * survives a reload, since it stays on the URL). The VM UI does write `?theme=`
- * back onto the URL when the theme later changes, but no Player VM spec asserts
- * on the query string, so carrying it from the start costs nothing.
+ * back onto the URL when the theme later changes. A spec that asserts on the URL
+ * has to expect the param (see `vm-main/open-vm-tab.spec.ts`).
  *
  * Waits for `<body>` to reflect the theme before returning.
  */

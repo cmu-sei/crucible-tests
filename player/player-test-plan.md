@@ -6,22 +6,34 @@ The Player application is the main learning platform in the Crucible ecosystem. 
 
 ## Theme Coverage
 
-Every authenticated functional scenario below runs **once per theme (light and dark)**: each
-spec loops over `PLAYER_THEMES` from `player/fixtures.ts`, reports under a `light theme ›` /
-`dark theme ›` describe prefix, and applies the theme through the top bar user menu's
-"Dark Theme" switch (`setPlayerTheme`) right after authentication. Player persists the
-choice in localStorage (`akita-player-ui`), so it survives the reloads and navigations a
-test performs, and every test's fresh browser context starts light.
+Every Player spec runs **once per theme (light and dark)**, with no exceptions: each spec
+file loops over `PLAYER_THEMES` from `player/fixtures.ts` and reports under a
+`light theme ›` / `dark theme ›` describe prefix. That includes the generator template
+(`player/tests/seed.spec.ts`), which signs in through the `playerAuthenticatedPage` fixture
+and applies the theme, so specs generated from it start out themed.
 
-Exceptions, which run once:
-  - 1.1 User Login, 1.3 Invalid Login Credentials, 1.4 Failed Authentication - Empty
-    Credentials, 1.6 Unauthorized Access Protection, and 13.12 Deep Link Access — they run
-    unauthenticated and exercise the Keycloak screens before any Player UI (and its theme
-    switch) exists.
-  - 2.5 Dark Theme Toggle and 15.8 Color Contrast — they toggle the theme themselves as
-    the behavior under test.
-  - 15.10 Theme Contrast and Color Settings Compliance — it is parameterized over the
-    themes itself.
+Authenticated specs apply the theme through the top bar user menu's "Dark Theme" switch
+(`setPlayerTheme`) right after authentication. Player persists the choice in localStorage
+(`akita-player-ui`), so it survives the reloads and navigations a test performs, and every
+test's fresh browser context starts light.
+
+Specs where the pattern had to be adapted:
+  - **Unauthenticated specs** — 1.1 User Login, 1.3 Invalid Login Credentials, 1.4 Failed
+    Authentication - Empty Credentials, 1.6 Unauthorized Access Protection and 13.12 Deep
+    Link Access start with no session, so there is no user menu yet. They request the theme
+    on the first navigation instead (`playerUrl(path, theme)`, which adds Player's
+    `?theme=dark-theme` / `?theme=light-theme` boot param). 1.1 and 13.12 log in and land
+    back in Player, so they then call `setPlayerTheme` as well (a no-op if the param already
+    took); 13.12's unknown view id sends the session home with a "View Not Found" sheet, which
+    it dismisses first. 1.3, 1.4 and 1.6 never get past Keycloak's own screens, which Player's
+    theme does not reach: they carry the param anyway and assert the redirect and the login
+    failure behave identically in both themes.
+  - **2.5 Dark Theme Toggle** tests the toggle itself, so the theme is its *starting* state:
+    it sets the theme, checks the switch reflects it, toggles and asserts the page flips to the
+    other theme, then toggles back and asserts it returns.
+  - **15.8 Color Contrast** applies the run's theme up front and measures WCAG 1.4.3 contrast
+    on the home page's always-present text in that theme (instead of flipping between themes
+    within one test).
 
 ## Test Scenarios
 
@@ -171,16 +183,19 @@ Exceptions, which run once:
 
 **File:** `player/tests/home/dark-theme-toggle.spec.ts`
 
+Runs once per theme, with that theme as the starting state.
+
 **Steps:**
-  1. Log in as admin user
+  1. Log in as admin user, in the run's starting theme
     - expect: User is on the home page
   2. Click the Menu button
     - expect: A dropdown menu appears showing a 'Dark Theme' toggle switch
+    - expect: The switch is on in dark and off in light
   3. Toggle the Dark Theme switch
-    - expect: The application theme changes to dark mode
-    - expect: Colors and backgrounds update to dark theme
+    - expect: The application theme changes to the other theme
+    - expect: Colors and backgrounds update to that theme
   4. Toggle the Dark Theme switch again
-    - expect: The application theme changes back to light mode
+    - expect: The application theme changes back to the starting theme
 
 #### 2.6. Create New View - Authorized User
 
@@ -1433,8 +1448,11 @@ Exceptions, which run once:
 
 **File:** `player/tests/accessibility/color-contrast.spec.ts`
 
+Runs once per theme, measuring that theme.
+
 **Steps:**
-  1. Log in and view the application in both light and dark themes
+  1. Log in and view the application in the run's theme
+    - expect: The "My Views" title, a table column header, the top bar title and the user menu meet WCAG 1.4.3 contrast against their painted backgrounds
     - expect: Text and background colors meet WCAG contrast requirements
     - expect: All text is readable
     - expect: Interactive elements are visually distinguishable
