@@ -1,0 +1,236 @@
+{
+  "workspaceId": "00000000-0000-0000-0000-000000000000",
+  "runId": "11111111-1111-1111-1111-111111111111",
+  "createdAt": "2026-10-13T17:00:00Z",
+  "isDestroy": false,
+  "nodes": [
+    {
+      "id": "module.fw_edge.proxmox_virtual_environment_vm.vm",
+      "kind": "Machine",
+      "type": "proxmox_virtual_environment_vm",
+      "label": "fw-edge-demo",
+      "module": "module.fw_edge",
+      "action": "create",
+      "external": false,
+      "properties": {
+        "cpus": "1",
+        "memory_mb": "512",
+        "node": "pve"
+      }
+    },
+    {
+      "id": "module.host[\"dc\"].proxmox_virtual_environment_vm.vm",
+      "kind": "Machine",
+      "type": "proxmox_virtual_environment_vm",
+      "label": "dc-demo",
+      "module": "module.host[\"dc\"]",
+      "action": "create",
+      "external": false,
+      "properties": {
+        "cpus": "1",
+        "memory_mb": "512",
+        "node": "pve"
+      }
+    },
+    {
+      "id": "module.host[\"files\"].proxmox_virtual_environment_vm.vm",
+      "kind": "Machine",
+      "type": "proxmox_virtual_environment_vm",
+      "label": "files-demo",
+      "module": "module.host[\"files\"]",
+      "action": "create",
+      "external": false,
+      "properties": {
+        "cpus": "1",
+        "memory_mb": "512",
+        "node": "pve"
+      }
+    },
+    {
+      "id": "module.host[\"kali-red\"].proxmox_virtual_environment_vm.vm",
+      "kind": "Machine",
+      "type": "proxmox_virtual_environment_vm",
+      "label": "kali-red-demo",
+      "module": "module.host[\"kali-red\"]",
+      "action": "create",
+      "external": false,
+      "properties": {
+        "cpus": "1",
+        "memory_mb": "512",
+        "node": "pve"
+      }
+    },
+    {
+      "id": "module.host[\"mail\"].proxmox_virtual_environment_vm.vm",
+      "kind": "Machine",
+      "type": "proxmox_virtual_environment_vm",
+      "label": "mail-demo",
+      "module": "module.host[\"mail\"]",
+      "action": "create",
+      "external": false,
+      "properties": {
+        "cpus": "1",
+        "memory_mb": "512",
+        "node": "pve"
+      }
+    },
+    {
+      "id": "module.host[\"siem\"].proxmox_virtual_environment_vm.vm",
+      "kind": "Machine",
+      "type": "proxmox_virtual_environment_vm",
+      "label": "siem-demo",
+      "module": "module.host[\"siem\"]",
+      "action": "create",
+      "external": false,
+      "properties": {
+        "cpus": "1",
+        "memory_mb": "512",
+        "node": "pve"
+      }
+    },
+    {
+      "id": "module.host[\"web\"].proxmox_virtual_environment_vm.vm",
+      "kind": "Machine",
+      "type": "proxmox_virtual_environment_vm",
+      "label": "web-demo",
+      "module": "module.host[\"web\"]",
+      "action": "create",
+      "external": false,
+      "properties": {
+        "cpus": "1",
+        "memory_mb": "512",
+        "node": "pve"
+      }
+    },
+    {
+      "id": "module.host[\"ws-1\"].proxmox_virtual_environment_vm.vm",
+      "kind": "Machine",
+      "type": "proxmox_virtual_environment_vm",
+      "label": "ws-1-demo",
+      "module": "module.host[\"ws-1\"]",
+      "action": "create",
+      "external": false,
+      "properties": {
+        "cpus": "1",
+        "memory_mb": "512",
+        "node": "pve"
+      }
+    },
+    {
+      "id": "module.host[\"ws-2\"].proxmox_virtual_environment_vm.vm",
+      "kind": "Machine",
+      "type": "proxmox_virtual_environment_vm",
+      "label": "ws-2-demo",
+      "module": "module.host[\"ws-2\"]",
+      "action": "create",
+      "external": false,
+      "properties": {
+        "cpus": "1",
+        "memory_mb": "512",
+        "node": "pve"
+      }
+    },
+    {
+      "id": "module.network.proxmox_sdn_vnet.segment[\"corp\"]",
+      "kind": "Network",
+      "type": "proxmox_sdn_vnet",
+      "label": "demo-corp",
+      "module": "module.network",
+      "action": "create",
+      "external": false,
+      "properties": {}
+    },
+    {
+      "id": "module.network.proxmox_sdn_vnet.segment[\"dmz\"]",
+      "kind": "Network",
+      "type": "proxmox_sdn_vnet",
+      "label": "demo-dmz",
+      "module": "module.network",
+      "action": "create",
+      "external": false,
+      "properties": {}
+    },
+    {
+      "id": "module.network.proxmox_sdn_vnet.segment[\"mgmt\"]",
+      "kind": "Network",
+      "type": "proxmox_sdn_vnet",
+      "label": "demo-mgmt",
+      "module": "module.network",
+      "action": "create",
+      "external": false,
+      "properties": {}
+    },
+    {
+      "id": "module.network.proxmox_sdn_vnet.segment[\"outside\"]",
+      "kind": "Network",
+      "type": "proxmox_sdn_vnet",
+      "label": "demo-outside",
+      "module": "module.network",
+      "action": "create",
+      "external": false,
+      "properties": {}
+    }
+  ],
+  "edges": [
+    {
+      "from": "module.fw_edge.proxmox_virtual_environment_vm.vm",
+      "to": "module.network.proxmox_sdn_vnet.segment[\"outside\"]",
+      "nic": 0
+    },
+    {
+      "from": "module.fw_edge.proxmox_virtual_environment_vm.vm",
+      "to": "module.network.proxmox_sdn_vnet.segment[\"dmz\"]",
+      "nic": 1
+    },
+    {
+      "from": "module.fw_edge.proxmox_virtual_environment_vm.vm",
+      "to": "module.network.proxmox_sdn_vnet.segment[\"corp\"]",
+      "nic": 2
+    },
+    {
+      "from": "module.fw_edge.proxmox_virtual_environment_vm.vm",
+      "to": "module.network.proxmox_sdn_vnet.segment[\"mgmt\"]",
+      "nic": 3
+    },
+    {
+      "from": "module.host[\"dc\"].proxmox_virtual_environment_vm.vm",
+      "to": "module.network.proxmox_sdn_vnet.segment[\"corp\"]",
+      "nic": 0
+    },
+    {
+      "from": "module.host[\"files\"].proxmox_virtual_environment_vm.vm",
+      "to": "module.network.proxmox_sdn_vnet.segment[\"corp\"]",
+      "nic": 0
+    },
+    {
+      "from": "module.host[\"kali-red\"].proxmox_virtual_environment_vm.vm",
+      "to": "module.network.proxmox_sdn_vnet.segment[\"outside\"]",
+      "nic": 0
+    },
+    {
+      "from": "module.host[\"mail\"].proxmox_virtual_environment_vm.vm",
+      "to": "module.network.proxmox_sdn_vnet.segment[\"dmz\"]",
+      "nic": 0
+    },
+    {
+      "from": "module.host[\"siem\"].proxmox_virtual_environment_vm.vm",
+      "to": "module.network.proxmox_sdn_vnet.segment[\"mgmt\"]",
+      "nic": 0
+    },
+    {
+      "from": "module.host[\"web\"].proxmox_virtual_environment_vm.vm",
+      "to": "module.network.proxmox_sdn_vnet.segment[\"dmz\"]",
+      "nic": 0
+    },
+    {
+      "from": "module.host[\"ws-1\"].proxmox_virtual_environment_vm.vm",
+      "to": "module.network.proxmox_sdn_vnet.segment[\"corp\"]",
+      "nic": 0
+    },
+    {
+      "from": "module.host[\"ws-2\"].proxmox_virtual_environment_vm.vm",
+      "to": "module.network.proxmox_sdn_vnet.segment[\"corp\"]",
+      "nic": 0
+    }
+  ]
+}

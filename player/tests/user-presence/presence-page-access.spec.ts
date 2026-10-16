@@ -4,21 +4,24 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink } from '../../fixtures';
+import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
 
-test.describe('User Presence', () => {
-  test('User Presence Page Access', async ({ playerAuthenticatedPage: page }) => {
-    const primaryViewName = seededPrimaryViewName();
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › User Presence`, () => {
+    test('User Presence Page Access', async ({ playerAuthenticatedPage: page }) => {
+      await setPlayerTheme(page, theme);
+      const primaryViewName = seededPrimaryViewName();
 
-    // 1. Navigate to user presence route /view/:id/presence
-    const viewLink = await findPlayerHomeViewLink(page, primaryViewName);
-    const href = await viewLink.getAttribute('href');
-    const viewId = href?.replace('/view/', '');
+      // 1. Navigate to user presence route /view/:id/presence
+      const viewLink = await findPlayerHomeViewLink(page, primaryViewName);
+      const href = await viewLink.getAttribute('href');
+      const viewId = href?.replace('/view/', '');
 
-    await page.goto(`${Services.Player.UI}/view/${viewId}/presence`);
+      await page.goto(`${Services.Player.UI}/view/${viewId}/presence`);
 
-    // expect: User presence page loads
-    // expect: List of users in the view is displayed
-    await expect(page.locator('body')).toBeVisible();
+      // expect: User presence page loads
+      // expect: List of users in the view is displayed
+      await expect(page.locator('body')).toBeVisible();
+    });
   });
-});
+}

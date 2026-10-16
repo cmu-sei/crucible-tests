@@ -13,6 +13,8 @@ import {
   gotoAdminSection,
   apiCreateCollection,
   apiDeleteCollectionById,
+  GALLERY_THEMES,
+  setGalleryTheme,
 } from '../../fixtures';
 
 /**
@@ -97,87 +99,90 @@ async function galleryApiPost<T>(path: string, data: unknown): Promise<T> {
   }
 }
 
-test.describe('Card Management', () => {
-  // Only ids this spec created are tracked; deleting the collection cascades to
-  // its cards. Never purge by name prefix — other specs run against the same
-  // stack and their live data would go with it.
-  let createdCollectionIds: string[] = [];
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Card Management`, () => {
+    // Only ids this spec created are tracked; deleting the collection cascades to
+    // its cards. Never purge by name prefix — other specs run against the same
+    // stack and their live data would go with it.
+    let createdCollectionIds: string[] = [];
 
-  test.beforeEach(() => {
-    createdCollectionIds = [];
-  });
-
-  test.afterEach(async () => {
-    for (const id of createdCollectionIds) {
-      await apiDeleteCollectionById(id);
-    }
-  });
-
-  test('View and Create Cards', async ({ galleryAuthenticatedPage: page }) => {
-    const unique = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-    const collectionName = `Card View Collection ${unique}`;
-    const seededCardName = `Seeded Card ${unique}`;
-    const seededCardDescription = `Seeded card description ${unique}`;
-    const newCardName = `New Card ${unique}`;
-    const newCardDescription = `New card description ${unique}`;
-
-    // Setup: a collection with one pre-existing card, so step 1's "Cards list is
-    // accessible with card details" has real details to assert on. The card is
-    // API-seeded because the *create* dialog is what step 2 exercises.
-    const collection = await apiCreateCollection(collectionName, 'Collection for card management tests');
-    createdCollectionIds.push(collection.id);
-    await galleryApiPost(`/api/cards`, {
-      name: seededCardName,
-      description: seededCardDescription,
-      move: 0,
-      inject: 0,
-      collectionId: collection.id,
+    test.beforeEach(() => {
+      createdCollectionIds = [];
     });
 
-    // 1. Navigate to a collection's card management in admin
-    await openCollectionCardsPanel(page, collectionName);
+    test.afterEach(async () => {
+      for (const id of createdCollectionIds) {
+        await apiDeleteCollectionById(id);
+      }
+    });
 
-    // expect: Cards list is accessible with card details
-    // The panel is a mat-accordion, not a mat-table: its header cells are
-    // `<div mat-sort-header>` elements, which expose the button role rather than
-    // columnheader.
-    const panel = await ensureCardsPanel(page, collectionName);
-    await expect(panel.getByRole('button', { name: 'Name', exact: true })).toBeVisible();
-    await expect(panel.getByRole('button', { name: 'Description', exact: true })).toBeVisible();
-    await expect(panel).toContainText(seededCardName);
-    await expect(panel).toContainText(seededCardDescription);
-    // The per-row actions prove this is a management view, not a read-only list.
-    await expect(panel.getByRole('button', { name: `Edit ${seededCardName}` })).toHaveCount(1);
-    await expect(panel.getByRole('button', { name: `Delete ${seededCardName}` })).toHaveCount(1);
+    test('View and Create Cards', async ({ galleryAuthenticatedPage: page }) => {
+      await setGalleryTheme(page, theme);
+      const unique = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+      const collectionName = `Card View Collection ${unique}`;
+      const seededCardName = `Seeded Card ${unique}`;
+      const seededCardDescription = `Seeded card description ${unique}`;
+      const newCardName = `New Card ${unique}`;
+      const newCardDescription = `New card description ${unique}`;
 
-    // 2. Create a new card with name and description
-    await panel.getByRole('button', { name: 'Add a Card' }).click();
-    await expect(page.getByRole('dialog', { name: 'Add a Card' })).toBeVisible();
+      // Setup: a collection with one pre-existing card, so step 1's "Cards list is
+      // accessible with card details" has real details to assert on. The card is
+      // API-seeded because the *create* dialog is what step 2 exercises.
+      const collection = await apiCreateCollection(collectionName, 'Collection for card management tests');
+      createdCollectionIds.push(collection.id);
+      await galleryApiPost(`/api/cards`, {
+        name: seededCardName,
+        description: seededCardDescription,
+        move: 0,
+        inject: 0,
+        collectionId: collection.id,
+      });
 
-    // The dialog is titled by mode (admin-card-edit-dialog.component.html binds
-    // [dialogTitle] to `data.card?.id ? 'Edit Card' : 'Add a Card'`), so the add dialog
-    // is titled "Add a Card" rather than "Edit Card".
-    const cardDialog = page.getByRole('dialog', { name: 'Add a Card' });
-    await expect(cardDialog).toBeVisible();
+      // 1. Navigate to a collection's card management in admin
+      await openCollectionCardsPanel(page, collectionName);
 
-    await cardDialog.getByRole('textbox', { name: 'Name' }).fill(newCardName);
-    await cardDialog.getByRole('textbox', { name: 'Description' }).fill(newCardDescription);
+      // expect: Cards list is accessible with card details
+      // The panel is a mat-accordion, not a mat-table: its header cells are
+      // `<div mat-sort-header>` elements, which expose the button role rather than
+      // columnheader.
+      const panel = await ensureCardsPanel(page, collectionName);
+      await expect(panel.getByRole('button', { name: 'Name', exact: true })).toBeVisible();
+      await expect(panel.getByRole('button', { name: 'Description', exact: true })).toBeVisible();
+      await expect(panel).toContainText(seededCardName);
+      await expect(panel).toContainText(seededCardDescription);
+      // The per-row actions prove this is a management view, not a read-only list.
+      await expect(panel.getByRole('button', { name: `Edit ${seededCardName}` })).toHaveCount(1);
+      await expect(panel.getByRole('button', { name: `Delete ${seededCardName}` })).toHaveCount(1);
 
-    // Pair the click with the POST: the response is the proof the card was
-    // persisted, and the list refresh is driven off it.
-    const [createResponse] = await Promise.all([
-      page.waitForResponse(
-        (r) => r.url().endsWith('/api/cards') && r.request().method() === 'POST'
-      ),
-      cardDialog.getByRole('button', { name: 'Save', exact: true }).click(),
-    ]);
-    expect(createResponse.status()).toBe(201);
-    await expect(cardDialog).toHaveCount(0);
+      // 2. Create a new card with name and description
+      await panel.getByRole('button', { name: 'Add a Card' }).click();
+      await expect(page.getByRole('dialog', { name: 'Add a Card' })).toBeVisible();
 
-    // expect: Card is created and appears in the list
-    // The cards panel paginates too, so filter by the unique name first.
-    const refreshedPanel = await ensureCardsPanel(page, collectionName, newCardName);
-    await expect(refreshedPanel.getByRole('button', { name: `Edit ${newCardName}` })).toHaveCount(1);
-    await expect(refreshedPanel).toContainText(newCardDescription);
+      // The dialog is titled by mode (admin-card-edit-dialog.component.html binds
+      // [dialogTitle] to `data.card?.id ? 'Edit Card' : 'Add a Card'`), so the add dialog
+      // is titled "Add a Card" rather than "Edit Card".
+      const cardDialog = page.getByRole('dialog', { name: 'Add a Card' });
+      await expect(cardDialog).toBeVisible();
+
+      await cardDialog.getByRole('textbox', { name: 'Name' }).fill(newCardName);
+      await cardDialog.getByRole('textbox', { name: 'Description' }).fill(newCardDescription);
+
+      // Pair the click with the POST: the response is the proof the card was
+      // persisted, and the list refresh is driven off it.
+      const [createResponse] = await Promise.all([
+        page.waitForResponse(
+          (r) => r.url().endsWith('/api/cards') && r.request().method() === 'POST'
+        ),
+        cardDialog.getByRole('button', { name: 'Save', exact: true }).click(),
+      ]);
+      expect(createResponse.status()).toBe(201);
+      await expect(cardDialog).toHaveCount(0);
+
+      // expect: Card is created and appears in the list
+      // The cards panel paginates too, so filter by the unique name first.
+      const refreshedPanel = await ensureCardsPanel(page, collectionName, newCardName);
+      await expect(refreshedPanel.getByRole('button', { name: `Edit ${newCardName}` })).toHaveCount(1);
+      await expect(refreshedPanel).toContainText(newCardDescription);
+    });
   });
-});
+}

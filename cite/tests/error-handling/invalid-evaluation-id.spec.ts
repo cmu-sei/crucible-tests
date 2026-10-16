@@ -4,22 +4,25 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, CITE_THEMES, setCiteTheme } from '../../fixtures';
 
-test.describe('Error Handling and Edge Cases', () => {
-  test('Invalid Evaluation ID', async ({ citeAuthenticatedPage: page }) => {
+for (const theme of CITE_THEMES) {
+  test.describe(`${theme} theme › Error Handling and Edge Cases`, () => {
+    test('Invalid Evaluation ID', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
 
-    // 1. Log in successfully
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
+      // 1. Log in successfully
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
 
-    // 2. Navigate to URL with invalid evaluation ID parameter
-    await page.goto(`${Services.Cite.UI}/?evaluation=00000000-0000-0000-0000-000000000000`);
-    await page.waitForLoadState('domcontentloaded');
+      // 2. Navigate to URL with invalid evaluation ID parameter
+      await page.goto(`${Services.Cite.UI}/?evaluation=00000000-0000-0000-0000-000000000000`);
+      await page.waitForLoadState('domcontentloaded');
 
-    // expect: Error message is displayed or user redirected
-    // expect: User can navigate back to home
-    await page.waitForTimeout(3000);
-    const body = page.locator('body');
-    await expect(body).toBeVisible();
+      // expect: Error message is displayed or user redirected
+      // expect: User can navigate back to home
+      await page.waitForTimeout(3000);
+      const body = page.locator('body');
+      await expect(body).toBeVisible();
+    });
   });
-});
+}

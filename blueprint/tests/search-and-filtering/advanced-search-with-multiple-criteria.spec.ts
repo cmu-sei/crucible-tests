@@ -4,95 +4,98 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 
-test.describe('Search and Filtering', () => {
-  test('Advanced Search with Multiple Criteria', async ({ blueprintAuthenticatedPage: page }) => {
+for (const theme of BLUEPRINT_THEMES) {
+    test.describe(`${theme} theme › Search and Filtering`, () => {
+    test('Advanced Search with Multiple Criteria', async ({ blueprintAuthenticatedPage: page }) => {
+    await applyBlueprintTheme(page, theme);
 
-    // 1. Navigate to the MSEL build/list page
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
+      // 1. Navigate to the MSEL build/list page
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
 
-    // Navigate to /build which contains the MSEL list
-    await page.goto(`${Services.Blueprint.UI}/build`);
-    await page.waitForLoadState('load');
+      // Navigate to /build which contains the MSEL list
+      await page.goto(`${Services.Blueprint.UI}/build`);
+      await page.waitForLoadState('load');
 
-    // Look for MSELs list - Blueprint uses Angular Material mat-table to display MSELs
-    // The actual HTML element is <mat-table> with role="table", not a native <table>
-    const mselList = page.locator('mat-table').first();
-    await expect(mselList).toBeVisible({ timeout: 20000 });
+      // Look for MSELs list - Blueprint uses Angular Material mat-table to display MSELs
+      // The actual HTML element is <mat-table> with role="table", not a native <table>
+      const mselList = page.locator('mat-table').first();
+      await expect(mselList).toBeVisible({ timeout: 20000 });
 
-    // Count initial MSELs - data rows are <mat-row> elements
-    const mselItems = page.locator('mat-row');
-    const initialCount = await mselItems.count();
-    expect(initialCount).toBeGreaterThan(0);
-    
-    // 2. Apply multiple filters using the Blueprint UI's visible filter controls
-    // Blueprint displays filters directly (no advanced search button required)
+      // Count initial MSELs - data rows are <mat-row> elements
+      const mselItems = page.locator('mat-row');
+      const initialCount = await mselItems.count();
+      expect(initialCount).toBeGreaterThan(0);
+      
+      // 2. Apply multiple filters using the Blueprint UI's visible filter controls
+      // Blueprint displays filters directly (no advanced search button required)
 
-    // Filter 1: Status - Blueprint has a "All Statuses" combobox
-    const statusFilter = page.locator('mat-select').filter({ hasText: /All Statuses|Status/ }).first();
-    const statusFilterVisible = await statusFilter.isVisible({ timeout: 3000 }).catch(() => false);
+      // Filter 1: Status - Blueprint has a "All Statuses" combobox
+      const statusFilter = page.locator('mat-select').filter({ hasText: /All Statuses|Status/ }).first();
+      const statusFilterVisible = await statusFilter.isVisible({ timeout: 3000 }).catch(() => false);
 
-    if (statusFilterVisible) {
-      await statusFilter.click();
+      if (statusFilterVisible) {
+        await statusFilter.click();
 
-      const statusOption = page.locator('mat-option').first();
-      if (await statusOption.isVisible({ timeout: 2000 })) {
-        await statusOption.click();
+        const statusOption = page.locator('mat-option').first();
+        if (await statusOption.isVisible({ timeout: 2000 })) {
+          await statusOption.click();
+        }
       }
-    }
 
-    // Filter 2: Type - Blueprint has a "All Types" combobox
-    const typeFilter = page.locator('mat-select').filter({ hasText: /All Types|Type/ }).first();
-    const typeFilterVisible = await typeFilter.isVisible({ timeout: 3000 }).catch(() => false);
+      // Filter 2: Type - Blueprint has a "All Types" combobox
+      const typeFilter = page.locator('mat-select').filter({ hasText: /All Types|Type/ }).first();
+      const typeFilterVisible = await typeFilter.isVisible({ timeout: 3000 }).catch(() => false);
 
-    if (typeFilterVisible) {
-      await typeFilter.click();
+      if (typeFilterVisible) {
+        await typeFilter.click();
 
-      const typeOption = page.locator('mat-option').first();
-      if (await typeOption.isVisible({ timeout: 2000 })) {
-        await typeOption.click();
+        const typeOption = page.locator('mat-option').first();
+        if (await typeOption.isVisible({ timeout: 2000 })) {
+          await typeOption.click();
+        }
       }
-    }
 
-    // Filter 3: Text search - Blueprint has a "Search" text input
-    const searchInput = page.locator('input[placeholder*="Search"], input[placeholder*="search"]').first();
-    const searchInputVisible = await searchInput.isVisible({ timeout: 3000 }).catch(() => false);
+      // Filter 3: Text search - Blueprint has a "Search" text input
+      const searchInput = page.locator('input[placeholder*="Search"], input[placeholder*="search"]').first();
+      const searchInputVisible = await searchInput.isVisible({ timeout: 3000 }).catch(() => false);
 
-    if (searchInputVisible) {
-      await searchInput.fill('MSEL');
-    }
-    
-    // expect: Multiple filters can be combined
-    // expect: Results match all selected criteria (AND logic)
-
-    const filteredItems = page.locator('mat-row');
-    const filteredCount = await filteredItems.count();
-
-    // With multiple filters, we expect fewer or equal results
-    expect(filteredCount).toBeLessThanOrEqual(initialCount);
-    expect(filteredCount).toBeGreaterThanOrEqual(0);
-
-    // 3. Clear all filters by resetting search input and dropdowns
-    if (searchInputVisible) {
-      await searchInput.clear();
-    }
-
-    // Reset status filter if applied
-    if (statusFilterVisible) {
-      await statusFilter.click();
-      // Select the first option (usually "All Statuses")
-      const allOption = page.locator('mat-option').first();
-      if (await allOption.isVisible({ timeout: 2000 })) {
-        await allOption.click();
+      if (searchInputVisible) {
+        await searchInput.fill('MSEL');
       }
-    }
+      
+      // expect: Multiple filters can be combined
+      // expect: Results match all selected criteria (AND logic)
+
+      const filteredItems = page.locator('mat-row');
+      const filteredCount = await filteredItems.count();
+
+      // With multiple filters, we expect fewer or equal results
+      expect(filteredCount).toBeLessThanOrEqual(initialCount);
+      expect(filteredCount).toBeGreaterThanOrEqual(0);
+
+      // 3. Clear all filters by resetting search input and dropdowns
+      if (searchInputVisible) {
+        await searchInput.clear();
+      }
+
+      // Reset status filter if applied
+      if (statusFilterVisible) {
+        await statusFilter.click();
+        // Select the first option (usually "All Statuses")
+        const allOption = page.locator('mat-option').first();
+        if (await allOption.isVisible({ timeout: 2000 })) {
+          await allOption.click();
+        }
+      }
 
 
-    const restoredItems = page.locator('mat-row');
-    const restoredCount = await restoredItems.count();
+      const restoredItems = page.locator('mat-row');
+      const restoredCount = await restoredItems.count();
 
-    // expect: Full unfiltered list is displayed
-    expect(restoredCount).toBeGreaterThanOrEqual(filteredCount);
-  });
-});
+      // expect: Full unfiltered list is displayed
+      expect(restoredCount).toBeGreaterThanOrEqual(filteredCount);
+    });
+    });
+}

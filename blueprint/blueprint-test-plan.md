@@ -670,6 +670,16 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
     - expect: 'If you believe you should have permissions to manage this event, contact your administrator.' message is shown
     - expect: No management controls are visible
 
+#### 8.6. Launch by Invitation Uses One Player View
+
+**File:** `blueprint/tests/launch-and-join-workflows/launch-by-invitation-player-view.spec.ts`
+
+**Steps:**
+  1. Launch an approved template that uses Player, through an invitation for its team 'Blue Team'
+    - expect: The launch returns a Player view ID
+    - expect: The launched MSEL reaches status 'Deployed' and stores that same view ID
+    - expect: The Player view's teams include 'Blue Team'
+
 ### 9. Admin - Units Management
 
 **Seed:** `/mnt/data/crucible-tests/blueprint/tests/seed.setup.ts`
@@ -966,6 +976,57 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
     - expect: 'Integration Failed' is shown instead of the in-progress status
     - expect: Navigation happens with no confirmation dialog
 
+#### 12.7. Caster Integration Topology Teams
+
+**File:** `blueprint/tests/integration-with-crucible-services/caster-integration-topology-teams.spec.ts`
+
+**Steps:**
+  1. Seed a Caster directory with a variables-only template and ask Blueprint for its team variables
+    - expect: only the string and untyped variables come back, required unless they have a default; the Blueprint variables, a number, a sensitive variable and one terraform.tfvars assigns are left out
+  2. Ask for the team variables of a directory that does not exist
+    - expect: 403
+  3. Map a team to a topology team, then clear it, then try names tfvars cannot hold
+    - expect: 'blue_cell' is saved; a blank mapping saves as null ("By team name")
+    - expect: 'not valid!', '2nd_team', 'view_id' and 'user_id' are refused with 409 and the team is unchanged
+
+#### 12.8. Caster Integration Push and Remove
+
+**File:** `blueprint/tests/integration-with-crucible-services/caster-integration-push-and-remove.spec.ts`
+
+**Steps:**
+  1. Push a MSEL using Player and Caster, with one team mapped to a topology team and one taking its variable from its name
+    - expect: the MSEL reaches Deployed with a Player view, a Caster workspace in the MSEL's directory and an applied run
+    - expect: the workspace's blueprint-<msel id>.auto.tfvars writes view_id and each team's Player team ID under its variable, and the mapping replaces the name-derived variable
+  2. Remove Integrations
+    - expect: the Player view and workspace IDs are cleared and the workspace is gone from Caster
+  3. Push with two teams mapped to the same topology team
+    - expect: 409 naming both teams and the variable they share; nothing is deployed
+  4. Push a MSEL with a team named Admin
+    - expect: the Player view has one Admin team, the MSEL's, with the View Admin role, and the vars file sets admin once, to it
+  5. Push a MSEL using Caster without Player
+    - expect: 409 'requires Player'
+
+#### 12.9. Caster Integration Config and Teams
+
+**File:** `blueprint/tests/integration-with-crucible-services/caster-integration-config-and-teams.spec.ts`
+
+**Steps:**
+  1. Open the Config tab of a MSEL using Caster without Player
+    - expect: 'Caster requires Player: the VMs are added to the Player view and its teams.' and Push Integrations is disabled
+  2. Turn on Player
+    - expect: 'Select the Caster directory to deploy.' and Push Integrations is disabled
+  3. Choose the directory from the Caster row's Directory select and Save Changes
+    - expect: the directory is saved, Push Integrations is enabled, and 'No Player application opens the VM UI…' is shown
+  4. Open the Teams section of a MSEL with a Caster directory
+    - expect: a Topology Team column with each team's variable, '(not in template)' for a name the template lacks, a warning for a mapping the template no longer declares, and no warning for an unmapped topology team with a default
+  5. Edit a mapped team and choose Topology Team 'By team name'
+    - expect: the options name the other teams using them, e.g. 'red_cell (used by Red Cell)'
+    - expect: the mapping is cleared and 'Topology team "blue_cell" has no MSEL team. The Caster template gives it no default, so the plan will fail unless Caster supplies it.' is shown
+  6. Edit another team and choose 'blue_cell'
+    - expect: the mapping is saved and the unmapped warning is gone
+  7. Map a third team to the same topology team
+    - expect: the option reads 'blue_cell (used by Green Team)' and a warning says both teams 'all become "blue_cell", so Push will be refused.'
+
 ### 13. Real-time Collaboration and SignalR
 
 **Seed:** `/mnt/data/crucible-tests/blueprint/tests/seed.setup.ts`
@@ -1097,6 +1158,29 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
     - expect: Each screen has passing nodes, so a blank page cannot pass
   2. Switch theme from the user menu and repeat the sweep
     - expect: The same holds in the other theme
+
+#### 16.4. Theme Contrast Compliance
+
+**File:** `blueprint/tests/accessibility-and-usability/theme-contrast-compliance.spec.ts`
+
+Runs once per theme (light and dark). Follows the Crucible colors design spec
+(`crucible-development/design-specs/angular/colors.md`). Expected colors are read from the
+app's layered settings files as served (`settings.json`, deep-merged with
+`settings.shared.json` then `settings.env.json`), not hardcoded. Read-only: nothing is seeded.
+
+**Steps:**
+  1. Log in, apply the theme, and navigate to the Build page (`/build`)
+    - expect: The "My MSELs" / "All MSELs" title, a text column header, and the top bar text meet WCAG 1.4.3 (4.5:1 normal, 3:1 large text)
+    - expect: Dark theme renders light-on-dark page text; light theme renders dark-on-light
+    - expect: The enabled "Add blank MSEL" icon button is painted in `--mat-sys-primary` and meets WCAG 1.4.11 (3:1) against its surface
+  2. Compare the applied CSS custom properties against the color settings
+    - expect: `--crucible-topbar-background` / `--crucible-topbar-text` equal `AppTopBarHexColor` / `AppTopBarHexTextColor` in both themes, and the top bar paints that pair
+    - expect: In light mode, `--mat-sys-primary` / `--mat-sys-on-primary` equal `AppLightModePrimaryHexColor` / `AppLightModePrimaryHexTextColor`
+    - expect: In dark mode, they equal `AppDarkModePrimaryHexColor` / `AppDarkModePrimaryHexTextColor`, falling back to the light-mode keys when absent
+  3. Open Administration → Units → "Add Unit" and fill Name and Short Name without saving
+    - expect: The filled Save button paints `--mat-sys-primary`, and its `on-primary` label meets 4.5:1
+    - expect: The outlined Cancel button label is painted in `--mat-sys-primary` and meets 4.5:1 against the dialog surface
+    - expect: Cancel closes the dialog without creating a unit
 
 ### 17. Admin - Competencies and Proficiency
 

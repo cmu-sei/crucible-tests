@@ -90,7 +90,7 @@ interface ApiOpts {
   query?: Record<string, string | number | boolean | undefined>;
 }
 
-async function blueprintCall<T = any>(
+export async function blueprintCall<T = any>(
   token: string,
   path: string,
   opts: ApiOpts = {}
@@ -167,6 +167,8 @@ export interface CreateMselOptions {
   description?: string;
   isTemplate?: boolean;
   status?: string;
+  // ISO 8601; defaults to now
+  startTime?: string;
 }
 
 /**
@@ -194,8 +196,7 @@ export async function createMsel(
     useGallery: false,
     useCite: false,
     useSteamfitter: false,
-    // StartTime defaults to now if not specified:
-    startTime: new Date().toISOString(),
+    startTime: opts.startTime ?? new Date().toISOString(),
     durationSeconds: 3600,
   };
 
@@ -544,6 +545,36 @@ export async function copyMselDataFieldsFrom(
   return listMselDataFields(token, mselId);
 }
 
+/**
+ * Add one DataField to a MSEL, on top of whatever it already has. Call this before creating
+ * the scenario events that need it: `POST /api/scenarioEvents` creates a DataValue only for
+ * the fields that exist at that moment.
+ */
+export async function createMselDataField(
+  token: string,
+  mselId: string,
+  field: { name: string; dataType: string; displayOrder: number; onScenarioEventList?: boolean }
+): Promise<any> {
+  const r = await blueprintCall<any>(token, '/api/dataFields', {
+    method: 'POST',
+    body: {
+      onScenarioEventList: true,
+      onExerciseView: false,
+      ...field,
+      mselId,
+      isChosenFromList: false,
+      isInformationField: false,
+      isFacilitationField: false,
+      isInitiallyHidden: false,
+      dataOptions: [],
+    },
+  });
+  if (!r.ok) {
+    throw new Error(`createMselDataField "${field.name}" failed (${r.status}): ${r.text}`);
+  }
+  return r.data;
+}
+
 /** List a MSEL's DataFields. */
 export async function listMselDataFields(token: string, mselId: string): Promise<any[]> {
   const r = await blueprintCall<any[]>(token, `/api/msels/${mselId}/dataFields`);
@@ -551,6 +582,45 @@ export async function listMselDataFields(token: string, mselId: string): Promise
     throw new Error(`listMselDataFields failed (${r.status}): ${r.text}`);
   }
   return r.data ?? [];
+}
+
+/**
+ * Create a DataField whose value is chosen from the given options, e.g. a Double with
+ * values 1.5 and 2.5. Each option's name and value are the same text.
+ */
+export async function createOptionListDataField(
+  token: string,
+  mselId: string,
+  field: { name: string; dataType: string; displayOrder: number },
+  options: string[]
+): Promise<any> {
+  const r = await blueprintCall<any>(token, '/api/dataFields', {
+    method: 'POST',
+    body: {
+      onScenarioEventList: true,
+      onExerciseView: false,
+      ...field,
+      mselId,
+      isChosenFromList: true,
+      isInformationField: false,
+      isFacilitationField: false,
+      isInitiallyHidden: false,
+      dataOptions: [],
+    },
+  });
+  if (!r.ok) {
+    throw new Error(`createOptionListDataField "${field.name}" failed (${r.status}): ${r.text}`);
+  }
+  for (const [i, option] of options.entries()) {
+    const o = await blueprintCall(token, '/api/dataOptions', {
+      method: 'POST',
+      body: { dataFieldId: r.data.id, optionName: option, optionValue: option, displayOrder: i + 1 },
+    });
+    if (!o.ok) {
+      throw new Error(`createOptionListDataField: POST dataOptions "${option}" failed (${o.status}): ${o.text}`);
+    }
+  }
+  return r.data;
 }
 
 /** Fetch a single scenario event, including its `dataValues`. */
@@ -678,6 +748,35 @@ export async function deleteTeam(token: string, teamId: string): Promise<void> {
   const r = await blueprintCall(token, `/api/teams/${teamId}`, { method: 'DELETE' });
   if (!r.ok && r.status !== 404) {
     console.warn(`deleteTeam(${teamId}) returned ${r.status}: ${r.text}`);
+  }
+}
+
+/**
+ * Create a Player application on the specified MSEL via the Blueprint API.
+ * Returns the application id — pair every call with `deletePlayerApplication` in test teardown.
+ */
+export async function createPlayerApplication(
+  token: string,
+  mselId: string,
+  name: string = tempBlueprintName('TestBP-App')
+): Promise<{ id: string; name: string }> {
+  const r = await blueprintCall<any>(token, '/api/playerApplications', {
+    method: 'POST',
+    body: { mselId, name, url: 'http://localhost', embeddable: true, loadInBackground: false },
+  });
+  if (!r.ok) {
+    throw new Error(`createPlayerApplication failed (${r.status}): ${r.text}`);
+  }
+  return { id: r.data.id as string, name: r.data.name as string };
+}
+
+/**
+ * Delete a Player application by id. Safe to call on a non-existent id — swallows 404.
+ */
+export async function deletePlayerApplication(token: string, id: string): Promise<void> {
+  const r = await blueprintCall(token, `/api/playerApplications/${id}`, { method: 'DELETE' });
+  if (!r.ok && r.status !== 404) {
+    console.warn(`deletePlayerApplication(${id}) returned ${r.status}: ${r.text}`);
   }
 }
 
@@ -1358,6 +1457,25 @@ export async function navigateToMsel(page: Page, mselId: string): Promise<void> 
     waitUntil: 'domcontentloaded',
   });
   await expect(mselSectionItem(page, 'Info')).toBeVisible({ timeout: 30000 });
+}
+
+/**
+ * Wait until the MSEL Info view has actually bound the active MSEL, before acting on it.
+ *
+ * The Config / page tabs (including "Add Page") render before `MselInfoComponent`'s
+ * active-MSEL subscription has fired. Until it does, `originalMsel` is an empty `MselPlus`,
+ * so selecting "Add Page" posts `{"name":"New Page",...}` with no `mselId` and the API
+ * answers 404 "Msel Entity not found" (reproduced: 1 in 4 runs on the first test in a fresh
+ * worker). The same subscription fills the Config tab's Name field, so that field showing
+ * the seeded name is a user-visible signal that `originalMsel` is populated.
+ *
+ * @param page - Playwright Page object, on the MSEL's Info section
+ * @param mselName - The name the MSEL was created with
+ */
+export async function waitForMselInfoLoaded(page: Page, mselName: string): Promise<void> {
+  await expect(page.getByRole('textbox', { name: 'Name' })).toHaveValue(mselName, {
+    timeout: 15000,
+  });
 }
 
 /**

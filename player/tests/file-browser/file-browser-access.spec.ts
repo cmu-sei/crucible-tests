@@ -4,23 +4,26 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink } from '../../fixtures';
+import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
 
-test.describe('File Browser', () => {
-  test('File Browser Access', async ({ playerAuthenticatedPage: page }) => {
-    const primaryViewName = seededPrimaryViewName();
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › File Browser`, () => {
+    test('File Browser Access', async ({ playerAuthenticatedPage: page }) => {
+      await setPlayerTheme(page, theme);
+      const primaryViewName = seededPrimaryViewName();
 
-    // 1. Navigate to file browser route /view/:id/files
-    // First get a valid view ID from the home page
-    const viewLink = await findPlayerHomeViewLink(page, primaryViewName);
-    const href = await viewLink.getAttribute('href');
-    const viewId = href?.replace('/view/', '');
+      // 1. Navigate to file browser route /view/:id/files
+      // First get a valid view ID from the home page
+      const viewLink = await findPlayerHomeViewLink(page, primaryViewName);
+      const href = await viewLink.getAttribute('href');
+      const viewId = href?.replace('/view/', '');
 
-    await page.goto(`${Services.Player.UI}/view/${viewId}/files`);
+      await page.goto(`${Services.Player.UI}/view/${viewId}/files`);
 
-    // expect: File browser interface loads
-    // expect: File list or directory structure is displayed
-    // The file browser page should render without errors
-    await expect(page.locator('body')).toBeVisible();
+      // expect: File browser interface loads
+      // expect: File list or directory structure is displayed
+      // The file browser page should render without errors
+      await expect(page.locator('body')).toBeVisible();
+    });
   });
-});
+}

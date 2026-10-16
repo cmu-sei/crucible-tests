@@ -4,21 +4,24 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, CITE_THEMES, setCiteTheme } from '../../fixtures';
 import { navigateToAdminSection } from '../../test-helpers';
 
-test.describe('Administration - Users', () => {
-  test('View User Details', async ({ citeAuthenticatedPage: page }) => {
+for (const theme of CITE_THEMES) {
+  test.describe(`${theme} theme › Administration - Users`, () => {
+    test('View User Details', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
 
-    await navigateToAdminSection(page, 'Users');
+      await navigateToAdminSection(page, 'Users');
 
-    const table = page.locator('table');
-    await expect(table).toBeVisible({ timeout: 10000 });
+      const table = page.locator('table');
+      await expect(table).toBeVisible({ timeout: 10000 });
 
-    const rows = page.locator('tbody tr');
-    await expect(rows.first()).toBeVisible({ timeout: 10000 });
+      const rows = page.locator('tbody tr');
+      await expect(rows.first()).toBeVisible({ timeout: 10000 });
 
-    // Verify user data is visible
-    await expect(rows.first()).toContainText('Admin User');
+      // Verify user data is visible
+      await expect(rows.first()).toContainText('Admin User');
+    });
   });
-});
+}

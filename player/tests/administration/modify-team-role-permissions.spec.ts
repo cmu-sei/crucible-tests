@@ -4,39 +4,46 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
 
-test.describe('Administration - Roles and Permissions', () => {
-  test('Modify Team Role Permissions', async ({ playerAuthenticatedPage: page }) => {
-    // 1. Log in as admin and navigate to Administration > Roles > Team Roles tab
-    await page.getByRole('button', { name: 'Menu' }).click();
-    await page.getByRole('menuitem', { name: 'Administration' }).click();
-    await page.getByRole('button', { name: 'Roles Roles' }).click();
-    await page.getByRole('tab', { name: 'Team Roles' }).click();
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Administration - Roles and Permissions`, () => {
+    test('Modify Team Role Permissions', async ({ playerAuthenticatedPage: page }) => {
+      await setPlayerTheme(page, theme);
+      // 1. Log in as admin and navigate to Administration > Roles > Team Roles tab
+      await page.getByRole('button', { name: 'Menu' }).click();
+      await page.getByRole('menuitem', { name: 'Administration' }).click();
+      await page.getByRole('button', { name: 'Roles Roles' }).click();
+      await page.getByRole('tab', { name: 'Team Roles' }).click();
 
-    // expect: The Team Roles permissions matrix is displayed
-    await expect(page.getByRole('tab', { name: 'Team Roles', selected: true })).toBeVisible();
-    await expect(page.getByRole('table')).toBeVisible();
+      // expect: The Team Roles permissions matrix is displayed
+      await expect(page.getByRole('tab', { name: 'Team Roles', selected: true })).toBeVisible();
+      await expect(page.getByRole('table')).toBeVisible();
 
-    // 2. Click a checkbox to assign or remove a permission from a team role
-    const editTeamRow = page.getByRole('row').filter({ hasText: 'EditTeam' });
-    const checkboxes = editTeamRow.getByRole('checkbox');
-    const targetCheckbox = checkboxes.first();
+      // 2. Click a checkbox to assign or remove a permission from a team role
+      // Key the row on its exact "About <permission>" info button: a text filter on
+      // 'ManageTeam' would also match the ManageTeamMaps row.
+      const manageTeamRow = page
+        .getByRole('row')
+        .filter({ has: page.getByRole('button', { name: 'About ManageTeam', exact: true }) });
+      const checkboxes = manageTeamRow.getByRole('checkbox');
+      const targetCheckbox = checkboxes.first();
 
-    // Get the current state
-    const wasChecked = await targetCheckbox.isChecked();
+      // Get the current state
+      const wasChecked = await targetCheckbox.isChecked();
 
-    // Click to toggle
-    await targetCheckbox.click();
+      // Click to toggle
+      await targetCheckbox.click();
 
-    // expect: The checkbox state toggles
-    if (wasChecked) {
-      await expect(targetCheckbox).not.toBeChecked();
-    } else {
-      await expect(targetCheckbox).toBeChecked();
-    }
+      // expect: The checkbox state toggles
+      if (wasChecked) {
+        await expect(targetCheckbox).not.toBeChecked();
+      } else {
+        await expect(targetCheckbox).toBeChecked();
+      }
 
-    // Revert the change to preserve test data
-    await targetCheckbox.click();
+      // Revert the change to preserve test data
+      await targetCheckbox.click();
+    });
   });
-});
+}

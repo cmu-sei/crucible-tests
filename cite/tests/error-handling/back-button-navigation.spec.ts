@@ -4,30 +4,33 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, CITE_THEMES, setCiteTheme } from '../../fixtures';
 
-test.describe('Error Handling and Edge Cases', () => {
-  test('Browser Back Button Navigation', async ({ citeAuthenticatedPage: page }) => {
+for (const theme of CITE_THEMES) {
+  test.describe(`${theme} theme › Error Handling and Edge Cases`, () => {
+    test('Browser Back Button Navigation', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
 
-    // 1. Navigate through multiple pages (home -> admin)
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
+      // 1. Navigate through multiple pages (home -> admin)
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
 
-    // Navigate to the Administration page
-    const adminButton = page.getByRole('button', { name: 'Show Administration Page' });
-    await expect(adminButton).toBeVisible({ timeout: 10000 });
-    await adminButton.click();
-    await expect(page).toHaveURL(/\/admin/, { timeout: 10000 });
+      // Navigate to the Administration page
+      const adminButton = page.getByRole('button', { name: 'Show Administration Page' });
+      await expect(adminButton).toBeVisible({ timeout: 10000 });
+      await adminButton.click();
+      await expect(page).toHaveURL(/\/admin/, { timeout: 10000 });
 
-    // expect: Navigation history is recorded
+      // expect: Navigation history is recorded
 
-    // 2. Click browser back button
-    await page.goBack();
+      // 2. Click browser back button
+      await page.goBack();
 
-    // expect: User navigates back to previous page
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
+      // expect: User navigates back to previous page
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
 
-    // expect: Page state is preserved or reloaded correctly
-    // expect: No errors occur
-    await expect(page.locator('body')).toBeVisible();
+      // expect: Page state is preserved or reloaded correctly
+      // expect: No errors occur
+      await expect(page.locator('body')).toBeVisible();
+    });
   });
-});
+}

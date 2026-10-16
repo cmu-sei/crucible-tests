@@ -4,35 +4,59 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
+import { closeMenuAndWaitForOverlay, expectBodyTheme } from '../../../theme-helpers';
 
-test.describe('Home Page - My Views', () => {
-  test('Dark Theme Toggle', async ({ playerAuthenticatedPage: page }) => {
-    // 1. Log in as admin user
-    // expect: User is on the home page
-    await expect(page.getByText('My Views')).toBeVisible();
+// This spec is about the toggle itself, so the theme is the *starting* state: each
+// run sets it, then asserts the switch reports it, that toggling flips the page to
+// the other theme, and that toggling again comes back.
+for (const theme of PLAYER_THEMES) {
+  const other = theme === 'dark' ? 'light' : 'dark';
 
-    // 2. Click the Menu button
-    await page.getByRole('button', { name: 'Menu' }).click();
+  test.describe(`${theme} theme › Home Page - My Views`, () => {
+    test('Dark Theme Toggle', async ({ playerAuthenticatedPage: page }) => {
+      // 1. Log in as admin user, starting in this run's theme
+      // expect: User is on the home page
+      await expect(page.getByText('My Views')).toBeVisible();
+      await setPlayerTheme(page, theme);
+      await expectBodyTheme(page, theme);
 
-    // expect: A dropdown menu appears showing a 'Dark Theme' toggle switch
-    const darkThemeSwitch = page.getByRole('switch', { name: 'Dark Theme' });
-    await expect(darkThemeSwitch).toBeVisible();
+      // 2. Click the Menu button
+      await page.getByRole('button', { name: 'Menu', exact: true }).click();
 
-    // 3. Toggle the Dark Theme switch
-    await page.getByText('Dark Theme').click();
+      // expect: A dropdown menu appears showing a 'Dark Theme' toggle switch,
+      // reflecting the theme the page is in
+      const darkThemeSwitch = page.getByRole('switch', { name: 'Dark Theme' });
+      await expect(darkThemeSwitch).toBeVisible();
+      if (theme === 'dark') {
+        await expect(darkThemeSwitch).toBeChecked();
+      } else {
+        await expect(darkThemeSwitch).not.toBeChecked();
+      }
 
-    // expect: The application theme changes to dark mode
-    // expect: Colors and backgrounds update to dark theme
-    // Close the menu first
-    await page.keyboard.press('Escape');
+      // 3. Toggle the Dark Theme switch
+      await darkThemeSwitch.click();
 
-    // 4. Toggle the Dark Theme switch again
-    await page.getByRole('button', { name: 'Menu' }).click();
-    await page.getByText('Dark Theme').click();
+      // expect: The application theme changes to the other theme
+      // expect: Colors and backgrounds update to that theme
+      if (other === 'dark') {
+        await expect(darkThemeSwitch).toBeChecked();
+      } else {
+        await expect(darkThemeSwitch).not.toBeChecked();
+      }
+      await closeMenuAndWaitForOverlay(page);
+      await expectBodyTheme(page, other);
+      await expect(page.getByText('My Views')).toBeVisible();
 
-    // expect: The application theme changes back to light mode
-    await page.keyboard.press('Escape');
-    await expect(page.getByText('My Views')).toBeVisible();
+      // 4. Toggle the Dark Theme switch again
+      await page.getByRole('button', { name: 'Menu', exact: true }).click();
+      await expect(darkThemeSwitch).toBeVisible();
+      await darkThemeSwitch.click();
+      await closeMenuAndWaitForOverlay(page);
+
+      // expect: The application theme changes back to the starting theme
+      await expectBodyTheme(page, theme);
+      await expect(page.getByText('My Views')).toBeVisible();
+    });
   });
-});
+}

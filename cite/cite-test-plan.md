@@ -4,6 +4,35 @@
 
 CITE (Collaborative Incident Threat Evaluator) is a collaborative cyber incident evaluation and scoring application in the Crucible ecosystem. The application enables participants from different organizations to evaluate, score, and comment on cyber incidents. CITE provides a situational awareness dashboard that allows teams to track their internal actions and roles. Users can participate in evaluations, submit and modify scores, view team-based submissions, track progress through evaluation moves, and manage content through administrative functions. The application uses Keycloak for authentication, supports role-based permissions (SystemAdmin, ContentDeveloper, evaluation-level and team-level permissions), and includes real-time SignalR notifications for collaborative features. This test plan covers authentication flows, evaluation selection and participation, scoring workflows, team collaboration, move navigation, submission management, administrative functions, and comprehensive error handling scenarios.
 
+## Theme Coverage
+
+Every CITE spec runs **once per theme (light and dark)**: each spec loops over
+`CITE_THEMES` from `cite/fixtures.ts` and reports under a `light theme ›` /
+`dark theme ›` describe prefix. There are no exceptions. How the theme is applied depends on
+what the spec drives:
+
+  - **Authenticated UI specs** apply the theme through the user menu's "Dark Theme" switch
+    (`setCiteTheme`) right after authentication. CITE persists the choice in localStorage
+    (`akita-cite-ui`), so it survives the reloads a test performs, and every test's fresh
+    browser context starts light. The multi-user scenarios (14.1–14.3, 15.8) apply the
+    theme to each browser instance.
+  - **Unauthenticated specs** (1.1 Successful Authentication Flow, 1.2 Failed
+    Authentication, 1.5 Unauthorized Access Protection, 15.6 Deep Link Access) request the
+    theme on their entry URL with CITE's `?theme=` query param (`citeThemeUrl`), since the
+    Keycloak screens come before any CITE UI. Those that log in (1.1, 15.6) then call
+    `setCiteTheme` once CITE's shell is up.
+  - **Specs where the user menu can't be reached after load** (the hub-unavailable
+    messages, where the system-message bottom sheet's backdrop covers the top bar) open
+    CITE through `citeThemeUrl`, so the theme applies from the first paint, and assert it
+    took effect.
+  - **API-only specs** (the scoring-model import and not-found checks) open no browser
+    page, so there is no theme to apply. They still run under both theme titles, and name
+    the data they seed per theme so the two runs never share a row.
+  - **`tests/seed.spec.ts`**, the empty template the test generator starts from, follows
+    the authenticated pattern, so generated specs start out themed.
+  - **17.5 Theme Contrast and Color Settings Compliance** is parameterized over the themes
+    the same way, and checks the colors each theme renders.
+
 ## Test Scenarios
 
 ### 1. Authentication and Authorization
@@ -605,7 +634,7 @@ CITE (Collaborative Incident Threat Evaluator) is a collaborative cyber incident
     - expect: Evaluations list displays
     - expect: Status filter dropdown is visible
   2. Click on status filter dropdown
-    - expect: Status options are displayed (Active, Developing, Archived, Complete)
+    - expect: Status options are displayed (Pending, Active, Cancelled, Complete, Archived)
   3. Select one or more statuses
     - expect: Evaluations list filters to show only evaluations with selected statuses
   4. Clear status filter
@@ -701,7 +730,11 @@ CITE (Collaborative Incident Threat Evaluator) is a collaborative cyber incident
 
 #### 7.15. Admin - Manage Evaluation Teams
 
-**File:** `tests/cite/admin/admin-evaluation-teams.spec.ts`
+**Files:**
+  - `tests/cite/admin/admin-evaluation-teams.spec.ts` — steps 1-2 (read back an
+    API-seeded team)
+  - `tests/cite/admin/admin-add-evaluation-team.spec.ts` — steps 3-5 (create a team
+    through the dialog)
 
 **Steps:**
   1. Navigate to admin evaluations section and expand an evaluation
@@ -712,11 +745,17 @@ CITE (Collaborative Incident Threat Evaluator) is a collaborative cyber incident
     - expect: Add team button is available
   3. Click add team button
     - expect: Create team dialog opens
-  4. Enter team name and select team type
+  4. Enter team name and select team type, leaving Hide Scoresheet untouched
     - expect: Form accepts input
   5. Save new team
-    - expect: Team is created successfully
+    - expect: POST /api/teams returns 201
+    - expect: Dialog closes and no error sheet is raised
     - expect: Team appears in list
+
+Steps 3-5 need their own spec because the read-back case seeds its team over the API
+and so never exercises the dialog. Leaving Hide Scoresheet untouched is the point of
+step 4: the checkbox the user never clicks is the one whose value used to be sent as
+`null`.
 
 #### 7.16. Admin - Manage Evaluation Actions
 
@@ -1349,15 +1388,20 @@ CITE (Collaborative Incident Threat Evaluator) is a collaborative cyber incident
 **File:** `tests/cite/error-handling/submission-without-permission.spec.ts`
 
 **Steps:**
-  1. Log in as user without CanSubmit permission
-    - expect: User is authenticated
-  2. Navigate to scoresheet
-    - expect: Scoresheet is displayed in read-only mode
-    - expect: User cannot modify scores
-  3. Attempt to modify a score via direct API call or console manipulation
-    - expect: API rejects the modification with 403 Forbidden
+  1. Seed an evaluation via the API and create a role-less Keycloak user
+    - expect: The new user authenticates and its token is accepted
+  2. List evaluations as that user
+    - expect: The seeded evaluation is absent, so there is nothing to submit
+  3. Read the seeded evaluation directly
+    - expect: API rejects the read with 403 Forbidden
     - expect: Error message indicates insufficient permissions
+  4. Attempt to create scoring content
+    - expect: API rejects the write with 403 Forbidden
     - expect: No unauthorized changes are saved
+
+The read-only scoresheet rendering is covered separately by 4.8 (Scoresheet - Modify
+Score without CanSubmit Permission); this case deliberately probes the API layer, because
+`admin` holds every system permission and can never produce a 403.
 
 ### 16. Integration with Gallery
 
@@ -1436,6 +1480,37 @@ CITE (Collaborative Incident Threat Evaluator) is a collaborative cyber incident
     - expect: Background content is not accessible via Tab
   2. Close modal
     - expect: Focus returns to element that triggered modal
+
+#### 17.5. Theme Contrast and Color Settings Compliance
+
+**File:** `tests/accessibility/theme-contrast-compliance.spec.ts`
+
+Checks real WCAG contrast on the home page and the Add TeamType dialog, and the color
+settings contract from the Crucible colors design spec
+(`design-specs/angular/colors.md` in the crucible-development repository). Expected
+colours are read from the served `settings.json` / `settings.shared.json` /
+`settings.env.json` (deep-merged in that order), not hardcoded, so an environment that
+overrides them still passes as long as the app applies what it was given.
+
+Runs **once per theme (light and dark)**. Read-only: nothing is seeded, and the Add TeamType
+dialog is dismissed via Cancel without submitting. The theme is restored to light
+afterwards because it persists per user.
+
+**Steps:**
+  1. Open the home page and measure text contrast (WCAG 1.4.3)
+    - expect: The "My Evaluations" title, a text column header, and the top bar text each meet 4.5:1 (3:1 for large text) against the surface they are painted on
+    - expect: The page content inverts the right way — dark-on-light in light theme, light-on-dark in dark theme
+  2. Measure the Administration (cog) icon button (WCAG 1.4.11)
+    - expect: Its colour is `--mat-sys-primary`
+    - expect: It meets 3:1 against its surface
+  3. Compare the applied colours with the effective settings
+    - expect: `AppTopBarHexColor`, `AppTopBarHexTextColor`, `AppLightModePrimaryHexColor`, and `AppLightModePrimaryHexTextColor` are defined
+    - expect: `--crucible-topbar-background` / `--crucible-topbar-text` equal the top-bar settings in both themes, and the toolbar is painted with them
+    - expect: The top-bar home logo is drawn in the top-bar colour on a disc of the top-bar text colour, in both themes
+    - expect: `--mat-sys-primary` / `--mat-sys-on-primary` equal the active mode's settings verbatim; dark falls back to the light key when its own is absent
+  4. Open Admin → Team Types → Add TeamType, fill the name so Save enables, and measure the buttons without submitting
+    - expect: The filled Save button is painted `--mat-sys-primary` and its `on-primary` label meets 4.5:1
+    - expect: The Cancel label is `--mat-sys-primary` and meets 4.5:1 on the dialog surface
 
 ### 18. Performance
 

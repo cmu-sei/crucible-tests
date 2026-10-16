@@ -4,6 +4,22 @@
 
 Steamfitter is a scenario execution service within the Crucible cybersecurity training platform. It enables content developers to create and manage scenarios consisting of scheduled tasks, manual tasks, and injects that run against virtual machines during training events. Tasks that target virtual machines execute through the Player VM API (supporting both Proxmox and vSphere providers); the application uses Keycloak for authentication. The UI is built with Angular and provides four major functional sections: Scenario Templates (reusable task groups), Scenarios (live instances of templates), Tasks (ad hoc task execution), and History (task execution results). The application supports role-based access control with system roles (Administrator, Content Developer, Observer) and granular permissions for managing scenario templates, scenarios, users, groups, and roles.
 
+## Theme Coverage
+
+Every functional scenario below runs **once per theme (light and dark)**: each spec loops
+over `STEAMFITTER_THEMES` from `steamfitter/fixtures.ts`, reports under a `light theme ›` /
+`dark theme ›` describe prefix, and applies the theme through the top bar user menu's
+"Dark Theme" switch (`setSteamfitterTheme`) right after authentication. Steamfitter persists
+the choice in localStorage (`akita-steamfitter-ui`), so it survives the reloads and
+navigations a test performs, and every test's fresh browser context starts light.
+
+Exceptions, which run once:
+  - 1.1 User Login Flow — it runs unauthenticated and exercises the Keycloak screens before
+    any Steamfitter UI (and its theme switch) exists.
+  - 5.11 Scenario Inherits Task Definitions from Template — it is API-only and renders no UI.
+  - 13.8 Theme Contrast and Color Settings Compliance — it is parameterized over the themes
+    itself.
+
 ## Test Scenarios
 
 ### 1. Authentication and Authorization
@@ -1341,6 +1357,36 @@ rather than by row count.
     - expect: A visible focus indicator (outline, border, highlight) appears on focused elements
     - expect: The focus indicator is clearly visible and not removed by CSS
     - expect: The indicator helps keyboard users identify their current position
+
+#### 13.8. Theme Contrast and Color Settings Compliance
+
+**File:** `tests/steamfitter/ui-responsiveness-and-accessibility/theme-contrast-compliance.spec.ts`
+
+Checks real WCAG contrast on the home page and the Admin → Groups "Create New Group?"
+dialog, and the color settings contract from the Crucible colors design spec
+(`design-specs/angular/colors.md` in the crucible-development repository). Expected
+colours are read from the served `settings.json` / `settings.shared.json` /
+`settings.env.json` (deep-merged in that order), not hardcoded, so an environment that
+overrides them still passes as long as the app applies what it was given.
+
+Runs **once per theme (light and dark)**. Read-only: nothing is seeded, and the dialog is
+dismissed via Cancel without submitting. The theme is restored to light afterwards.
+
+**Steps:**
+  1. Open the home page and measure text contrast (WCAG 1.4.3)
+    - expect: The "My Scenarios" section title, a text column header, and the top bar title and user menu each meet 4.5:1 (3:1 for large text) against the surface they are painted on
+    - expect: The page content inverts the right way — dark-on-light in light theme, light-on-dark in dark theme
+  2. Measure the Administration (cog) icon button (WCAG 1.4.11)
+    - expect: Its colour is `--mat-sys-primary`
+    - expect: It meets 3:1 against its surface
+  3. Compare the applied colours with the effective settings
+    - expect: `AppTopBarHexColor`, `AppTopBarHexTextColor`, `AppLightModePrimaryHexColor`, and `AppLightModePrimaryHexTextColor` are defined
+    - expect: `--crucible-topbar-background` / `--crucible-topbar-text` equal the top-bar settings in both themes, and the toolbar is painted with them
+    - expect: The top-bar home logo is drawn in the top-bar colour on a disc of the top-bar text colour, in both themes
+    - expect: `--mat-sys-primary` / `--mat-sys-on-primary` equal the active mode's settings verbatim; dark falls back to the light key when its own is absent
+  4. Open Admin → Groups → Add New Group, fill the name so Save enables, and measure the buttons without submitting
+    - expect: The filled Save button is painted `--mat-sys-primary` and its `on-primary` label meets 4.5:1
+    - expect: The Cancel label is `--mat-sys-primary` and meets 4.5:1 on the dialog surface
 
 ### 14. Player VM API Integration (Proxmox and vSphere)
 

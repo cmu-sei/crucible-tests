@@ -4,7 +4,7 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -102,97 +102,100 @@ function extractRowXml(sheetXml: string, rowNumber: number): string {
  *     export; only DataField columns are asserted on here, since those are the ones guaranteed
  *     present once seeded.
  */
-test.describe('Scenario Events Management', () => {
-  let token: string;
-  let mselId: string;
-  let mselName: string;
-  let descriptionMarker: string;
-  let controlNumberMarker: string;
-  let downloadPath: string | undefined;
+for (const theme of BLUEPRINT_THEMES) {
+    test.describe(`${theme} theme › Scenario Events Management`, () => {
+    let token: string;
+    let mselId: string;
+    let mselName: string;
+    let descriptionMarker: string;
+    let controlNumberMarker: string;
+    let downloadPath: string | undefined;
 
-  test.beforeEach(async () => {
-    token = await getBlueprintToken();
-    mselName = tempBlueprintName('TestBP-EventExport');
-    const msel = await createMsel(token, {
-      name: mselName,
-      description: 'Seeded for scenario event export',
+    test.beforeEach(async () => {
+      token = await getBlueprintToken();
+      mselName = tempBlueprintName('TestBP-EventExport');
+      const msel = await createMsel(token, {
+        name: mselName,
+        description: 'Seeded for scenario event export',
+      });
+      mselId = msel.id;
+
+      descriptionMarker = tempBlueprintName('ExportedDescription');
+      const event = await createRenderableScenarioEvent(token, mselId, descriptionMarker, {
+        deltaSeconds: 300,
+      });
+
+      // A second DataField value on the same event, so the export is proven to carry more than
+      // one column's worth of event data — the plan explicitly calls out "all ... data fields".
+      controlNumberMarker = tempBlueprintName('ExportedControl');
+      await setScenarioEventFieldValue(token, event.id, 'Control Number', controlNumberMarker);
+
+      downloadPath = undefined;
     });
-    mselId = msel.id;
 
-    descriptionMarker = tempBlueprintName('ExportedDescription');
-    const event = await createRenderableScenarioEvent(token, mselId, descriptionMarker, {
-      deltaSeconds: 300,
+    test.afterEach(async () => {
+      // Deleting the MSEL cascades to its scenario events and data fields.
+      try {
+        if (mselId) await deleteMsel(token, mselId);
+      } catch (err) {
+        console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+      }
+      if (downloadPath && fs.existsSync(downloadPath)) {
+        fs.unlinkSync(downloadPath);
+      }
     });
 
-    // A second DataField value on the same event, so the export is proven to carry more than
-    // one column's worth of event data — the plan explicitly calls out "all ... data fields".
-    controlNumberMarker = tempBlueprintName('ExportedControl');
-    await setScenarioEventFieldValue(token, event.id, 'Control Number', controlNumberMarker);
+    test('Export Scenario Events', async ({ blueprintAuthenticatedPage: page }) => {
+    await applyBlueprintTheme(page, theme);
+      await page.goto(`${Services.Blueprint.UI}/build`, { waitUntil: 'domcontentloaded' });
+      await expect(page.getByRole('table').first()).toBeVisible({ timeout: 15000 });
 
-    downloadPath = undefined;
-  });
+      // 1. Click 'Export' or download button and select a format.
+      const mselRow = await findMselRowByName(page, mselName);
+      await expect(mselRow).toBeVisible();
+      const download = await downloadMselFile(page, mselRow, /Download xlsx file/i);
 
-  test.afterEach(async () => {
-    // Deleting the MSEL cascades to its scenario events and data fields.
-    try {
-      if (mselId) await deleteMsel(token, mselId);
-    } catch (err) {
-      console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
-    }
-    if (downloadPath && fs.existsSync(downloadPath)) {
-      fs.unlinkSync(downloadPath);
-    }
-  });
+      // expect: File is generated and downloaded with all events and data fields.
+      expect(download.suggestedFilename()).toMatch(/\.xlsx$/i);
 
-  test('Export Scenario Events', async ({ blueprintAuthenticatedPage: page }) => {
-    await page.goto(`${Services.Blueprint.UI}/build`, { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('table').first()).toBeVisible({ timeout: 15000 });
+      // saveAs works when the browser runs remotely, unlike relying on path() alone.
+      downloadPath = path.join(os.tmpdir(), `scenario-event-export-${mselName}.xlsx`);
+      await download.saveAs(downloadPath);
+      const fileBuffer = fs.readFileSync(downloadPath);
+      expect(fileBuffer.subarray(0, 2).toString('latin1')).toBe('PK');
 
-    // 1. Click 'Export' or download button and select a format.
-    const mselRow = await findMselRowByName(page, mselName);
-    await expect(mselRow).toBeVisible();
-    const download = await downloadMselFile(page, mselRow, /Download xlsx file/i);
+      const sheetXml = readZipEntryText(fileBuffer, 'xl/worksheets/sheet1.xml');
+      expect(sheetXml, 'exported xlsx has no xl/worksheets/sheet1.xml entry').toBeTruthy();
 
-    // expect: File is generated and downloaded with all events and data fields.
-    expect(download.suggestedFilename()).toMatch(/\.xlsx$/i);
+      // The header row (row 1) carries every seeded DataField, not just the two this test
+      // happens to read values from.
+      const headerRowXml = extractRowXml(sheetXml!, 1);
+      expect(headerRowXml, 'no header row (row 1) found in the exported sheet').toBeTruthy();
+      for (const fieldName of [
+        'Control Number',
+        'Move',
+        'Group',
+        'Delivery Time',
+        'Simulated Time',
+        'Assigned To',
+        'Status',
+        'Title',
+        'Description',
+        'From Org',
+        'To Org',
+        'Expected Actions',
+        'Details',
+      ]) {
+        expect(headerRowXml).toContain(fieldName);
+      }
 
-    // saveAs works when the browser runs remotely, unlike relying on path() alone.
-    downloadPath = path.join(os.tmpdir(), `scenario-event-export-${mselName}.xlsx`);
-    await download.saveAs(downloadPath);
-    const fileBuffer = fs.readFileSync(downloadPath);
-    expect(fileBuffer.subarray(0, 2).toString('latin1')).toBe('PK');
-
-    const sheetXml = readZipEntryText(fileBuffer, 'xl/worksheets/sheet1.xml');
-    expect(sheetXml, 'exported xlsx has no xl/worksheets/sheet1.xml entry').toBeTruthy();
-
-    // The header row (row 1) carries every seeded DataField, not just the two this test
-    // happens to read values from.
-    const headerRowXml = extractRowXml(sheetXml!, 1);
-    expect(headerRowXml, 'no header row (row 1) found in the exported sheet').toBeTruthy();
-    for (const fieldName of [
-      'Control Number',
-      'Move',
-      'Group',
-      'Delivery Time',
-      'Simulated Time',
-      'Assigned To',
-      'Status',
-      'Title',
-      'Description',
-      'From Org',
-      'To Org',
-      'Expected Actions',
-      'Details',
-    ]) {
-      expect(headerRowXml).toContain(fieldName);
-    }
-
-    // The data row (row 2 — the single seeded event) carries the actual seeded content in
-    // both DataField columns it was written to, proving the export round-trips real data
-    // rather than just producing an empty template.
-    const dataRowXml = extractRowXml(sheetXml!, 2);
-    expect(dataRowXml, 'no data row (row 2) found in the exported sheet').toBeTruthy();
-    expect(dataRowXml).toContain(descriptionMarker);
-    expect(dataRowXml).toContain(controlNumberMarker);
-  });
-});
+      // The data row (row 2 — the single seeded event) carries the actual seeded content in
+      // both DataField columns it was written to, proving the export round-trips real data
+      // rather than just producing an empty template.
+      const dataRowXml = extractRowXml(sheetXml!, 2);
+      expect(dataRowXml, 'no data row (row 2) found in the exported sheet').toBeTruthy();
+      expect(dataRowXml).toContain(descriptionMarker);
+      expect(dataRowXml).toContain(controlNumberMarker);
+    });
+    });
+}

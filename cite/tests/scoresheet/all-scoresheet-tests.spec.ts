@@ -7,7 +7,7 @@
 // This file combines all scoresheet tests into a single file to run them serially,
 // avoiding parallel execution issues where multiple tests compete for the same "Admin User" visibility.
 
-import { test, expect, Services, serviceUrlPattern, ensureScoringModelExists, getCiteApiToken, purgeStaleEvaluations, settleForResponse } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, ensureScoringModelExists, getCiteApiToken, purgeStaleEvaluations, settleForResponse, CITE_THEMES, setCiteTheme } from '../../fixtures';
 import { navigateToAdminSection, deleteEvaluationByName, deleteTeamTypeByName } from '../../test-helpers';
 import { request as pwRequest, type Locator } from '@playwright/test';
 
@@ -383,281 +383,305 @@ async function navigateToEvaluationScoresheet(
 }
 
 // Configure tests to run serially to avoid parallel execution conflicts
-test.describe.configure({ mode: 'serial' });
+for (const theme of CITE_THEMES) {
+  test.describe(`${theme} theme › Scoresheet Interface`, () => {
+    // Serial per theme, so a failure in one theme doesn't skip the other.
+    test.describe.configure({ mode: 'serial' });
 
-test.describe('Scoresheet Interface', () => {
+    // Keep the evaluations list small/deterministic — the admin suite may have flooded it.
+    test.beforeAll(async () => {
+      // Purge only this file's own evaluations: a broader purge deletes the
+      // evaluations other files are using on the other worker.
+      await purgeStaleEvaluations(['E2E SS-']);
+    });
 
-  // Keep the evaluations list small/deterministic — the admin suite may have flooded it.
-  test.beforeAll(async () => {
-    await purgeStaleEvaluations();
-  });
+    test('Scoresheet Initial Load', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
 
-  test('Scoresheet Initial Load', async ({ citeAuthenticatedPage: page }) => {
-    const TT = 'E2E SS-IL Team Type';
-    const EV = 'E2E SS-IL Evaluation';
+      const TT = 'E2E SS-IL Team Type';
+      const EV = 'E2E SS-IL Evaluation';
 
-    await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-IL Team', 'SIL');
-    await navigateToEvaluationScoresheet(page, EV, 'E2E SS-IL');
+      await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-IL Team', 'SIL');
+      await navigateToEvaluationScoresheet(page, EV, 'E2E SS-IL');
 
-    // expect: Submission type buttons are visible (User / Team). These are the reliable
-    // signal that the scoresheet rendered with an active team (navigateToEvaluationScoresheet
-    // already polls until they appear). Assert them first.
-    const userButton = page.getByRole('button', { name: 'User', exact: true });
-    await expect(userButton).toBeVisible({ timeout: 10000 });
+      // expect: Submission type buttons are visible (User / Team). These are the reliable
+      // signal that the scoresheet rendered with an active team (navigateToEvaluationScoresheet
+      // already polls until they appear). Assert them first.
+      const userButton = page.getByRole('button', { name: 'User', exact: true });
+      await expect(userButton).toBeVisible({ timeout: 10000 });
 
-    // expect: Scoresheet interface loads with scoring categories displayed as table rows.
-    // The scoresheet view contains both the scoring mat-table and (when present) a hidden
-    // Score Summary table, so target a VISIBLE table specifically rather than .first().
-    const scoresheetTable = page.locator('mat-table').filter({ has: page.getByRole('row'), visible: true }).first();
-    await expect(scoresheetTable).toBeVisible({ timeout: 10000 });
+      // expect: Scoresheet interface loads with scoring categories displayed as table rows.
+      // The scoresheet view contains both the scoring mat-table and (when present) a hidden
+      // Score Summary table, so target a VISIBLE table specifically rather than .first().
+      const scoresheetTable = page.locator('mat-table').filter({ has: page.getByRole('row'), visible: true }).first();
+      await expect(scoresheetTable).toBeVisible({ timeout: 10000 });
 
-    // expect: Scoring categories (discussion questions) are displayed
-    await expect(scoresheetTable.getByRole('row').first()).toBeVisible({ timeout: 10000 });
+      // expect: Scoring categories (discussion questions) are displayed
+      await expect(scoresheetTable.getByRole('row').first()).toBeVisible({ timeout: 10000 });
 
-    // Cleanup
-    await deleteEvaluationByName(page, EV);
-    await deleteTeamTypeByName(page, TT);
-  });
+      // Cleanup
+      await deleteEvaluationByName(page, EV);
+      await deleteTeamTypeByName(page, TT);
+    });
 
-  test('View User Submission', async ({ citeAuthenticatedPage: page }) => {
-    const TT = 'E2E SS-VU Team Type';
-    const EV = 'E2E SS-VU Evaluation';
+    test('View User Submission', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
 
-    await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-VU Team', 'SVU');
-    await navigateToEvaluationScoresheet(page, EV, 'E2E SS-VU');
+      const TT = 'E2E SS-VU Team Type';
+      const EV = 'E2E SS-VU Evaluation';
 
-    // Click the "User" submission type button
-    const userButton = page.getByRole('button', { name: 'User', exact: true });
-    await expect(userButton).toBeVisible({ timeout: 5000 });
-    await userButton.click();
-    await page.waitForTimeout(1000);
+      await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-VU Team', 'SVU');
+      await navigateToEvaluationScoresheet(page, EV, 'E2E SS-VU');
 
-    // expect: Scoresheet displays user's individual scores (table with questions visible)
-    const scoresheetTable = page.getByRole('table').first();
-    await expect(scoresheetTable).toBeVisible({ timeout: 10000 });
-
-    // Cleanup
-    await deleteEvaluationByName(page, EV);
-    await deleteTeamTypeByName(page, TT);
-  });
-
-  test('View Team Submission', async ({ citeAuthenticatedPage: page }) => {
-    const TT = 'E2E SS-VT Team Type';
-    const EV = 'E2E SS-VT Evaluation';
-
-    await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-VT Team', 'SVT');
-    await navigateToEvaluationScoresheet(page, EV, 'E2E SS-VT');
-
-    // Click the "Team" submission type button
-    const teamButton = page.getByRole('button', { name: 'Team', exact: true });
-    await expect(teamButton).toBeVisible({ timeout: 5000 });
-    await teamButton.click();
-    await page.waitForTimeout(1000);
-
-    // expect: Scoresheet displays team's official scores
-    const scoresheetTable = page.getByRole('table').first();
-    await expect(scoresheetTable).toBeVisible({ timeout: 10000 });
-
-    // Cleanup
-    await deleteEvaluationByName(page, EV);
-    await deleteTeamTypeByName(page, TT);
-  });
-
-  test('View Team Average Submission', async ({ citeAuthenticatedPage: page }) => {
-    const TT = 'E2E SS-TA Team Type';
-    const EV = 'E2E SS-TA Evaluation';
-
-    await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-TA Team', 'STA');
-    await navigateToEvaluationScoresheet(page, EV, 'E2E SS-TA');
-
-    // The "Team Avg" button may or may not be visible depending on scoring model config.
-    // If visible, click it; otherwise verify the scoresheet is loaded.
-    const teamAvgButton = page.getByRole('button', { name: 'Team Avg', exact: true });
-    if (await teamAvgButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await teamAvgButton.click();
+      // Click the "User" submission type button
+      const userButton = page.getByRole('button', { name: 'User', exact: true });
+      await expect(userButton).toBeVisible({ timeout: 5000 });
+      await userButton.click();
       await page.waitForTimeout(1000);
-    }
 
-    // expect: Scoresheet is displayed (read-only for averages)
-    const scoresheetTable = page.getByRole('table').first();
-    await expect(scoresheetTable).toBeVisible({ timeout: 10000 });
+      // expect: Scoresheet displays user's individual scores (table with questions visible)
+      const scoresheetTable = page.getByRole('table').first();
+      await expect(scoresheetTable).toBeVisible({ timeout: 10000 });
 
-    // Cleanup
-    await deleteEvaluationByName(page, EV);
-    await deleteTeamTypeByName(page, TT);
-  });
+      // Cleanup
+      await deleteEvaluationByName(page, EV);
+      await deleteTeamTypeByName(page, TT);
+    });
 
-  test('View Group Average Submission', async ({ citeAuthenticatedPage: page }) => {
-    const TT = 'E2E SS-GA Team Type';
-    const EV = 'E2E SS-GA Evaluation';
+    test('View Team Submission', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
 
-    await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-GA Team', 'SGA');
-    await navigateToEvaluationScoresheet(page, EV, 'E2E SS-GA');
+      const TT = 'E2E SS-VT Team Type';
+      const EV = 'E2E SS-VT Evaluation';
 
-    // The "Group Avg" button may or may not be visible depending on scoring model/group config.
-    // If visible, click it; otherwise verify the scoresheet is loaded.
-    const groupAvgButton = page.getByRole('button', { name: 'Group Avg', exact: true });
-    if (await groupAvgButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await groupAvgButton.click();
+      await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-VT Team', 'SVT');
+      await navigateToEvaluationScoresheet(page, EV, 'E2E SS-VT');
+
+      // Click the "Team" submission type button
+      const teamButton = page.getByRole('button', { name: 'Team', exact: true });
+      await expect(teamButton).toBeVisible({ timeout: 5000 });
+      await teamButton.click();
       await page.waitForTimeout(1000);
-    }
 
-    // expect: Scoresheet is displayed
-    const scoresheetTable = page.getByRole('table').first();
-    await expect(scoresheetTable).toBeVisible({ timeout: 10000 });
+      // expect: Scoresheet displays team's official scores
+      const scoresheetTable = page.getByRole('table').first();
+      await expect(scoresheetTable).toBeVisible({ timeout: 10000 });
 
-    // Cleanup
-    await deleteEvaluationByName(page, EV);
-    await deleteTeamTypeByName(page, TT);
-  });
+      // Cleanup
+      await deleteEvaluationByName(page, EV);
+      await deleteTeamTypeByName(page, TT);
+    });
 
-  test('View Official Submission', async ({ citeAuthenticatedPage: page }) => {
-    const TT = 'E2E SS-VO Team Type';
-    const EV = 'E2E SS-VO Evaluation';
+    test('View Team Average Submission', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
 
-    await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-VO Team', 'SVO');
-    await navigateToEvaluationScoresheet(page, EV, 'E2E SS-VO');
+      const TT = 'E2E SS-TA Team Type';
+      const EV = 'E2E SS-TA Evaluation';
 
-    // The "Official" button may or may not be visible depending on scoring model config.
-    // If visible, click it; otherwise verify the scoresheet is loaded.
-    const officialButton = page.getByRole('button', { name: 'Official', exact: true });
-    if (await officialButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await officialButton.click();
-      await page.waitForTimeout(1000);
-    }
+      await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-TA Team', 'STA');
+      await navigateToEvaluationScoresheet(page, EV, 'E2E SS-TA');
 
-    // expect: Scoresheet is displayed
-    const scoresheetTable = page.getByRole('table').first();
-    await expect(scoresheetTable).toBeVisible({ timeout: 10000 });
-
-    // Cleanup
-    await deleteEvaluationByName(page, EV);
-    await deleteTeamTypeByName(page, TT);
-  });
-
-  test('Modify Score with CanSubmit Permission', async ({ citeAuthenticatedPage: page }) => {
-    const TT = 'E2E SS-MS Team Type';
-    const EV = 'E2E SS-MS Evaluation';
-
-    await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-MS Team', 'SMS');
-    await navigateToEvaluationScoresheet(page, EV, 'E2E SS-MS');
-
-    // Ensure we're on User submission to have edit ability
-    const userButton = page.getByRole('button', { name: 'User', exact: true });
-    await expect(userButton).toBeVisible({ timeout: 5000 });
-    await userButton.click();
-    await page.waitForTimeout(1000);
-
-    // expect: Scoresheet displays with scoring question textboxes
-    const scoresheetTable = page.getByRole('table').first();
-    await expect(scoresheetTable).toBeVisible({ timeout: 10000 });
-
-    // Look for interactive scoring options (radio buttons, checkboxes, or enabled textboxes)
-    const scoringOptions = page.locator('mat-radio-button, mat-checkbox, input:not([disabled]), textarea:not([disabled])');
-    if (await scoringOptions.first().isVisible({ timeout: 5000 }).catch(() => false)) {
-      // Click or type in the first interactive element
-      const firstOption = scoringOptions.first();
-      const tagName = await firstOption.evaluate(el => el.tagName.toLowerCase());
-      if (tagName === 'input' || tagName === 'textarea') {
-        await firstOption.fill('Test response');
-        await firstOption.blur();
-      } else {
-        await firstOption.click();
+      // The "Team Avg" button may or may not be visible depending on scoring model config.
+      // If visible, click it; otherwise verify the scoresheet is loaded.
+      const teamAvgButton = page.getByRole('button', { name: 'Team Avg', exact: true });
+      if (await teamAvgButton.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await teamAvgButton.click();
+        await page.waitForTimeout(1000);
       }
+
+      // expect: Scoresheet is displayed (read-only for averages)
+      const scoresheetTable = page.getByRole('table').first();
+      await expect(scoresheetTable).toBeVisible({ timeout: 10000 });
+
+      // Cleanup
+      await deleteEvaluationByName(page, EV);
+      await deleteTeamTypeByName(page, TT);
+    });
+
+    test('View Group Average Submission', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
+
+      const TT = 'E2E SS-GA Team Type';
+      const EV = 'E2E SS-GA Evaluation';
+
+      await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-GA Team', 'SGA');
+      await navigateToEvaluationScoresheet(page, EV, 'E2E SS-GA');
+
+      // The "Group Avg" button may or may not be visible depending on scoring model/group config.
+      // If visible, click it; otherwise verify the scoresheet is loaded.
+      const groupAvgButton = page.getByRole('button', { name: 'Group Avg', exact: true });
+      if (await groupAvgButton.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await groupAvgButton.click();
+        await page.waitForTimeout(1000);
+      }
+
+      // expect: Scoresheet is displayed
+      const scoresheetTable = page.getByRole('table').first();
+      await expect(scoresheetTable).toBeVisible({ timeout: 10000 });
+
+      // Cleanup
+      await deleteEvaluationByName(page, EV);
+      await deleteTeamTypeByName(page, TT);
+    });
+
+    test('View Official Submission', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
+
+      const TT = 'E2E SS-VO Team Type';
+      const EV = 'E2E SS-VO Evaluation';
+
+      await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-VO Team', 'SVO');
+      await navigateToEvaluationScoresheet(page, EV, 'E2E SS-VO');
+
+      // The "Official" button may or may not be visible depending on scoring model config.
+      // If visible, click it; otherwise verify the scoresheet is loaded.
+      const officialButton = page.getByRole('button', { name: 'Official', exact: true });
+      if (await officialButton.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await officialButton.click();
+        await page.waitForTimeout(1000);
+      }
+
+      // expect: Scoresheet is displayed
+      const scoresheetTable = page.getByRole('table').first();
+      await expect(scoresheetTable).toBeVisible({ timeout: 10000 });
+
+      // Cleanup
+      await deleteEvaluationByName(page, EV);
+      await deleteTeamTypeByName(page, TT);
+    });
+
+    test('Modify Score with CanSubmit Permission', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
+
+      const TT = 'E2E SS-MS Team Type';
+      const EV = 'E2E SS-MS Evaluation';
+
+      await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-MS Team', 'SMS');
+      await navigateToEvaluationScoresheet(page, EV, 'E2E SS-MS');
+
+      // Ensure we're on User submission to have edit ability
+      const userButton = page.getByRole('button', { name: 'User', exact: true });
+      await expect(userButton).toBeVisible({ timeout: 5000 });
+      await userButton.click();
       await page.waitForTimeout(1000);
-    }
 
-    // expect: No error snackbar after interaction
-    const errorSnackbar = page.locator('snack-bar-container, mat-snack-bar-container').filter({ hasText: /error/i });
-    const hasError = await errorSnackbar.isVisible({ timeout: 2000 }).catch(() => false);
-    expect(hasError).toBeFalsy();
+      // expect: Scoresheet displays with scoring question textboxes
+      const scoresheetTable = page.getByRole('table').first();
+      await expect(scoresheetTable).toBeVisible({ timeout: 10000 });
 
-    // Cleanup
-    await deleteEvaluationByName(page, EV);
-    await deleteTeamTypeByName(page, TT);
-  });
+      // Look for interactive scoring options (radio buttons, checkboxes, or enabled textboxes)
+      const scoringOptions = page.locator('mat-radio-button, mat-checkbox, input:not([disabled]), textarea:not([disabled])');
+      if (await scoringOptions.first().isVisible({ timeout: 5000 }).catch(() => false)) {
+        // Click or type in the first interactive element
+        const firstOption = scoringOptions.first();
+        const tagName = await firstOption.evaluate(el => el.tagName.toLowerCase());
+        if (tagName === 'input' || tagName === 'textarea') {
+          await firstOption.fill('Test response');
+          await firstOption.blur();
+        } else {
+          await firstOption.click();
+        }
+        await page.waitForTimeout(1000);
+      }
 
-  test('Modify Score without CanSubmit Permission', async ({ citeAuthenticatedPage: page }) => {
-    const TT = 'E2E SS-MU Team Type';
-    const EV = 'E2E SS-MU Evaluation';
+      // expect: No error snackbar after interaction
+      const errorSnackbar = page.locator('snack-bar-container, mat-snack-bar-container').filter({ hasText: /error/i });
+      const hasError = await errorSnackbar.isVisible({ timeout: 2000 }).catch(() => false);
+      expect(hasError).toBeFalsy();
 
-    await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-MU Team', 'SMU');
-    await navigateToEvaluationScoresheet(page, EV, 'E2E SS-MU');
+      // Cleanup
+      await deleteEvaluationByName(page, EV);
+      await deleteTeamTypeByName(page, TT);
+    });
 
-    // Switch to "Team" view where the admin user cannot directly modify scores
-    const teamButton = page.getByRole('button', { name: 'Team', exact: true });
-    await expect(teamButton).toBeVisible({ timeout: 5000 });
-    await teamButton.click();
-    await page.waitForTimeout(1000);
+    test('Modify Score without CanSubmit Permission', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
 
-    // expect: Scoresheet displays in a non-user submission mode
-    const scoresheetTable = page.getByRole('table').first();
-    await expect(scoresheetTable).toBeVisible({ timeout: 10000 });
+      const TT = 'E2E SS-MU Team Type';
+      const EV = 'E2E SS-MU Evaluation';
 
-    // expect: Textboxes should be disabled in Team view
-    const disabledTextboxes = page.locator('textbox[disabled], input[disabled], textarea[disabled]');
-    if (await disabledTextboxes.first().isVisible({ timeout: 3000 }).catch(() => false)) {
-      await expect(disabledTextboxes.first()).toBeDisabled();
-    }
+      await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-MU Team', 'SMU');
+      await navigateToEvaluationScoresheet(page, EV, 'E2E SS-MU');
 
-    // Cleanup
-    await deleteEvaluationByName(page, EV);
-    await deleteTeamTypeByName(page, TT);
-  });
-
-  test('Add Comment to Score', async ({ citeAuthenticatedPage: page }) => {
-    const TT = 'E2E SS-AC Team Type';
-    const EV = 'E2E SS-AC Evaluation';
-
-    await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-AC Team', 'SAC');
-    await navigateToEvaluationScoresheet(page, EV, 'E2E SS-AC');
-
-    // Switch to User submission to have edit ability
-    const userButton = page.getByRole('button', { name: 'User', exact: true });
-    await expect(userButton).toBeVisible({ timeout: 5000 });
-    await userButton.click();
-    await page.waitForTimeout(1000);
-
-    // expect: Scoresheet displays
-    const scoresheetTable = page.getByRole('table').first();
-    await expect(scoresheetTable).toBeVisible({ timeout: 10000 });
-
-    // Look for a textbox/textarea that can accept comments
-    // The scoresheet has textbox fields for each discussion question
-    const commentFields = page.locator('textarea:not([disabled]), input[type="text"]:not([disabled])');
-    if (await commentFields.first().isVisible({ timeout: 5000 }).catch(() => false)) {
-      await commentFields.first().fill('Test comment from automated test');
-      await expect(commentFields.first()).toHaveValue('Test comment from automated test');
-      await commentFields.first().blur();
+      // Switch to "Team" view where the admin user cannot directly modify scores
+      const teamButton = page.getByRole('button', { name: 'Team', exact: true });
+      await expect(teamButton).toBeVisible({ timeout: 5000 });
+      await teamButton.click();
       await page.waitForTimeout(1000);
-    }
 
-    // Cleanup
-    await deleteEvaluationByName(page, EV);
-    await deleteTeamTypeByName(page, TT);
+      // expect: Scoresheet displays in a non-user submission mode
+      const scoresheetTable = page.getByRole('table').first();
+      await expect(scoresheetTable).toBeVisible({ timeout: 10000 });
+
+      // expect: Textboxes should be disabled in Team view
+      const disabledTextboxes = page.locator('textbox[disabled], input[disabled], textarea[disabled]');
+      if (await disabledTextboxes.first().isVisible({ timeout: 3000 }).catch(() => false)) {
+        await expect(disabledTextboxes.first()).toBeDisabled();
+      }
+
+      // Cleanup
+      await deleteEvaluationByName(page, EV);
+      await deleteTeamTypeByName(page, TT);
+    });
+
+    test('Add Comment to Score', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
+
+      const TT = 'E2E SS-AC Team Type';
+      const EV = 'E2E SS-AC Evaluation';
+
+      await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-AC Team', 'SAC');
+      await navigateToEvaluationScoresheet(page, EV, 'E2E SS-AC');
+
+      // Switch to User submission to have edit ability
+      const userButton = page.getByRole('button', { name: 'User', exact: true });
+      await expect(userButton).toBeVisible({ timeout: 5000 });
+      await userButton.click();
+      await page.waitForTimeout(1000);
+
+      // expect: Scoresheet displays
+      const scoresheetTable = page.getByRole('table').first();
+      await expect(scoresheetTable).toBeVisible({ timeout: 10000 });
+
+      // Look for a textbox/textarea that can accept comments
+      // The scoresheet has textbox fields for each discussion question
+      const commentFields = page.locator('textarea:not([disabled]), input[type="text"]:not([disabled])');
+      if (await commentFields.first().isVisible({ timeout: 5000 }).catch(() => false)) {
+        await commentFields.first().fill('Test comment from automated test');
+        await expect(commentFields.first()).toHaveValue('Test comment from automated test');
+        await commentFields.first().blur();
+        await page.waitForTimeout(1000);
+      }
+
+      // Cleanup
+      await deleteEvaluationByName(page, EV);
+      await deleteTeamTypeByName(page, TT);
+    });
+
+    test('View Score Summary', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
+
+      const TT = 'E2E SS-VS Team Type';
+      const EV = 'E2E SS-VS Evaluation';
+
+      await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-VS Team', 'SVS');
+      await navigateToEvaluationScoresheet(page, EV, 'E2E SS-VS');
+
+      // expect: Scoresheet displays with the evaluation heading and move info
+      const scoresheetTable = page.getByRole('table').first();
+      await expect(scoresheetTable).toBeVisible({ timeout: 10000 });
+
+      // The current move info is shown in the header
+      const moveHeading = page.getByRole('heading', { name: /Move:/ });
+      await expect(moveHeading).toBeVisible({ timeout: 5000 });
+
+      // The SubmissionReview (report) button is available for viewing score summaries
+      const reportButton = page.locator('button[title="SubmissionReview"]');
+      await expect(reportButton).toBeVisible({ timeout: 5000 });
+
+      // Cleanup
+      await deleteEvaluationByName(page, EV);
+      await deleteTeamTypeByName(page, TT);
+    });
   });
-
-  test('View Score Summary', async ({ citeAuthenticatedPage: page }) => {
-    const TT = 'E2E SS-VS Team Type';
-    const EV = 'E2E SS-VS Evaluation';
-
-    await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-VS Team', 'SVS');
-    await navigateToEvaluationScoresheet(page, EV, 'E2E SS-VS');
-
-    // expect: Scoresheet displays with the evaluation heading and move info
-    const scoresheetTable = page.getByRole('table').first();
-    await expect(scoresheetTable).toBeVisible({ timeout: 10000 });
-
-    // The current move info is shown in the header
-    const moveHeading = page.getByRole('heading', { name: /Move:/ });
-    await expect(moveHeading).toBeVisible({ timeout: 5000 });
-
-    // The SubmissionReview (report) button is available for viewing score summaries
-    const reportButton = page.locator('button[title="SubmissionReview"]');
-    await expect(reportButton).toBeVisible({ timeout: 5000 });
-
-    // Cleanup
-    await deleteEvaluationByName(page, EV);
-    await deleteTeamTypeByName(page, TT);
-  });
-});
+}
