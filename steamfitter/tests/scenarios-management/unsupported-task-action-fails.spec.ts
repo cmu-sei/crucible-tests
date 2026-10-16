@@ -12,6 +12,7 @@
 
 import { request as pwRequest } from '@playwright/test';
 import { test, expect } from '../../fixtures';
+import { requirePrecondition } from '../../../shared-fixtures';
 import {
   Services,
   getSteamfitterApiToken,
@@ -139,7 +140,8 @@ test.describe('Scenarios Management', () => {
   });
 
   test('a task using a removed StackStorm action fails and runs its Failure subtask', async () => {
-    test.skip(!playerAvailable, 'Player API unavailable — tasks only run in a started scenario, which needs a view.');
+    // Skips locally (Player is optional in a partial stack) but fails under CI.
+    requirePrecondition(playerAvailable, 'Player API unavailable — tasks only run in a started scenario, which needs a view.');
 
     // 1. Seed a view-bound scenario and start it, since only an active scenario's tasks run.
     const scenarioId = await seedScenario(
