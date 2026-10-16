@@ -4,7 +4,7 @@
 // spec: steamfitter/steamfitter-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, STEAMFITTER_THEMES, setSteamfitterTheme } from '../../fixtures';
 import { seedUser, deleteUsersByPrefix } from '../../fixtures';
 import { navigateToAdminSection } from '../../test-helpers';
 
@@ -14,32 +14,35 @@ import { navigateToAdminSection } from '../../test-helpers';
  * so searching is how we reliably surface a specific user), then clears the search and
  * confirms the list repopulates.
  */
-test.describe('User Management in Admin', () => {
-  const USER_NAME = `E2E Search User ${Date.now()}`;
+for (const theme of STEAMFITTER_THEMES) {
+  test.describe(`${theme} theme › User Management in Admin`, () => {
+    const USER_NAME = `E2E Search User ${Date.now()}`;
 
-  test.beforeEach(async () => {
-    await seedUser(USER_NAME);
-  });
+    test.beforeEach(async () => {
+      await seedUser(USER_NAME);
+    });
 
-  test.afterEach(async () => {
-    await deleteUsersByPrefix(['E2E Search User']);
-  });
+    test.afterEach(async () => {
+      await deleteUsersByPrefix(['E2E Search User']);
+    });
 
-  test('Search users', async ({ steamfitterAuthenticatedPage: page }) => {
-    await navigateToAdminSection(page, 'Users');
+    test('Search users', async ({ steamfitterAuthenticatedPage: page }) => {
+      await setSteamfitterTheme(page, theme);
+      await navigateToAdminSection(page, 'Users');
 
-    const searchField = page.getByRole('textbox', { name: 'Search' });
-    await expect(searchField).toBeVisible({ timeout: 5000 });
+      const searchField = page.getByRole('textbox', { name: 'Search' });
+      await expect(searchField).toBeVisible({ timeout: 5000 });
 
-    // 1. Search for the seeded user; only its row should remain.
-    await searchField.fill(USER_NAME);
-    const matchingRow = page.locator('tbody tr').filter({ hasText: USER_NAME }).first();
-    await expect(matchingRow).toBeVisible({ timeout: 5000 });
+      // 1. Search for the seeded user; only its row should remain.
+      await searchField.fill(USER_NAME);
+      const matchingRow = page.locator('tbody tr').filter({ hasText: USER_NAME }).first();
+      await expect(matchingRow).toBeVisible({ timeout: 5000 });
 
-    // 2. Clear the search; the list repopulates with more than the single match.
-    await searchField.fill('');
-    await expect(page.locator('tbody tr').filter({ hasText: 'admin' }).first()).toBeVisible({
-      timeout: 5000,
+      // 2. Clear the search; the list repopulates with more than the single match.
+      await searchField.fill('');
+      await expect(page.locator('tbody tr').filter({ hasText: 'admin' }).first()).toBeVisible({
+        timeout: 5000,
+      });
     });
   });
-});
+}
