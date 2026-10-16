@@ -80,7 +80,8 @@ export async function seedScoringModel(
       },
       data: {
         description,
-        // CITE serializes ItemStatus as a STRING enum ('Pending'|'Active'|'Complete'|'Archived').
+        // CITE serializes ItemStatus as a STRING enum
+        // ('Pending'|'Active'|'Cancelled'|'Complete'|'Archived').
         // The admin UI filters the list with `evaluation.status === ItemStatus.Pending` (a string),
         // so a numeric 0 here is silently filtered out and the list shows "0 of 0".
         status: 'Pending',

@@ -634,7 +634,7 @@ what the spec drives:
     - expect: Evaluations list displays
     - expect: Status filter dropdown is visible
   2. Click on status filter dropdown
-    - expect: Status options are displayed (Active, Developing, Archived, Complete)
+    - expect: Status options are displayed (Pending, Active, Cancelled, Complete, Archived)
   3. Select one or more statuses
     - expect: Evaluations list filters to show only evaluations with selected statuses
   4. Clear status filter
@@ -730,7 +730,11 @@ what the spec drives:
 
 #### 7.15. Admin - Manage Evaluation Teams
 
-**File:** `tests/cite/admin/admin-evaluation-teams.spec.ts`
+**Files:**
+  - `tests/cite/admin/admin-evaluation-teams.spec.ts` — steps 1-2 (read back an
+    API-seeded team)
+  - `tests/cite/admin/admin-add-evaluation-team.spec.ts` — steps 3-5 (create a team
+    through the dialog)
 
 **Steps:**
   1. Navigate to admin evaluations section and expand an evaluation
@@ -741,11 +745,17 @@ what the spec drives:
     - expect: Add team button is available
   3. Click add team button
     - expect: Create team dialog opens
-  4. Enter team name and select team type
+  4. Enter team name and select team type, leaving Hide Scoresheet untouched
     - expect: Form accepts input
   5. Save new team
-    - expect: Team is created successfully
+    - expect: POST /api/teams returns 201
+    - expect: Dialog closes and no error sheet is raised
     - expect: Team appears in list
+
+Steps 3-5 need their own spec because the read-back case seeds its team over the API
+and so never exercises the dialog. Leaving Hide Scoresheet untouched is the point of
+step 4: the checkbox the user never clicks is the one whose value used to be sent as
+`null`.
 
 #### 7.16. Admin - Manage Evaluation Actions
 
@@ -1378,15 +1388,20 @@ what the spec drives:
 **File:** `tests/cite/error-handling/submission-without-permission.spec.ts`
 
 **Steps:**
-  1. Log in as user without CanSubmit permission
-    - expect: User is authenticated
-  2. Navigate to scoresheet
-    - expect: Scoresheet is displayed in read-only mode
-    - expect: User cannot modify scores
-  3. Attempt to modify a score via direct API call or console manipulation
-    - expect: API rejects the modification with 403 Forbidden
+  1. Seed an evaluation via the API and create a role-less Keycloak user
+    - expect: The new user authenticates and its token is accepted
+  2. List evaluations as that user
+    - expect: The seeded evaluation is absent, so there is nothing to submit
+  3. Read the seeded evaluation directly
+    - expect: API rejects the read with 403 Forbidden
     - expect: Error message indicates insufficient permissions
+  4. Attempt to create scoring content
+    - expect: API rejects the write with 403 Forbidden
     - expect: No unauthorized changes are saved
+
+The read-only scoresheet rendering is covered separately by 4.8 (Scoresheet - Modify
+Score without CanSubmit Permission); this case deliberately probes the API layer, because
+`admin` holds every system permission and can never produce a 403.
 
 ### 16. Integration with Gallery
 
