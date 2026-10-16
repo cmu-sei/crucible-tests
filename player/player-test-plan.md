@@ -4,6 +4,37 @@
 
 The Player application is the main learning platform in the Crucible ecosystem. It provides views (training scenarios/exercises), team management, user roles and permissions, application templates for integrating with other Crucible services, and webhook subscriptions. The application uses Keycloak for authentication and supports multiple teams per view with different permission levels.
 
+## Theme Coverage
+
+Every Player spec runs **once per theme (light and dark)**, with no exceptions: each spec
+file loops over `PLAYER_THEMES` from `player/fixtures.ts` and reports under a
+`light theme ›` / `dark theme ›` describe prefix. That includes the generator template
+(`player/tests/seed.spec.ts`), which signs in through the `playerAuthenticatedPage` fixture
+and applies the theme, so specs generated from it start out themed.
+
+Authenticated specs apply the theme through the top bar user menu's "Dark Theme" switch
+(`setPlayerTheme`) right after authentication. Player persists the choice in localStorage
+(`akita-player-ui`), so it survives the reloads and navigations a test performs, and every
+test's fresh browser context starts light.
+
+Specs where the pattern had to be adapted:
+  - **Unauthenticated specs** — 1.1 User Login, 1.3 Invalid Login Credentials, 1.4 Failed
+    Authentication - Empty Credentials, 1.6 Unauthorized Access Protection and 13.12 Deep
+    Link Access start with no session, so there is no user menu yet. They request the theme
+    on the first navigation instead (`playerUrl(path, theme)`, which adds Player's
+    `?theme=dark-theme` / `?theme=light-theme` boot param). 1.1 and 13.12 log in and land
+    back in Player, then assert the param survived the Keycloak round trip and the theme is
+    applied; 13.12's unknown view id sends the session home with a "View Not Found" sheet, which
+    it dismisses first. 1.3, 1.4 and 1.6 never get past Keycloak's own screens, which Player's
+    theme does not reach: they carry the param anyway and run their unchanged Keycloak
+    assertions under both theme titles.
+  - **2.5 Dark Theme Toggle** tests the toggle itself, so the theme is its *starting* state:
+    it sets the theme, checks the switch reflects it, toggles and asserts the page flips to the
+    other theme, then toggles back and asserts it returns.
+  - **15.8 Color Contrast** applies the run's theme up front and measures WCAG 1.4.3 contrast
+    on the home page's always-present text in that theme (instead of flipping between themes
+    within one test).
+
 ## Test Scenarios
 
 ### 1. Authentication
@@ -152,16 +183,19 @@ The Player application is the main learning platform in the Crucible ecosystem. 
 
 **File:** `player/tests/home/dark-theme-toggle.spec.ts`
 
+Runs once per theme, with that theme as the starting state.
+
 **Steps:**
-  1. Log in as admin user
+  1. Log in as admin user, in the run's starting theme
     - expect: User is on the home page
   2. Click the Menu button
     - expect: A dropdown menu appears showing a 'Dark Theme' toggle switch
+    - expect: The switch is on in dark and off in light
   3. Toggle the Dark Theme switch
-    - expect: The application theme changes to dark mode
-    - expect: Colors and backgrounds update to dark theme
+    - expect: The application theme changes to the other theme
+    - expect: Colors and backgrounds update to that theme
   4. Toggle the Dark Theme switch again
-    - expect: The application theme changes back to light mode
+    - expect: The application theme changes back to the starting theme
 
 #### 2.6. Create New View - Authorized User
 
@@ -912,7 +946,7 @@ The Player application is the main learning platform in the Crucible ecosystem. 
     - expect: The Team Roles tab becomes active
     - expect: A permissions matrix is displayed showing team-specific roles
     - expect: Columns show 'View Admin', 'Observer', and 'View Member' roles
-    - expect: Rows show team permissions like 'All', 'EditTeam', 'EditView', 'ManageTeam', 'ManageView', 'ViewTeam', 'ViewView', 'DownloadVmFiles', 'ManageNetworks', 'RevertVms', 'UploadTeamIsos', 'UploadViewIsos', 'UploadVmFiles', 'ViewNetworks'
+    - expect: Rows show team permissions like 'All', 'ManageTeam', 'ManageView', 'ViewTeam', 'ViewView', 'ControlTeamVms', 'ViewTeamVms', 'ViewTeamMaps', 'DownloadVmFiles', 'ManageNetworks', 'RevertVms', 'UploadTeamIsos', 'UploadViewIsos', 'UploadVmFiles', 'ViewNetworks'
 
 #### 10.8. Modify Team Role Permissions
 
@@ -1199,7 +1233,8 @@ The Player application is the main learning platform in the Crucible ecosystem. 
     - expect: User is not authenticated
   3. Paste and navigate to deep link URL
     - expect: User is redirected to login
-    - expect: After login, user is redirected back to intended deep link
+    - expect: After login, the user returns to Player; the unknown view id sends them home
+      (with a "View Not Found" sheet) and "My Views" is visible in the requested theme
 
 #### 13.13. XSS Protection - Script Injection in Forms
 
@@ -1414,8 +1449,11 @@ The Player application is the main learning platform in the Crucible ecosystem. 
 
 **File:** `player/tests/accessibility/color-contrast.spec.ts`
 
+Runs once per theme, measuring that theme.
+
 **Steps:**
-  1. Log in and view the application in both light and dark themes
+  1. Log in and view the application in the run's theme
+    - expect: The "My Views" title, a table column header, the top bar title and the user menu meet WCAG 1.4.3 contrast against their painted backgrounds
     - expect: Text and background colors meet WCAG contrast requirements
     - expect: All text is readable
     - expect: Interactive elements are visually distinguishable
@@ -1431,3 +1469,34 @@ The Player application is the main learning platform in the Crucible ecosystem. 
     - expect: Background content is not accessible via Tab
   2. Close modal
     - expect: Focus returns to element that triggered modal
+
+#### 15.10. Theme Contrast and Color Settings Compliance
+
+**File:** `player/tests/accessibility/theme-contrast-compliance.spec.ts`
+
+Checks real WCAG contrast on the home page and its "Create New View?" dialog, and the
+color settings contract from the Crucible colors design spec (`design-specs/angular/colors.md`
+in the crucible-development repository). Expected colours are read from the served
+`settings.json` / `settings.shared.json` / `settings.env.json` (deep-merged in that order),
+not hardcoded, so an environment that overrides them still passes as long as the app
+applies what it was given.
+
+Runs **once per theme (light and dark)**. Read-only: it seeds nothing beyond the fixture's
+own views, and the dialog is dismissed via Cancel without submitting. The theme is restored
+to light afterwards.
+
+**Steps:**
+  1. Open the home page and measure text contrast (WCAG 1.4.3)
+    - expect: The "My Views" title, a text column header, and the top bar title and user menu each meet 4.5:1 (3:1 for large text) against the surface they are painted on
+    - expect: The page content inverts the right way — dark-on-light in light theme, light-on-dark in dark theme
+  2. Measure the "Add New View" icon button (WCAG 1.4.11)
+    - expect: Its colour is `--mat-sys-primary`
+    - expect: It meets 3:1 against its surface
+  3. Compare the applied colours with the effective settings
+    - expect: `AppTopBarHexColor`, `AppTopBarHexTextColor`, `AppLightModePrimaryHexColor`, and `AppLightModePrimaryHexTextColor` are defined
+    - expect: `--crucible-topbar-background` / `--crucible-topbar-text` equal the top-bar settings in both themes, and the toolbar is painted with them
+    - expect: The "Player home" logo is drawn in the top-bar colour on a disc of the top-bar text colour, in both themes
+    - expect: `--mat-sys-primary` / `--mat-sys-on-primary` equal the active mode's settings verbatim; dark falls back to the light key when its own is absent
+  4. Click "Add New View", fill the name so Save enables, and measure the buttons without submitting
+    - expect: The filled Save button is painted `--mat-sys-primary` and its `on-primary` label meets 4.5:1
+    - expect: The Cancel label is `--mat-sys-primary` and meets 4.5:1 on the dialog surface

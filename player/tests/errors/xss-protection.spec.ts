@@ -4,37 +4,40 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
 
-test.describe('Error Handling and Edge Cases', () => {
-  test('XSS Protection - Script Injection in Forms', async ({ playerAuthenticatedPage: page }) => {
-    // 1. Navigate to a form (e.g., create view)
-    await expect(page.getByText('My Views')).toBeVisible();
-    const createButton = page.locator('button:has(mat-icon[fonticon="mdi-plus-circle"])');
-    await createButton.click();
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Error Handling and Edge Cases`, () => {
+    test('XSS Protection - Script Injection in Forms', async ({ playerAuthenticatedPage: page }) => {
+      await setPlayerTheme(page, theme);
+      // 1. Navigate to a form (e.g., create view)
+      await expect(page.getByText('My Views')).toBeVisible();
+      const createButton = page.locator('button:has(mat-icon[fonticon="mdi-plus-circle"])');
+      await createButton.click();
 
-    // expect: Form is displayed
-    const dialog = page.getByRole('dialog', { name: 'Create New View?' });
-    await expect(dialog).toBeVisible();
+      // expect: Form is displayed
+      const dialog = page.getByRole('dialog', { name: 'Create New View?' });
+      await expect(dialog).toBeVisible();
 
-    // 2. Enter script tags in text fields
-    const nameField = dialog.getByRole('textbox', { name: 'Name' });
-    await nameField.fill('<script>alert("XSS")</script>');
+      // 2. Enter script tags in text fields
+      const nameField = dialog.getByRole('textbox', { name: 'Name' });
+      await nameField.fill('<script>alert("XSS")</script>');
 
-    // expect: Input is accepted
-    await expect(nameField).toHaveValue('<script>alert("XSS")</script>');
+      // expect: Input is accepted
+      await expect(nameField).toHaveValue('<script>alert("XSS")</script>');
 
-    // 3. Verify no script execution occurs
-    // expect: Script is sanitized and not executed
-    // expect: No XSS vulnerability is present
-    // If the script were executed, it would show an alert dialog
-    // The fact that we reach this point means no XSS was triggered
+      // 3. Verify no script execution occurs
+      // expect: Script is sanitized and not executed
+      // expect: No XSS vulnerability is present
+      // If the script were executed, it would show an alert dialog
+      // The fact that we reach this point means no XSS was triggered
 
-    // Cancel the dialog
-    await dialog.getByRole('button', { name: 'Cancel' }).click();
-    await expect(dialog).not.toBeVisible();
+      // Cancel the dialog
+      await dialog.getByRole('button', { name: 'Cancel' }).click();
+      await expect(dialog).not.toBeVisible();
 
-    // Verify page is still functional
-    await expect(page.getByText('My Views')).toBeVisible();
+      // Verify page is still functional
+      await expect(page.getByText('My Views')).toBeVisible();
+    });
   });
-});
+}

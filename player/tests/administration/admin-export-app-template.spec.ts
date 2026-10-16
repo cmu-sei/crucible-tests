@@ -4,44 +4,47 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
 
-test.describe('Administration - Application Templates', () => {
-  test('Export Application Template', async ({ playerAuthenticatedPage: page }) => {
-    // 1. Navigate to admin application templates section
-    await page.getByRole('button', { name: 'Menu' }).click();
-    await page.getByRole('menuitem', { name: 'Administration' }).click();
-    await page.getByRole('button', { name: 'Application Templates' }).click();
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Administration - Application Templates`, () => {
+    test('Export Application Template', async ({ playerAuthenticatedPage: page }) => {
+      await setPlayerTheme(page, theme);
+      // 1. Navigate to admin application templates section
+      await page.getByRole('button', { name: 'Menu' }).click();
+      await page.getByRole('menuitem', { name: 'Administration' }).click();
+      await page.getByRole('button', { name: 'Application Templates' }).click();
 
-    // expect: Templates list displays
-    await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
+      // expect: Templates list displays
+      await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
 
-    // Select a template
-    const firstCheckbox = page
-      .locator('app-admin-app-template-search mat-row')
-      .first()
-      .locator('mat-cell')
-      .first()
-      .locator('mat-checkbox');
-    await firstCheckbox.getByRole('checkbox').focus();
-    await page.keyboard.press('Space');
+      // Select a template
+      const firstCheckbox = page
+        .locator('app-admin-app-template-search mat-row')
+        .first()
+        .locator('mat-cell')
+        .first()
+        .locator('mat-checkbox');
+      await firstCheckbox.getByRole('checkbox').focus();
+      await page.keyboard.press('Space');
 
-    // 2. Click export button for a template
-    const exportButton = page.locator('button:has(mat-icon[fonticon="mdi-file-export"])');
-    await expect(exportButton).toBeVisible();
-    await exportButton.click();
+      // 2. Click export button for a template
+      const exportButton = page.locator('button:has(mat-icon[fonticon="mdi-file-export"])');
+      await expect(exportButton).toBeVisible();
+      await exportButton.click();
 
-    // expect: Export dialog opens
-    const exportDialog = page.getByRole('dialog');
-    await expect(exportDialog).toBeVisible();
-    await expect(exportDialog.getByRole('heading', { name: 'Export Application Templates' })).toBeVisible();
+      // expect: Export dialog opens
+      const exportDialog = page.getByRole('dialog');
+      await expect(exportDialog).toBeVisible();
+      await expect(exportDialog.getByRole('heading', { name: 'Export Application Templates' })).toBeVisible();
 
-    // 3. Click Export button in the dialog to start the download
-    const downloadPromise = page.waitForEvent('download');
-    await exportDialog.getByRole('button', { name: /Export/ }).click();
+      // 3. Click Export button in the dialog to start the download
+      const downloadPromise = page.waitForEvent('download');
+      await exportDialog.getByRole('button', { name: /Export/ }).click();
 
-    // expect: Template file is downloaded
-    const download = await downloadPromise;
-    expect(download.suggestedFilename()).toBeTruthy();
+      // expect: Template file is downloaded
+      const download = await downloadPromise;
+      expect(download.suggestedFilename()).toBeTruthy();
+    });
   });
-});
+}
