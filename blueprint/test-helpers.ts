@@ -167,6 +167,8 @@ export interface CreateMselOptions {
   description?: string;
   isTemplate?: boolean;
   status?: string;
+  // ISO 8601; defaults to now
+  startTime?: string;
 }
 
 /**
@@ -194,8 +196,7 @@ export async function createMsel(
     useGallery: false,
     useCite: false,
     useSteamfitter: false,
-    // StartTime defaults to now if not specified:
-    startTime: new Date().toISOString(),
+    startTime: opts.startTime ?? new Date().toISOString(),
     durationSeconds: 3600,
   };
 
