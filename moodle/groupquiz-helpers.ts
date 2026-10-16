@@ -213,16 +213,28 @@ export async function addGroupQuiz(
 }
 
 /**
- * Fill a Moodle "rich text" field. This install renders the raw textarea for
- * question text, but a site with TinyMCE enabled hides it behind an iframe.
+ * Fill a Moodle "rich text" field. With TinyMCE the textarea is replaced by an
+ * iframe after page load, and TinyMCE resets the iframe body when it finishes
+ * initialising, so wait for that before typing or the text is lost on submit.
  */
 async function fillEditorField(page: Page, fieldId: string, text: string): Promise<void> {
-  const textarea = page.locator(`#${fieldId}`);
-  if (await textarea.isVisible().catch(() => false)) {
-    await textarea.fill(text);
+  const iframe = page.locator(`#${fieldId}_ifr`);
+  const hasTiny = await iframe
+    .waitFor({ state: 'attached', timeout: ACTION_TIMEOUT })
+    .then(() => true)
+    .catch(() => false);
+  if (!hasTiny) {
+    await page.locator(`#${fieldId}`).fill(text);
     return;
   }
-  await page.frameLocator(`#${fieldId}_ifr`).locator('body').fill(text);
+  await page.waitForFunction(
+    (id) => (window as any).tinymce?.get(id)?.initialized === true,
+    fieldId,
+    { timeout: ACTION_TIMEOUT }
+  );
+  const body = page.frameLocator(`#${fieldId}_ifr`).locator('body');
+  await body.fill(text);
+  await expect(body).toHaveText(text);
 }
 
 /**
