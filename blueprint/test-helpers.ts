@@ -90,7 +90,7 @@ interface ApiOpts {
   query?: Record<string, string | number | boolean | undefined>;
 }
 
-async function blueprintCall<T = any>(
+export async function blueprintCall<T = any>(
   token: string,
   path: string,
   opts: ApiOpts = {}

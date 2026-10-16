@@ -23,6 +23,8 @@ interface ProvisionTarget {
   app: string;
   homeUrl: string;
   appShellSelector: string;
+  /** Other apps whose tests call this app's API with its token, so need it provisioned too. */
+  neededBy?: string[];
 }
 
 /**
@@ -38,6 +40,8 @@ const PROVISION: ProvisionTarget[] = [
     app: 'caster',
     homeUrl: Services.Caster.UI,
     appShellSelector: 'app-root',
+    // Blueprint's Caster integration tests seed Caster templates with this token.
+    neededBy: ['blueprint'],
   },
   {
     app: 'player',
@@ -90,7 +94,10 @@ async function globalSetup(_config: FullConfig): Promise<void> {
   const authDir = path.resolve(__dirname, '.auth');
   fs.mkdirSync(authDir, { recursive: true });
 
-  for (const target of PROVISION.filter(target => pathFiltersIncludeApp(target.app))) {
+  const selected = PROVISION.filter(
+    target => [target.app, ...(target.neededBy ?? [])].some(app => pathFiltersIncludeApp(app))
+  );
+  for (const target of selected) {
     const statePath = authStatePath(target.app);
     const browser = await chromium.launch();
     try {
