@@ -5,7 +5,7 @@
 // seed: seed.spec.ts
 
 import { request as pwRequest } from '@playwright/test';
-import { test, expect, gotoExhibitSection, Services } from '../../fixtures';
+import { test, expect, gotoExhibitSection, Services, GALLERY_THEMES, setGalleryTheme } from '../../fixtures';
 import { getUserToken } from '../../../keycloak-admin';
 
 /**
@@ -63,61 +63,64 @@ async function restoreAllUnread(exhibitId: string, teamId: string): Promise<void
   }
 }
 
-test.describe('Archive Functionality', () => {
-  test.afterEach(async ({ seededExhibit }) => {
-    await restoreAllUnread(seededExhibit.exhibitId, seededExhibit.teamId);
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Archive Functionality`, () => {
+    test.afterEach(async ({ seededExhibit }) => {
+      await restoreAllUnread(seededExhibit.exhibitId, seededExhibit.teamId);
+    });
+
+    test('Archive Article Read Toggle', async ({ galleryAuthenticatedPage: page, seededExhibit }) => {
+      await setGalleryTheme(page, theme);
+      await gotoExhibitSection(page, seededExhibit.exhibitId, 'archive');
+
+      // Both released articles start unread, which the tab title's "(N)" suffix reflects.
+      await expect(page).toHaveTitle(/^Gallery Archive \(\d+\)$/);
+      const articleCards = page.locator('section.cards mat-card');
+      const intelArticle = articleCards.filter({ hasText: 'Intel Article 1' });
+      const newsArticle = articleCards.filter({ hasText: 'News Article 1' });
+      await expect(intelArticle).toHaveCount(1);
+      await expect(newsArticle).toHaveCount(1);
+      const baselineUnread = unreadFromTitle(await page.title());
+      expect(baselineUnread).toBeGreaterThanOrEqual(2);
+
+      // 1. Observe an article's 'Read' button state.
+      // expect: The Read button shows an unchecked icon indicating the article is unread.
+      const readButton = intelArticle.getByRole('button', { name: 'Read' });
+      await expect(readButton).toBeVisible();
+      await expect(readButton.locator('mat-icon')).toHaveClass(/mdi-checkbox-blank-outline/);
+      await expect(intelArticle.locator('mat-card-header')).toHaveClass(/article-unread/);
+
+      // 2. Click the 'Read' button on an unread article.
+      const isReadResponse = (r: { url(): string }) =>
+        /\/api\/userarticles\/[^/]+\/isread$/i.test(r.url());
+      const [markReadResponse] = await Promise.all([
+        page.waitForResponse(isReadResponse),
+        readButton.click(),
+      ]);
+      expect(markReadResponse.status()).toBe(200);
+
+      // expect: The Read button icon changes to checked/filled indicating the article is
+      // now read. The card header class and the tab-title unread count corroborate it.
+      await expect(readButton.locator('mat-icon')).toHaveClass(/mdi-checkbox-marked-outline/);
+      await expect(intelArticle.locator('mat-card-header')).toHaveClass(/article-read/);
+      await expect
+        .poll(async () => unreadFromTitle(await page.title()))
+        .toBe(baselineUnread - 1);
+
+      // Only the clicked article changed state.
+      await expect(newsArticle.locator('mat-card-header')).toHaveClass(/article-unread/);
+
+      // 3. Click the 'Read' button again to toggle back to unread.
+      const [markUnreadResponse] = await Promise.all([
+        page.waitForResponse(isReadResponse),
+        readButton.click(),
+      ]);
+      expect(markUnreadResponse.status()).toBe(200);
+
+      // expect: The Read button icon changes back to unchecked.
+      await expect(readButton.locator('mat-icon')).toHaveClass(/mdi-checkbox-blank-outline/);
+      await expect(intelArticle.locator('mat-card-header')).toHaveClass(/article-unread/);
+      await expect.poll(async () => unreadFromTitle(await page.title())).toBe(baselineUnread);
+    });
   });
-
-  test('Archive Article Read Toggle', async ({ galleryAuthenticatedPage: page, seededExhibit }) => {
-    await gotoExhibitSection(page, seededExhibit.exhibitId, 'archive');
-
-    // Both released articles start unread, which the tab title's "(N)" suffix reflects.
-    await expect(page).toHaveTitle(/^Gallery Archive \(\d+\)$/);
-    const articleCards = page.locator('section.cards mat-card');
-    const intelArticle = articleCards.filter({ hasText: 'Intel Article 1' });
-    const newsArticle = articleCards.filter({ hasText: 'News Article 1' });
-    await expect(intelArticle).toHaveCount(1);
-    await expect(newsArticle).toHaveCount(1);
-    const baselineUnread = unreadFromTitle(await page.title());
-    expect(baselineUnread).toBeGreaterThanOrEqual(2);
-
-    // 1. Observe an article's 'Read' button state.
-    // expect: The Read button shows an unchecked icon indicating the article is unread.
-    const readButton = intelArticle.getByRole('button', { name: 'Read' });
-    await expect(readButton).toBeVisible();
-    await expect(readButton.locator('mat-icon')).toHaveClass(/mdi-checkbox-blank-outline/);
-    await expect(intelArticle.locator('mat-card-header')).toHaveClass(/article-unread/);
-
-    // 2. Click the 'Read' button on an unread article.
-    const isReadResponse = (r: { url(): string }) =>
-      /\/api\/userarticles\/[^/]+\/isread$/i.test(r.url());
-    const [markReadResponse] = await Promise.all([
-      page.waitForResponse(isReadResponse),
-      readButton.click(),
-    ]);
-    expect(markReadResponse.status()).toBe(200);
-
-    // expect: The Read button icon changes to checked/filled indicating the article is
-    // now read. The card header class and the tab-title unread count corroborate it.
-    await expect(readButton.locator('mat-icon')).toHaveClass(/mdi-checkbox-marked-outline/);
-    await expect(intelArticle.locator('mat-card-header')).toHaveClass(/article-read/);
-    await expect
-      .poll(async () => unreadFromTitle(await page.title()))
-      .toBe(baselineUnread - 1);
-
-    // Only the clicked article changed state.
-    await expect(newsArticle.locator('mat-card-header')).toHaveClass(/article-unread/);
-
-    // 3. Click the 'Read' button again to toggle back to unread.
-    const [markUnreadResponse] = await Promise.all([
-      page.waitForResponse(isReadResponse),
-      readButton.click(),
-    ]);
-    expect(markUnreadResponse.status()).toBe(200);
-
-    // expect: The Read button icon changes back to unchecked.
-    await expect(readButton.locator('mat-icon')).toHaveClass(/mdi-checkbox-blank-outline/);
-    await expect(intelArticle.locator('mat-card-header')).toHaveClass(/article-unread/);
-    await expect.poll(async () => unreadFromTitle(await page.title())).toBe(baselineUnread);
-  });
-});
+}

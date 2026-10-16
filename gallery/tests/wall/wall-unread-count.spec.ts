@@ -5,7 +5,7 @@
 // seed: seed.spec.ts
 
 import { APIRequestContext, request as pwRequest } from '@playwright/test';
-import { test, expect, gotoExhibitSection, Services } from '../../fixtures';
+import { test, expect, gotoExhibitSection, Services, GALLERY_THEMES, setGalleryTheme } from '../../fixtures';
 import { getUserToken } from '../../../keycloak-admin';
 
 /**
@@ -167,96 +167,99 @@ async function seedUnreadExhibit(api: APIRequestContext): Promise<UnreadFixture>
   };
 }
 
-test.describe('Wall View Functionality', () => {
-  let api: APIRequestContext;
-  let fixture: UnreadFixture;
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Wall View Functionality`, () => {
+    let api: APIRequestContext;
+    let fixture: UnreadFixture;
 
-  test.beforeEach(async () => {
-    const token = await getUserToken('admin', 'admin', 'gallery.ui', 'openid profile gallery');
-    api = await pwRequest.newContext({
-      ignoreHTTPSErrors: true,
-      extraHTTPHeaders: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    test.beforeEach(async () => {
+      const token = await getUserToken('admin', 'admin', 'gallery.ui', 'openid profile gallery');
+      api = await pwRequest.newContext({
+        ignoreHTTPSErrors: true,
+        extraHTTPHeaders: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      });
+      fixture = await seedUnreadExhibit(api);
     });
-    fixture = await seedUnreadExhibit(api);
-  });
 
-  test.afterEach(async () => {
-    try {
-      for (const id of fixture.articleIds) {
-        await api.delete(`${Services.Gallery.API}/api/articles/${id}`);
+    test.afterEach(async () => {
+      try {
+        for (const id of fixture.articleIds) {
+          await api.delete(`${Services.Gallery.API}/api/articles/${id}`);
+        }
+        for (const id of fixture.cardIds) {
+          await api.delete(`${Services.Gallery.API}/api/cards/${id}`);
+        }
+        await api.delete(`${Services.Gallery.API}/api/teams/${fixture.teamId}`);
+        await api.delete(`${Services.Gallery.API}/api/exhibits/${fixture.exhibitId}`);
+        await api.delete(`${Services.Gallery.API}/api/collections/${fixture.collectionId}`);
+      } finally {
+        await api.dispose();
       }
-      for (const id of fixture.cardIds) {
-        await api.delete(`${Services.Gallery.API}/api/cards/${id}`);
-      }
-      await api.delete(`${Services.Gallery.API}/api/teams/${fixture.teamId}`);
-      await api.delete(`${Services.Gallery.API}/api/exhibits/${fixture.exhibitId}`);
-      await api.delete(`${Services.Gallery.API}/api/collections/${fixture.collectionId}`);
-    } finally {
-      await api.dispose();
-    }
+    });
+
+    test('Wall Unread Article Count', async ({ galleryAuthenticatedPage: page }) => {
+      await setGalleryTheme(page, theme);
+      const { releasedCardName, intelArticleName, newsArticleName } = fixture;
+
+      // 1. Navigate to the Wall view and observe unread article counts on cards.
+      await gotoExhibitSection(page, fixture.exhibitId, 'wall');
+      await expect(page).toHaveTitle('Gallery Wall');
+
+      const cards = page.locator('section.cards mat-card');
+      const releasedCard = cards.filter({ hasText: releasedCardName });
+
+      // expect: Each card shows the unread article count. Card 1's two articles are
+      // released at (0, 0); card 2 sits at move 1 and so reports nothing posted yet.
+      await expect(releasedCard.getByRole('heading', { level: 3 })).toHaveText('2 unread articles');
+      await expect(cards.filter({ hasText: 'Card 2' }).getByRole('heading', { level: 3 })).toHaveText(
+        'No articles posted'
+      );
+
+      // 2. Navigate to the Archive view and mark an article as 'Read'.
+      await page.getByRole('button', { name: 'Archive' }).click();
+
+      // Both of this exhibit's released articles are unread, and this exhibit's own
+      // articles are the only ones in the store, so the count is exactly 2.
+      await expect(page).toHaveTitle('Gallery Archive (2)');
+      expect(unreadFromTitle(await page.title())).toBe(2);
+
+      const archiveCards = page.locator('section.cards mat-card');
+      const intelArticle = archiveCards.filter({ hasText: intelArticleName });
+      await expect(intelArticle).toHaveCount(1);
+      await expect(archiveCards.filter({ hasText: newsArticleName })).toHaveCount(1);
+
+      // The card header carries `article-unread` until the article is read.
+      await expect(intelArticle.locator('mat-card-header')).toHaveClass(/article-unread/);
+
+      const readButton = intelArticle.getByRole('button', { name: 'Read' });
+      await expect(readButton).toBeEnabled();
+      // The generated client calls the lower-cased `/api/userarticles/{id}/isread` route,
+      // so match case-insensitively rather than on the Swagger casing.
+      const [readResponse] = await Promise.all([
+        page.waitForResponse((r) => /\/api\/userarticles\/[^/]+\/isread$/i.test(r.url())),
+        readButton.click(),
+      ]);
+      expect(readResponse.status()).toBe(200);
+
+      // expect: The Read button toggles to indicate the article has been read.
+      await expect(intelArticle.locator('mat-card-header')).toHaveClass(/article-read/);
+      await expect(readButton.locator('mat-icon')).toHaveClass(/mdi-checkbox-marked-outline/);
+      // The unread count in the tab title drops by exactly one.
+      await expect.poll(async () => unreadFromTitle(await page.title())).toBe(1);
+
+      // 3. Navigate back to the Wall view.
+      await page.getByRole('button', { name: 'Wall' }).click();
+      await expect(page).toHaveTitle('Gallery Wall');
+
+      // expect: The unread article count on the corresponding card decreases.
+      // Singular "article" here, so the assertion cannot be satisfied by the old
+      // "2 unread articles" text.
+      await expect(
+        page
+          .locator('section.cards mat-card')
+          .filter({ hasText: releasedCardName })
+          .getByRole('heading', { level: 3 })
+      ).toHaveText('1 unread article');
+    });
   });
-
-  test('Wall Unread Article Count', async ({ galleryAuthenticatedPage: page }) => {
-    const { releasedCardName, intelArticleName, newsArticleName } = fixture;
-
-    // 1. Navigate to the Wall view and observe unread article counts on cards.
-    await gotoExhibitSection(page, fixture.exhibitId, 'wall');
-    await expect(page).toHaveTitle('Gallery Wall');
-
-    const cards = page.locator('section.cards mat-card');
-    const releasedCard = cards.filter({ hasText: releasedCardName });
-
-    // expect: Each card shows the unread article count. Card 1's two articles are
-    // released at (0, 0); card 2 sits at move 1 and so reports nothing posted yet.
-    await expect(releasedCard.getByRole('heading', { level: 3 })).toHaveText('2 unread articles');
-    await expect(cards.filter({ hasText: 'Card 2' }).getByRole('heading', { level: 3 })).toHaveText(
-      'No articles posted'
-    );
-
-    // 2. Navigate to the Archive view and mark an article as 'Read'.
-    await page.getByRole('button', { name: 'Archive' }).click();
-
-    // Both of this exhibit's released articles are unread, and this exhibit's own
-    // articles are the only ones in the store, so the count is exactly 2.
-    await expect(page).toHaveTitle('Gallery Archive (2)');
-    expect(unreadFromTitle(await page.title())).toBe(2);
-
-    const archiveCards = page.locator('section.cards mat-card');
-    const intelArticle = archiveCards.filter({ hasText: intelArticleName });
-    await expect(intelArticle).toHaveCount(1);
-    await expect(archiveCards.filter({ hasText: newsArticleName })).toHaveCount(1);
-
-    // The card header carries `article-unread` until the article is read.
-    await expect(intelArticle.locator('mat-card-header')).toHaveClass(/article-unread/);
-
-    const readButton = intelArticle.getByRole('button', { name: 'Read' });
-    await expect(readButton).toBeEnabled();
-    // The generated client calls the lower-cased `/api/userarticles/{id}/isread` route,
-    // so match case-insensitively rather than on the Swagger casing.
-    const [readResponse] = await Promise.all([
-      page.waitForResponse((r) => /\/api\/userarticles\/[^/]+\/isread$/i.test(r.url())),
-      readButton.click(),
-    ]);
-    expect(readResponse.status()).toBe(200);
-
-    // expect: The Read button toggles to indicate the article has been read.
-    await expect(intelArticle.locator('mat-card-header')).toHaveClass(/article-read/);
-    await expect(readButton.locator('mat-icon')).toHaveClass(/mdi-checkbox-marked-outline/);
-    // The unread count in the tab title drops by exactly one.
-    await expect.poll(async () => unreadFromTitle(await page.title())).toBe(1);
-
-    // 3. Navigate back to the Wall view.
-    await page.getByRole('button', { name: 'Wall' }).click();
-    await expect(page).toHaveTitle('Gallery Wall');
-
-    // expect: The unread article count on the corresponding card decreases.
-    // Singular "article" here, so the assertion cannot be satisfied by the old
-    // "2 unread articles" text.
-    await expect(
-      page
-        .locator('section.cards mat-card')
-        .filter({ hasText: releasedCardName })
-        .getByRole('heading', { level: 3 })
-    ).toHaveText('1 unread article');
-  });
-});
+}

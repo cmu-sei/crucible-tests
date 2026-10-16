@@ -11,6 +11,8 @@ import {
   Services,
   apiCreateCollection,
   apiDeleteCollectionById,
+  GALLERY_THEMES,
+  setGalleryTheme,
 } from '../../fixtures';
 
 /**
@@ -100,135 +102,138 @@ async function galleryApi(
   }
 }
 
-test.describe('Article Management', () => {
-  // The UI delete is the subject of this test, so the removal assertion stays in
-  // the body; the afterEach is the safety net for a failure before or during the
-  // confirm step. Only ids this spec created are tracked — deleting a collection
-  // cascades to its cards and articles. Never purge by name prefix: sibling
-  // specs share this stack.
-  let createdCollectionIds: string[] = [];
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Article Management`, () => {
+    // The UI delete is the subject of this test, so the removal assertion stays in
+    // the body; the afterEach is the safety net for a failure before or during the
+    // confirm step. Only ids this spec created are tracked — deleting a collection
+    // cascades to its cards and articles. Never purge by name prefix: sibling
+    // specs share this stack.
+    let createdCollectionIds: string[] = [];
 
-  test.beforeEach(() => {
-    createdCollectionIds = [];
-  });
-
-  test.afterEach(async () => {
-    for (const id of createdCollectionIds) {
-      await apiDeleteCollectionById(id);
-    }
-  });
-
-  test('Delete Article', async ({ galleryAuthenticatedPage: page }) => {
-    const unique = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-    const collectionName = `Article Delete Collection ${unique}`;
-    const cardName = `Article Delete Card ${unique}`;
-    const articleName = `Delete Article ${unique}`;
-    const keptArticleName = `Kept Article ${unique}`;
-
-    // Setup: an own collection with a card and two collection-level articles
-    // (exhibitId null, so they are visible in the admin panel —
-    // ArticleService.GetByCollectionAsync filters `a.ExhibitId == null`). The
-    // second article is the control: it must still be there afterwards, proving
-    // the delete was targeted rather than clearing the list.
-    const collection = await apiCreateCollection(collectionName, 'Collection for article delete tests');
-    createdCollectionIds.push(collection.id);
-
-    const card = await galleryApi('post', '/api/cards', {
-      name: cardName,
-      description: `Card for ${articleName}`,
-      move: 0,
-      inject: 0,
-      collectionId: collection.id,
+    test.beforeEach(() => {
+      createdCollectionIds = [];
     });
-    expect(card.status, 'seed card').toBe(201);
 
-    const seededIds: Record<string, string> = {};
-    for (const name of [articleName, keptArticleName]) {
-      const created = await galleryApi('post', '/api/articles', {
-        name,
-        summary: `Summary for ${name}`,
-        description: `<p>Description for ${name}</p>`,
-        collectionId: collection.id,
-        cardId: card.body.id,
+    test.afterEach(async () => {
+      for (const id of createdCollectionIds) {
+        await apiDeleteCollectionById(id);
+      }
+    });
+
+    test('Delete Article', async ({ galleryAuthenticatedPage: page }) => {
+      await setGalleryTheme(page, theme);
+      const unique = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+      const collectionName = `Article Delete Collection ${unique}`;
+      const cardName = `Article Delete Card ${unique}`;
+      const articleName = `Delete Article ${unique}`;
+      const keptArticleName = `Kept Article ${unique}`;
+
+      // Setup: an own collection with a card and two collection-level articles
+      // (exhibitId null, so they are visible in the admin panel —
+      // ArticleService.GetByCollectionAsync filters `a.ExhibitId == null`). The
+      // second article is the control: it must still be there afterwards, proving
+      // the delete was targeted rather than clearing the list.
+      const collection = await apiCreateCollection(collectionName, 'Collection for article delete tests');
+      createdCollectionIds.push(collection.id);
+
+      const card = await galleryApi('post', '/api/cards', {
+        name: cardName,
+        description: `Card for ${articleName}`,
         move: 0,
         inject: 0,
-        status: 'Unused',
-        sourceType: 'Intel',
-        sourceName: 'Playwright',
-        datePosted: new Date().toISOString(),
-        openInNewTab: false,
+        collectionId: collection.id,
       });
-      expect(created.status, `seed article ${name}`).toBe(201);
-      seededIds[name] = created.body.id;
-    }
+      expect(card.status, 'seed card').toBe(201);
 
-    await openCollectionArticlesPanel(page, collectionName);
+      const seededIds: Record<string, string> = {};
+      for (const name of [articleName, keptArticleName]) {
+        const created = await galleryApi('post', '/api/articles', {
+          name,
+          summary: `Summary for ${name}`,
+          description: `<p>Description for ${name}</p>`,
+          collectionId: collection.id,
+          cardId: card.body.id,
+          move: 0,
+          inject: 0,
+          status: 'Unused',
+          sourceType: 'Intel',
+          sourceName: 'Playwright',
+          datePosted: new Date().toISOString(),
+          openInNewTab: false,
+        });
+        expect(created.status, `seed article ${name}`).toBe(201);
+        seededIds[name] = created.body.id;
+      }
 
-    // 1. Open the delete action for an article
-    await expectArticleRowCount(page, collectionName, articleName, 1);
+      await openCollectionArticlesPanel(page, collectionName);
 
-    // force: true is required. The button itself is enabled (disabled=null,
-    // aria-disabled=null) but the enclosing `<mat-expansion-panel-header disabled>`
-    // carries aria-disabled="true", and Playwright treats descendants of an
-    // aria-disabled ancestor as disabled — a plain click waits out the timeout.
-    const openConfirmDialog = async () => {
-      const panel = await ensureArticlesPanel(page, collectionName, articleName);
-      await panel.getByRole('button', { name: `Delete ${articleName}` }).click({ force: true });
-      const confirm = page.getByRole('dialog').filter({ hasText: 'Delete Article' });
-      await expect(confirm).toBeVisible();
-      return confirm;
-    };
+      // 1. Open the delete action for an article
+      await expectArticleRowCount(page, collectionName, articleName, 1);
 
-    const confirmDialog = await openConfirmDialog();
+      // force: true is required. The button itself is enabled (disabled=null,
+      // aria-disabled=null) but the enclosing `<mat-expansion-panel-header disabled>`
+      // carries aria-disabled="true", and Playwright treats descendants of an
+      // aria-disabled ancestor as disabled — a plain click waits out the timeout.
+      const openConfirmDialog = async () => {
+        const panel = await ensureArticlesPanel(page, collectionName, articleName);
+        await panel.getByRole('button', { name: `Delete ${articleName}` }).click({ force: true });
+        const confirm = page.getByRole('dialog').filter({ hasText: 'Delete Article' });
+        await expect(confirm).toBeVisible();
+        return confirm;
+      };
 
-    // expect: Confirmation dialog appears
-    // deleteArticle() in admin-articles.component.ts raises a
-    // CrucibleDialogService.confirm titled 'Delete Article'.
-    await expect(confirmDialog).toContainText(
-      `Are you sure that you want to delete ${articleName}?`
-    );
+      const confirmDialog = await openConfirmDialog();
 
-    // 2. Click 'Cancel' in the confirmation dialog
-    await confirmDialog.getByRole('button', { name: 'Cancel' }).click();
+      // expect: Confirmation dialog appears
+      // deleteArticle() in admin-articles.component.ts raises a
+      // CrucibleDialogService.confirm titled 'Delete Article'.
+      await expect(confirmDialog).toContainText(
+        `Are you sure that you want to delete ${articleName}?`
+      );
 
-    // expect: Dialog closes
-    await expect(confirmDialog).toHaveCount(0);
+      // 2. Click 'Cancel' in the confirmation dialog
+      await confirmDialog.getByRole('button', { name: 'Cancel' }).click();
 
-    // expect: Article is not deleted. The row check is panel-rebuild tolerant;
-    // the API check is the unambiguous one — Cancel must not have deleted
-    // anything.
-    await expectArticleRowCount(page, collectionName, articleName, 1);
-    const afterCancel = await galleryApi('get', `/api/collections/${collection.id}/articles`);
-    expect(afterCancel.status).toBe(200);
-    expect(
-      (afterCancel.body as Array<{ id: string }>).map((a) => a.id),
-      'Cancel must not delete the article'
-    ).toContain(seededIds[articleName]);
+      // expect: Dialog closes
+      await expect(confirmDialog).toHaveCount(0);
 
-    // 3. Click Delete again and confirm
-    const confirmDialog2 = await openConfirmDialog();
+      // expect: Article is not deleted. The row check is panel-rebuild tolerant;
+      // the API check is the unambiguous one — Cancel must not have deleted
+      // anything.
+      await expectArticleRowCount(page, collectionName, articleName, 1);
+      const afterCancel = await galleryApi('get', `/api/collections/${collection.id}/articles`);
+      expect(afterCancel.status).toBe(200);
+      expect(
+        (afterCancel.body as Array<{ id: string }>).map((a) => a.id),
+        'Cancel must not delete the article'
+      ).toContain(seededIds[articleName]);
 
-    const [deleteResponse] = await Promise.all([
-      page.waitForResponse(
-        (r) => /\/api\/articles\/[0-9a-f-]{36}$/.test(r.url()) && r.request().method() === 'DELETE'
-      ),
-      confirmDialog2.getByRole('button', { name: 'Delete', exact: true }).click(),
-    ]);
+      // 3. Click Delete again and confirm
+      const confirmDialog2 = await openConfirmDialog();
 
-    // expect: Article is deleted successfully
-    expect(deleteResponse.status()).toBe(204);
-    await expect(confirmDialog2).toHaveCount(0);
+      const [deleteResponse] = await Promise.all([
+        page.waitForResponse(
+          (r) => /\/api\/articles\/[0-9a-f-]{36}$/.test(r.url()) && r.request().method() === 'DELETE'
+        ),
+        confirmDialog2.getByRole('button', { name: 'Delete', exact: true }).click(),
+      ]);
 
-    // expect: Article is removed from the list
-    await expectArticleRowCount(page, collectionName, articleName, 0);
+      // expect: Article is deleted successfully
+      expect(deleteResponse.status()).toBe(204);
+      await expect(confirmDialog2).toHaveCount(0);
 
-    // ...and only that article went. The control row survives, and the API agrees.
-    await expectArticleRowCount(page, collectionName, keptArticleName, 1);
+      // expect: Article is removed from the list
+      await expectArticleRowCount(page, collectionName, articleName, 0);
 
-    const remaining = await galleryApi('get', `/api/collections/${collection.id}/articles`);
-    expect(remaining.status).toBe(200);
-    const remainingIds = (remaining.body as Array<{ id: string }>).map((a) => a.id);
-    expect(remainingIds).not.toContain(seededIds[articleName]);
-    expect(remainingIds).toContain(seededIds[keptArticleName]);
+      // ...and only that article went. The control row survives, and the API agrees.
+      await expectArticleRowCount(page, collectionName, keptArticleName, 1);
+
+      const remaining = await galleryApi('get', `/api/collections/${collection.id}/articles`);
+      expect(remaining.status).toBe(200);
+      const remainingIds = (remaining.body as Array<{ id: string }>).map((a) => a.id);
+      expect(remainingIds).not.toContain(seededIds[articleName]);
+      expect(remainingIds).toContain(seededIds[keptArticleName]);
+    });
   });
-});
+}

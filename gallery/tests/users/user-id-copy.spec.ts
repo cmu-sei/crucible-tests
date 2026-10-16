@@ -4,32 +4,35 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoGalleryAdmin, gotoAdminSection } from '../../fixtures';
+import { test, expect, gotoGalleryAdmin, gotoAdminSection, GALLERY_THEMES, setGalleryTheme } from '../../fixtures';
 
-test.describe('User Management', () => {
-  test('User ID Copy Button', async ({ galleryAuthenticatedPage: page }) => {
-    await gotoGalleryAdmin(page);
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › User Management`, () => {
+    test('User ID Copy Button', async ({ galleryAuthenticatedPage: page }) => {
+      await setGalleryTheme(page, theme);
+      await gotoGalleryAdmin(page);
 
-    // Navigate to Users section
-    await gotoAdminSection(page, 'Users');
+      // Navigate to Users section
+      await gotoAdminSection(page, 'Users');
 
-    // 1. Click the Copy button (clipboard icon) next to a user's ID
-    // The button's accessible name includes the UUID (e.g. "Copy: 9b3b331c-...")
-    const uuidPattern = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
-    const copyButton = page.getByRole('button', { name: /Copy:/ }).first();
-    await expect(copyButton).toBeVisible();
+      // 1. Click the Copy button (clipboard icon) next to a user's ID
+      // The button's accessible name includes the UUID (e.g. "Copy: 9b3b331c-...")
+      const uuidPattern = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
+      const copyButton = page.getByRole('button', { name: /Copy:/ }).first();
+      await expect(copyButton).toBeVisible();
 
-    // Extract the UUID from the button's title attribute (e.g. "Copy:  9b3b331c-...")
-    const buttonTitle = await copyButton.getAttribute('title') ?? '';
-    expect(buttonTitle).toMatch(uuidPattern);
-    const uuid = buttonTitle.match(uuidPattern)![0];
+      // Extract the UUID from the button's title attribute (e.g. "Copy:  9b3b331c-...")
+      const buttonTitle = await copyButton.getAttribute('title') ?? '';
+      expect(buttonTitle).toMatch(uuidPattern);
+      const uuid = buttonTitle.match(uuidPattern)![0];
 
-    // Click the copy button to verify it triggers without error
-    await copyButton.click();
+      // Click the copy button to verify it triggers without error
+      await copyButton.click();
 
-    // expect: The user's UUID is copied to the clipboard
-    // Verify the UUID in the button title matches the UUID displayed in the table cell
-    const userRow = page.getByRole('row').filter({ hasText: uuid });
-    await expect(userRow.getByRole('cell').first()).toContainText(uuid);
+      // expect: The user's UUID is copied to the clipboard
+      // Verify the UUID in the button title matches the UUID displayed in the table cell
+      const userRow = page.getByRole('row').filter({ hasText: uuid });
+      await expect(userRow.getByRole('cell').first()).toContainText(uuid);
+    });
   });
-});
+}

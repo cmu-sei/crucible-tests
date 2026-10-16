@@ -4,7 +4,7 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoExhibitSection, apiSetExhibitMoveAndInject } from '../../fixtures';
+import { test, expect, gotoExhibitSection, apiSetExhibitMoveAndInject, GALLERY_THEMES, setGalleryTheme } from '../../fixtures';
 
 /**
  * Archive Functionality §4.3 — Archive Search.
@@ -37,54 +37,57 @@ const ALL_SEEDED_IN_ORDER = [
   'Intel Article 1',
 ];
 
-test.describe('Archive Functionality', () => {
-  test.afterEach(async ({ seededExhibit }) => {
-    await apiSetExhibitMoveAndInject(seededExhibit.exhibitId, 0, 0);
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Archive Functionality`, () => {
+    test.afterEach(async ({ seededExhibit }) => {
+      await apiSetExhibitMoveAndInject(seededExhibit.exhibitId, 0, 0);
+    });
+
+    test('Archive Search', async ({ galleryAuthenticatedPage: page, seededExhibit }) => {
+      await setGalleryTheme(page, theme);
+      await apiSetExhibitMoveAndInject(seededExhibit.exhibitId, 1, 1);
+      await gotoExhibitSection(page, seededExhibit.exhibitId, 'archive');
+      await expect(page).toHaveTitle(/Gallery Archive/);
+
+      const articleCards = page.locator('section.cards mat-card');
+      const titles = articleCards.locator('.article-title').filter({ hasText: SEEDED_ARTICLE });
+      await expect(titles).toHaveText(ALL_SEEDED_IN_ORDER);
+
+      // 1. Enter a keyword in the 'Search the Archive' field that matches an article title.
+      // The input is bound to a reactive `formControl`, so fill() alone triggers the
+      // valueChanges subscription that re-runs the filter (unlike the home page's
+      // (keyup)-bound search box).
+      const searchField = page.getByRole('textbox', { name: 'Search the Archive' });
+      await searchField.fill('Intel');
+
+      // expect: Only articles with matching titles or content are displayed.
+      await expect(titles).toHaveText(['Intel Article 1']);
+
+      // A term that appears only in the body text also filters, proving the match is not
+      // title-only: every article's description ends with its own summary sentence.
+      await searchField.fill('e2e test social article');
+      await expect(titles).toHaveText(['Social Article 1']);
+
+      // 2. Clear the search field. The suffix 'Clear Search' button only renders while
+      // the control has a value, so this also covers that affordance.
+      await page.getByRole('button', { name: 'Clear Search' }).click();
+
+      // expect: All articles are displayed again.
+      await expect(searchField).toHaveValue('');
+      await expect(titles).toHaveText(ALL_SEEDED_IN_ORDER);
+
+      // 3. Enter a keyword that matches no articles.
+      await searchField.fill('ZZZZNONEXISTENT');
+
+      // expect: No articles are displayed.
+      await expect(articleCards).toHaveCount(0);
+
+      // The plan also expects an empty state / 'no results' message here. The Archive
+      // template (archive/archive.component.html) has no such element — it only @for's
+      // over `filteredUserArticleList` — so the observable behaviour is an empty list.
+      // Asserting that deliberately rather than skipping; if the app later adds an empty
+      // state, extend this with an assertion on it.
+      await expect(page.getByText(/no results/i)).toHaveCount(0);
+    });
   });
-
-  test('Archive Search', async ({ galleryAuthenticatedPage: page, seededExhibit }) => {
-    await apiSetExhibitMoveAndInject(seededExhibit.exhibitId, 1, 1);
-    await gotoExhibitSection(page, seededExhibit.exhibitId, 'archive');
-    await expect(page).toHaveTitle(/Gallery Archive/);
-
-    const articleCards = page.locator('section.cards mat-card');
-    const titles = articleCards.locator('.article-title').filter({ hasText: SEEDED_ARTICLE });
-    await expect(titles).toHaveText(ALL_SEEDED_IN_ORDER);
-
-    // 1. Enter a keyword in the 'Search the Archive' field that matches an article title.
-    // The input is bound to a reactive `formControl`, so fill() alone triggers the
-    // valueChanges subscription that re-runs the filter (unlike the home page's
-    // (keyup)-bound search box).
-    const searchField = page.getByRole('textbox', { name: 'Search the Archive' });
-    await searchField.fill('Intel');
-
-    // expect: Only articles with matching titles or content are displayed.
-    await expect(titles).toHaveText(['Intel Article 1']);
-
-    // A term that appears only in the body text also filters, proving the match is not
-    // title-only: every article's description ends with its own summary sentence.
-    await searchField.fill('e2e test social article');
-    await expect(titles).toHaveText(['Social Article 1']);
-
-    // 2. Clear the search field. The suffix 'Clear Search' button only renders while
-    // the control has a value, so this also covers that affordance.
-    await page.getByRole('button', { name: 'Clear Search' }).click();
-
-    // expect: All articles are displayed again.
-    await expect(searchField).toHaveValue('');
-    await expect(titles).toHaveText(ALL_SEEDED_IN_ORDER);
-
-    // 3. Enter a keyword that matches no articles.
-    await searchField.fill('ZZZZNONEXISTENT');
-
-    // expect: No articles are displayed.
-    await expect(articleCards).toHaveCount(0);
-
-    // The plan also expects an empty state / 'no results' message here. The Archive
-    // template (archive/archive.component.html) has no such element — it only @for's
-    // over `filteredUserArticleList` — so the observable behaviour is an empty list.
-    // Asserting that deliberately rather than skipping; if the app later adds an empty
-    // state, extend this with an assertion on it.
-    await expect(page.getByText(/no results/i)).toHaveCount(0);
-  });
-});
+}
