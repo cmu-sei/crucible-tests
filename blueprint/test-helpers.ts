@@ -545,6 +545,36 @@ export async function copyMselDataFieldsFrom(
   return listMselDataFields(token, mselId);
 }
 
+/**
+ * Add one DataField to a MSEL, on top of whatever it already has. Call this before creating
+ * the scenario events that need it: `POST /api/scenarioEvents` creates a DataValue only for
+ * the fields that exist at that moment.
+ */
+export async function createMselDataField(
+  token: string,
+  mselId: string,
+  field: { name: string; dataType: string; displayOrder: number; onScenarioEventList?: boolean }
+): Promise<any> {
+  const r = await blueprintCall<any>(token, '/api/dataFields', {
+    method: 'POST',
+    body: {
+      onScenarioEventList: true,
+      onExerciseView: false,
+      ...field,
+      mselId,
+      isChosenFromList: false,
+      isInformationField: false,
+      isFacilitationField: false,
+      isInitiallyHidden: false,
+      dataOptions: [],
+    },
+  });
+  if (!r.ok) {
+    throw new Error(`createMselDataField "${field.name}" failed (${r.status}): ${r.text}`);
+  }
+  return r.data;
+}
+
 /** List a MSEL's DataFields. */
 export async function listMselDataFields(token: string, mselId: string): Promise<any[]> {
   const r = await blueprintCall<any[]>(token, `/api/msels/${mselId}/dataFields`);
