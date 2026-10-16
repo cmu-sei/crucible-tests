@@ -321,6 +321,39 @@ export async function addQuestionToQuiz(page: Page, cmid: string, questionName: 
 // ---------------------------------------------------------------------------
 
 /**
+ * Duplicate an activity from the course page, which runs it through a backup and
+ * restore inside the course. Returns the copy's cmid.
+ */
+export async function duplicateActivity(
+  page: Page,
+  courseId: string,
+  cmid: string
+): Promise<string> {
+  await gotoMoodle(page, `/course/view.php?id=${courseId}`);
+  // 5.3 exposes the edit-mode toggle as a switch rather than a checkbox.
+  const editMode = page.getByLabel('Edit mode', { exact: true });
+  if (!(await editMode.isChecked())) {
+    await editMode.check();
+    await page.waitForLoadState('domcontentloaded');
+  }
+  const activity = page.locator(`li.activity[data-id="${cmid}"]`);
+  const name = (await activity.locator('.instancename').first().innerText()).split('\n')[0].trim();
+  // Follow the menu item's link rather than clicking it: the course page user tour
+  // can open over the menu at any point and swallow the click.
+  const href = await activity.getByRole('menuitem', { name: 'Duplicate', includeHidden: true }).getAttribute('href');
+  expect(href, 'the activity menu should offer Duplicate').toBeTruthy();
+  await page.goto(href as string);
+  await page.waitForLoadState('domcontentloaded');
+  const copy = page
+    .locator('li.activity')
+    .filter({ has: page.locator('.instancename', { hasText: `${name} (copy)` }) });
+  await expect(copy).toHaveCount(1, { timeout: ACTION_TIMEOUT });
+  const copyId = await copy.getAttribute('data-id');
+  expect(copyId, 'the duplicated activity should be on the course page').toBeTruthy();
+  return copyId as string;
+}
+
+/**
  * Create a manual-auth Moodle account. The specs need a student who can log in
  * through the local form; Keycloak-provisioned accounts would depend on the IdP's
  * auto-provision and confirmation settings, which are not part of this plugin.

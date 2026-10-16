@@ -11,6 +11,7 @@ import {
   createCourse,
   createTrueFalseQuestion,
   deleteCourse,
+  duplicateActivity,
   gotoMoodle,
   openAddGroupQuizForm,
   seedCourseWithGrouping,
@@ -324,5 +325,37 @@ test.describe('mod_groupquiz instructor workflow', () => {
     const confirmation = await openDeleteConfirmation();
     await expect(confirmation).toContainText(questionName);
     await expect(confirmation).not.toContainText(inUseNotice);
+  });
+
+  test('a duplicated group quiz keeps its questions and grouping', async ({
+    moodleAdminPage: page,
+  }) => {
+    const suffix = seedSuffix();
+    const seed = await seedCourseWithGrouping(page, suffix);
+    seededCourseIds.push(seed.course.id);
+    const cmid = await addGroupQuiz(page, {
+      courseId: seed.course.id,
+      name: `GQ Quiz ${suffix}`,
+      groupingName: seed.groupingName,
+    });
+    const first = `GQ TF one ${suffix}`;
+    const second = `GQ TF two ${suffix}`;
+    await createTrueFalseQuestion(page, cmid, first, 'The sky is blue.');
+    await createTrueFalseQuestion(page, cmid, second, 'Grass is green.');
+    await addQuestionsToQuiz(page, cmid, [first, second]);
+
+    const copyId = await duplicateActivity(page, seed.course.id, cmid);
+    expect(copyId).not.toBe(cmid);
+
+    // The copy has both questions, in the original's order.
+    await gotoMoodle(page, `/mod/groupquiz/edit.php?cmid=${copyId}`);
+    const listItems = page.locator('#questionrow ol.questionlist li[data-questionid]');
+    await expect(listItems).toHaveCount(2);
+    await expect(listItems.nth(0).locator('.name')).toContainText(first);
+    await expect(listItems.nth(1).locator('.name')).toContainText(second);
+
+    // And it still uses the original's grouping.
+    await gotoMoodle(page, `/course/modedit.php?update=${copyId}`);
+    await expect(page.locator('#id_grouping option:checked')).toHaveText(seed.groupingName);
   });
 });
