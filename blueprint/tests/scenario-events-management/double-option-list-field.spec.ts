@@ -31,8 +31,9 @@ test.describe('Scenario Events Management', () => {
     await createOptionListDataField(
       token,
       mselId,
-      { name: SCORE_FIELD, dataType: 'Double', displayOrder: 14 },
-      ['1.5', '2.5']
+      SCORE_FIELD,
+      ['1.5', '2.5'].map((v) => ({ optionName: v, optionValue: v })),
+      { dataType: 'Double', displayOrder: 14 }
     );
   });
 
