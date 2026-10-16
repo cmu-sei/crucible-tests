@@ -4,21 +4,24 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, CITE_THEMES, setCiteTheme } from '../../fixtures';
 import { navigateToAdminSection } from '../../test-helpers';
 
-test.describe('Administration - Submissions', () => {
-  test('Submissions Section', async ({ citeAuthenticatedPage: page }) => {
+for (const theme of CITE_THEMES) {
+  test.describe(`${theme} theme › Administration - Submissions`, () => {
+    test('Submissions Section', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
 
-    await navigateToAdminSection(page, 'Submissions');
+      await navigateToAdminSection(page, 'Submissions');
 
-    const table = page.locator('table');
-    await expect(table).toBeVisible({ timeout: 10000 });
+      const table = page.locator('table');
+      await expect(table).toBeVisible({ timeout: 10000 });
 
-    const evaluationFilter = page.getByRole('combobox', { name: 'Evaluation' });
-    await expect(evaluationFilter).toBeVisible({ timeout: 5000 });
+      const evaluationFilter = page.getByRole('combobox', { name: 'Evaluation' });
+      await expect(evaluationFilter).toBeVisible({ timeout: 5000 });
 
-    const typesFilter = page.getByRole('combobox', { name: 'Types' });
-    await expect(typesFilter).toBeVisible({ timeout: 5000 });
+      const typesFilter = page.getByRole('combobox', { name: 'Types' });
+      await expect(typesFilter).toBeVisible({ timeout: 5000 });
+    });
   });
-});
+}

@@ -4,27 +4,30 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, CITE_THEMES, setCiteTheme } from '../../fixtures';
 import { navigateToAdminSection } from '../../test-helpers';
 
-test.describe('Administration - Roles', () => {
-  test('View Evaluation Roles', async ({ citeAuthenticatedPage: page }) => {
+for (const theme of CITE_THEMES) {
+  test.describe(`${theme} theme › Administration - Roles`, () => {
+    test('View Evaluation Roles', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
 
-    // 1. Navigate to Roles section
-    await navigateToAdminSection(page, 'Roles');
+      // 1. Navigate to Roles section
+      await navigateToAdminSection(page, 'Roles');
 
-    // 2. Click the Evaluation Roles tab
-    const evaluationRolesTab = page.getByRole('tab', { name: 'Evaluation Roles' });
-    await expect(evaluationRolesTab).toBeVisible({ timeout: 10000 });
-    await evaluationRolesTab.click();
-    await page.waitForTimeout(1000);
+      // 2. Click the Evaluation Roles tab
+      const evaluationRolesTab = page.getByRole('tab', { name: 'Evaluation Roles' });
+      await expect(evaluationRolesTab).toBeVisible({ timeout: 10000 });
+      await evaluationRolesTab.click();
+      await page.waitForTimeout(1000);
 
-    // 3. Verify evaluation roles content is displayed
-    const rolesTable = page.locator('table, mat-table, mat-list').first();
-    await expect(rolesTable).toBeVisible({ timeout: 10000 });
+      // 3. Verify evaluation roles content is displayed
+      const rolesTable = page.locator('table, mat-table, mat-list').first();
+      await expect(rolesTable).toBeVisible({ timeout: 10000 });
 
-    // 4. Verify at least one role entry is present
-    const roleEntries = page.locator('tbody tr, mat-list-item, mat-row').first();
-    await expect(roleEntries).toBeVisible({ timeout: 10000 });
+      // 4. Verify at least one role entry is present
+      const roleEntries = page.locator('tbody tr, mat-list-item, mat-row').first();
+      await expect(roleEntries).toBeVisible({ timeout: 10000 });
+    });
   });
-});
+}

@@ -4,25 +4,28 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, CITE_THEMES, setCiteTheme } from '../../fixtures';
 
-test.describe('Authentication and Authorization', () => {
-  test('Session Persistence After Refresh', async ({ citeAuthenticatedPage: page }) => {
+for (const theme of CITE_THEMES) {
+  test.describe(`${theme} theme › Authentication and Authorization`, () => {
+    test('Session Persistence After Refresh', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
 
-    // 1. Log in with valid credentials (admin/admin)
-    // expect: User is successfully authenticated and viewing CITE home page
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
+      // 1. Log in with valid credentials (admin/admin)
+      // expect: User is successfully authenticated and viewing CITE home page
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
 
-    // 2. Refresh the browser page
-    await page.reload();
+      // 2. Refresh the browser page
+      await page.reload();
 
-    // expect: User remains authenticated
-    // expect: Home page loads without redirecting to Keycloak
-    await page.waitForLoadState('domcontentloaded');
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
+      // expect: User remains authenticated
+      // expect: Home page loads without redirecting to Keycloak
+      await page.waitForLoadState('domcontentloaded');
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
 
-    // expect: User session is maintained
-    const userMenu = page.locator('[class*="user"], [class*="profile"], mat-toolbar').first();
-    await expect(userMenu).toBeVisible({ timeout: 10000 });
+      // expect: User session is maintained
+      const userMenu = page.locator('[class*="user"], [class*="profile"], mat-toolbar').first();
+      await expect(userMenu).toBeVisible({ timeout: 10000 });
+    });
   });
-});
+}

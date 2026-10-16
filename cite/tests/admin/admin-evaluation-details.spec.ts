@@ -4,21 +4,24 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, CITE_THEMES, setCiteTheme } from '../../fixtures';
 import { navigateToAdminSection } from '../../test-helpers';
 
-test.describe('Administration - Evaluations', () => {
-  test('Expand Evaluation Details', async ({ citeAuthenticatedPage: page }) => {
+for (const theme of CITE_THEMES) {
+  test.describe(`${theme} theme › Administration - Evaluations`, () => {
+    test('Expand Evaluation Details', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
 
-    await navigateToAdminSection(page);
+      await navigateToAdminSection(page);
 
-    const table = page.locator('table');
-    await expect(table).toBeVisible({ timeout: 10000 });
+      const table = page.locator('table');
+      await expect(table).toBeVisible({ timeout: 10000 });
 
-    const descriptionHeader = page.getByRole('columnheader', { name: 'Description' });
-    await expect(descriptionHeader).toBeVisible({ timeout: 5000 });
+      const descriptionHeader = page.getByRole('columnheader', { name: 'Description' });
+      await expect(descriptionHeader).toBeVisible({ timeout: 5000 });
 
-    const statusHeader = page.getByRole('columnheader', { name: 'Status' });
-    await expect(statusHeader).toBeVisible({ timeout: 5000 });
+      const statusHeader = page.getByRole('columnheader', { name: 'Status' });
+      await expect(statusHeader).toBeVisible({ timeout: 5000 });
+    });
   });
-});
+}

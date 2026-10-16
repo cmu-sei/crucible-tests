@@ -7,7 +7,7 @@
 // This file combines all report tests into a single file to run them serially,
 // avoiding parallel execution issues where multiple tests compete for the same "Admin User" visibility.
 
-import { test, expect, Services, serviceUrlPattern, ensureScoringModelExists, purgeStaleEvaluations, settleForResponse } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, ensureScoringModelExists, purgeStaleEvaluations, settleForResponse, CITE_THEMES, setCiteTheme } from '../../fixtures';
 import { navigateToAdminSection, deleteEvaluationByName, deleteTeamTypeByName } from '../../test-helpers';
 
 // Test data constants
@@ -215,122 +215,129 @@ async function navigateToEvaluation(page: import('@playwright/test').Page, evalN
 }
 
 // Configure tests to run serially to avoid parallel execution conflicts
-test.describe.configure({ mode: 'serial' });
+for (const theme of CITE_THEMES) {
+  test.describe(`${theme} theme › Report Interface`, () => {
+    // Serial per theme, so a failure in one theme doesn't skip the other.
+    test.describe.configure({ mode: 'serial' });
 
-test.describe('Report Interface', () => {
+    // Keep the evaluations list small/deterministic — the admin suite may have flooded it.
+    test.beforeAll(async () => {
+      // Purge only this file's own evaluations: a broader purge deletes the
+      // evaluations other files are using on the other worker.
+      await purgeStaleEvaluations([DISPLAY_EVAL_NAME, EXPORT_EVAL_NAME, COMPARISON_EVAL_NAME]);
+    });
 
-  // Keep the evaluations list small/deterministic — the admin suite may have flooded it.
-  test.beforeAll(async () => {
-    await purgeStaleEvaluations();
+
+    test('Report Display', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
+
+      await createActiveEvalWithMoveAndTeam(page, DISPLAY_TEAM_TYPE, DISPLAY_EVAL_NAME, 'Display Test Team', 'DTT');
+      await navigateToEvaluation(page, DISPLAY_EVAL_NAME, 'E2E Display');
+
+      // Click the SubmissionReview (Report) button
+      const reportButton = page.locator('button[title="SubmissionReview"]');
+      await expect(reportButton).toBeVisible({ timeout: 10000 });
+      await reportButton.click();
+      await page.waitForTimeout(2000);
+
+      // Verify the report interface loads with the heading
+      const reportHeading = page.locator('h2').filter({ hasText: /Responses for/ });
+      await expect(reportHeading).toBeVisible({ timeout: 10000 });
+      await expect(reportHeading).toContainText(DISPLAY_EVAL_NAME);
+
+      // Verify the toggle and print buttons are present
+      const toggleButton = page.locator('button[title="Toggle between user and team scores"]');
+      await expect(toggleButton).toBeVisible({ timeout: 5000 });
+
+      const printButton = page.locator('button[title="Print Submission Review"]');
+      await expect(printButton).toBeVisible({ timeout: 5000 });
+
+      // Cleanup
+      await deleteEvaluationByName(page, DISPLAY_EVAL_NAME);
+      await deleteTeamTypeByName(page, DISPLAY_TEAM_TYPE);
+    });
+
+    test('Export Report Data', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
+
+      await createActiveEvalWithMoveAndTeam(page, EXPORT_TEAM_TYPE, EXPORT_EVAL_NAME, 'Export Test Team', 'ETT');
+      await navigateToEvaluation(page, EXPORT_EVAL_NAME, 'E2E Export');
+
+      // Click the Aggregate Report button
+      const aggregateButton = page.locator('button[title="Aggregate Report"]');
+      await expect(aggregateButton).toBeVisible({ timeout: 10000 });
+      await aggregateButton.click();
+      await page.waitForTimeout(2000);
+
+      // Verify the aggregate report is displayed
+      const reportHeading = page.locator('h2').filter({ hasText: /Submissions Report/ });
+      await expect(reportHeading).toBeVisible({ timeout: 10000 });
+
+      // Verify the Print button is visible
+      const printButton = page.locator('button[title="Print Submission Review"]');
+      await expect(printButton).toBeVisible({ timeout: 5000 });
+      await expect(printButton).toBeEnabled({ timeout: 5000 });
+
+      // Stub window.print to prevent the browser print dialog.
+      // The component calls: replace body -> window.print() -> location.reload()
+      // After reload the page returns to the home page.
+      await page.evaluate(() => { window.print = () => {}; });
+
+      await printButton.click();
+
+      // The component triggers location.reload() after print, which navigates back
+      await page.waitForLoadState('domcontentloaded', { timeout: 30000 });
+      await page.waitForTimeout(2000);
+
+      // After reload, page returns to the CITE app (confirms the print flow completed)
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 15000 });
+
+      // Cleanup
+      await deleteEvaluationByName(page, EXPORT_EVAL_NAME);
+      await deleteTeamTypeByName(page, EXPORT_TEAM_TYPE);
+    });
+
+    test('View Team Comparison - Toggle User/Team Scores', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
+
+      await createActiveEvalWithMoveAndTeam(page, COMPARISON_TEAM_TYPE, COMPARISON_EVAL_NAME, 'Comparison Test Team', 'CTT');
+      await navigateToEvaluation(page, COMPARISON_EVAL_NAME, 'E2E Comparison');
+
+      // Click the Aggregate Report button
+      const aggregateButton = page.locator('button[title="Aggregate Report"]');
+      await expect(aggregateButton).toBeVisible({ timeout: 10000 });
+      await aggregateButton.click();
+      await page.waitForTimeout(2000);
+
+      // Verify the aggregate report is displayed
+      const reportHeading = page.locator('h2').filter({ hasText: /Submissions Report/ });
+      await expect(reportHeading).toBeVisible({ timeout: 10000 });
+
+      // Toggle between user and team scores.
+      // NOTE: the report's initial User/Team state is persisted in localStorage and can
+      // carry over from a previous test in the same worker, so do NOT assume it starts on
+      // "User". Instead, read the current state and assert that each toggle FLIPS it.
+      const toggleButton = page.locator('button[title="Toggle between user and team scores"]');
+      await expect(toggleButton).toBeVisible({ timeout: 5000 });
+
+      const isUser = async () => ((await reportHeading.textContent()) ?? '').includes('User');
+
+      const startUser = await isUser();
+
+      await toggleButton.click();
+      await page.waitForTimeout(1000);
+      // After one toggle the heading should be the opposite of where it started.
+      await expect(reportHeading).toContainText(startUser ? 'Team' : 'User', { timeout: 5000 });
+
+      await toggleButton.click();
+      await page.waitForTimeout(1000);
+      // A second toggle returns it to the starting state.
+      await expect(reportHeading).toContainText(startUser ? 'User' : 'Team', { timeout: 5000 });
+
+      // Cleanup
+      await deleteEvaluationByName(page, COMPARISON_EVAL_NAME);
+      await deleteTeamTypeByName(page, COMPARISON_TEAM_TYPE);
+    });
+
   });
-
-
-  test('Report Display', async ({ citeAuthenticatedPage: page }) => {
-
-    await createActiveEvalWithMoveAndTeam(page, DISPLAY_TEAM_TYPE, DISPLAY_EVAL_NAME, 'Display Test Team', 'DTT');
-    await navigateToEvaluation(page, DISPLAY_EVAL_NAME, 'E2E Display');
-
-    // Click the SubmissionReview (Report) button
-    const reportButton = page.locator('button[title="SubmissionReview"]');
-    await expect(reportButton).toBeVisible({ timeout: 10000 });
-    await reportButton.click();
-    await page.waitForTimeout(2000);
-
-    // Verify the report interface loads with the heading
-    const reportHeading = page.locator('h2').filter({ hasText: /Responses for/ });
-    await expect(reportHeading).toBeVisible({ timeout: 10000 });
-    await expect(reportHeading).toContainText(DISPLAY_EVAL_NAME);
-
-    // Verify the toggle and print buttons are present
-    const toggleButton = page.locator('button[title="Toggle between user and team scores"]');
-    await expect(toggleButton).toBeVisible({ timeout: 5000 });
-
-    const printButton = page.locator('button[title="Print Submission Review"]');
-    await expect(printButton).toBeVisible({ timeout: 5000 });
-
-    // Cleanup
-    await deleteEvaluationByName(page, DISPLAY_EVAL_NAME);
-    await deleteTeamTypeByName(page, DISPLAY_TEAM_TYPE);
-  });
-
-  test('Export Report Data', async ({ citeAuthenticatedPage: page }) => {
-
-    await createActiveEvalWithMoveAndTeam(page, EXPORT_TEAM_TYPE, EXPORT_EVAL_NAME, 'Export Test Team', 'ETT');
-    await navigateToEvaluation(page, EXPORT_EVAL_NAME, 'E2E Export');
-
-    // Click the Aggregate Report button
-    const aggregateButton = page.locator('button[title="Aggregate Report"]');
-    await expect(aggregateButton).toBeVisible({ timeout: 10000 });
-    await aggregateButton.click();
-    await page.waitForTimeout(2000);
-
-    // Verify the aggregate report is displayed
-    const reportHeading = page.locator('h2').filter({ hasText: /Submissions Report/ });
-    await expect(reportHeading).toBeVisible({ timeout: 10000 });
-
-    // Verify the Print button is visible
-    const printButton = page.locator('button[title="Print Submission Review"]');
-    await expect(printButton).toBeVisible({ timeout: 5000 });
-    await expect(printButton).toBeEnabled({ timeout: 5000 });
-
-    // Stub window.print to prevent the browser print dialog.
-    // The component calls: replace body -> window.print() -> location.reload()
-    // After reload the page returns to the home page.
-    await page.evaluate(() => { window.print = () => {}; });
-
-    await printButton.click();
-
-    // The component triggers location.reload() after print, which navigates back
-    await page.waitForLoadState('domcontentloaded', { timeout: 30000 });
-    await page.waitForTimeout(2000);
-
-    // After reload, page returns to the CITE app (confirms the print flow completed)
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 15000 });
-
-    // Cleanup
-    await deleteEvaluationByName(page, EXPORT_EVAL_NAME);
-    await deleteTeamTypeByName(page, EXPORT_TEAM_TYPE);
-  });
-
-  test('View Team Comparison - Toggle User/Team Scores', async ({ citeAuthenticatedPage: page }) => {
-
-    await createActiveEvalWithMoveAndTeam(page, COMPARISON_TEAM_TYPE, COMPARISON_EVAL_NAME, 'Comparison Test Team', 'CTT');
-    await navigateToEvaluation(page, COMPARISON_EVAL_NAME, 'E2E Comparison');
-
-    // Click the Aggregate Report button
-    const aggregateButton = page.locator('button[title="Aggregate Report"]');
-    await expect(aggregateButton).toBeVisible({ timeout: 10000 });
-    await aggregateButton.click();
-    await page.waitForTimeout(2000);
-
-    // Verify the aggregate report is displayed
-    const reportHeading = page.locator('h2').filter({ hasText: /Submissions Report/ });
-    await expect(reportHeading).toBeVisible({ timeout: 10000 });
-
-    // Toggle between user and team scores.
-    // NOTE: the report's initial User/Team state is persisted in localStorage and can
-    // carry over from a previous test in the same worker, so do NOT assume it starts on
-    // "User". Instead, read the current state and assert that each toggle FLIPS it.
-    const toggleButton = page.locator('button[title="Toggle between user and team scores"]');
-    await expect(toggleButton).toBeVisible({ timeout: 5000 });
-
-    const isUser = async () => ((await reportHeading.textContent()) ?? '').includes('User');
-
-    const startUser = await isUser();
-
-    await toggleButton.click();
-    await page.waitForTimeout(1000);
-    // After one toggle the heading should be the opposite of where it started.
-    await expect(reportHeading).toContainText(startUser ? 'Team' : 'User', { timeout: 5000 });
-
-    await toggleButton.click();
-    await page.waitForTimeout(1000);
-    // A second toggle returns it to the starting state.
-    await expect(reportHeading).toContainText(startUser ? 'User' : 'Team', { timeout: 5000 });
-
-    // Cleanup
-    await deleteEvaluationByName(page, COMPARISON_EVAL_NAME);
-    await deleteTeamTypeByName(page, COMPARISON_TEAM_TYPE);
-  });
-
-});
+}

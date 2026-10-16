@@ -4,27 +4,30 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, CITE_THEMES, setCiteTheme } from '../../fixtures';
 
-test.describe('Performance', () => {
-  test('Page Load Performance - Evaluation Dashboard', async ({ citeAuthenticatedPage: page }) => {
+for (const theme of CITE_THEMES) {
+  test.describe(`${theme} theme › Performance`, () => {
+    test('Page Load Performance - Evaluation Dashboard', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
 
-    // Navigate to home first
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
+      // Navigate to home first
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
 
-    // 1. Measure time from navigation to admin dashboard until page is interactive
-    const startTime = Date.now();
-    const adminButton = page.getByRole('button', { name: 'Show Administration Page' });
-    await expect(adminButton).toBeVisible({ timeout: 10000 });
-    await adminButton.click();
-    await expect(page).toHaveURL(/\/admin/, { timeout: 10000 });
+      // 1. Measure time from navigation to admin dashboard until page is interactive
+      const startTime = Date.now();
+      const adminButton = page.getByRole('button', { name: 'Show Administration Page' });
+      await expect(adminButton).toBeVisible({ timeout: 10000 });
+      await adminButton.click();
+      await expect(page).toHaveURL(/\/admin/, { timeout: 10000 });
 
-    const content = page.locator('mat-toolbar-row').getByText('Evaluations');
-    await expect(content).toBeVisible({ timeout: 10000 });
+      const content = page.locator('mat-toolbar-row').getByText('Evaluations');
+      await expect(content).toBeVisible({ timeout: 10000 });
 
-    const loadTime = Date.now() - startTime;
+      const loadTime = Date.now() - startTime;
 
-    // expect: Dashboard loads within acceptable time
-    expect(loadTime).toBeLessThan(10000);
+      // expect: Dashboard loads within acceptable time
+      expect(loadTime).toBeLessThan(10000);
+    });
   });
-});
+}
