@@ -35,6 +35,7 @@
 import fs from 'fs';
 import path from 'path';
 import { expect, test } from '@playwright/test';
+import { PLAYERVM_THEMES } from '../../fixtures';
 import { requireAppSources } from '../../../shared-fixtures';
 import {
   HubCall,
@@ -292,87 +293,92 @@ function describeHub(hubPath: string, clients: Client[]): void {
   });
 }
 
-test.describe('Player VM SignalR contract', () => {
-  for (const [hubPath, clients] of Object.entries(CLIENTS)) {
-    describeHub(hubPath, clients);
-  }
-
-  /**
-   * A hub added to `vm.api` with no entry in {@link CLIENTS} would be a whole hub this spec never looks at,
-   * and nothing above could report it: every test here is generated from that table. So the table is
-   * asserted against the application.
-   */
-  test('the API maps exactly the hubs this spec knows clients for', () => {
-    requireAppSources(apiSourcesPresent(), `${appDirectory('vm.api')} is not checked out.`);
-
-    surface ??= apiHubSurface();
-
-    expect(
-      surface.map((x) => x.path).sort(),
-      'a hub with no entry in CLIENTS is a hub no test in this file checks a client against'
-    ).toEqual(Object.keys(CLIENTS).sort());
-  });
-
-  /**
-   * The reader's own precondition. Every assertion above compares a client against a set this suite read
-   * out of C#, and an empty set makes all of them pass; this is the one test that fails when the reading
-   * itself has stopped working.
-   */
-  test('the hub surface read from the API is not empty', () => {
-    requireAppSources(apiSourcesPresent(), `${appDirectory('vm.api')} is not checked out.`);
-
-    surface ??= apiHubSurface();
-
-    expect(surface.length).toBeGreaterThan(0);
-
-    for (const hub of surface) {
-      expect(hub.methods.length, `${hub.file} declares no invocable methods`).toBeGreaterThan(0);
-      expect(hub.broadcasts.length, `${hub.file} sends nothing`).toBeGreaterThan(0);
-    }
-  });
-
-  /**
-   * The `modifiedProperties` argument of `VmUpdated` is a list of property names, and `vm.ui` spends them
-   * as `model[x] = vm[x]`. A name that is not a key of the serialized VM assigns `undefined` over a value
-   * that was correct a moment ago, so the failure is not a missing update but a field that goes blank when
-   * the VM changes.
-   *
-   * The names are Entity Framework's, taken from the tracked properties of the domain entity, and the keys
-   * are the DTO's. Both are read from `vm.api`; the interface is the one the browser actually indexes.
-   */
-  test.describe('modifiedProperties', () => {
-    /** Both sides of the comparison, or a skip when either repository is missing. */
-    function generatedVm(): string[] {
-      requireAppSources(
-        apiSourcesPresent() && allPresent(generatedClientDirectory()),
-        'vm.api or the generated vm.ui API client is not checked out.'
-      );
-
-      const generated = generatedInterfaceProperties('Vm');
-      expect(generated, 'the generated client has no Vm interface').not.toBeNull();
-
-      return generated;
+// Wrapped in the suite's theme loop like every Player VM spec, so the suite has one shape and every
+// test reports under both `light theme ›` and `dark theme ›`. Nothing here opens a page, so the theme
+// changes nothing but the title; the source reads are cached in `surface` and shared by both runs.
+for (const theme of PLAYERVM_THEMES) {
+  test.describe(`${theme} theme › Player VM SignalR contract`, () => {
+    for (const [hubPath, clients] of Object.entries(CLIENTS)) {
+      describeHub(hubPath, clients);
     }
 
-    test('every name the API can send is a property of the generated Vm interface', () => {
-      const generated = generatedVm();
+    /**
+     * A hub added to `vm.api` with no entry in {@link CLIENTS} would be a whole hub this spec never looks at,
+     * and nothing above could report it: every test here is generated from that table. So the table is
+     * asserted against the application.
+     */
+    test('the API maps exactly the hubs this spec knows clients for', () => {
+      requireAppSources(apiSourcesPresent(), `${appDirectory('vm.api')} is not checked out.`);
 
-      expect(domainVmModifiedProperties().filter((x) => !generated.includes(x))).toEqual([]);
+      surface ??= apiHubSurface();
+
+      expect(
+        surface.map((x) => x.path).sort(),
+        'a hub with no entry in CLIENTS is a hub no test in this file checks a client against'
+      ).toEqual(Object.keys(CLIENTS).sort());
     });
 
     /**
-     * The keys `modifiedProperties` never names are still keys - they change with the VM, they are just
-     * only ever carried by the whole `Vm` the first argument holds. Asserted because a client indexing one
-     * of them off a stale interface reads `undefined` just the same, and because the difference between the
-     * two lists is where somebody looking for "why did this field not update" ends up.
+     * The reader's own precondition. Every assertion above compares a client against a set this suite read
+     * out of C#, and an empty set makes all of them pass; this is the one test that fails when the reading
+     * itself has stopped working.
      */
-    test('every key no update ever names is a property of the generated Vm interface', () => {
-      const generated = generatedVm();
-      const named = new Set(domainVmModifiedProperties());
-      const neverNamed = viewModelVmProperties().filter((x) => !named.has(x));
+    test('the hub surface read from the API is not empty', () => {
+      requireAppSources(apiSourcesPresent(), `${appDirectory('vm.api')} is not checked out.`);
 
-      expect(neverNamed.length, 'the DTO has no keys beyond the ones updates name').toBeGreaterThan(0);
-      expect(neverNamed.filter((x) => !generated.includes(x))).toEqual([]);
+      surface ??= apiHubSurface();
+
+      expect(surface.length).toBeGreaterThan(0);
+
+      for (const hub of surface) {
+        expect(hub.methods.length, `${hub.file} declares no invocable methods`).toBeGreaterThan(0);
+        expect(hub.broadcasts.length, `${hub.file} sends nothing`).toBeGreaterThan(0);
+      }
+    });
+
+    /**
+     * The `modifiedProperties` argument of `VmUpdated` is a list of property names, and `vm.ui` spends them
+     * as `model[x] = vm[x]`. A name that is not a key of the serialized VM assigns `undefined` over a value
+     * that was correct a moment ago, so the failure is not a missing update but a field that goes blank when
+     * the VM changes.
+     *
+     * The names are Entity Framework's, taken from the tracked properties of the domain entity, and the keys
+     * are the DTO's. Both are read from `vm.api`; the interface is the one the browser actually indexes.
+     */
+    test.describe('modifiedProperties', () => {
+      /** Both sides of the comparison, or a skip when either repository is missing. */
+      function generatedVm(): string[] {
+        requireAppSources(
+          apiSourcesPresent() && allPresent(generatedClientDirectory()),
+          'vm.api or the generated vm.ui API client is not checked out.'
+        );
+
+        const generated = generatedInterfaceProperties('Vm');
+        expect(generated, 'the generated client has no Vm interface').not.toBeNull();
+
+        return generated;
+      }
+
+      test('every name the API can send is a property of the generated Vm interface', () => {
+        const generated = generatedVm();
+
+        expect(domainVmModifiedProperties().filter((x) => !generated.includes(x))).toEqual([]);
+      });
+
+      /**
+       * The keys `modifiedProperties` never names are still keys - they change with the VM, they are just
+       * only ever carried by the whole `Vm` the first argument holds. Asserted because a client indexing one
+       * of them off a stale interface reads `undefined` just the same, and because the difference between the
+       * two lists is where somebody looking for "why did this field not update" ends up.
+       */
+      test('every key no update ever names is a property of the generated Vm interface', () => {
+        const generated = generatedVm();
+        const named = new Set(domainVmModifiedProperties());
+        const neverNamed = viewModelVmProperties().filter((x) => !named.has(x));
+
+        expect(neverNamed.length, 'the DTO has no keys beyond the ones updates name').toBeGreaterThan(0);
+        expect(neverNamed.filter((x) => !generated.includes(x))).toEqual([]);
+      });
     });
   });
-});
+}

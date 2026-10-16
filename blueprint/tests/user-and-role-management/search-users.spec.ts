@@ -16,7 +16,7 @@
 //   3. Types "admin" in the Search input and verifies only matching rows appear
 //   4. Clears the search and verifies all users return
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 
 // ---------------------------------------------------------------------------
 // Helper: navigate to admin section and click a sidebar item
@@ -35,75 +35,78 @@ async function gotoAdminSection(page: any, section: string) {
   await page.locator('table').first().waitFor({ state: 'visible', timeout: 10000 });
 }
 
-test.describe('User and Role Management', () => {
-  test('Search Users', async ({ blueprintAuthenticatedPage: page }) => {
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
+for (const theme of BLUEPRINT_THEMES) {
+    test.describe(`${theme} theme › User and Role Management`, () => {
+    test('Search Users', async ({ blueprintAuthenticatedPage: page }) => {
+    await applyBlueprintTheme(page, theme);
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
 
-    // 2. Navigate to Users admin section
-    // Blueprint is a SPA — URL stays at /admin when navigating sidebar items
-    await gotoAdminSection(page, 'Users');
+      // 2. Navigate to Users admin section
+      // Blueprint is a SPA — URL stays at /admin when navigating sidebar items
+      await gotoAdminSection(page, 'Users');
 
-    // expect: Users table is visible with ID, Name, Role columns
-    const usersTable = page.locator('table');
-    await expect(usersTable).toBeVisible({ timeout: 10000 });
+      // expect: Users table is visible with ID, Name, Role columns
+      const usersTable = page.locator('table');
+      await expect(usersTable).toBeVisible({ timeout: 10000 });
 
-    await expect(page.getByRole('columnheader', { name: 'ID' })).toBeVisible({ timeout: 5000 });
-    await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible({ timeout: 5000 });
-    await expect(page.getByRole('columnheader', { name: 'Role' })).toBeVisible({ timeout: 5000 });
+      await expect(page.getByRole('columnheader', { name: 'ID' })).toBeVisible({ timeout: 5000 });
+      await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible({ timeout: 5000 });
+      await expect(page.getByRole('columnheader', { name: 'Role' })).toBeVisible({ timeout: 5000 });
 
-    // 3. Count initial user rows
-    const userRows = page.locator('table tbody tr');
-    const initialCount = await userRows.count();
-    expect(initialCount).toBeGreaterThan(0);
+      // 3. Count initial user rows
+      const userRows = page.locator('table tbody tr');
+      const initialCount = await userRows.count();
+      expect(initialCount).toBeGreaterThan(0);
 
-    // 4. Type "admin" in the Search input and press Enter to trigger the filter
-    // Blueprint's search is server-side and requires pressing Enter to apply
-    // expect: The list filters to show only matching users
-    const searchInput = page.getByRole('textbox', { name: 'Search' });
-    await expect(searchInput).toBeVisible({ timeout: 5000 });
-    await searchInput.fill('admin');
+      // 4. Type "admin" in the Search input and press Enter to trigger the filter
+      // Blueprint's search is server-side and requires pressing Enter to apply
+      // expect: The list filters to show only matching users
+      const searchInput = page.getByRole('textbox', { name: 'Search' });
+      await expect(searchInput).toBeVisible({ timeout: 5000 });
+      await searchInput.fill('admin');
 
-    // Wait for the table to be attached (stable) before pressing Enter
-    await expect(usersTable).toBeAttached({ timeout: 5000 });
-    await searchInput.press('Enter');
+      // Wait for the table to be attached (stable) before pressing Enter
+      await expect(usersTable).toBeAttached({ timeout: 5000 });
+      await searchInput.press('Enter');
 
-    // Wait for the table to update after the filter is applied - the row count will change
-    await page.waitForFunction(
-      (initialRowCount) => {
-        const rows = document.querySelectorAll('table tbody tr');
-        return rows.length !== initialRowCount;
-      },
-      initialCount,
-      { timeout: 10000 }
-    );
+      // Wait for the table to update after the filter is applied - the row count will change
+      await page.waitForFunction(
+        (initialRowCount) => {
+          const rows = document.querySelectorAll('table tbody tr');
+          return rows.length !== initialRowCount;
+        },
+        initialCount,
+        { timeout: 10000 }
+      );
 
-    // expect: Filtered results are fewer than the initial count
-    const filteredCount = await userRows.count();
-    expect(filteredCount).toBeLessThan(initialCount);
+      // expect: Filtered results are fewer than the initial count
+      const filteredCount = await userRows.count();
+      expect(filteredCount).toBeLessThan(initialCount);
 
-    // expect: Each visible row contains "admin" in the Name column (case-insensitive)
-    for (let i = 0; i < filteredCount; i++) {
-      const rowText = await userRows.nth(i).textContent();
-      expect(rowText?.toLowerCase()).toContain('admin');
-    }
+      // expect: Each visible row contains "admin" in the Name column (case-insensitive)
+      for (let i = 0; i < filteredCount; i++) {
+        const rowText = await userRows.nth(i).textContent();
+        expect(rowText?.toLowerCase()).toContain('admin');
+      }
 
-    // 5. Clear the search box and press Enter to restore full list
-    await searchInput.clear();
-    await searchInput.press('Enter');
+      // 5. Clear the search box and press Enter to restore full list
+      await searchInput.clear();
+      await searchInput.press('Enter');
 
-    // Wait for the table to update after clearing the filter - the row count will change back
-    await page.waitForFunction(
-      (filteredRowCount) => {
-        const rows = document.querySelectorAll('table tbody tr');
-        return rows.length > filteredRowCount;
-      },
-      filteredCount,
-      { timeout: 10000 }
-    );
+      // Wait for the table to update after clearing the filter - the row count will change back
+      await page.waitForFunction(
+        (filteredRowCount) => {
+          const rows = document.querySelectorAll('table tbody tr');
+          return rows.length > filteredRowCount;
+        },
+        filteredCount,
+        { timeout: 10000 }
+      );
 
-    // expect: All users are displayed again
-    const clearedCount = await userRows.count();
-    expect(clearedCount).toBeGreaterThan(filteredCount);
-    expect(clearedCount).toBe(initialCount);
-  });
-});
+      // expect: All users are displayed again
+      const clearedCount = await userRows.count();
+      expect(clearedCount).toBeGreaterThan(filteredCount);
+      expect(clearedCount).toBe(initialCount);
+    });
+    });
+}

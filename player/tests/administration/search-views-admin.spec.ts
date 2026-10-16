@@ -4,48 +4,51 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, seededPrimaryViewName, seededSteamfitterViewName, typeIntoSearch } from '../../fixtures';
+import { test, expect, Services, seededPrimaryViewName, seededSteamfitterViewName, typeIntoSearch, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
 
-test.describe('Administration - Views', () => {
-  test('Search Views in Admin', async ({ playerAuthenticatedPage: page }) => {
-    const primaryViewName = seededPrimaryViewName();
-    const steamfitterViewName = seededSteamfitterViewName();
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Administration - Views`, () => {
+    test('Search Views in Admin', async ({ playerAuthenticatedPage: page }) => {
+      await setPlayerTheme(page, theme);
+      const primaryViewName = seededPrimaryViewName();
+      const steamfitterViewName = seededSteamfitterViewName();
 
-    // 1. Log in as admin and navigate to Administration > Views
-    await page.getByRole('button', { name: 'Menu' }).click();
-    await page.getByRole('menuitem', { name: 'Administration' }).click();
-    await expect(page).toHaveURL(/\/admin/, { timeout: 10000 });
+      // 1. Log in as admin and navigate to Administration > Views
+      await page.getByRole('button', { name: 'Menu' }).click();
+      await page.getByRole('menuitem', { name: 'Administration' }).click();
+      await expect(page).toHaveURL(/\/admin/, { timeout: 10000 });
 
-    // expect: The Views admin section is displayed
-    await expect(page.getByRole('heading', { name: 'Views' })).toBeVisible();
+      // expect: The Views admin section is displayed
+      await expect(page.getByRole('heading', { name: 'Views' })).toBeVisible();
 
-    // 2. Enter a search term in the Search field
-    const searchField = page.getByRole('textbox', { name: 'Search' });
-    await typeIntoSearch(searchField, 'Lagoon');
+      // 2. Enter a search term in the Search field
+      const searchField = page.getByRole('textbox', { name: 'Search' });
+      await typeIntoSearch(searchField, 'Lagoon');
 
-    // expect: The search field accepts input
-    await expect(searchField).toHaveValue('Lagoon');
+      // expect: The search field accepts input
+      await expect(searchField).toHaveValue('Lagoon');
 
-    // expect: A clear search button appears
-    await expect(page.getByRole('button', { name: 'Clear Search' })).toBeVisible();
+      // expect: A clear search button appears
+      await expect(page.getByRole('button', { name: 'Clear Search' })).toBeVisible();
 
-    // expect: The matching view is visible
-    await expect(page.getByRole('button', { name: primaryViewName, exact: true })).toBeVisible();
+      // expect: The matching view is visible
+      await expect(page.getByRole('button', { name: primaryViewName, exact: true })).toBeVisible();
 
-    // 3. Clear the search field
-    await page.getByRole('button', { name: 'Clear Search' }).click();
+      // 3. Clear the search field
+      await page.getByRole('button', { name: 'Clear Search' }).click();
 
-    // expect: Search field is cleared
-    await expect(searchField).toHaveValue('');
+      // expect: Search field is cleared
+      await expect(searchField).toHaveValue('');
 
-    // expect: The primary fixture view is still visible after clearing search
-    await expect(page.getByRole('button', { name: primaryViewName, exact: true })).toBeVisible();
+      // expect: The primary fixture view is still visible after clearing search
+      await expect(page.getByRole('button', { name: primaryViewName, exact: true })).toBeVisible();
 
-    // 4. Search for the secondary seeded view directly
-    await typeIntoSearch(searchField, 'Steamfitter');
+      // 4. Search for the secondary seeded view directly
+      await typeIntoSearch(searchField, 'Steamfitter');
 
-    // expect: The secondary fixture view is searchable as well
-    await expect(searchField).toHaveValue('Steamfitter');
-    await expect(page.getByRole('button', { name: steamfitterViewName, exact: true })).toBeVisible();
+      // expect: The secondary fixture view is searchable as well
+      await expect(searchField).toHaveValue('Steamfitter');
+      await expect(page.getByRole('button', { name: steamfitterViewName, exact: true })).toBeVisible();
+    });
   });
-});
+}

@@ -4,30 +4,33 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
 
-test.describe('Administration - Application Templates', () => {
-  test('View Application Templates', async ({ playerAuthenticatedPage: page }) => {
-    // 1. Log in as admin and navigate to Administration
-    await page.getByRole('button', { name: 'Menu' }).click();
-    await page.getByRole('menuitem', { name: 'Administration' }).click();
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Administration - Application Templates`, () => {
+    test('View Application Templates', async ({ playerAuthenticatedPage: page }) => {
+      await setPlayerTheme(page, theme);
+      // 1. Log in as admin and navigate to Administration
+      await page.getByRole('button', { name: 'Menu' }).click();
+      await page.getByRole('menuitem', { name: 'Administration' }).click();
 
-    // expect: The Administration page is displayed
-    await expect(page).toHaveURL(/\/admin/, { timeout: 10000 });
+      // expect: The Administration page is displayed
+      await expect(page).toHaveURL(/\/admin/, { timeout: 10000 });
 
-    // 2. Click the 'Application Templates' button
-    await page.getByRole('button', { name: 'Application Templates' }).click();
+      // 2. Click the 'Application Templates' button
+      await page.getByRole('button', { name: 'Application Templates' }).click();
 
-    // expect: The Application Templates section is displayed
-    await expect(page).toHaveURL(/section=application-templates/);
+      // expect: The Application Templates section is displayed
+      await expect(page).toHaveURL(/section=application-templates/);
 
-    // expect: A table shows templates with columns: checkbox, Name, Url
-    await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Url' })).toBeVisible();
+      // expect: A table shows templates with columns: checkbox, Name, Url
+      await expect(page.getByRole('columnheader', { name: 'Name' })).toBeVisible();
+      await expect(page.getByRole('columnheader', { name: 'Url' })).toBeVisible();
 
-    // expect: Templates include Dashboard, Map, and Virtual Machines with their respective URLs
-    await expect(page.getByText('Dashboard').first()).toBeVisible();
-    await expect(page.getByText('Map').first()).toBeVisible();
-    await expect(page.getByText('Virtual Machines').first()).toBeVisible();
+      // expect: Templates include Dashboard, Map, and Virtual Machines with their respective URLs
+      await expect(page.getByText('Dashboard').first()).toBeVisible();
+      await expect(page.getByText('Map').first()).toBeVisible();
+      await expect(page.getByText('Virtual Machines').first()).toBeVisible();
+    });
   });
-});
+}

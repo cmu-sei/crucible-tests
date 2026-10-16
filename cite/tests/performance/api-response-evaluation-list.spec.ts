@@ -4,31 +4,34 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, CITE_THEMES, setCiteTheme } from '../../fixtures';
 
-test.describe('Performance', () => {
-  test('API Response Time - Evaluation List', async ({ citeAuthenticatedPage: page }) => {
+for (const theme of CITE_THEMES) {
+  test.describe(`${theme} theme › Performance`, () => {
+    test('API Response Time - Evaluation List', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
 
-    // 1. Monitor network requests when loading evaluation list
-    const apiTimes: number[] = [];
+      // 1. Monitor network requests when loading evaluation list
+      const apiTimes: number[] = [];
 
-    page.on('response', (response) => {
-      if (response.url().includes('/api/') && response.url().includes('evaluation')) {
-        const timing = response.request().timing();
-        if (timing.responseEnd > 0) {
-          apiTimes.push(timing.responseEnd);
+      page.on('response', (response) => {
+        if (response.url().includes('/api/') && response.url().includes('evaluation')) {
+          const timing = response.request().timing();
+          if (timing.responseEnd > 0) {
+            apiTimes.push(timing.responseEnd);
+          }
         }
+      });
+
+      await page.goto(Services.Cite.UI);
+      await page.waitForLoadState('networkidle');
+
+      // expect: API response time is under acceptable threshold
+      for (const time of apiTimes) {
+        expect(time).toBeLessThan(5000);
       }
+
+      // expect: No unnecessary API calls are made
     });
-
-    await page.goto(Services.Cite.UI);
-    await page.waitForLoadState('networkidle');
-
-    // expect: API response time is under acceptable threshold
-    for (const time of apiTimes) {
-      expect(time).toBeLessThan(5000);
-    }
-
-    // expect: No unnecessary API calls are made
   });
-});
+}

@@ -4,35 +4,38 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, CITE_THEMES, setCiteTheme } from '../../fixtures';
 import { navigateToAdminSection } from '../../test-helpers';
 
-test.describe('Administration - Submissions', () => {
-  test('Filter Submissions by Team', async ({ citeAuthenticatedPage: page }) => {
+for (const theme of CITE_THEMES) {
+  test.describe(`${theme} theme › Administration - Submissions`, () => {
+    test('Filter Submissions by Team', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
 
-    // 1. Navigate to Submissions section
-    await navigateToAdminSection(page, 'Submissions');
+      // 1. Navigate to Submissions section
+      await navigateToAdminSection(page, 'Submissions');
 
-    // 2. Verify the Types filter is present and functional
-    const typesFilter = page.getByRole('combobox', { name: 'Types' });
-    await expect(typesFilter).toBeVisible({ timeout: 5000 });
+      // 2. Verify the Types filter is present and functional
+      const typesFilter = page.getByRole('combobox', { name: 'Types' });
+      await expect(typesFilter).toBeVisible({ timeout: 5000 });
 
-    // 3. Open the Types filter and select an option
-    await typesFilter.click();
-    await page.waitForTimeout(500);
+      // 3. Open the Types filter and select an option
+      await typesFilter.click();
+      await page.waitForTimeout(500);
 
-    const options = page.locator('mat-option');
-    await expect(options.first()).toBeVisible({ timeout: 5000 });
+      const options = page.locator('mat-option');
+      await expect(options.first()).toBeVisible({ timeout: 5000 });
 
-    const optionCount = await options.count();
-    expect(optionCount).toBeGreaterThan(0);
+      const optionCount = await options.count();
+      expect(optionCount).toBeGreaterThan(0);
 
-    // Select the first type option
-    const firstOptionText = await options.first().textContent();
-    await options.first().click();
-    await page.waitForTimeout(1000);
+      // Select the first type option
+      const firstOptionText = await options.first().textContent();
+      await options.first().click();
+      await page.waitForTimeout(1000);
 
-    // 4. Verify the filter is applied (the dropdown shows the selected value)
-    await expect(typesFilter).toContainText(firstOptionText?.trim() || '', { timeout: 5000 });
+      // 4. Verify the filter is applied (the dropdown shows the selected value)
+      await expect(typesFilter).toContainText(firstOptionText?.trim() || '', { timeout: 5000 });
+    });
   });
-});
+}

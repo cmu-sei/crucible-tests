@@ -4,24 +4,27 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
 
-test.describe('Performance', () => {
-  test('Page Load Performance - Home Page', async ({ playerAuthenticatedPage: page }) => {
-    // 1. Measure time from navigation to home page until page is fully loaded
-    const startTime = Date.now();
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Performance`, () => {
+    test('Page Load Performance - Home Page', async ({ playerAuthenticatedPage: page }) => {
+      await setPlayerTheme(page, theme);
+      // 1. Measure time from navigation to home page until page is fully loaded
+      const startTime = Date.now();
 
-    // Navigate to home page (already authenticated via fixture)
-    await expect(page.getByText('My Views')).toBeVisible();
-    await expect(page.getByRole('table')).toBeVisible();
+      // Navigate to home page (already authenticated via fixture)
+      await expect(page.getByText('My Views')).toBeVisible();
+      await expect(page.getByRole('table')).toBeVisible();
 
-    const loadTime = Date.now() - startTime;
+      const loadTime = Date.now() - startTime;
 
-    // expect: Home page loads within acceptable time (e.g., under 3 seconds)
-    // Note: The fixture handles authentication, so this measures post-auth page load
-    expect(loadTime).toBeLessThan(3000);
+      // expect: Home page loads within acceptable time (e.g., under 3 seconds)
+      // Note: The fixture handles authentication, so this measures post-auth page load
+      expect(loadTime).toBeLessThan(3000);
 
-    // expect: No blocking resources delay rendering
-    await expect(page.getByRole('button', { name: 'Menu' })).toBeVisible();
+      // expect: No blocking resources delay rendering
+      await expect(page.getByRole('button', { name: 'Menu' })).toBeVisible();
+    });
   });
-});
+}

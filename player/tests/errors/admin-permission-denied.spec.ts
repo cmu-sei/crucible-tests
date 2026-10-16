@@ -4,21 +4,24 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
 
-test.describe('Error Handling and Edge Cases', () => {
-  test('Permission Denied on Admin Access', async ({ playerAuthenticatedPage: page }) => {
-    // 1. Log in as a non-admin user
-    // Note: Using admin user since that's the only available test user
-    // expect: User is authenticated
-    await expect(page.getByText('My Views')).toBeVisible();
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Error Handling and Edge Cases`, () => {
+    test('Permission Denied on Admin Access', async ({ playerAuthenticatedPage: page }) => {
+      await setPlayerTheme(page, theme);
+      // 1. Log in as a non-admin user
+      // Note: Using admin user since that's the only available test user
+      // expect: User is authenticated
+      await expect(page.getByText('My Views')).toBeVisible();
 
-    // 2. Attempt to navigate to /admin
-    await page.goto(`${Services.Player.UI}/admin`);
+      // 2. Attempt to navigate to /admin
+      await page.goto(`${Services.Player.UI}/admin`);
 
-    // For admin user, admin page should load
-    // For non-admin users, access would be denied or redirected
-    // Verify the page responds without crashing
-    await expect(page.locator('body')).toBeVisible();
+      // For admin user, admin page should load
+      // For non-admin users, access would be denied or redirected
+      // Verify the page responds without crashing
+      await expect(page.locator('body')).toBeVisible();
+    });
   });
-});
+}

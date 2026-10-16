@@ -4,28 +4,31 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink } from '../../fixtures';
+import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
 
-test.describe('File Browser', () => {
-  test('File Browser - Directory Navigation', async ({ playerAuthenticatedPage: page }) => {
-    const primaryViewName = seededPrimaryViewName();
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › File Browser`, () => {
+    test('File Browser - Directory Navigation', async ({ playerAuthenticatedPage: page }) => {
+      await setPlayerTheme(page, theme);
+      const primaryViewName = seededPrimaryViewName();
 
-    // 1. Open file browser with nested directories
-    const viewLink = await findPlayerHomeViewLink(page, primaryViewName);
-    const href = await viewLink.getAttribute('href');
-    const viewId = href?.replace('/view/', '');
+      // 1. Open file browser with nested directories
+      const viewLink = await findPlayerHomeViewLink(page, primaryViewName);
+      const href = await viewLink.getAttribute('href');
+      const viewId = href?.replace('/view/', '');
 
-    await page.goto(`${Services.Player.UI}/view/${viewId}/files`);
+      await page.goto(`${Services.Player.UI}/view/${viewId}/files`);
 
-    // expect: Root directory contents are displayed
-    await expect(page.locator('body')).toBeVisible();
+      // expect: Root directory contents are displayed
+      await expect(page.locator('body')).toBeVisible();
 
-    // 2. If directories are available, click on one
-    // expect: Directory opens and shows its contents
-    // expect: Breadcrumb or path updates to show current location
+      // 2. If directories are available, click on one
+      // expect: Directory opens and shows its contents
+      // expect: Breadcrumb or path updates to show current location
 
-    // 3. Navigate back
-    // expect: User navigates back to parent directory
-    // Note: File browser content depends on view configuration
+      // 3. Navigate back
+      // expect: User navigates back to parent directory
+      // Note: File browser content depends on view configuration
+    });
   });
-});
+}

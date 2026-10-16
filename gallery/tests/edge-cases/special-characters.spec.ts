@@ -4,7 +4,7 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoGalleryAdmin, apiDeleteCollectionById } from '../../fixtures';
+import { test, expect, gotoGalleryAdmin, apiDeleteCollectionById, GALLERY_THEMES, setGalleryTheme } from '../../fixtures';
 import type { Locator, Page } from '@playwright/test';
 
 /**
@@ -61,58 +61,61 @@ async function findCollectionRow(page: Page, name: string): Promise<Locator> {
   return row;
 }
 
-test.describe('Edge Cases and Negative Testing', () => {
-  // Ids are captured from the create responses and deleted here, so a failure in the
-  // middle of the test cannot leave collections behind.
-  const createdCollectionIds: string[] = [];
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Edge Cases and Negative Testing`, () => {
+    // Ids are captured from the create responses and deleted here, so a failure in the
+    // middle of the test cannot leave collections behind.
+    const createdCollectionIds: string[] = [];
 
-  test.afterEach(async () => {
-    while (createdCollectionIds.length > 0) {
-      const id = createdCollectionIds.pop() as string;
-      await apiDeleteCollectionById(id, 'Special Characters test collection');
-    }
+    test.afterEach(async () => {
+      while (createdCollectionIds.length > 0) {
+        const id = createdCollectionIds.pop() as string;
+        await apiDeleteCollectionById(id, 'Special Characters test collection');
+      }
+    });
+
+    test('Special Characters and Input Sanitization', async ({ galleryAuthenticatedPage: page }) => {
+      await setGalleryTheme(page, theme);
+      await gotoGalleryAdmin(page);
+
+      const suffix = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+
+      // 1. Create a collection with special characters in the name, and 3. HTML tags in
+      // the description (same record — the description field is where the HTML goes).
+      const xssName = `<script>alert('xss')</script> ${suffix}`;
+      const htmlDescription = '<b>HTML tags</b>';
+      createdCollectionIds.push(await createCollectionViaUi(page, xssName, htmlDescription));
+
+      // expect: Special characters are handled correctly — the row is found and its name
+      // reads back exactly as typed.
+      const xssRow = await findCollectionRow(page, xssName);
+      const nameCell = xssRow.getByRole('cell').nth(1);
+      const descriptionCell = xssRow.getByRole('cell').nth(2);
+      await expect(nameCell).toHaveText(xssName);
+
+      // expect: No XSS vulnerabilities — the payload is rendered as text, not parsed as
+      // markup. Angular interpolation escapes it, so the literal '<script>' shows up in
+      // innerText while no script element is created. Asserting both directions matters:
+      // visible text alone would also pass if the browser had silently executed the tag.
+      await expect(nameCell.locator('script')).toHaveCount(0);
+      await expect(page.locator('app-admin-collections tbody script')).toHaveCount(0);
+      expect(await nameCell.innerHTML()).toBe(
+        "&lt;script&gt;alert('xss')&lt;/script&gt; " + suffix
+      );
+
+      // 3. expect: HTML in the description is escaped or rendered harmless — the <b> is
+      // shown as text, not as a bold element.
+      await expect(descriptionCell).toHaveText(htmlDescription);
+      await expect(descriptionCell.locator('b')).toHaveCount(0);
+
+      // 2. Create a collection with Unicode characters
+      const unicodeName = `Unicode 测试 🎯 ${suffix}`;
+      createdCollectionIds.push(await createCollectionViaUi(page, unicodeName, 'Unicode test'));
+
+      // expect: Unicode characters are stored and displayed correctly — CJK and the
+      // astral-plane emoji both survive intact.
+      const unicodeRow = await findCollectionRow(page, unicodeName);
+      await expect(unicodeRow.getByRole('cell').nth(1)).toHaveText(unicodeName);
+    });
   });
-
-  test('Special Characters and Input Sanitization', async ({ galleryAuthenticatedPage: page }) => {
-    await gotoGalleryAdmin(page);
-
-    const suffix = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-
-    // 1. Create a collection with special characters in the name, and 3. HTML tags in
-    // the description (same record — the description field is where the HTML goes).
-    const xssName = `<script>alert('xss')</script> ${suffix}`;
-    const htmlDescription = '<b>HTML tags</b>';
-    createdCollectionIds.push(await createCollectionViaUi(page, xssName, htmlDescription));
-
-    // expect: Special characters are handled correctly — the row is found and its name
-    // reads back exactly as typed.
-    const xssRow = await findCollectionRow(page, xssName);
-    const nameCell = xssRow.getByRole('cell').nth(1);
-    const descriptionCell = xssRow.getByRole('cell').nth(2);
-    await expect(nameCell).toHaveText(xssName);
-
-    // expect: No XSS vulnerabilities — the payload is rendered as text, not parsed as
-    // markup. Angular interpolation escapes it, so the literal '<script>' shows up in
-    // innerText while no script element is created. Asserting both directions matters:
-    // visible text alone would also pass if the browser had silently executed the tag.
-    await expect(nameCell.locator('script')).toHaveCount(0);
-    await expect(page.locator('app-admin-collections tbody script')).toHaveCount(0);
-    expect(await nameCell.innerHTML()).toBe(
-      "&lt;script&gt;alert('xss')&lt;/script&gt; " + suffix
-    );
-
-    // 3. expect: HTML in the description is escaped or rendered harmless — the <b> is
-    // shown as text, not as a bold element.
-    await expect(descriptionCell).toHaveText(htmlDescription);
-    await expect(descriptionCell.locator('b')).toHaveCount(0);
-
-    // 2. Create a collection with Unicode characters
-    const unicodeName = `Unicode 测试 🎯 ${suffix}`;
-    createdCollectionIds.push(await createCollectionViaUi(page, unicodeName, 'Unicode test'));
-
-    // expect: Unicode characters are stored and displayed correctly — CJK and the
-    // astral-plane emoji both survive intact.
-    const unicodeRow = await findCollectionRow(page, unicodeName);
-    await expect(unicodeRow.getByRole('cell').nth(1)).toHaveText(unicodeName);
-  });
-});
+}

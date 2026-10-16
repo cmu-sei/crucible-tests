@@ -57,80 +57,83 @@
 // Rewritten to collect every offender and assert the collection is empty, so a failure names
 // the actual elements.
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 
 const ROUTES = ['', '/build', '/admin'] as const;
 
-test.describe('Accessibility and Usability', () => {
-  test('Screen Reader Compatibility', async ({ blueprintAuthenticatedPage: page }) => {
-    for (const route of ROUTES) {
-      await page.goto(`${Services.Blueprint.UI}${route}`, { waitUntil: 'domcontentloaded' });
-      await expect(page.locator('app-topbar, mat-toolbar').first()).toBeVisible({
-        timeout: 20000,
-      });
-      const where = `route "${route || '/'}"`;
+for (const theme of BLUEPRINT_THEMES) {
+    test.describe(`${theme} theme › Accessibility and Usability`, () => {
+    test('Screen Reader Compatibility', async ({ blueprintAuthenticatedPage: page }) => {
+    await applyBlueprintTheme(page, theme);
+      for (const route of ROUTES) {
+        await page.goto(`${Services.Blueprint.UI}${route}`, { waitUntil: 'domcontentloaded' });
+        await expect(page.locator('app-topbar, mat-toolbar').first()).toBeVisible({
+          timeout: 20000,
+        });
+        const where = `route "${route || '/'}"`;
 
-      // expect: the document is titled.
-      expect(await page.title(), `${where}: document.title`).toBeTruthy();
+        // expect: the document is titled.
+        expect(await page.title(), `${where}: document.title`).toBeTruthy();
 
-      // expect: at least one heading, and exactly one h1 as the page's main heading.
-      await expect(
-        page.locator('h1, h2, h3, h4, h5, h6'),
-        `${where}: page must expose at least one heading`
-      ).not.toHaveCount(0);
-      await expect(page.locator('h1'), `${where}: page must have exactly one h1`).toHaveCount(1);
+        // expect: at least one heading, and exactly one h1 as the page's main heading.
+        await expect(
+          page.locator('h1, h2, h3, h4, h5, h6'),
+          `${where}: page must expose at least one heading`
+        ).not.toHaveCount(0);
+        await expect(page.locator('h1'), `${where}: page must have exactly one h1`).toHaveCount(1);
 
-      // expect: at least one ARIA landmark so a screen-reader user can skip to content.
-      await expect(
-        page.locator(
-          '[role="main"], [role="navigation"], [role="banner"], [role="complementary"], ' +
-            '[role="contentinfo"], main, nav, header, aside, footer'
-        ),
-        `${where}: page must expose at least one ARIA landmark`
-      ).not.toHaveCount(0);
+        // expect: at least one ARIA landmark so a screen-reader user can skip to content.
+        await expect(
+          page.locator(
+            '[role="main"], [role="navigation"], [role="banner"], [role="complementary"], ' +
+              '[role="contentinfo"], main, nav, header, aside, footer'
+          ),
+          `${where}: page must expose at least one ARIA landmark`
+        ).not.toHaveCount(0);
 
-      // expect: every visible interactive element has an accessible name. Collected rather
-      // than sampled, so a failure reports exactly which elements are unnamed.
-      const unnamed = await page.evaluate(() => {
-        const offenders: Array<{ tag: string; cls: string; why: string }> = [];
-        const visible = (el: Element) => {
-          const r = el.getBoundingClientRect();
-          return r.width > 0 && r.height > 0;
-        };
-        const describe = (el: Element, why: string) => ({
-          tag: el.tagName,
-          cls: (el as HTMLElement).className?.toString().slice(0, 40) ?? '',
-          why,
+        // expect: every visible interactive element has an accessible name. Collected rather
+        // than sampled, so a failure reports exactly which elements are unnamed.
+        const unnamed = await page.evaluate(() => {
+          const offenders: Array<{ tag: string; cls: string; why: string }> = [];
+          const visible = (el: Element) => {
+            const r = el.getBoundingClientRect();
+            return r.width > 0 && r.height > 0;
+          };
+          const describe = (el: Element, why: string) => ({
+            tag: el.tagName,
+            cls: (el as HTMLElement).className?.toString().slice(0, 40) ?? '',
+            why,
+          });
+
+          for (const el of Array.from(document.querySelectorAll('button, a'))) {
+            if (!visible(el)) continue;
+            const named =
+              (el.textContent ?? '').trim() ||
+              el.getAttribute('aria-label') ||
+              el.getAttribute('title') ||
+              el.getAttribute('aria-labelledby');
+            if (!named) offenders.push(describe(el, 'no accessible name'));
+          }
+
+          for (const el of Array.from(
+            document.querySelectorAll('input:not([type=hidden]), textarea, select')
+          )) {
+            if (!visible(el)) continue;
+            const id = el.getAttribute('id');
+            const labelled =
+              el.getAttribute('aria-label') ||
+              el.getAttribute('aria-labelledby') ||
+              (id && document.querySelector(`label[for="${id}"]`)) ||
+              el.closest('label') ||
+              el.closest('mat-form-field')?.querySelector('mat-label');
+            if (!labelled) offenders.push(describe(el, 'form control has no label'));
+          }
+
+          return offenders.slice(0, 15);
         });
 
-        for (const el of Array.from(document.querySelectorAll('button, a'))) {
-          if (!visible(el)) continue;
-          const named =
-            (el.textContent ?? '').trim() ||
-            el.getAttribute('aria-label') ||
-            el.getAttribute('title') ||
-            el.getAttribute('aria-labelledby');
-          if (!named) offenders.push(describe(el, 'no accessible name'));
-        }
-
-        for (const el of Array.from(
-          document.querySelectorAll('input:not([type=hidden]), textarea, select')
-        )) {
-          if (!visible(el)) continue;
-          const id = el.getAttribute('id');
-          const labelled =
-            el.getAttribute('aria-label') ||
-            el.getAttribute('aria-labelledby') ||
-            (id && document.querySelector(`label[for="${id}"]`)) ||
-            el.closest('label') ||
-            el.closest('mat-form-field')?.querySelector('mat-label');
-          if (!labelled) offenders.push(describe(el, 'form control has no label'));
-        }
-
-        return offenders.slice(0, 15);
-      });
-
-      expect(unnamed, `${where}: interactive elements without accessible names`).toEqual([]);
-    }
-  });
-});
+        expect(unnamed, `${where}: interactive elements without accessible names`).toEqual([]);
+      }
+    });
+    });
+}
