@@ -13,7 +13,7 @@
 // a push — so no real Player is needed.
 
 import { request as playwrightRequest, Page } from '@playwright/test';
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import {
   getBlueprintToken,
   createMsel,
@@ -57,96 +57,99 @@ async function renderedTeamApps(page: Page): Promise<string[]> {
   return orders.map((o, i) => `${o.trim()} ${names[i]?.trim()}`);
 }
 
-test.describe('Player Application Team Order', () => {
-  let token: string;
-  let mselId: string;
-  let teamLabel: string;
-  const appName = {
-    first: tempBlueprintName('TestBP-AppOrderFirst'),
-    second: tempBlueprintName('TestBP-AppOrderSecond'),
-  };
+for (const theme of BLUEPRINT_THEMES) {
+  test.describe(`${theme} theme › Player Application Team Order`, () => {
+    let token: string;
+    let mselId: string;
+    let teamLabel: string;
+    const appName = {
+      first: tempBlueprintName('TestBP-AppOrderFirst'),
+      second: tempBlueprintName('TestBP-AppOrderSecond'),
+    };
 
-  test.beforeEach(async () => {
-    token = await getBlueprintToken();
-    mselId = (await createMsel(token)).id;
-    // The Player Apps tab only exists on MSELs that integrate with Player.
-    await updateMsel(token, mselId, { usePlayer: true });
-    const team = await createTeam(token, mselId, {
-      name: tempBlueprintName('TestBP-AppOrderTeam'),
-      shortName: 'AOT',
+    test.beforeEach(async () => {
+      token = await getBlueprintToken();
+      mselId = (await createMsel(token)).id;
+      // The Player Apps tab only exists on MSELs that integrate with Player.
+      await updateMsel(token, mselId, { usePlayer: true });
+      const team = await createTeam(token, mselId, {
+        name: tempBlueprintName('TestBP-AppOrderTeam'),
+        shortName: 'AOT',
+      });
+      teamLabel = `${team.shortName} - ${team.name}`;
+      const first = await createPlayerApplication(token, mselId, { name: appName.first });
+      const second = await createPlayerApplication(token, mselId, { name: appName.second });
+      await assignPlayerApplicationToTeam(token, first.id, team.id, 1);
+      await assignPlayerApplicationToTeam(token, second.id, team.id, 2);
     });
-    teamLabel = `${team.shortName} - ${team.name}`;
-    const first = await createPlayerApplication(token, mselId, { name: appName.first });
-    const second = await createPlayerApplication(token, mselId, { name: appName.second });
-    await assignPlayerApplicationToTeam(token, first.id, team.id, 1);
-    await assignPlayerApplicationToTeam(token, second.id, team.id, 2);
+
+    test.afterEach(async () => {
+      // The MSEL delete cascades to its teams, Player applications and their assignments.
+      if (mselId) await deleteMsel(token, mselId);
+    });
+
+    async function openTeamAppOrder(page: Page): Promise<void> {
+      await navigateToMselSection(page, mselId, 'Player Apps');
+      await page
+        .locator('mat-expansion-panel-header')
+        .filter({ hasText: 'Team Application Order' })
+        .click();
+      await page
+        .locator('app-player-team-app-order tr.mat-mdc-row')
+        .filter({ hasText: teamLabel })
+        .click();
+    }
+
+    test('Moving an application down swaps it with the next one and persists', async ({
+      blueprintAuthenticatedPage: page,
+    }) => {
+      await applyBlueprintTheme(page, theme);
+      // 1. Open the team's application order
+      await openTeamAppOrder(page);
+
+      // expect: the team's applications in their assigned order, first one's "up" disabled and
+      // last one's "down" disabled
+      await expect.poll(() => renderedTeamApps(page)).toEqual([
+        `1 ${appName.first}`,
+        `2 ${appName.second}`,
+      ]);
+      const firstRow = page
+        .locator('app-player-team-app-order .data-row')
+        .filter({ hasText: appName.first });
+      const secondRow = page
+        .locator('app-player-team-app-order .data-row')
+        .filter({ hasText: appName.second });
+      await expect(firstRow.locator('button[title="Move player application up"]')).toBeDisabled();
+      await expect(secondRow.locator('button[title="Move player application down"]')).toBeDisabled();
+
+      // 2. Move the first application down
+      const saved = page.waitForResponse(
+        (res) =>
+          res.request().method() === 'PUT' &&
+          res.url().toLowerCase().includes('/api/playerapplicationteams/'),
+        { timeout: 15000 }
+      );
+      await firstRow.locator('button[title="Move player application down"]').click();
+      expect((await saved).ok(), 'the moved assignment is saved').toBe(true);
+
+      // expect: the two applications have swapped places and numbers
+      await expect.poll(() => renderedTeamApps(page)).toEqual([
+        `1 ${appName.second}`,
+        `2 ${appName.first}`,
+      ]);
+
+      // 3. Reload and reopen the team
+      await openTeamAppOrder(page);
+
+      // expect: the new order came from the server
+      await expect.poll(() => renderedTeamApps(page)).toEqual([
+        `1 ${appName.second}`,
+        `2 ${appName.first}`,
+      ]);
+
+      // Secondary: the API renumbered both assignments.
+      const assignments = await listPlayerApplicationTeams(token, mselId);
+      expect(assignments.map((a) => Number(a.displayOrder)).sort((a, b) => a - b)).toEqual([1, 2]);
+    });
   });
-
-  test.afterEach(async () => {
-    // The MSEL delete cascades to its teams, Player applications and their assignments.
-    if (mselId) await deleteMsel(token, mselId);
-  });
-
-  async function openTeamAppOrder(page: Page): Promise<void> {
-    await navigateToMselSection(page, mselId, 'Player Apps');
-    await page
-      .locator('mat-expansion-panel-header')
-      .filter({ hasText: 'Team Application Order' })
-      .click();
-    await page
-      .locator('app-player-team-app-order tr.mat-mdc-row')
-      .filter({ hasText: teamLabel })
-      .click();
-  }
-
-  test('Moving an application down swaps it with the next one and persists', async ({
-    blueprintAuthenticatedPage: page,
-  }) => {
-    // 1. Open the team's application order
-    await openTeamAppOrder(page);
-
-    // expect: the team's applications in their assigned order, first one's "up" disabled and
-    // last one's "down" disabled
-    await expect.poll(() => renderedTeamApps(page)).toEqual([
-      `1 ${appName.first}`,
-      `2 ${appName.second}`,
-    ]);
-    const firstRow = page
-      .locator('app-player-team-app-order .data-row')
-      .filter({ hasText: appName.first });
-    const secondRow = page
-      .locator('app-player-team-app-order .data-row')
-      .filter({ hasText: appName.second });
-    await expect(firstRow.locator('button[title="Move player application up"]')).toBeDisabled();
-    await expect(secondRow.locator('button[title="Move player application down"]')).toBeDisabled();
-
-    // 2. Move the first application down
-    const saved = page.waitForResponse(
-      (res) =>
-        res.request().method() === 'PUT' &&
-        res.url().toLowerCase().includes('/api/playerapplicationteams/'),
-      { timeout: 15000 }
-    );
-    await firstRow.locator('button[title="Move player application down"]').click();
-    expect((await saved).ok(), 'the moved assignment is saved').toBe(true);
-
-    // expect: the two applications have swapped places and numbers
-    await expect.poll(() => renderedTeamApps(page)).toEqual([
-      `1 ${appName.second}`,
-      `2 ${appName.first}`,
-    ]);
-
-    // 3. Reload and reopen the team
-    await openTeamAppOrder(page);
-
-    // expect: the new order came from the server
-    await expect.poll(() => renderedTeamApps(page)).toEqual([
-      `1 ${appName.second}`,
-      `2 ${appName.first}`,
-    ]);
-
-    // Secondary: the API renumbered both assignments.
-    const assignments = await listPlayerApplicationTeams(token, mselId);
-    expect(assignments.map((a) => Number(a.displayOrder)).sort((a, b) => a - b)).toEqual([1, 2]);
-  });
-});
+}

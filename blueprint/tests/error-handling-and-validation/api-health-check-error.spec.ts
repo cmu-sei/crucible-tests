@@ -3,7 +3,7 @@
 
 // spec: specs/blueprint-test-plan.md
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 
 /**
  * When the API health check fails, the app must say so instead of rendering an empty shell.
@@ -43,48 +43,51 @@ import { test, expect, Services } from '../../fixtures';
  *      mode violation resolving to 2 elements. The locators below are therefore scoped with
  *      `.first()` / counted, rather than assuming a single dialog.
  */
-test.describe('Error Handling and Validation', () => {
-  test('API Health Check Error', async ({ blueprintAuthenticatedPage: page }) => {
-    // 1. Make every Blueprint API call fail, which is what a down API looks like to the client.
-    await page.route(`${Services.Blueprint.API}/**`, (route) => route.abort('connectionrefused'));
+for (const theme of BLUEPRINT_THEMES) {
+    test.describe(`${theme} theme › Error Handling and Validation`, () => {
+    test('API Health Check Error', async ({ blueprintAuthenticatedPage: page }) => {
+    await applyBlueprintTheme(page, theme);
+      // 1. Make every Blueprint API call fail, which is what a down API looks like to the client.
+      await page.route(`${Services.Blueprint.API}/**`, (route) => route.abort('connectionrefused'));
 
-    try {
-      await page.goto(`${Services.Blueprint.UI}/build`, { waitUntil: 'domcontentloaded' });
+      try {
+        await page.goto(`${Services.Blueprint.UI}/build`, { waitUntil: 'domcontentloaded' });
 
-      // expect: an API error sheet is raised, naming the failure.
-      const errorSheets = page.locator('mat-bottom-sheet-container');
-      await expect(errorSheets.first()).toBeVisible({ timeout: 30000 });
-      await expect(errorSheets.first().getByRole('heading', { name: 'API Error' })).toBeVisible();
-      await expect(errorSheets.first()).toContainText(/could not be reached/i);
+        // expect: an API error sheet is raised, naming the failure.
+        const errorSheets = page.locator('mat-bottom-sheet-container');
+        await expect(errorSheets.first()).toBeVisible({ timeout: 30000 });
+        await expect(errorSheets.first().getByRole('heading', { name: 'API Error' })).toBeVisible();
+        await expect(errorSheets.first()).toContainText(/could not be reached/i);
 
-      // Dismiss every sheet: while one is up the content behind it is not visible, and several
-      // are opened because several API calls fail.
-      for (let i = 0; i < 10 && (await errorSheets.count()) > 0; i++) {
-        await errorSheets.first().getByRole('button').first().click();
-        await expect(errorSheets).toHaveCount(Math.max(0, (await errorSheets.count()) - 1), {
-          timeout: 10000,
-        });
+        // Dismiss every sheet: while one is up the content behind it is not visible, and several
+        // are opened because several API calls fail.
+        for (let i = 0; i < 10 && (await errorSheets.count()) > 0; i++) {
+          await errorSheets.first().getByRole('button').first().click();
+          await expect(errorSheets).toHaveCount(Math.max(0, (await errorSheets.count()) - 1), {
+            timeout: 10000,
+          });
+        }
+        await expect(errorSheets).toHaveCount(0, { timeout: 15000 });
+
+        // expect: the page itself reports the API is unreachable, with the recovery instruction.
+        await expect(
+          page.getByRole('heading', { name: /The API web service is not responding/i })
+        ).toBeVisible({ timeout: 30000 });
+        await expect(
+          page.getByRole('heading', { name: /Please refresh this page/i })
+        ).toBeVisible({ timeout: 15000 });
+        await expect(
+          page.getByRole('heading', { name: /contact the site administrator/i })
+        ).toBeVisible({ timeout: 15000 });
+
+        // expect: the normal dashboard content is suppressed rather than rendered empty — the
+        // same `apiIsSick` flag gates it (home-app.component.html:23, 36).
+        await expect(page.getByRole('button', { name: /Manage an Event/i })).toHaveCount(0);
+      } finally {
+        // Always drop the intercept, even if an assertion above fails, so the page is not left
+        // routed for anything that reuses this context.
+        await page.unrouteAll();
       }
-      await expect(errorSheets).toHaveCount(0, { timeout: 15000 });
-
-      // expect: the page itself reports the API is unreachable, with the recovery instruction.
-      await expect(
-        page.getByRole('heading', { name: /The API web service is not responding/i })
-      ).toBeVisible({ timeout: 30000 });
-      await expect(
-        page.getByRole('heading', { name: /Please refresh this page/i })
-      ).toBeVisible({ timeout: 15000 });
-      await expect(
-        page.getByRole('heading', { name: /contact the site administrator/i })
-      ).toBeVisible({ timeout: 15000 });
-
-      // expect: the normal dashboard content is suppressed rather than rendered empty — the
-      // same `apiIsSick` flag gates it (home-app.component.html:23, 36).
-      await expect(page.getByRole('button', { name: /Manage an Event/i })).toHaveCount(0);
-    } finally {
-      // Always drop the intercept, even if an assertion above fails, so the page is not left
-      // routed for anything that reuses this context.
-      await page.unrouteAll();
-    }
-  });
-});
+    });
+    });
+}

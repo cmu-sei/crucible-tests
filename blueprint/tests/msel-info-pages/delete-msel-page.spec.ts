@@ -3,73 +3,81 @@
 
 // spec: specs/blueprint-test-plan.md
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import {
   getBlueprintToken,
   createMsel,
   deleteMsel,
   navigateToMsel,
+  waitForMselInfoLoaded,
 } from '../../test-helpers';
 
-test.describe('MSEL Info Pages Management', () => {
-  let token: string;
-  let mselId: string;
+for (const theme of BLUEPRINT_THEMES) {
+    test.describe(`${theme} theme › MSEL Info Pages Management`, () => {
+    let token: string;
+    let mselId: string;
+    let mselName: string;
 
-  test.beforeEach(async () => {
-    token = await getBlueprintToken();
-    const msel = await createMsel(token);
-    mselId = msel.id;
-  });
+    test.beforeEach(async () => {
+      token = await getBlueprintToken();
+      const msel = await createMsel(token);
+      mselId = msel.id;
+      mselName = msel.name;
+    });
 
-  test.afterEach(async () => {
-    try {
-      if (mselId) await deleteMsel(token, mselId);
-    } catch (err) {
-      console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
-    }
-  });
+    test.afterEach(async () => {
+      try {
+        if (mselId) await deleteMsel(token, mselId);
+      } catch (err) {
+        console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+      }
+    });
 
-  test('Delete MSEL Page', async ({ blueprintAuthenticatedPage: page }) => {
-    // Navigate to the seeded MSEL
-    await navigateToMsel(page, mselId);
+    test('Delete MSEL Page', async ({ blueprintAuthenticatedPage: page }) => {
+    await applyBlueprintTheme(page, theme);
+      // Navigate to the seeded MSEL
+      await navigateToMsel(page, mselId);
+      await waitForMselInfoLoaded(page, mselName);
 
-    // First, create a new page so we have one to safely delete
-    const addPageTab = page.getByRole('tab', { name: 'Add Page' });
-    await expect(addPageTab).toBeVisible({ timeout: 5000 });
-    await addPageTab.click();
+      // First, create a new page so we have one to safely delete
+      const addPageTab = page.getByRole('tab', { name: 'Add Page' });
+      await expect(addPageTab).toBeVisible({ timeout: 5000 });
+      await addPageTab.click();
 
-    // Verify new page was created and is selected
-    const selectedTab = page.getByRole('tab', { selected: true });
-    await expect(selectedTab).toHaveText(/New Page/, { timeout: 5000 });
-    const newPageName = (await selectedTab.textContent())?.trim() || 'New Page';
+      // Verify new page was created and is selected
+      const selectedTab = page.getByRole('tab', { selected: true });
+      await expect(selectedTab).toHaveText(/New Page/, { timeout: 5000 });
+      const newPageName = (await selectedTab.textContent())?.trim() || 'New Page';
 
-    // The page is in edit mode after creation — we need to save or cancel first
-    // Look for the cancel button to exit edit mode
-    const cancelButton = page.getByRole('button', { name: /Cancel/ }).first();
-    if (await cancelButton.isVisible({ timeout: 2000 }).catch(() => false)) {
+      // A new page opens in edit mode, but only after a 100ms setTimeout in
+      // MselInfoComponent that follows the tab switch. Wait for the page's own Cancel
+      // Changes button and leave edit mode; an isVisible() probe does not wait and
+      // skipped the cancel whenever it ran inside that window.
+      const cancelButton = page.getByRole('tabpanel').getByRole('button', { name: 'Cancel Changes' });
+      await expect(cancelButton).toBeVisible({ timeout: 10000 });
       await cancelButton.click();
-    }
 
-    // Wait for delete button to become visible (proves edit mode exited)
-    const deleteButton = page.getByRole('button', { name: `Delete ${newPageName}` });
-    await expect(deleteButton).toBeVisible({ timeout: 5000 });
-    await deleteButton.click();
+      // Wait for delete button to become visible (proves edit mode exited)
+      const deleteButton = page.getByRole('button', { name: `Delete ${newPageName}` });
+      await expect(deleteButton).toBeVisible({ timeout: 5000 });
+      await deleteButton.click();
 
-    // expect: A confirmation dialog appears
-    const confirmDialog = page.getByRole('dialog');
-    await expect(confirmDialog).toBeVisible({ timeout: 5000 });
+      // expect: A confirmation dialog appears
+      const confirmDialog = page.getByRole('dialog');
+      await expect(confirmDialog).toBeVisible({ timeout: 5000 });
 
-    // 2. Confirm deletion
-    const yesButton = confirmDialog.getByRole('button', { name: /YES/i });
-    await expect(yesButton).toBeVisible({ timeout: 5000 });
-    await yesButton.click();
+      // 2. Confirm deletion
+      const yesButton = confirmDialog.getByRole('button', { name: /YES/i });
+      await expect(yesButton).toBeVisible({ timeout: 5000 });
+      await yesButton.click();
 
-    // expect: The page is deleted — the specific tab should no longer exist
-    const deletedTab = page.getByRole('tab', { name: newPageName, exact: true });
-    await expect(deletedTab).toBeHidden({ timeout: 10000 });
+      // expect: The page is deleted — the specific tab should no longer exist
+      const deletedTab = page.getByRole('tab', { name: newPageName, exact: true });
+      await expect(deletedTab).toBeHidden({ timeout: 10000 });
 
-    // expect: Config tab is still visible
-    const configTab = page.getByRole('tab', { name: 'Config' });
-    await expect(configTab).toBeVisible({ timeout: 5000 });
-  });
-});
+      // expect: Config tab is still visible
+      const configTab = page.getByRole('tab', { name: 'Config' });
+      await expect(configTab).toBeVisible({ timeout: 5000 });
+    });
+    });
+}

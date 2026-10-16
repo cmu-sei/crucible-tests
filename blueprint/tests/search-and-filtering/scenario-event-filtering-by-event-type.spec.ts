@@ -4,7 +4,7 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import {
   getBlueprintToken,
   createMsel,
@@ -15,88 +15,91 @@ import {
   tempBlueprintName,
 } from '../../test-helpers';
 
-test.describe('Search and Filtering', () => {
-  let token: string;
-  let mselId: string;
-  let eventId1: string;
-  let eventId2: string;
+for (const theme of BLUEPRINT_THEMES) {
+    test.describe(`${theme} theme › Search and Filtering`, () => {
+    let token: string;
+    let mselId: string;
+    let eventId1: string;
+    let eventId2: string;
 
-  test.beforeEach(async () => {
-    token = await getBlueprintToken();
-    const msel = await createMsel(token, {
-      name: tempBlueprintName('EventFilterTest'),
-      description: 'MSEL for event type filtering test',
+    test.beforeEach(async () => {
+      token = await getBlueprintToken();
+      const msel = await createMsel(token, {
+        name: tempBlueprintName('EventFilterTest'),
+        description: 'MSEL for event type filtering test',
+      });
+      mselId = msel.id;
+
+      // Create two scenario events
+      const event1 = await createRenderableScenarioEvent(token, mselId, 'First test event', { deltaSeconds: 0 });
+      eventId1 = event1.id;
+
+      const event2 = await createRenderableScenarioEvent(token, mselId, 'Second test event', { deltaSeconds: 60 });
+      eventId2 = event2.id;
     });
-    mselId = msel.id;
 
-    // Create two scenario events
-    const event1 = await createRenderableScenarioEvent(token, mselId, 'First test event', { deltaSeconds: 0 });
-    eventId1 = event1.id;
+    test.afterEach(async () => {
+      try {
+        if (eventId1) await deleteScenarioEvent(token, eventId1);
+        if (eventId2) await deleteScenarioEvent(token, eventId2);
+        if (mselId) await deleteMsel(token, mselId);
+      } catch (err) {
+        console.warn(`Cleanup failed: ${err}`);
+      }
+    });
 
-    const event2 = await createRenderableScenarioEvent(token, mselId, 'Second test event', { deltaSeconds: 60 });
-    eventId2 = event2.id;
-  });
+    test('Scenario Event Filtering by Event Type', async ({ blueprintAuthenticatedPage: page }) => {
+    await applyBlueprintTheme(page, theme);
+      // 1. Navigate to the MSEL's Scenario Events section
+      await navigateToMselSection(page, mselId, 'Scenario Events');
 
-  test.afterEach(async () => {
-    try {
-      if (eventId1) await deleteScenarioEvent(token, eventId1);
-      if (eventId2) await deleteScenarioEvent(token, eventId2);
-      if (mselId) await deleteMsel(token, mselId);
-    } catch (err) {
-      console.warn(`Cleanup failed: ${err}`);
-    }
-  });
+      // expect: Scenario events are displayed in a table
+      const timelineContainer = page.locator('app-scenario-event-list, table').first();
+      await expect(timelineContainer).toBeVisible({ timeout: 15000 });
 
-  test('Scenario Event Filtering by Event Type', async ({ blueprintAuthenticatedPage: page }) => {
-    // 1. Navigate to the MSEL's Scenario Events section
-    await navigateToMselSection(page, mselId, 'Scenario Events');
+      // Wait for the events to render
+      const eventItems = page.locator('table tbody tr');
+      await expect(eventItems.first()).toBeVisible({ timeout: 10000 });
 
-    // expect: Scenario events are displayed in a table
-    const timelineContainer = page.locator('app-scenario-event-list, table').first();
-    await expect(timelineContainer).toBeVisible({ timeout: 15000 });
+      // Count initial events (our two seeded events)
+      const initialEventCount = await eventItems.count();
+      expect(initialEventCount).toBeGreaterThanOrEqual(2);
 
-    // Wait for the events to render
-    const eventItems = page.locator('table tbody tr');
-    await expect(eventItems.first()).toBeVisible({ timeout: 10000 });
+      // 2. Look for event type filter control
+      const eventTypeFilter = page.locator(
+        'mat-select[placeholder*="Type"], ' +
+        'mat-select[placeholder*="Event Type"], ' +
+        '[aria-label*="Event Type"]'
+      ).first();
 
-    // Count initial events (our two seeded events)
-    const initialEventCount = await eventItems.count();
-    expect(initialEventCount).toBeGreaterThanOrEqual(2);
+      // If no filter is present, this test verifies the scenario events are at least visible
+      const typeFilterVisible = await eventTypeFilter.isVisible({ timeout: 5000 }).catch(() => false);
 
-    // 2. Look for event type filter control
-    const eventTypeFilter = page.locator(
-      'mat-select[placeholder*="Type"], ' +
-      'mat-select[placeholder*="Event Type"], ' +
-      '[aria-label*="Event Type"]'
-    ).first();
+      if (typeFilterVisible) {
+        await eventTypeFilter.click();
 
-    // If no filter is present, this test verifies the scenario events are at least visible
-    const typeFilterVisible = await eventTypeFilter.isVisible({ timeout: 5000 }).catch(() => false);
+        // Get available event type options
+        const typeOptions = page.locator('mat-option, [role="option"]');
+        const typeOptionCount = await typeOptions.count();
+        expect(typeOptionCount).toBeGreaterThan(0);
 
-    if (typeFilterVisible) {
-      await eventTypeFilter.click();
+        // Select the first event type option
+        const firstTypeOption = typeOptions.first();
+        await firstTypeOption.click();
 
-      // Get available event type options
-      const typeOptions = page.locator('mat-option, [role="option"]');
-      const typeOptionCount = await typeOptions.count();
-      expect(typeOptionCount).toBeGreaterThan(0);
-
-      // Select the first event type option
-      const firstTypeOption = typeOptions.first();
-      await firstTypeOption.click();
-
-      // expect: Timeline updates after filtering
-      // Wait for table to reflect the filter
-      await expect(timelineContainer).toBeVisible({ timeout: 10000 });
-      const filteredEvents = page.locator('table tbody tr');
-      const filteredEventCount = await filteredEvents.count();
-      expect(filteredEventCount).toBeGreaterThanOrEqual(0);
-      expect(filteredEventCount).toBeLessThanOrEqual(initialEventCount);
-    } else {
-      // No type filter present - verify events are still visible
-      await expect(timelineContainer).toBeVisible();
-      const visibleEvents = page.locator('table tbody tr');
-      await expect(visibleEvents.first()).toBeVisible({ timeout: 5000 });
-    }
-  });
-});
+        // expect: Timeline updates after filtering
+        // Wait for table to reflect the filter
+        await expect(timelineContainer).toBeVisible({ timeout: 10000 });
+        const filteredEvents = page.locator('table tbody tr');
+        const filteredEventCount = await filteredEvents.count();
+        expect(filteredEventCount).toBeGreaterThanOrEqual(0);
+        expect(filteredEventCount).toBeLessThanOrEqual(initialEventCount);
+      } else {
+        // No type filter present - verify events are still visible
+        await expect(timelineContainer).toBeVisible();
+        const visibleEvents = page.locator('table tbody tr');
+        await expect(visibleEvents.first()).toBeVisible({ timeout: 5000 });
+      }
+    });
+    });
+}
