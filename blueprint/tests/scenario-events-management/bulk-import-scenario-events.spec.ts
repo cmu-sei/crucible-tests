@@ -4,7 +4,7 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -55,141 +55,144 @@ import {
  * notification at all. This is verified below (rather than skipped) so a regression that adds
  * an incorrect/misleading notification would also be caught.
  */
-test.describe('Scenario Events Management', () => {
-  let token: string;
-  let sourceMselId: string;
-  let sourceMselName: string;
-  let importedMselId: string | undefined;
-  let downloadPath: string | undefined;
+for (const theme of BLUEPRINT_THEMES) {
+    test.describe(`${theme} theme › Scenario Events Management`, () => {
+    let token: string;
+    let sourceMselId: string;
+    let sourceMselName: string;
+    let importedMselId: string | undefined;
+    let downloadPath: string | undefined;
 
-  test.beforeEach(async () => {
-    token = await getBlueprintToken();
-    sourceMselName = tempBlueprintName('TestBP-BulkImportSrc');
-    const msel = await createMsel(token, {
-      name: sourceMselName,
-      description: 'Seeded as bulk-import fixture',
+    test.beforeEach(async () => {
+      token = await getBlueprintToken();
+      sourceMselName = tempBlueprintName('TestBP-BulkImportSrc');
+      const msel = await createMsel(token, {
+        name: sourceMselName,
+        description: 'Seeded as bulk-import fixture',
+      });
+      sourceMselId = msel.id;
+      await seedMselDataFields(token, sourceMselId);
+
+      await createRenderableScenarioEvent(token, sourceMselId, 'Bulk import first event', {
+        deltaSeconds: 300,
+      });
+      await createRenderableScenarioEvent(token, sourceMselId, 'Bulk import second event', {
+        deltaSeconds: 900,
+      });
+
+      importedMselId = undefined;
+      downloadPath = undefined;
     });
-    sourceMselId = msel.id;
-    await seedMselDataFields(token, sourceMselId);
 
-    await createRenderableScenarioEvent(token, sourceMselId, 'Bulk import first event', {
-      deltaSeconds: 300,
+    test.afterEach(async () => {
+      try {
+        if (importedMselId) await deleteMsel(token, importedMselId);
+      } catch (err) {
+        console.warn(`Cleanup failed for imported MSEL ${importedMselId}: ${err}`);
+      }
+      try {
+        if (sourceMselId) await deleteMsel(token, sourceMselId);
+      } catch (err) {
+        console.warn(`Cleanup failed for source MSEL ${sourceMselId}: ${err}`);
+      }
+      if (downloadPath && fs.existsSync(downloadPath)) {
+        fs.unlinkSync(downloadPath);
+      }
     });
-    await createRenderableScenarioEvent(token, sourceMselId, 'Bulk import second event', {
-      deltaSeconds: 900,
+
+    test('Bulk Import Scenario Events', async ({ blueprintAuthenticatedPage: page }) => {
+    await applyBlueprintTheme(page, theme);
+      // 1. Click 'Import' or 'Upload Events' button in MSEL details and select a CSV or Excel
+      //    file. Navigate to the MSEL list and export the seeded MSEL to get a guaranteed-valid
+      //    xlsx fixture.
+      await page.goto(`${Services.Blueprint.UI}/build`, { waitUntil: 'domcontentloaded' });
+      await expect(page.getByRole('table').first()).toBeVisible({ timeout: 15000 });
+
+      const searchBox = page.getByRole('textbox', { name: 'Search' });
+      await searchBox.fill(sourceMselName);
+
+      const sourceRow = page.getByRole('row').filter({ hasText: sourceMselName });
+      await expect(sourceRow).toBeVisible({ timeout: 10000 });
+
+      const download = await downloadMselFile(page, sourceRow, /Download xlsx file/i);
+
+      downloadPath = path.join(os.tmpdir(), `bulk-import-${sourceMselName}.xlsx`);
+      await download.saveAs(downloadPath);
+      expect(fs.statSync(downloadPath).size).toBeGreaterThan(0);
+
+      // Now select that file through Blueprint's bulk-import control: the list header's
+      // "Upload a new MSEL from a file" button. This is the only file-based import affordance
+      // for scenario events that exists in the UI (see file-level comment above).
+      const uploadButton = page.getByRole('button', { name: /Upload a new MSEL from a file/i });
+      await expect(uploadButton).toBeVisible({ timeout: 10000 });
+      await uploadButton.click();
+
+      const uploadXlsxItem = page.getByRole('menuitem', { name: /Upload xlsx file/i });
+      await expect(uploadXlsxItem).toBeVisible({ timeout: 10000 });
+
+      // 2. Confirm import: selecting the file itself submits — there is no separate confirm
+      //    step in this control — so pair the file-chooser selection with the POST it triggers.
+      const fileChooserPromise = page.waitForEvent('filechooser');
+      const importResponsePromise = page.waitForResponse(
+        (r) => /\/api\/msels\/xlsx/i.test(r.url()) && r.request().method() === 'POST',
+        { timeout: 30000 }
+      );
+      await uploadXlsxItem.click();
+      const fileChooser = await fileChooserPromise;
+      await fileChooser.setFiles(downloadPath);
+
+      // expect: File is uploaded and validated — the API accepts it and returns the created MSEL.
+      const importResponse = await importResponsePromise;
+      expect(importResponse.ok(), `import failed with ${importResponse.status()}`).toBe(true);
+      const importedMsel = await importResponse.json();
+      importedMselId = importedMsel.id;
+      expect(importedMselId).toBeTruthy();
+
+      // expect: Events are imported — the response's own scenarioEvents collection (unlike
+      // GET /api/msels/{id}/scenarioEvents, which omits dataValues) already includes each
+      // event's dataValues, so count and content are asserted directly from it.
+      expect(importedMsel.scenarioEvents.length).toBe(2);
+      const importedTexts = importedMsel.scenarioEvents.flatMap((se: any) =>
+        (se.dataValues ?? []).map((dv: any) => dv.value).filter(Boolean)
+      );
+      expect(importedTexts).toEqual(
+        expect.arrayContaining(['Bulk import first event', 'Bulk import second event'])
+      );
+
+      // The delivery offsets came through the file too, so the imported MSEL is actually runnable
+      // and not just a list of texts. Coerced because `JsonIntegerConverter` writes ints as strings.
+      expect(
+        importedMsel.scenarioEvents
+          .map((se: any) => Number(se.deltaSeconds))
+          .sort((a: number, b: number) => a - b)
+      ).toEqual([300, 900]);
+
+      // Cross-check independently via the single-event endpoint (which does return dataValues),
+      // confirming the import response was not a fluke of what the client happened to send back.
+      const persistedEvents = await listScenarioEvents(token, importedMselId!);
+      expect(persistedEvents.length).toBe(2);
+      const persistedTexts: string[] = [];
+      for (const event of persistedEvents) {
+        const full = await getScenarioEvent(token, event.id);
+        persistedTexts.push(...(full.dataValues ?? []).map((dv: any) => dv.value).filter(Boolean));
+      }
+      expect(persistedTexts).toEqual(
+        expect.arrayContaining(['Bulk import first event', 'Bulk import second event'])
+      );
+
+      // expect: no error is surfaced for this successful import (see file-level Notification
+      // note — the control has no success banner either, only the new row appearing in the list).
+      await expect(
+        page.locator('simple-snack-bar, mat-snack-bar-container, .mat-mdc-snack-bar-container')
+      ).toHaveCount(0);
+      await expect(page.getByRole('alert')).toHaveCount(0);
+
+      // The new MSEL also appears in the list, confirming the import is reflected in the UI.
+      await searchBox.fill(importedMsel.name);
+      const importedRow = page.getByRole('row').filter({ hasText: sourceMselName }).filter({
+        hasText: 'Uploaded from',
+      });
+      await expect(importedRow).toBeVisible({ timeout: 10000 });
     });
-
-    importedMselId = undefined;
-    downloadPath = undefined;
-  });
-
-  test.afterEach(async () => {
-    try {
-      if (importedMselId) await deleteMsel(token, importedMselId);
-    } catch (err) {
-      console.warn(`Cleanup failed for imported MSEL ${importedMselId}: ${err}`);
-    }
-    try {
-      if (sourceMselId) await deleteMsel(token, sourceMselId);
-    } catch (err) {
-      console.warn(`Cleanup failed for source MSEL ${sourceMselId}: ${err}`);
-    }
-    if (downloadPath && fs.existsSync(downloadPath)) {
-      fs.unlinkSync(downloadPath);
-    }
-  });
-
-  test('Bulk Import Scenario Events', async ({ blueprintAuthenticatedPage: page }) => {
-    // 1. Click 'Import' or 'Upload Events' button in MSEL details and select a CSV or Excel
-    //    file. Navigate to the MSEL list and export the seeded MSEL to get a guaranteed-valid
-    //    xlsx fixture.
-    await page.goto(`${Services.Blueprint.UI}/build`, { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('table').first()).toBeVisible({ timeout: 15000 });
-
-    const searchBox = page.getByRole('textbox', { name: 'Search' });
-    await searchBox.fill(sourceMselName);
-
-    const sourceRow = page.getByRole('row').filter({ hasText: sourceMselName });
-    await expect(sourceRow).toBeVisible({ timeout: 10000 });
-
-    const download = await downloadMselFile(page, sourceRow, /Download xlsx file/i);
-
-    downloadPath = path.join(os.tmpdir(), `bulk-import-${sourceMselName}.xlsx`);
-    await download.saveAs(downloadPath);
-    expect(fs.statSync(downloadPath).size).toBeGreaterThan(0);
-
-    // Now select that file through Blueprint's bulk-import control: the list header's
-    // "Upload a new MSEL from a file" button. This is the only file-based import affordance
-    // for scenario events that exists in the UI (see file-level comment above).
-    const uploadButton = page.getByRole('button', { name: /Upload a new MSEL from a file/i });
-    await expect(uploadButton).toBeVisible({ timeout: 10000 });
-    await uploadButton.click();
-
-    const uploadXlsxItem = page.getByRole('menuitem', { name: /Upload xlsx file/i });
-    await expect(uploadXlsxItem).toBeVisible({ timeout: 10000 });
-
-    // 2. Confirm import: selecting the file itself submits — there is no separate confirm
-    //    step in this control — so pair the file-chooser selection with the POST it triggers.
-    const fileChooserPromise = page.waitForEvent('filechooser');
-    const importResponsePromise = page.waitForResponse(
-      (r) => /\/api\/msels\/xlsx/i.test(r.url()) && r.request().method() === 'POST',
-      { timeout: 30000 }
-    );
-    await uploadXlsxItem.click();
-    const fileChooser = await fileChooserPromise;
-    await fileChooser.setFiles(downloadPath);
-
-    // expect: File is uploaded and validated — the API accepts it and returns the created MSEL.
-    const importResponse = await importResponsePromise;
-    expect(importResponse.ok(), `import failed with ${importResponse.status()}`).toBe(true);
-    const importedMsel = await importResponse.json();
-    importedMselId = importedMsel.id;
-    expect(importedMselId).toBeTruthy();
-
-    // expect: Events are imported — the response's own scenarioEvents collection (unlike
-    // GET /api/msels/{id}/scenarioEvents, which omits dataValues) already includes each
-    // event's dataValues, so count and content are asserted directly from it.
-    expect(importedMsel.scenarioEvents.length).toBe(2);
-    const importedTexts = importedMsel.scenarioEvents.flatMap((se: any) =>
-      (se.dataValues ?? []).map((dv: any) => dv.value).filter(Boolean)
-    );
-    expect(importedTexts).toEqual(
-      expect.arrayContaining(['Bulk import first event', 'Bulk import second event'])
-    );
-
-    // The delivery offsets came through the file too, so the imported MSEL is actually runnable
-    // and not just a list of texts. Coerced because `JsonIntegerConverter` writes ints as strings.
-    expect(
-      importedMsel.scenarioEvents
-        .map((se: any) => Number(se.deltaSeconds))
-        .sort((a: number, b: number) => a - b)
-    ).toEqual([300, 900]);
-
-    // Cross-check independently via the single-event endpoint (which does return dataValues),
-    // confirming the import response was not a fluke of what the client happened to send back.
-    const persistedEvents = await listScenarioEvents(token, importedMselId!);
-    expect(persistedEvents.length).toBe(2);
-    const persistedTexts: string[] = [];
-    for (const event of persistedEvents) {
-      const full = await getScenarioEvent(token, event.id);
-      persistedTexts.push(...(full.dataValues ?? []).map((dv: any) => dv.value).filter(Boolean));
-    }
-    expect(persistedTexts).toEqual(
-      expect.arrayContaining(['Bulk import first event', 'Bulk import second event'])
-    );
-
-    // expect: no error is surfaced for this successful import (see file-level Notification
-    // note — the control has no success banner either, only the new row appearing in the list).
-    await expect(
-      page.locator('simple-snack-bar, mat-snack-bar-container, .mat-mdc-snack-bar-container')
-    ).toHaveCount(0);
-    await expect(page.getByRole('alert')).toHaveCount(0);
-
-    // The new MSEL also appears in the list, confirming the import is reflected in the UI.
-    await searchBox.fill(importedMsel.name);
-    const importedRow = page.getByRole('row').filter({ hasText: sourceMselName }).filter({
-      hasText: 'Uploaded from',
     });
-    await expect(importedRow).toBeVisible({ timeout: 10000 });
-  });
-});
+}

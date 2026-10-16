@@ -4,7 +4,7 @@
 // spec: steamfitter/steamfitter-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, STEAMFITTER_THEMES, setSteamfitterTheme } from '../../fixtures';
 import { getSystemRoles } from '../../fixtures';
 import { navigateToAdminSection } from '../../test-helpers';
 
@@ -14,32 +14,36 @@ import { navigateToAdminSection } from '../../test-helpers';
  * confirms the permission rows render and that the Administrator role — which holds all
  * permissions per the API — shows its "All" checkbox checked.
  */
-test.describe('Role Management in Admin', () => {
-  test('View system role permissions', async ({ steamfitterAuthenticatedPage: page }) => {
-    // The API is the source of truth for which role has allPermissions.
-    const roles = await getSystemRoles();
-    const adminRole = roles.find((r) => r.name === 'Administrator');
-    expect(adminRole, 'Administrator role should exist').toBeTruthy();
-    expect(adminRole!.allPermissions, 'Administrator should hold all permissions').toBe(true);
+for (const theme of STEAMFITTER_THEMES) {
+  test.describe(`${theme} theme › Role Management in Admin`, () => {
+    test('View system role permissions', async ({ steamfitterAuthenticatedPage: page }) => {
+      await setSteamfitterTheme(page, theme);
+      // The API is the source of truth for which role has allPermissions.
+      const roles = await getSystemRoles();
+      const adminRole = roles.find((r) => r.name === 'Administrator');
+      expect(adminRole, 'Administrator role should exist').toBeTruthy();
+      expect(adminRole!.allPermissions, 'Administrator should hold all permissions').toBe(true);
 
-    await navigateToAdminSection(page, 'Roles');
+      await navigateToAdminSection(page, 'Roles');
 
-    const rolesTab = page.getByRole('tab', { name: 'Roles', exact: true });
-    await rolesTab.click();
+      const rolesTab = page.getByRole('tab', { name: 'Roles', exact: true });
+      await rolesTab.click();
 
-    const table = page.locator('table');
-    await expect(table).toBeVisible({ timeout: 10000 });
+      const table = page.locator('table');
+      await expect(table).toBeVisible({ timeout: 10000 });
 
-    // The "All" permission row is always present, plus at least one concrete
-    // permission row (permissions come from the API's SystemPermission enum).
-    await expect(page.getByRole('cell', { name: 'All', exact: true }).first()).toBeVisible({
-      timeout: 10000,
-    });
+      // The "All" permission row is always present, plus at least one concrete
+      // permission row (permissions come from the API's SystemPermission enum). Each
+      // permission row carries an "About <permission>" info button.
+      await expect(page.getByRole('button', { name: 'About All', exact: true }).first()).toBeVisible({
+        timeout: 10000,
+      });
 
-    // The Administrator column holds all permissions, so its "All" checkbox is checked;
-    // confirm at least one checkbox in the grid renders checked.
-    await expect(page.getByRole('checkbox', { checked: true }).first()).toBeVisible({
-      timeout: 10000,
+      // The Administrator column holds all permissions, so its "All" checkbox is checked;
+      // confirm at least one checkbox in the grid renders checked.
+      await expect(page.getByRole('checkbox', { checked: true }).first()).toBeVisible({
+        timeout: 10000,
+      });
     });
   });
-});
+}

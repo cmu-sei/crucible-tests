@@ -4,19 +4,22 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, CASTER_THEMES, setCasterTheme } from '../../fixtures';
 
-test.describe('Search and Filtering', () => {
-  test('Filter by Status', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Search and Filtering`, () => {
+    test('Filter by Status', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
-    await page.goto(Services.Caster.UI + '/admin?section=Workspaces');
-    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible({ timeout: 10000 });
-    await expect(page.getByRole('heading', { name: 'Active Runs' })).toBeVisible();
+      await page.goto(Services.Caster.UI + '/admin?section=Workspaces');
+      await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible({ timeout: 10000 });
+      await expect(page.getByRole('heading', { name: 'Active Runs' })).toBeVisible();
 
-    const searchBox = page.getByRole('textbox', { name: 'Search' });
-    if (await searchBox.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await searchBox.fill('Applied');
-      await searchBox.clear();
-    }
+      const searchBox = page.getByRole('textbox', { name: 'Search' });
+      if (await searchBox.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await searchBox.fill('Applied');
+        await searchBox.clear();
+      }
+    });
   });
-});
+}

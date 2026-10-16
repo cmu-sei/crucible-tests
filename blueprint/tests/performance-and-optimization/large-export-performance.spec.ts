@@ -3,7 +3,7 @@
 
 // spec: specs/blueprint-test-plan.md
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import fs from 'fs';
 import {
   getBlueprintToken,
@@ -45,86 +45,89 @@ import {
  * to make the export non-trivial while keeping `beforeEach` quick. The count is asserted, so the
  * spec states the size it actually tested instead of implying 500.
  */
-test.describe('Performance and Optimization', () => {
-  const EVENT_COUNT = 60;
+for (const theme of BLUEPRINT_THEMES) {
+    test.describe(`${theme} theme › Performance and Optimization`, () => {
+    const EVENT_COUNT = 60;
 
-  let token: string;
-  let mselId: string;
-  let mselName: string;
+    let token: string;
+    let mselId: string;
+    let mselName: string;
 
-  test.beforeEach(async () => {
-    token = await getBlueprintToken();
-    mselName = tempBlueprintName('TestBP-ExportPerf');
-    const msel = await createMsel(token, {
-      name: mselName,
-      description: 'Seeded to measure export performance.',
-    });
-    mselId = msel.id;
+    test.beforeEach(async () => {
+      token = await getBlueprintToken();
+      mselName = tempBlueprintName('TestBP-ExportPerf');
+      const msel = await createMsel(token, {
+        name: mselName,
+        description: 'Seeded to measure export performance.',
+      });
+      mselId = msel.id;
 
-    // DataFields once, then the events. `createScenarioEvent` is used directly rather than
-    // `createRenderableScenarioEvent` because the cell text is irrelevant here and skipping the
-    // per-event DataValue write keeps setup to one call per event.
-    await seedMselDataFields(token, mselId);
-    for (let i = 0; i < EVENT_COUNT; i++) {
-      await createScenarioEvent(token, mselId, { deltaSeconds: (i + 1) * 60 });
-    }
-  });
-
-  test.afterEach(async () => {
-    try {
-      if (mselId) await deleteMsel(token, mselId);
-    } catch (err) {
-      console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
-    }
-  });
-
-  test('Large Export Performance', async ({ blueprintAuthenticatedPage: page }) => {
-    // expect: the fixture really has the events this spec claims to export. Read through the
-    // shared helper, which knows the endpoint is lowercase `/api/scenarioevents`.
-    const seededEvents = await listScenarioEvents(token, mselId);
-    expect(seededEvents.length, 'seeded scenario event count').toBe(EVENT_COUNT);
-
-    await page.goto(`${Services.Blueprint.UI}/build`, { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('table').first()).toBeVisible({ timeout: 30000 });
-
-    const mselRow = await findMselRowByName(page, mselName);
-    await expect(mselRow).toBeVisible();
-
-    // Time the export from the moment the request actually leaves the browser rather than from
-    // the menu click, so that opening the mat-menu — which `downloadMselFile` may have to retry
-    // past an overlay animation — is not charged against the export budget below.
-    let requestedAt = 0;
-    page.on('request', (req) => {
-      if (/\/api\/msels\/[^/]+\/xlsx/i.test(req.url())) requestedAt = Date.now();
+      // DataFields once, then the events. `createScenarioEvent` is used directly rather than
+      // `createRenderableScenarioEvent` because the cell text is irrelevant here and skipping the
+      // per-event DataValue write keeps setup to one call per event.
+      await seedMselDataFields(token, mselId);
+      for (let i = 0; i < EVENT_COUNT; i++) {
+        await createScenarioEvent(token, mselId, { deltaSeconds: (i + 1) * 60 });
+      }
     });
 
-    const download = await downloadMselFile(page, mselRow, /Download xlsx file/i);
-    expect(requestedAt, 'never observed the xlsx export request').toBeGreaterThan(0);
-    const exportSeconds = (Date.now() - requestedAt) / 1000;
+    test.afterEach(async () => {
+      try {
+        if (mselId) await deleteMsel(token, mselId);
+      } catch (err) {
+        console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+      }
+    });
 
-    // expect: the export completes in reasonable time.
-    expect(exportSeconds, `export of ${EVENT_COUNT} events took ${exportSeconds}s`).toBeLessThan(60);
+    test('Large Export Performance', async ({ blueprintAuthenticatedPage: page }) => {
+    await applyBlueprintTheme(page, theme);
+      // expect: the fixture really has the events this spec claims to export. Read through the
+      // shared helper, which knows the endpoint is lowercase `/api/scenarioevents`.
+      const seededEvents = await listScenarioEvents(token, mselId);
+      expect(seededEvents.length, 'seeded scenario event count').toBe(EVENT_COUNT);
 
-    // expect: the page is still responsive afterwards — asserted by actually driving it, not by
-    // reading `document.readyState` (which is 'complete' on a wedged page too, and was the old
-    // version's only real check).
-    await expect(page.getByRole('table').first()).toBeVisible({ timeout: 15000 });
-    const searchBox = page.getByPlaceholder('Search').first();
-    await expect(searchBox).toBeVisible({ timeout: 15000 });
-    await searchBox.fill(mselName);
-    await expect(searchBox).toHaveValue(mselName);
+      await page.goto(`${Services.Blueprint.UI}/build`, { waitUntil: 'domcontentloaded' });
+      await expect(page.getByRole('table').first()).toBeVisible({ timeout: 30000 });
 
-    // expect: a real workbook, not an error placeholder. xlsx is a zip, so it starts with "PK".
-    expect(download.suggestedFilename()).toMatch(/\.xlsx?$/i);
-    const downloadPath = await download.path();
-    expect(downloadPath, 'export produced no file on disk').toBeTruthy();
+      const mselRow = await findMselRowByName(page, mselName);
+      await expect(mselRow).toBeVisible();
 
-    const contents = fs.readFileSync(downloadPath!);
-    expect(contents.subarray(0, 2).toString('latin1')).toBe('PK');
+      // Time the export from the moment the request actually leaves the browser rather than from
+      // the menu click, so that opening the mat-menu — which `downloadMselFile` may have to retry
+      // past an overlay animation — is not charged against the export budget below.
+      let requestedAt = 0;
+      page.on('request', (req) => {
+        if (/\/api\/msels\/[^/]+\/xlsx/i.test(req.url())) requestedAt = Date.now();
+      });
 
-    // expect: the file is neither empty nor implausibly large.
-    const fileSizeMB = contents.length / 1024 / 1024;
-    expect(contents.length).toBeGreaterThan(0);
-    expect(fileSizeMB, `workbook was ${fileSizeMB.toFixed(2)} MB`).toBeLessThan(50);
-  });
-});
+      const download = await downloadMselFile(page, mselRow, /Download xlsx file/i);
+      expect(requestedAt, 'never observed the xlsx export request').toBeGreaterThan(0);
+      const exportSeconds = (Date.now() - requestedAt) / 1000;
+
+      // expect: the export completes in reasonable time.
+      expect(exportSeconds, `export of ${EVENT_COUNT} events took ${exportSeconds}s`).toBeLessThan(60);
+
+      // expect: the page is still responsive afterwards — asserted by actually driving it, not by
+      // reading `document.readyState` (which is 'complete' on a wedged page too, and was the old
+      // version's only real check).
+      await expect(page.getByRole('table').first()).toBeVisible({ timeout: 15000 });
+      const searchBox = page.getByPlaceholder('Search').first();
+      await expect(searchBox).toBeVisible({ timeout: 15000 });
+      await searchBox.fill(mselName);
+      await expect(searchBox).toHaveValue(mselName);
+
+      // expect: a real workbook, not an error placeholder. xlsx is a zip, so it starts with "PK".
+      expect(download.suggestedFilename()).toMatch(/\.xlsx?$/i);
+      const downloadPath = await download.path();
+      expect(downloadPath, 'export produced no file on disk').toBeTruthy();
+
+      const contents = fs.readFileSync(downloadPath!);
+      expect(contents.subarray(0, 2).toString('latin1')).toBe('PK');
+
+      // expect: the file is neither empty nor implausibly large.
+      const fileSizeMB = contents.length / 1024 / 1024;
+      expect(contents.length).toBeGreaterThan(0);
+      expect(fileSizeMB, `workbook was ${fileSizeMB.toFixed(2)} MB`).toBeLessThan(50);
+    });
+    });
+}

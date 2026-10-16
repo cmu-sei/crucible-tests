@@ -4,18 +4,21 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, CASTER_THEMES, setCasterTheme } from '../../fixtures';
 
-test.describe('Pools Management', () => {
-  test('View Pool Details', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Pools Management`, () => {
+    test('View Pool Details', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
-    await page.goto(Services.Caster.UI + '/admin?section=VLANs');
-    await expect(page.getByRole('heading', { name: 'Pools' })).toBeVisible({ timeout: 10000 });
-    await expect(page.getByRole('tab', { name: 'Pools', selected: true })).toBeVisible();
+      await page.goto(Services.Caster.UI + '/admin?section=VLANs');
+      await expect(page.getByRole('heading', { name: 'Pools' })).toBeVisible({ timeout: 10000 });
+      await expect(page.getByRole('tab', { name: 'Pools', selected: true })).toBeVisible();
 
-    const poolRow = page.getByRole('tabpanel', { name: 'Pools' }).getByRole('row').first();
-    if (await poolRow.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await poolRow.click();
-    }
+      const poolRow = page.getByRole('tabpanel', { name: 'Pools' }).getByRole('row').first();
+      if (await poolRow.isVisible({ timeout: 5000 }).catch(() => false)) {
+        await poolRow.click();
+      }
+    });
   });
-});
+}

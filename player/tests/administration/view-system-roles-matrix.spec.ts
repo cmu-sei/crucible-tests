@@ -4,40 +4,47 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
 
-test.describe('Administration - Roles and Permissions', () => {
-  test('View System Roles Permissions Matrix', async ({ playerAuthenticatedPage: page }) => {
-    // 1. Log in as admin and navigate to Administration > Roles
-    await page.getByRole('button', { name: 'Menu' }).click();
-    await page.getByRole('menuitem', { name: 'Administration' }).click();
-    await page.getByRole('button', { name: 'Roles Roles' }).click();
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Administration - Roles and Permissions`, () => {
+    test('View System Roles Permissions Matrix', async ({ playerAuthenticatedPage: page }) => {
+      await setPlayerTheme(page, theme);
+      // 1. Log in as admin and navigate to Administration > Roles
+      await page.getByRole('button', { name: 'Menu' }).click();
+      await page.getByRole('menuitem', { name: 'Administration' }).click();
+      await page.getByRole('button', { name: 'Roles Roles' }).click();
 
-    // expect: The Roles tab is active
-    await expect(page.getByRole('tab', { name: 'Roles', selected: true })).toBeVisible();
+      // expect: The Roles tab is active
+      await expect(page.getByRole('tab', { name: 'Roles', selected: true })).toBeVisible();
 
-    // 2. Observe the permissions matrix
-    // expect: Columns show 'Administrator' and 'Content Developer' roles
-    await expect(page.getByRole('columnheader', { name: 'Administrator' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Content Developer' })).toBeVisible();
+      // 2. Observe the permissions matrix
+      // expect: Columns show 'Administrator' and 'Content Developer' roles
+      await expect(page.getByRole('columnheader', { name: 'Administrator' })).toBeVisible();
+      await expect(page.getByRole('columnheader', { name: 'Content Developer' })).toBeVisible();
 
-    // expect: Rows show permissions
-    await expect(page.getByRole('cell', { name: 'All' })).toBeVisible();
-    await expect(page.getByRole('cell', { name: 'CreateViews' })).toBeVisible();
-    await expect(page.getByRole('cell', { name: 'EditViews' })).toBeVisible();
-    await expect(page.getByRole('cell', { name: 'ManageApplications' })).toBeVisible();
-    await expect(page.getByRole('cell', { name: 'ManageRoles' })).toBeVisible();
-    await expect(page.getByRole('cell', { name: 'ManageUsers' })).toBeVisible();
-    await expect(page.getByRole('cell', { name: 'ManageViews' })).toBeVisible();
-    await expect(page.getByRole('cell', { name: 'ViewApplications' })).toBeVisible();
-    await expect(page.getByRole('cell', { name: 'ViewRoles' })).toBeVisible();
-    await expect(page.getByRole('cell', { name: 'ViewUsers' })).toBeVisible();
-    await expect(page.getByRole('cell', { name: 'ViewViews' })).toBeVisible();
+      // expect: Rows show permissions
+      await expect(page.getByRole('cell', { name: 'All' })).toBeVisible();
+      await expect(page.getByRole('cell', { name: 'CreateViews' })).toBeVisible();
+      await expect(page.getByRole('cell', { name: 'EditViews' })).toBeVisible();
+      await expect(page.getByRole('cell', { name: 'ManageApplications' })).toBeVisible();
+      await expect(page.getByRole('cell', { name: 'ManageRoles' })).toBeVisible();
+      await expect(page.getByRole('cell', { name: 'ManageUsers' })).toBeVisible();
+      await expect(page.getByRole('cell', { name: 'ManageViews' })).toBeVisible();
+      await expect(page.getByRole('cell', { name: 'ViewApplications' })).toBeVisible();
+      await expect(page.getByRole('cell', { name: 'ViewRoles' })).toBeVisible();
+      await expect(page.getByRole('cell', { name: 'ViewUsers' })).toBeVisible();
+      await expect(page.getByRole('cell', { name: 'ViewViews' })).toBeVisible();
 
-    // expect: Administrator role has 'All' permission checked and disabled
-    const allRow = page.getByRole('row').filter({ has: page.getByRole('cell', { name: 'All', exact: true }) });
-    const adminCell = allRow.getByRole('cell').nth(1);
-    await expect(adminCell.getByRole('checkbox')).toBeChecked();
-    await expect(adminCell.getByRole('checkbox')).toBeDisabled();
+      // expect: Administrator role has 'All' permission checked and disabled
+      // The permission cell's accessible name includes its "About <permission>" info
+      // button, so key the row on that button rather than an exact cell name.
+      const allRow = page
+        .getByRole('row')
+        .filter({ has: page.getByRole('button', { name: 'About All', exact: true }) });
+      const adminCell = allRow.getByRole('cell').nth(1);
+      await expect(adminCell.getByRole('checkbox')).toBeChecked();
+      await expect(adminCell.getByRole('checkbox')).toBeDisabled();
+    });
   });
-});
+}

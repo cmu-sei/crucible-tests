@@ -4,48 +4,51 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, CASTER_THEMES, setCasterTheme } from '../../fixtures';
 
-test.describe('Workspaces Management', () => {
-  test('Lock and Unlock Workspace', async ({ casterAuthenticatedPage: page, cleanupCasterProjectByName }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Workspaces Management`, () => {
+    test('Lock and Unlock Workspace', async ({ casterAuthenticatedPage: page, cleanupCasterProjectByName }) => {
+      await setCasterTheme(page, theme);
 
-    const projectName = 'Lock WS Project';
-    await cleanupCasterProjectByName(projectName);
+      const projectName = 'Lock WS Project';
+      await cleanupCasterProjectByName(projectName);
 
-    await expect(page.getByText('My Projects')).toBeVisible();
-    await page.reload();
+      await expect(page.getByText('My Projects')).toBeVisible();
+      await page.reload();
 
-    await page.locator('[mattooltip="Add New Project"]').click();
-    const projectDialog = page.getByRole('dialog', { name: 'Create New Project?' });
-    await expect(projectDialog).toBeVisible();
-    await projectDialog.getByRole('textbox', { name: 'Name' }).fill(projectName);
-    await projectDialog.getByRole('button', { name: 'Save' }).click();
-    await expectCasterProjectOpen(page, projectName);
+      await page.locator('[mattooltip="Add New Project"]').click();
+      const projectDialog = page.getByRole('dialog', { name: 'Create New Project?' });
+      await expect(projectDialog).toBeVisible();
+      await projectDialog.getByRole('textbox', { name: 'Name' }).fill(projectName);
+      await projectDialog.getByRole('button', { name: 'Save' }).click();
+      await expectCasterProjectOpen(page, projectName);
 
-    await page.getByTitle('Add New Directory').click();
-    const dirDialog = page.getByRole('dialog', { name: 'Create New Directory?' });
-    await expect(dirDialog).toBeVisible();
-    await dirDialog.getByRole('textbox', { name: 'Name' }).fill('Lock WS Dir');
-    await dirDialog.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByRole('button', { name: 'Lock WS Dir' })).toBeVisible({ timeout: 10000 });
+      await page.getByTitle('Add New Directory').click();
+      const dirDialog = page.getByRole('dialog', { name: 'Create New Directory?' });
+      await expect(dirDialog).toBeVisible();
+      await dirDialog.getByRole('textbox', { name: 'Name' }).fill('Lock WS Dir');
+      await dirDialog.getByRole('button', { name: 'Save' }).click();
+      await expect(page.getByRole('button', { name: 'Lock WS Dir' })).toBeVisible({ timeout: 10000 });
 
-    await page.getByRole('button', { name: 'Lock WS Dir' }).click();
-    await page.getByRole('button', { name: 'WORKSPACES' }).click();
+      await page.getByRole('button', { name: 'Lock WS Dir' }).click();
+      await page.getByRole('button', { name: 'WORKSPACES' }).click();
 
-    await page.getByText('Add Workspace').click();
-    const wsDialog = page.getByRole('dialog', { name: 'Create New Workspace?' });
-    await expect(wsDialog).toBeVisible();
-    // Workspace names must match pattern: ^[a-zA-Z0-9-_.]+$ (no spaces allowed)
-    await wsDialog.getByRole('textbox', { name: 'Name' }).fill('Lock_Workspace');
-    await wsDialog.getByRole('button', { name: 'Save' }).click();
+      await page.getByText('Add Workspace').click();
+      const wsDialog = page.getByRole('dialog', { name: 'Create New Workspace?' });
+      await expect(wsDialog).toBeVisible();
+      // Workspace names must match pattern: ^[a-zA-Z0-9-_.]+$ (no spaces allowed)
+      await wsDialog.getByRole('textbox', { name: 'Name' }).fill('Lock_Workspace');
+      await wsDialog.getByRole('button', { name: 'Save' }).click();
 
-    const wsItem = page.getByText('Lock_Workspace');
-    if (await wsItem.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await wsItem.click();
-      const lockButton = page.getByRole('button', { name: /lock/i });
-      if (await lockButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-        await lockButton.click();
+      const wsItem = page.getByText('Lock_Workspace');
+      if (await wsItem.isVisible({ timeout: 5000 }).catch(() => false)) {
+        await wsItem.click();
+        const lockButton = page.getByRole('button', { name: /lock/i });
+        if (await lockButton.isVisible({ timeout: 3000 }).catch(() => false)) {
+          await lockButton.click();
+        }
       }
-    }
+    });
   });
-});
+}

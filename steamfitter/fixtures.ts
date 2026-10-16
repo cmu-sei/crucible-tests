@@ -1,7 +1,7 @@
 // Copyright 2026 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
-import { test as base, Page, request as pwRequest, APIRequestContext } from '@playwright/test';
+import { test as base, expect, Page, request as pwRequest, APIRequestContext } from '@playwright/test';
 import fs from 'fs';
 import { randomUUID } from 'crypto';
 import {
@@ -13,6 +13,7 @@ import {
   settleForResponse,
 } from '../shared-fixtures';
 import { authStatePath } from '../auth-paths';
+import { createView, deleteView, getPlayerToken } from '../player-helpers';
 
 /**
  * Steamfitter-specific fixtures
@@ -274,57 +275,41 @@ export async function seedTask(
 // dialog (the Save button is gated on a viewId). The Player API is a separate
 // service that may or may not be running in a given environment, so view-dependent
 // tests probe availability first and fall back to dependency-free assertions when
-// Player is down. The Steamfitter token already carries the `player` scope (see
-// getSteamfitterApiToken), so the same token authenticates against the Player API.
+// Player is down.
+//
+// The view calls themselves live in `../player-helpers`, which owns every view
+// create/delete in the suite. The two wrappers below exist only to keep the
+// argument shape these specs already use — `createPlayerView(name)` returning an
+// id, and `deletePlayerView(id)` — rather than threading a token through each
+// spec, and to keep the "API seed:"/"API cleanup:" log lines that make a
+// Steamfitter run readable. They do not re-implement anything.
+//
+// Note the token: `player-helpers` fetches its own via the `player.vm.api`
+// password grant instead of reusing `getSteamfitterApiToken`. Both carry the
+// `player` audience and both authenticate against the Player API, so the swap is
+// invisible to a caller; it costs one extra Keycloak round trip per view, which
+// is nothing against a browser test.
 
 /**
- * Return true when the Player API is reachable and accepts our token, so
+ * Return true when the Player API is reachable and accepts a seeding token, so
  * view-dependent tests can decide whether to seed a real view or fall back to
- * dependency-free assertions. Never throws — any failure is treated as "unavailable".
+ * dependency-free assertions. Never throws — any failure is treated as
+ * "unavailable". Re-exported from `../player-helpers` so the probe and the
+ * subsequent create use the same credentials.
  */
-export async function isPlayerApiAvailable(): Promise<boolean> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
-    const token = await getSteamfitterApiToken(apiContext);
-    const response = await apiContext.get(`${Services.Player.API}/api/views`, {
-      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-      timeout: 8000,
-    });
-    return response.ok();
-  } catch {
-    return false;
-  } finally {
-    await apiContext.dispose();
-  }
-}
+export { isPlayerApiAvailable } from '../player-helpers';
 
 /**
- * Create a Player view via the Player API and return its id. Used by view-dependent
- * scenario tests; pair every call with {@link deletePlayerView} in cleanup.
+ * Create a Player view and return its id. Used by view-dependent scenario tests;
+ * pair every call with {@link deletePlayerView} in cleanup.
  */
 export async function createPlayerView(
   name: string = `E2E View ${Date.now()}`,
   description: string = 'E2E seeded Player view'
 ): Promise<string> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
-    const token = await getSteamfitterApiToken(apiContext);
-    const response = await apiContext.post(`${Services.Player.API}/api/views`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      data: { name, description, status: 'Active' },
-    });
-    if (!response.ok()) {
-      throw new Error(`Failed to create Player view: ${response.status()} ${await response.text()}`);
-    }
-    const view = await response.json();
-    console.log(`API seed: Created Player view "${name}" (${view.id})`);
-    return view.id;
-  } finally {
-    await apiContext.dispose();
-  }
+  const view = await createView(await getPlayerToken(), name, description);
+  console.log(`API seed: Created Player view "${name}" (${view.id})`);
+  return view.id;
 }
 
 /**
@@ -333,21 +318,21 @@ export async function createPlayerView(
  */
 export async function deletePlayerView(viewId: string): Promise<void> {
   if (!viewId) return;
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
   try {
-    const token = await getSteamfitterApiToken(apiContext);
-    const response = await apiContext
-      .delete(`${Services.Player.API}/api/views/${viewId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      .catch(() => null);
-    if (response && (response.ok() || response.status() === 404)) {
-      console.log(`API cleanup: Deleted Player view ${viewId}`);
-    } else if (response) {
-      console.warn(`API cleanup: Failed to delete Player view ${viewId}: ${response.status()}`);
-    }
-  } finally {
-    await apiContext.dispose();
+    // deleteView warns and resolves on a failed DELETE rather than throwing, so
+    // the log has to follow its verdict — claiming a deletion that did not happen
+    // sends the next person looking anywhere but at the leaked view.
+    const deleted = await deleteView(await getPlayerToken(), viewId);
+    console.log(
+      deleted
+        ? `API cleanup: Deleted Player view ${viewId}`
+        : `API cleanup: Player view ${viewId} was NOT deleted and has leaked (see warning above)`
+    );
+  } catch (error) {
+    // deleteView already swallows a failed DELETE (it warns); this catches the
+    // token fetch, which would otherwise throw out of a teardown and replace the
+    // test's real failure with its own.
+    console.warn(`API cleanup: Failed to delete Player view ${viewId}: ${error}`);
   }
 }
 
@@ -804,6 +789,58 @@ export const test = base.extend<SteamfitterFixtures>({
     await use(page);
   },
 });
+
+/**
+ * Themes every Steamfitter functional spec is parameterized over. Each spec runs
+ * once per entry so every screen is exercised in both light and dark mode.
+ */
+export const STEAMFITTER_THEMES = ['light', 'dark'] as const;
+export type SteamfitterTheme = (typeof STEAMFITTER_THEMES)[number];
+
+/** Whether Steamfitter is currently rendering the dark theme. */
+export async function steamfitterIsDarkTheme(page: Page): Promise<boolean> {
+  return page.evaluate(() => document.body.classList.contains('darkMode'));
+}
+
+/**
+ * Switch Steamfitter between light and dark theme through the top bar user menu's
+ * "Dark Theme" switch, and wait for the change to land on `document.body`.
+ *
+ * Steamfitter persists the selected theme in the `auth.ui` slice of its Akita
+ * store, saved to localStorage under 'akita-steamfitter-ui' (`main.ts`). So a theme
+ * set here survives the reloads and `page.goto` calls a test performs afterward,
+ * and only needs applying once, right after authentication. The preference never
+ * reaches the server, and the saved auth state carries no Akita store, so every
+ * test's fresh browser context starts light.
+ *
+ * Use the switch rather than the `?theme=dark` query param: once the param has been
+ * seen, `AppComponent` writes it back onto the URL on every later theme change,
+ * which would leak it into the URL assertions several specs make.
+ *
+ * No-ops when the requested theme is already active, so callers can use it to
+ * restore state unconditionally.
+ */
+export async function setSteamfitterTheme(page: Page, theme: SteamfitterTheme): Promise<void> {
+  const want = theme === 'dark';
+  if ((await steamfitterIsDarkTheme(page)) === want) return;
+
+  // The user menu is the top bar's name button (its label is the current user's name).
+  await page.locator('app-topbar button.menu-trigger').first().click();
+  const toggle = page.getByRole('switch', { name: 'Dark Theme' });
+  await toggle.waitFor({ state: 'visible', timeout: 10000 });
+  await toggle.click();
+  // Close the menu, and wait for its overlay to tear down so a lingering CDK
+  // backdrop can't silently intercept the test's next click.
+  await page.keyboard.press('Escape');
+  await page.locator('.mat-mdc-menu-panel').waitFor({ state: 'detached', timeout: 5000 });
+  await page.locator('.cdk-overlay-backdrop').waitFor({ state: 'detached', timeout: 5000 });
+
+  if (want) {
+    await expect(page.locator('body')).toHaveClass(/\bdarkMode\b/, { timeout: 10000 });
+  } else {
+    await expect(page.locator('body')).not.toHaveClass(/\bdarkMode\b/, { timeout: 10000 });
+  }
+}
 
 export { expect } from '@playwright/test';
 export { Services, serviceUrlPattern, oidcStorageKey, waitForFirstVisible, settleForResponse };

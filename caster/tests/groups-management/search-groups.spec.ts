@@ -4,25 +4,28 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, CASTER_THEMES, setCasterTheme } from '../../fixtures';
 
-test.describe('Groups Management', () => {
-  test('Search Groups', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Groups Management`, () => {
+    test('Search Groups', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
-    // 1. Navigate to Groups admin section
-    await page.goto(Services.Caster.UI + '/admin?section=Groups');
-    await expect(page.getByRole('columnheader', { name: 'Group Name' })).toBeVisible({ timeout: 10000 });
+      // 1. Navigate to Groups admin section
+      await page.goto(Services.Caster.UI + '/admin?section=Groups');
+      await expect(page.getByRole('columnheader', { name: 'Group Name' })).toBeVisible({ timeout: 10000 });
 
-    const searchBox = page.getByRole('textbox', { name: 'Search Groups' });
-    await expect(searchBox).toBeVisible();
+      const searchBox = page.getByRole('textbox', { name: 'Search Groups' });
+      await expect(searchBox).toBeVisible();
 
-    // 2. Enter a search term
-    await searchBox.fill('TestSearch');
+      // 2. Enter a search term
+      await searchBox.fill('TestSearch');
 
-    // 3. Clear the search box
-    await searchBox.clear();
+      // 3. Clear the search box
+      await searchBox.clear();
 
-    // expect: All groups are displayed again
-    await expect(page.getByRole('table')).toBeVisible();
+      // expect: All groups are displayed again
+      await expect(page.getByRole('table')).toBeVisible();
+    });
   });
-});
+}

@@ -6,24 +6,28 @@
 
 import { test, expect } from '@playwright/test';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
+import { ALLOY_THEMES, applyAlloyTheme } from '../../test-helpers';
 
-test.describe('Events Management', () => {
-  test('Join Active Event from Home Page', async ({ page }) => {
-    // 1. Navigate to http://localhost:4403 (home page)
-    await authenticateWithKeycloak(page, Services.Alloy.UI);
+for (const theme of ALLOY_THEMES) {
+  test.describe(`${theme} theme › Events Management`, () => {
+    test('Join Active Event from Home Page', async ({ page }) => {
+      // 1. Navigate to http://localhost:4403 (home page)
+      await authenticateWithKeycloak(page, Services.Alloy.UI);
+      await applyAlloyTheme(page, theme);
 
-    // expect: Home page displays list of user's events
-    await expect(page.getByText('My Events')).toBeVisible();
-    await expect(page.getByRole('table')).toBeVisible();
+      // expect: Home page displays list of user's events
+      await expect(page.getByText('My Events')).toBeVisible();
+      await expect(page.getByRole('table')).toBeVisible();
 
-    // 2. Verify event template links are clickable
-    const scenarioLink = page.getByRole('link', { name: 'Scenario Template' });
-    if (await scenarioLink.isVisible()) {
-      // Click on the event template
-      await scenarioLink.click();
+      // 2. Verify event template links are clickable
+      const scenarioLink = page.getByRole('link', { name: 'Scenario Template' });
+      if (await scenarioLink.isVisible()) {
+        // Click on the event template
+        await scenarioLink.click();
 
-      // expect: The application navigates to the event view
-      await expect(page).toHaveURL(/\/templates\//);
-    }
+        // expect: The application navigates to the event view
+        await expect(page).toHaveURL(/\/templates\//);
+      }
+    });
   });
-});
+}

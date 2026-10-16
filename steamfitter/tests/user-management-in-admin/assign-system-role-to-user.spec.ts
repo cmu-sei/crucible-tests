@@ -4,7 +4,7 @@
 // spec: steamfitter/steamfitter-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, STEAMFITTER_THEMES, setSteamfitterTheme } from '../../fixtures';
 import { seedUser, deleteUsersByPrefix } from '../../fixtures';
 import { navigateToAdminSection } from '../../test-helpers';
 
@@ -15,45 +15,48 @@ import { navigateToAdminSection } from '../../test-helpers';
  * built-in "Content Developer" role, waits on the PUT, and confirms the select now
  * shows that role after a reload.
  */
-test.describe('User Management in Admin', () => {
-  const USER_NAME = `E2E Role User ${Date.now()}`;
-  const ROLE_NAME = 'Content Developer';
+for (const theme of STEAMFITTER_THEMES) {
+  test.describe(`${theme} theme › User Management in Admin`, () => {
+    const USER_NAME = `E2E Role User ${Date.now()}`;
+    const ROLE_NAME = 'Content Developer';
 
-  test.beforeEach(async () => {
-    await seedUser(USER_NAME);
+    test.beforeEach(async () => {
+      await seedUser(USER_NAME);
+    });
+
+    test.afterEach(async () => {
+      await deleteUsersByPrefix(['E2E Role User']);
+    });
+
+    test('Assign a system role to a user', async ({ steamfitterAuthenticatedPage: page }) => {
+      await setSteamfitterTheme(page, theme);
+      await navigateToAdminSection(page, 'Users');
+
+      // 1. Search to isolate the seeded user's row.
+      const searchField = page.getByRole('textbox', { name: 'Search' });
+      await searchField.fill(USER_NAME);
+      const row = page.locator('tbody tr').filter({ hasText: USER_NAME }).first();
+      await expect(row).toBeVisible({ timeout: 5000 });
+
+      // 2. Open the row's role select and pick ContentDeveloper. Wait on the user PUT so
+      // the assignment is persisted before we re-check.
+      const roleSelect = row.getByRole('combobox');
+      await roleSelect.click();
+      const putResponse = page.waitForResponse(
+        (response) =>
+          /\/api\/users\//.test(response.url()) &&
+          response.request().method() === 'PUT' &&
+          response.ok(),
+        { timeout: 15000 }
+      );
+      await page.getByRole('option', { name: ROLE_NAME, exact: true }).click();
+      await putResponse.catch(() => {});
+
+      // 3. Reload the section, re-isolate the row, and confirm the select shows the role.
+      await navigateToAdminSection(page, 'Users');
+      await searchField.fill(USER_NAME);
+      const reloadedRow = page.locator('tbody tr').filter({ hasText: USER_NAME }).first();
+      await expect(reloadedRow.getByRole('combobox')).toContainText(ROLE_NAME, { timeout: 10000 });
+    });
   });
-
-  test.afterEach(async () => {
-    await deleteUsersByPrefix(['E2E Role User']);
-  });
-
-  test('Assign a system role to a user', async ({ steamfitterAuthenticatedPage: page }) => {
-    await navigateToAdminSection(page, 'Users');
-
-    // 1. Search to isolate the seeded user's row.
-    const searchField = page.getByRole('textbox', { name: 'Search' });
-    await searchField.fill(USER_NAME);
-    const row = page.locator('tbody tr').filter({ hasText: USER_NAME }).first();
-    await expect(row).toBeVisible({ timeout: 5000 });
-
-    // 2. Open the row's role select and pick ContentDeveloper. Wait on the user PUT so
-    // the assignment is persisted before we re-check.
-    const roleSelect = row.getByRole('combobox');
-    await roleSelect.click();
-    const putResponse = page.waitForResponse(
-      (response) =>
-        /\/api\/users\//.test(response.url()) &&
-        response.request().method() === 'PUT' &&
-        response.ok(),
-      { timeout: 15000 }
-    );
-    await page.getByRole('option', { name: ROLE_NAME, exact: true }).click();
-    await putResponse.catch(() => {});
-
-    // 3. Reload the section, re-isolate the row, and confirm the select shows the role.
-    await navigateToAdminSection(page, 'Users');
-    await searchField.fill(USER_NAME);
-    const reloadedRow = page.locator('tbody tr').filter({ hasText: USER_NAME }).first();
-    await expect(reloadedRow.getByRole('combobox')).toContainText(ROLE_NAME, { timeout: 10000 });
-  });
-});
+}

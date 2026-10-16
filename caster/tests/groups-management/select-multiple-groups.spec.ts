@@ -11,38 +11,43 @@ import {
   createCasterGroup,
   deleteCasterGroup,
   gotoCasterGroupsAdmin,
+  CASTER_THEMES,
+  setCasterTheme,
 } from '../../fixtures';
 
 const GROUP_NAMES = ['Select Group 1', 'Select Group 2'];
 
-test.describe('Groups Management', () => {
-  test('Select Multiple Groups', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Groups Management`, () => {
+    test('Select Multiple Groups', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
-    await gotoCasterGroupsAdmin(page);
+      await gotoCasterGroupsAdmin(page);
 
-    // 1. Create two groups for selection testing
-    for (const groupName of GROUP_NAMES) {
-      await createCasterGroup(page, groupName);
-      await expect(casterGroupCell(page, groupName)).toBeVisible();
-    }
+      // 1. Create two groups for selection testing
+      for (const groupName of GROUP_NAMES) {
+        await createCasterGroup(page, groupName);
+        await expect(casterGroupCell(page, groupName)).toBeVisible();
+      }
 
-    // 2. Click on group rows to expand/select them
-    for (const groupName of GROUP_NAMES) {
-      const row = page.getByRole('row').filter({ has: casterGroupCell(page, groupName) });
-      await row.getByRole('cell').last().click();
-    }
+      // 2. Click on group rows to expand/select them
+      for (const groupName of GROUP_NAMES) {
+        const row = page.getByRole('row').filter({ has: casterGroupCell(page, groupName) });
+        await row.getByRole('cell').last().click();
+      }
 
-    // Cleanup: reload to clear any expanded rows and error overlays, then delete groups
-    await gotoCasterGroupsAdmin(page);
+      // Cleanup: reload to clear any expanded rows and error overlays, then delete groups
+      await gotoCasterGroupsAdmin(page);
 
-    for (const groupName of GROUP_NAMES) {
-      await expect(casterGroupCell(page, groupName)).toBeVisible({ timeout: 10000 });
-      await deleteCasterGroup(page, groupName);
-    }
+      for (const groupName of GROUP_NAMES) {
+        await expect(casterGroupCell(page, groupName)).toBeVisible({ timeout: 10000 });
+        await deleteCasterGroup(page, groupName);
+      }
 
-    // Final verification: neither group exists
-    for (const groupName of GROUP_NAMES) {
-      await expect(casterGroupCell(page, groupName)).toHaveCount(0);
-    }
+      // Final verification: neither group exists
+      for (const groupName of GROUP_NAMES) {
+        await expect(casterGroupCell(page, groupName)).toHaveCount(0);
+      }
+    });
   });
-});
+}

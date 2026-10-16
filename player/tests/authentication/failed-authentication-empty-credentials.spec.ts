@@ -4,39 +4,46 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, PLAYER_THEMES, playerUrl } from '../../fixtures';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
-test.describe('Authentication', () => {
-  test('Failed Authentication - Empty Credentials', async ({ page }) => {
-    // 1. Navigate to Player UI at http://localhost:4301
-    await page.goto(Services.Player.UI);
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Authentication`, () => {
+    test('Failed Authentication - Empty Credentials', async ({ page }) => {
+      // 1. Navigate to Player UI at http://localhost:4301
+      // The login never succeeds, so Player's user-menu theme switch never exists.
+      // The theme is requested on the entry URL instead, the only theme input an
+      // unauthenticated visitor has; everything after it happens on Keycloak's own
+      // screens, so the assertions are the same in both themes and the point is
+      // that the redirect and the failure behave identically in each.
+      await page.goto(playerUrl('/', theme));
 
-    // expect: User is redirected to Keycloak login page
-    await page.getByText('Sign in to your account').first().waitFor({ state: 'visible' });
+      // expect: User is redirected to Keycloak login page
+      await page.getByText('Sign in to your account').first().waitFor({ state: 'visible' });
 
-    // 2. Leave username field empty
-    const usernameField = page.getByRole('textbox', { name: 'Username or email' });
+      // 2. Leave username field empty
+      const usernameField = page.getByRole('textbox', { name: 'Username or email' });
 
-    // expect: Username field is empty
-    await expect(usernameField).toHaveValue('');
+      // expect: Username field is empty
+      await expect(usernameField).toHaveValue('');
 
-    // 3. Leave password field empty
-    const passwordField = page.getByRole('textbox', { name: 'Password' });
+      // 3. Leave password field empty
+      const passwordField = page.getByRole('textbox', { name: 'Password' });
 
-    // expect: Password field is empty
-    await expect(passwordField).toHaveValue('');
+      // expect: Password field is empty
+      await expect(passwordField).toHaveValue('');
 
-    // 4. Click the 'Sign In' button
-    await page.getByRole('button', { name: 'Sign In' }).click();
+      // 4. Click the 'Sign In' button
+      await page.getByRole('button', { name: 'Sign In' }).click();
 
-    // expect: Validation error appears
-    // expect: Error message indicates required fields
-    const errorMessage = page.locator('.alert-error, #input-error, .kc-feedback-text');
-    await expect(errorMessage).toBeVisible({ timeout: 5000 });
+      // expect: Validation error appears
+      // expect: Error message indicates required fields
+      const errorMessage = page.locator('.alert-error, #input-error, .kc-feedback-text');
+      await expect(errorMessage).toBeVisible({ timeout: 5000 });
 
-    // expect: User cannot proceed without credentials
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 5000 });
+      // expect: User cannot proceed without credentials
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 5000 });
+    });
   });
-});
+}

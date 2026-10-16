@@ -4,42 +4,45 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, CASTER_THEMES, setCasterTheme } from '../../fixtures';
 
-test.describe('Workspaces Management', () => {
-  test('View Workspaces List', async ({ casterAuthenticatedPage: page, cleanupCasterProjectByName }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Workspaces Management`, () => {
+    test('View Workspaces List', async ({ casterAuthenticatedPage: page, cleanupCasterProjectByName }) => {
+      await setCasterTheme(page, theme);
 
-    const projectName = 'View WS List Project';
-    await cleanupCasterProjectByName(projectName);
+      const projectName = 'View WS List Project';
+      await cleanupCasterProjectByName(projectName);
 
-    // Setup: Create a project and directory
-    await expect(page.getByText('My Projects')).toBeVisible();
-    await page.reload();
+      // Setup: Create a project and directory
+      await expect(page.getByText('My Projects')).toBeVisible();
+      await page.reload();
 
-    await page.locator('[mattooltip="Add New Project"]').click();
-    const projectDialog = page.getByRole('dialog', { name: 'Create New Project?' });
-    await expect(projectDialog).toBeVisible();
-    await projectDialog.getByRole('textbox', { name: 'Name' }).fill(projectName);
-    await projectDialog.getByRole('button', { name: 'Save' }).click();
-    await expectCasterProjectOpen(page, projectName);
+      await page.locator('[mattooltip="Add New Project"]').click();
+      const projectDialog = page.getByRole('dialog', { name: 'Create New Project?' });
+      await expect(projectDialog).toBeVisible();
+      await projectDialog.getByRole('textbox', { name: 'Name' }).fill(projectName);
+      await projectDialog.getByRole('button', { name: 'Save' }).click();
+      await expectCasterProjectOpen(page, projectName);
 
-    await page.getByTitle('Add New Directory').click();
-    const dirDialog = page.getByRole('dialog', { name: 'Create New Directory?' });
-    await expect(dirDialog).toBeVisible();
-    await dirDialog.getByRole('textbox', { name: 'Name' }).fill('WS List Dir');
-    await dirDialog.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByRole('button', { name: 'WS List Dir' })).toBeVisible({ timeout: 10000 });
+      await page.getByTitle('Add New Directory').click();
+      const dirDialog = page.getByRole('dialog', { name: 'Create New Directory?' });
+      await expect(dirDialog).toBeVisible();
+      await dirDialog.getByRole('textbox', { name: 'Name' }).fill('WS List Dir');
+      await dirDialog.getByRole('button', { name: 'Save' }).click();
+      await expect(page.getByRole('button', { name: 'WS List Dir' })).toBeVisible({ timeout: 10000 });
 
-    // Expand directory and navigate to WORKSPACES
-    await page.getByRole('button', { name: 'WS List Dir' }).click();
+      // Expand directory and navigate to WORKSPACES
+      await page.getByRole('button', { name: 'WS List Dir' }).click();
 
-    // expect: WORKSPACES section is available
-    await expect(page.getByRole('button', { name: 'WORKSPACES' })).toBeVisible();
+      // expect: WORKSPACES section is available
+      await expect(page.getByRole('button', { name: 'WORKSPACES' })).toBeVisible();
 
-    // Click to expand WORKSPACES
-    await page.getByRole('button', { name: 'WORKSPACES' }).click();
+      // Click to expand WORKSPACES
+      await page.getByRole('button', { name: 'WORKSPACES' }).click();
 
-    // expect: Workspaces section shows Add Workspace option
-    await expect(page.getByText('Add Workspace')).toBeVisible();
+      // expect: Workspaces section shows Add Workspace option
+      await expect(page.getByText('Add Workspace')).toBeVisible();
+    });
   });
-});
+}

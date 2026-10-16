@@ -4,24 +4,27 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
 
-test.describe('Authentication', () => {
-  test('Session Persistence After Refresh', async ({ playerAuthenticatedPage: page }) => {
-    // 1. Log in with valid credentials (admin/admin)
-    // expect: User is successfully authenticated and viewing Player home page
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Player.UI), { timeout: 10000 });
-    await expect(page.getByText('My Views')).toBeVisible();
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Authentication`, () => {
+    test('Session Persistence After Refresh', async ({ playerAuthenticatedPage: page }) => {
+      await setPlayerTheme(page, theme);
+      // 1. Log in with valid credentials (admin/admin)
+      // expect: User is successfully authenticated and viewing Player home page
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Player.UI), { timeout: 10000 });
+      await expect(page.getByText('My Views')).toBeVisible();
 
-    // 2. Refresh the browser page
-    await page.reload();
+      // 2. Refresh the browser page
+      await page.reload();
 
-    // expect: User remains authenticated
-    // expect: Home page loads without redirecting to Keycloak
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Player.UI), { timeout: 10000 });
+      // expect: User remains authenticated
+      // expect: Home page loads without redirecting to Keycloak
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Player.UI), { timeout: 10000 });
 
-    // expect: User session is maintained
-    await expect(page.getByText('My Views')).toBeVisible();
-    await expect(page.getByText('Admin User').first()).toBeVisible();
+      // expect: User session is maintained
+      await expect(page.getByText('My Views')).toBeVisible();
+      await expect(page.getByText('Admin User').first()).toBeVisible();
+    });
   });
-});
+}

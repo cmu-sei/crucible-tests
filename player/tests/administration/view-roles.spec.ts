@@ -4,32 +4,35 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
 
-test.describe('Administration - Roles and Permissions', () => {
-  test('View Roles', async ({ playerAuthenticatedPage: page }) => {
-    // 1. Log in as admin and navigate to Administration
-    await page.getByRole('button', { name: 'Menu' }).click();
-    await page.getByRole('menuitem', { name: 'Administration' }).click();
+for (const theme of PLAYER_THEMES) {
+  test.describe(`${theme} theme › Administration - Roles and Permissions`, () => {
+    test('View Roles', async ({ playerAuthenticatedPage: page }) => {
+      await setPlayerTheme(page, theme);
+      // 1. Log in as admin and navigate to Administration
+      await page.getByRole('button', { name: 'Menu' }).click();
+      await page.getByRole('menuitem', { name: 'Administration' }).click();
 
-    // expect: The Administration page is displayed
-    await expect(page).toHaveURL(/\/admin/, { timeout: 10000 });
+      // expect: The Administration page is displayed
+      await expect(page).toHaveURL(/\/admin/, { timeout: 10000 });
 
-    // 2. Click the 'Roles' button
-    await page.getByRole('button', { name: 'Roles Roles' }).click();
+      // 2. Click the 'Roles' button
+      await page.getByRole('button', { name: 'Roles Roles' }).click();
 
-    // expect: The Roles/Permissions section is displayed
-    await expect(page).toHaveURL(/section=role-perm/);
+      // expect: The Roles/Permissions section is displayed
+      await expect(page).toHaveURL(/section=role-perm/);
 
-    // expect: Two tabs are shown: 'Roles' and 'Team Roles'
-    await expect(page.getByRole('tab', { name: 'Roles', exact: true })).toBeVisible();
-    await expect(page.getByRole('tab', { name: 'Team Roles' })).toBeVisible();
+      // expect: Two tabs are shown: 'Roles' and 'Team Roles'
+      await expect(page.getByRole('tab', { name: 'Roles', exact: true })).toBeVisible();
+      await expect(page.getByRole('tab', { name: 'Team Roles' })).toBeVisible();
 
-    // expect: The 'Roles' tab is active by default
-    await expect(page.getByRole('tab', { name: 'Roles', exact: true, selected: true })).toBeVisible();
+      // expect: The 'Roles' tab is active by default
+      await expect(page.getByRole('tab', { name: 'Roles', exact: true, selected: true })).toBeVisible();
 
-    // expect: A permissions matrix is displayed showing roles and permissions
-    await expect(page.getByRole('table')).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Permissions' })).toBeVisible();
+      // expect: A permissions matrix is displayed showing roles and permissions
+      await expect(page.getByRole('table')).toBeVisible();
+      await expect(page.getByRole('columnheader', { name: 'Permissions' })).toBeVisible();
+    });
   });
-});
+}

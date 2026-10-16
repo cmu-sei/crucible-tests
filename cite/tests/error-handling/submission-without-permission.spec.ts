@@ -4,7 +4,14 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, seedCompleteEvaluation, cleanupCompleteEvaluation } from '../../fixtures';
+import {
+  test,
+  expect,
+  Services,
+  seedCompleteEvaluation,
+  cleanupCompleteEvaluation,
+  CITE_THEMES,
+} from '../../fixtures';
 import { request as pwRequest } from '@playwright/test';
 import {
   getKeycloakAdminToken,
@@ -24,66 +31,72 @@ import {
  * The probe runs as a freshly created role-less Keycloak user rather than as `admin`,
  * because `admin` holds every CITE system permission and therefore can never produce
  * a 403.
+ *
+ * API-only: no browser page is opened, so there is no theme to apply. It still runs under
+ * each theme's title so every CITE spec reports in both, and its seeded evaluation is
+ * named per theme so the two runs never share a row.
  */
-test.describe('Error Handling and Edge Cases', () => {
-  test('Submission Without Required Permissions', async () => {
-    const kcAdminToken = await getKeycloakAdminToken();
-    const username = tempUsername('citenoperm');
-    const password = 'TestPassword123!';
+for (const theme of CITE_THEMES) {
+  test.describe(`${theme} theme › Error Handling and Edge Cases`, () => {
+    test('Submission Without Required Permissions', async () => {
+      const kcAdminToken = await getKeycloakAdminToken();
+      const username = tempUsername('citenoperm');
+      const password = 'TestPassword123!';
 
-    const seeded = await seedCompleteEvaluation(`E2E NoPerm Evaluation ${Date.now()}`, 1);
-    const user = await createKeycloakUser(kcAdminToken, {
-      username,
-      password,
-      email: `${username}@test.local`,
-      realmRoles: [], // no CITE system permissions at all
-    });
-
-    try {
-      const token = await getUserToken(username, password, 'cite.ui', 'openid profile cite');
-      const ctx = await pwRequest.newContext({
-        baseURL: Services.Cite.API,
-        extraHTTPHeaders: { Authorization: `Bearer ${token}` },
-        ignoreHTTPSErrors: true,
+      const seeded = await seedCompleteEvaluation(`E2E NoPerm Evaluation ${theme} ${Date.now()}`, 1);
+      const user = await createKeycloakUser(kcAdminToken, {
+        username,
+        password,
+        email: `${username}@test.local`,
+        realmRoles: [], // no CITE system permissions at all
       });
 
       try {
-        // 1. The user authenticates fine — the token is accepted, the list just scopes to nothing.
-        const listResponse = await ctx.get('/api/evaluations');
-        expect(listResponse.status()).toBe(200);
-        const visible = await listResponse.json();
-
-        // expect: Without an evaluation membership there is nothing to submit
-        expect(Array.isArray(visible)).toBe(true);
-        expect(visible.map((e: { id: string }) => e.id)).not.toContain(seeded.evaluationId);
-
-        // 2. Reading the evaluation directly is refused rather than leaking it.
-        const detailResponse = await ctx.get(`/api/evaluations/${seeded.evaluationId}`);
-
-        // expect: API rejects the read with 403 Forbidden
-        expect(detailResponse.status()).toBe(403);
-
-        // expect: Error message indicates insufficient permissions
-        expect(await detailResponse.json()).toMatchObject({
-          title: 'Insufficient Permissions',
-          status: 403,
+        const token = await getUserToken(username, password, 'cite.ui', 'openid profile cite');
+        const ctx = await pwRequest.newContext({
+          baseURL: Services.Cite.API,
+          extraHTTPHeaders: { Authorization: `Bearer ${token}` },
+          ignoreHTTPSErrors: true,
         });
 
-        // 3. Writing scoring content is refused too, so no unauthorized changes are saved.
-        const writeResponse = await ctx.post('/api/scoringmodels', {
-          data: {
-            description: `E2E NoPerm Should Not Exist ${Date.now()}`,
-            status: 'Pending',
-            calculationEquation: '{average}',
-          },
-        });
-        expect(writeResponse.status()).toBe(403);
+        try {
+          // 1. The user authenticates fine — the token is accepted, the list just scopes to nothing.
+          const listResponse = await ctx.get('/api/evaluations');
+          expect(listResponse.status()).toBe(200);
+          const visible = await listResponse.json();
+
+          // expect: Without an evaluation membership there is nothing to submit
+          expect(Array.isArray(visible)).toBe(true);
+          expect(visible.map((e: { id: string }) => e.id)).not.toContain(seeded.evaluationId);
+
+          // 2. Reading the evaluation directly is refused rather than leaking it.
+          const detailResponse = await ctx.get(`/api/evaluations/${seeded.evaluationId}`);
+
+          // expect: API rejects the read with 403 Forbidden
+          expect(detailResponse.status()).toBe(403);
+
+          // expect: Error message indicates insufficient permissions
+          expect(await detailResponse.json()).toMatchObject({
+            title: 'Insufficient Permissions',
+            status: 403,
+          });
+
+          // 3. Writing scoring content is refused too, so no unauthorized changes are saved.
+          const writeResponse = await ctx.post('/api/scoringmodels', {
+            data: {
+              description: `E2E NoPerm Should Not Exist ${theme} ${Date.now()}`,
+              status: 'Pending',
+              calculationEquation: '{average}',
+            },
+          });
+          expect(writeResponse.status()).toBe(403);
+        } finally {
+          await ctx.dispose();
+        }
       } finally {
-        await ctx.dispose();
+        await deleteKeycloakUser(kcAdminToken, user.id);
+        await cleanupCompleteEvaluation(seeded);
       }
-    } finally {
-      await deleteKeycloakUser(kcAdminToken, user.id);
-      await cleanupCompleteEvaluation(seeded);
-    }
+    });
   });
-});
+}

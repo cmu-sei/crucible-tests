@@ -4,34 +4,37 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, CASTER_THEMES, setCasterTheme } from '../../fixtures';
 
-test.describe('Real-time Updates and SignalR', () => {
-  test('Real-time Workspace Updates', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Real-time Updates and SignalR`, () => {
+    test('Real-time Workspace Updates', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+      await setCasterTheme(page, theme);
 
-    const consoleLogs: string[] = [];
-    page.on('console', (msg) => {
-      consoleLogs.push(msg.text());
+      const consoleLogs: string[] = [];
+      page.on('console', (msg) => {
+        consoleLogs.push(msg.text());
+      });
+
+      await expect(page.getByText('My Projects')).toBeVisible();
+
+      await page.getByText('My Projects').locator('..').locator('button').click();
+      await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
+      await page.getByRole('textbox', { name: 'Name' }).fill('RT WS Update Project');
+      await page.getByRole('button', { name: 'Save' }).click();
+      await expectCasterProjectOpen(page, 'RT WS Update Project');
+
+      // Register the project for cleanup
+      const projectId = page.url().match(/\/projects\/([^/]+)/)?.[1];
+      if (projectId) cleanupCasterProject(projectId);
+
+      const hasSignalRLog = consoleLogs.some(log =>
+        log.includes('WebSocket connected') ||
+        log.includes('Information: Web') ||
+        log.includes('signalr') ||
+        log.includes('SignalR')
+      );
+      expect(hasSignalRLog || consoleLogs.length > 0).toBeTruthy();
     });
-
-    await expect(page.getByText('My Projects')).toBeVisible();
-
-    await page.getByText('My Projects').locator('..').locator('button').click();
-    await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
-    await page.getByRole('textbox', { name: 'Name' }).fill('RT WS Update Project');
-    await page.getByRole('button', { name: 'Save' }).click();
-    await expectCasterProjectOpen(page, 'RT WS Update Project');
-
-    // Register the project for cleanup
-    const projectId = page.url().match(/\/projects\/([^/]+)/)?.[1];
-    if (projectId) cleanupCasterProject(projectId);
-
-    const hasSignalRLog = consoleLogs.some(log =>
-      log.includes('WebSocket connected') ||
-      log.includes('Information: Web') ||
-      log.includes('signalr') ||
-      log.includes('SignalR')
-    );
-    expect(hasSignalRLog || consoleLogs.length > 0).toBeTruthy();
   });
-});
+}

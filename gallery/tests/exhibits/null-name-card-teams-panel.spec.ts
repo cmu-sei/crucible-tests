@@ -16,6 +16,8 @@ import {
   apiCreateCard,
   apiCreateTeamCard,
   apiDeleteCollectionById,
+  GALLERY_THEMES,
+  setGalleryTheme,
 } from '../../fixtures';
 import { waitForFirstVisible } from '../../../shared-fixtures';
 
@@ -353,157 +355,161 @@ async function expectAllThreeRowsLoaded(region: Locator, seeded: SeededPanel): P
   await expect(cellCardName(nullCardNameRow)).toHaveText('');
 }
 
-test.describe('Exhibit Management', () => {
-  // Recorded as soon as the collection exists so `afterEach` removes it even when the
-  // test body throws partway through. Exhibit.CollectionId, Team.ExhibitId and
-  // Card.CollectionId are all DeleteBehavior.Cascade, and a TeamCard cascades with its
-  // team, so deleting the collection removes the exhibit, the teams, the cards and the
-  // TeamCards in one call.
-  let collectionId: string | undefined;
+for (const theme of GALLERY_THEMES) {
+  test.describe(`${theme} theme › Exhibit Management`, () => {
+    // Recorded as soon as the collection exists so `afterEach` removes it even when the
+    // test body throws partway through. Exhibit.CollectionId, Team.ExhibitId and
+    // Card.CollectionId are all DeleteBehavior.Cascade, and a TeamCard cascades with its
+    // team, so deleting the collection removes the exhibit, the teams, the cards and the
+    // TeamCards in one call.
+    let collectionId: string | undefined;
 
-  test.afterEach(async () => {
-    if (collectionId) {
-      await apiDeleteCollectionById(collectionId, 'Null Name TC Test collection');
-    }
-    collectionId = undefined;
-  });
-
-  test('Sorting Card Teams tolerates a team or card with no name', async ({
-    galleryAuthenticatedPage: page,
-  }) => {
-    const seeded = await seedCardTeamsPanel('Null Name TC Sort Test');
-    collectionId = seeded.collectionId;
-
-    await gotoGalleryAdmin(page);
-    const region = await openCardTeamsPanel(page, seeded.collectionName, seeded.exhibitName);
-
-    // Baseline. While the helpers are unguarded both tests fail before reaching here, inside
-    // `openCardTeamsPanel`: `applyFilter` runs unconditionally when the panel's data lands
-    // and throws on the first null name it meets, so the error sheet is already up.
-    await expectAllThreeRowsLoaded(region, seeded);
-
-    const teamHeader = region.getByRole('button', { name: 'Team', exact: true });
-    const cardHeader = region.getByRole('button', { name: 'Card', exact: true });
-
-    await withAppErrorDiagnostic(page, async () => {
-      // 1. Sort by Team ascending. `mat-sort-header="teamId"` starts at 'asc'.
-      await teamHeader.click();
-
-      // expect: every row still renders, ordered by team name with the null one first (it
-      // falls back to '', which is lexically first). Asserting the exact order is strictly
-      // stronger than a row count: it also fails on a dropped row, and on a comparator
-      // that threw and left the previous, unsorted list in place.
-      await expect(rowTeamNames(region)).toHaveText([
-        '',
-        seeded.alphaTeamName,
-        seeded.zuluTeamName,
-      ]);
-      // The Card column pins which rows those are, so "the null-name row is still listed"
-      // is checked by identity and not just by an empty cell appearing somewhere.
-      await expect(rowCardNames(region)).toHaveText([
-        seeded.zuluCardName,
-        '',
-        seeded.alphaCardName,
-      ]);
-
-      // 2. Sort by Team descending. The comparator is re-entered with its arguments
-      //    swapped, so this exercises the `b.getTeamName()` side of the original
-      //    expression.
-      await teamHeader.click();
-      await expect(rowTeamNames(region)).toHaveText([
-        seeded.zuluTeamName,
-        seeded.alphaTeamName,
-        '',
-      ]);
-      await expect(rowCardNames(region)).toHaveText([
-        seeded.alphaCardName,
-        '',
-        seeded.zuluCardName,
-      ]);
-
-      // 3. Sort by Card ascending. This is the second, independent call site
-      //    (`case 'cardId'`, using `getCardName`) and it is the null *card* name that has
-      //    to survive it. Switching the active column resets MatSort's direction to 'asc'.
-      await cardHeader.click();
-      await expect(rowCardNames(region)).toHaveText([
-        '',
-        seeded.alphaCardName,
-        seeded.zuluCardName,
-      ]);
-      await expect(rowTeamNames(region)).toHaveText([
-        seeded.alphaTeamName,
-        seeded.zuluTeamName,
-        '',
-      ]);
-
-      // 4. Sort by Card descending, for the `b.getCardName()` side.
-      await cardHeader.click();
-      await expect(rowCardNames(region)).toHaveText([
-        seeded.zuluCardName,
-        seeded.alphaCardName,
-        '',
-      ]);
-      await expect(rowTeamNames(region)).toHaveText([
-        '',
-        seeded.zuluTeamName,
-        seeded.alphaTeamName,
-      ]);
+    test.afterEach(async () => {
+      if (collectionId) {
+        await apiDeleteCollectionById(collectionId, 'Null Name TC Test collection');
+      }
+      collectionId = undefined;
     });
-  });
 
-  test('Searching Card Teams tolerates a team or card with no name', async ({
-    galleryAuthenticatedPage: page,
-  }) => {
-    const seeded = await seedCardTeamsPanel('Null Name TC Filter Test');
-    collectionId = seeded.collectionId;
+    test('Sorting Card Teams tolerates a team or card with no name', async ({
+      galleryAuthenticatedPage: page,
+    }) => {
+      await setGalleryTheme(page, theme);
+      const seeded = await seedCardTeamsPanel('Null Name TC Sort Test');
+      collectionId = seeded.collectionId;
 
-    await gotoGalleryAdmin(page);
-    const region = await openCardTeamsPanel(page, seeded.collectionName, seeded.exhibitName);
+      await gotoGalleryAdmin(page);
+      const region = await openCardTeamsPanel(page, seeded.collectionName, seeded.exhibitName);
 
-    await expectAllThreeRowsLoaded(region, seeded);
-
-    // The panel's Search input is bound to a reactive `filterControl` whose `valueChanges`
-    // subscription calls `applyFilter`, so `fill()` alone drives the filter.
-    const searchBox = region.getByRole('textbox', { name: 'Search' });
-
-    await withAppErrorDiagnostic(page, async () => {
-      // 1. Search for the card name of the row whose *team* name is null.
-      await searchBox.fill(seeded.zuluCardName);
-
-      // expect: exactly that row. This is the load-bearing assertion of this test. The two
-      // names are independent OR branches, so a correct guard neutralises only the null one
-      // and still evaluates the other — whereas a "fix" that stopped the throw by skipping
-      // records with a null name would render zero rows here and so satisfy "nothing
-      // crashed" while quietly breaking search.
-      await expect(rowCardNames(region)).toHaveText([seeded.zuluCardName]);
-      await expect(rowTeamNames(region)).toHaveText(['']);
-
-      // 2. The mirror case: search for the team name of the row whose *card* name is null.
-      //    A guard applied to only one of the two names would pass step 1 and fail here.
-      await searchBox.fill(seeded.alphaTeamName);
-      await expect(rowTeamNames(region)).toHaveText([seeded.alphaTeamName]);
-      await expect(rowCardNames(region)).toHaveText(['']);
-
-      // 3. A term broad enough to match all three rows runs the predicate over both
-      //    null-valued rows in a single pass, which is the state the panel is actually in
-      //    while someone types a partial name. Every seeded value carries the same unique
-      //    suffix, so this matches all three rows and nothing another spec seeded.
-      await searchBox.fill(seeded.suffix);
-      await expect(teamCardRows(region)).toHaveCount(3);
-      await expect(teamCardRows(region).filter({ hasText: seeded.zuluCardName })).toHaveCount(1);
-      await expect(teamCardRows(region).filter({ hasText: seeded.alphaTeamName })).toHaveCount(1);
-
-      // 4. A term matching nothing must yield an empty list rather than an error. Paired
-      //    with step 3 this pins the difference between "correctly filtered to zero" and
-      //    an unguarded "crashed to zero": the empty result tracks the search term instead
-      //    of being the component's failure mode.
-      await searchBox.fill(`ZZZ-NO-SUCH-TEAM-CARD-${seeded.suffix}`);
-      await expect(teamCardRows(region)).toHaveCount(0);
-
-      // 5. Clearing the search restores all three rows, showing the component came through
-      //    every step above with a live subscription rather than being left wedged.
-      await region.getByRole('button', { name: 'Clear Search' }).click();
+      // Baseline. While the helpers are unguarded both tests fail before reaching here, inside
+      // `openCardTeamsPanel`: `applyFilter` runs unconditionally when the panel's data lands
+      // and throws on the first null name it meets, so the error sheet is already up.
       await expectAllThreeRowsLoaded(region, seeded);
+
+      const teamHeader = region.getByRole('button', { name: 'Team', exact: true });
+      const cardHeader = region.getByRole('button', { name: 'Card', exact: true });
+
+      await withAppErrorDiagnostic(page, async () => {
+        // 1. Sort by Team ascending. `mat-sort-header="teamId"` starts at 'asc'.
+        await teamHeader.click();
+
+        // expect: every row still renders, ordered by team name with the null one first (it
+        // falls back to '', which is lexically first). Asserting the exact order is strictly
+        // stronger than a row count: it also fails on a dropped row, and on a comparator
+        // that threw and left the previous, unsorted list in place.
+        await expect(rowTeamNames(region)).toHaveText([
+          '',
+          seeded.alphaTeamName,
+          seeded.zuluTeamName,
+        ]);
+        // The Card column pins which rows those are, so "the null-name row is still listed"
+        // is checked by identity and not just by an empty cell appearing somewhere.
+        await expect(rowCardNames(region)).toHaveText([
+          seeded.zuluCardName,
+          '',
+          seeded.alphaCardName,
+        ]);
+
+        // 2. Sort by Team descending. The comparator is re-entered with its arguments
+        //    swapped, so this exercises the `b.getTeamName()` side of the original
+        //    expression.
+        await teamHeader.click();
+        await expect(rowTeamNames(region)).toHaveText([
+          seeded.zuluTeamName,
+          seeded.alphaTeamName,
+          '',
+        ]);
+        await expect(rowCardNames(region)).toHaveText([
+          seeded.alphaCardName,
+          '',
+          seeded.zuluCardName,
+        ]);
+
+        // 3. Sort by Card ascending. This is the second, independent call site
+        //    (`case 'cardId'`, using `getCardName`) and it is the null *card* name that has
+        //    to survive it. Switching the active column resets MatSort's direction to 'asc'.
+        await cardHeader.click();
+        await expect(rowCardNames(region)).toHaveText([
+          '',
+          seeded.alphaCardName,
+          seeded.zuluCardName,
+        ]);
+        await expect(rowTeamNames(region)).toHaveText([
+          seeded.alphaTeamName,
+          seeded.zuluTeamName,
+          '',
+        ]);
+
+        // 4. Sort by Card descending, for the `b.getCardName()` side.
+        await cardHeader.click();
+        await expect(rowCardNames(region)).toHaveText([
+          seeded.zuluCardName,
+          seeded.alphaCardName,
+          '',
+        ]);
+        await expect(rowTeamNames(region)).toHaveText([
+          '',
+          seeded.zuluTeamName,
+          seeded.alphaTeamName,
+        ]);
+      });
+    });
+
+    test('Searching Card Teams tolerates a team or card with no name', async ({
+      galleryAuthenticatedPage: page,
+    }) => {
+      await setGalleryTheme(page, theme);
+      const seeded = await seedCardTeamsPanel('Null Name TC Filter Test');
+      collectionId = seeded.collectionId;
+
+      await gotoGalleryAdmin(page);
+      const region = await openCardTeamsPanel(page, seeded.collectionName, seeded.exhibitName);
+
+      await expectAllThreeRowsLoaded(region, seeded);
+
+      // The panel's Search input is bound to a reactive `filterControl` whose `valueChanges`
+      // subscription calls `applyFilter`, so `fill()` alone drives the filter.
+      const searchBox = region.getByRole('textbox', { name: 'Search' });
+
+      await withAppErrorDiagnostic(page, async () => {
+        // 1. Search for the card name of the row whose *team* name is null.
+        await searchBox.fill(seeded.zuluCardName);
+
+        // expect: exactly that row. This is the load-bearing assertion of this test. The two
+        // names are independent OR branches, so a correct guard neutralises only the null one
+        // and still evaluates the other — whereas a "fix" that stopped the throw by skipping
+        // records with a null name would render zero rows here and so satisfy "nothing
+        // crashed" while quietly breaking search.
+        await expect(rowCardNames(region)).toHaveText([seeded.zuluCardName]);
+        await expect(rowTeamNames(region)).toHaveText(['']);
+
+        // 2. The mirror case: search for the team name of the row whose *card* name is null.
+        //    A guard applied to only one of the two names would pass step 1 and fail here.
+        await searchBox.fill(seeded.alphaTeamName);
+        await expect(rowTeamNames(region)).toHaveText([seeded.alphaTeamName]);
+        await expect(rowCardNames(region)).toHaveText(['']);
+
+        // 3. A term broad enough to match all three rows runs the predicate over both
+        //    null-valued rows in a single pass, which is the state the panel is actually in
+        //    while someone types a partial name. Every seeded value carries the same unique
+        //    suffix, so this matches all three rows and nothing another spec seeded.
+        await searchBox.fill(seeded.suffix);
+        await expect(teamCardRows(region)).toHaveCount(3);
+        await expect(teamCardRows(region).filter({ hasText: seeded.zuluCardName })).toHaveCount(1);
+        await expect(teamCardRows(region).filter({ hasText: seeded.alphaTeamName })).toHaveCount(1);
+
+        // 4. A term matching nothing must yield an empty list rather than an error. Paired
+        //    with step 3 this pins the difference between "correctly filtered to zero" and
+        //    an unguarded "crashed to zero": the empty result tracks the search term instead
+        //    of being the component's failure mode.
+        await searchBox.fill(`ZZZ-NO-SUCH-TEAM-CARD-${seeded.suffix}`);
+        await expect(teamCardRows(region)).toHaveCount(0);
+
+        // 5. Clearing the search restores all three rows, showing the component came through
+        //    every step above with a live subscription rather than being left wedged.
+        await region.getByRole('button', { name: 'Clear Search' }).click();
+        await expectAllThreeRowsLoaded(region, seeded);
+      });
     });
   });
-});
+}

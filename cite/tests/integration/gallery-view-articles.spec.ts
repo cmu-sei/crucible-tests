@@ -4,7 +4,7 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern, oidcStorageKey, ensureScoringModelExists, purgeStaleEvaluations, settleForResponse } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, oidcStorageKey, ensureScoringModelExists, ensureTeamTypeExists, purgeStaleEvaluations, settleForResponse, CITE_THEMES, setCiteTheme } from '../../fixtures';
 import { deleteEvaluationByName, navigateToAdminSection } from '../../test-helpers';
 import {
   getKeycloakToken,
@@ -24,6 +24,8 @@ import {
  * Shared helper: set up Gallery resources via the API and create a CITE evaluation
  * that links to the gallery exhibit. Returns the CITE evaluation ID.
  */
+const SHARED_TEAM_TYPE = 'E2E Shared Team Type';
+
 async function setupGalleryAndCiteEvaluation(
   page: import('@playwright/test').Page,
   opts: {
@@ -97,6 +99,7 @@ async function setupGalleryAndCiteEvaluation(
 
   // Ensure a scoring model exists so the Scoring Model dropdown is populated.
   await ensureScoringModelExists();
+  await ensureTeamTypeExists(SHARED_TEAM_TYPE);
 
   await navigateToAdminSection(page, 'Evaluations');
 
@@ -187,9 +190,11 @@ async function setupGalleryAndCiteEvaluation(
   const teamTypeCombobox = teamDialog.getByRole('combobox', { name: 'Team Type' });
   await teamTypeCombobox.click();
   await page.waitForTimeout(500);
-  const firstTeamTypeOption = page.getByRole('option').first();
-  await expect(firstTeamTypeOption).toBeVisible({ timeout: 5000 });
-  await firstTeamTypeOption.click();
+  // Select the shared team type. Not the first option: other specs' temporary team
+  // types are deleted while this one runs, and saving against one gives a 500.
+  const teamTypeOption = page.getByRole('option', { name: SHARED_TEAM_TYPE, exact: true }).first(); // parallel workers can each seed one on a fresh DB
+  await expect(teamTypeOption).toBeVisible({ timeout: 5000 });
+  await teamTypeOption.click();
   await page.waitForTimeout(500);
 
   const teamSaveButton = teamDialog.getByRole('button', { name: 'Save' });
@@ -206,20 +211,22 @@ async function setupGalleryAndCiteEvaluation(
   const membershipArea = teamsPanel.locator('app-admin-team-memberships').first();
   await expect(membershipArea).toBeVisible({ timeout: 10000 });
 
-  const membersList = membershipArea.locator('app-admin-team-member-list');
-  const alreadyMember = membersList.locator('tr').filter({ hasText: 'Admin User' }).first();
-  const isAlreadyMember = await alreadyMember.isVisible({ timeout: 3000 }).catch(() => false);
-
-  if (!isAlreadyMember) {
-    const usersList2 = membershipArea.locator('app-admin-team-membership-list');
-    const adminRow2 = usersList2.locator('tr').filter({ hasText: 'Admin User' }).first();
-    await expect(adminRow2).toBeVisible({ timeout: 15000 });
-    await page.waitForTimeout(1000);
-    const addBtn = adminRow2.locator('button').filter({ has: page.locator('mat-icon[fonticon*="plus"]') });
-    await expect(addBtn).toBeVisible({ timeout: 5000 });
-    await addBtn.click({ timeout: 15000 });
-    await page.waitForTimeout(2000);
-  }
+  // The team is brand new, so Admin User starts in the non-members list. Add them, then
+  // wait for the row to move into the member list — without the membership the evaluation
+  // isn't in Admin User's "My Evaluations" and its dashboard won't open.
+  const usersList2 = membershipArea.locator('app-admin-team-membership-list');
+  // The non-member list is paginated and other suites leave users behind, so Admin
+  // User may not be on page 1. Filter it first (the filter runs on keyup, so type).
+  await usersList2.getByPlaceholder('Search').pressSequentially('Admin User');
+  // The table re-renders as the filter applies and as memberships refresh, which can
+  // detach the button mid-click. Retry until Admin User is actually a member.
+  const adminRow2 = usersList2.locator('tr').filter({ hasText: 'Admin User' }).first();
+  const adminMember = membershipArea.locator('app-admin-team-member-list tr').filter({ hasText: 'Admin User' }).first();
+  await expect(async () => {
+    if (await adminMember.isVisible()) return;
+    await adminRow2.getByRole('button').last().click({ timeout: 3000 });
+    await expect(adminMember).toBeVisible({ timeout: 3000 });
+  }).toPass({ timeout: 30000, intervals: [500, 1000, 2000] });
 
   expect(citeEvaluationId).toBeTruthy();
   return { token, collectionId: collection.id, exhibitId: exhibit.id, citeEvaluationId: citeEvaluationId! };
@@ -238,86 +245,94 @@ async function navigateToEvaluationDashboard(page: import('@playwright/test').Pa
 }
 
 // Run tests serially - they share Gallery API and Keycloak infrastructure
-test.describe.configure({ mode: 'serial' });
+for (const theme of CITE_THEMES) {
+  test.describe(`${theme} theme › Integration with Gallery`, () => {
+    // Serial per theme, so a failure in one theme doesn't skip the other.
+    test.describe.configure({ mode: 'serial' });
 
-test.describe('Integration with Gallery', () => {
+    // Keep the evaluations list small/deterministic — the admin suite may have flooded it.
+    test.beforeAll(async () => {
+      // Purge only this file's own evaluations: a broader purge deletes the
+      // evaluations other files are using on the other worker.
+      await purgeStaleEvaluations(['E2E Gallery ']);
+    });
 
-  // Keep the evaluations list small/deterministic — the admin suite may have flooded it.
-  test.beforeAll(async () => {
-    await purgeStaleEvaluations();
-  });
+    test('Gallery Integration - View Articles', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
 
-  test('Gallery Integration - View Articles', async ({ citeAuthenticatedPage: page }) => {
-    const TEST_EVAL_NAME = 'E2E Gallery View Articles';
-    let cleanup: { token: string; collectionId: string; exhibitId: string } | undefined;
+      const TEST_EVAL_NAME = 'E2E Gallery View Articles';
+      let cleanup: { token: string; collectionId: string; exhibitId: string } | undefined;
 
-    try {
-      const result = await setupGalleryAndCiteEvaluation(page, {
-        evalName: TEST_EVAL_NAME,
-        collectionName: 'E2E View Articles Collection',
-        teamName: 'View Articles Team',
-        teamShort: 'VAT',
-        articleCount: 1,
-      });
-      cleanup = result;
+      try {
+        const result = await setupGalleryAndCiteEvaluation(page, {
+          evalName: TEST_EVAL_NAME,
+          collectionName: 'E2E View Articles Collection',
+          teamName: 'View Articles Team',
+          teamShort: 'VAT',
+          articleCount: 1,
+        });
+        cleanup = result;
 
-      await navigateToEvaluationDashboard(page, result.citeEvaluationId);
+        await navigateToEvaluationDashboard(page, result.citeEvaluationId);
 
-      // Verify "You have X unread Gallery item(s)" notification
-      const unreadNotification = page.locator('text=/unread Gallery item/');
-      await expect(unreadNotification).toBeVisible({ timeout: 15000 });
+        // Verify "You have X unread Gallery item(s)" notification
+        const unreadNotification = page.locator('text=/unread Gallery item/');
+        await expect(unreadNotification).toBeVisible({ timeout: 15000 });
 
-      // Verify the Gallery link
-      const galleryLink = page.locator('a', { hasText: 'click here to view them in Gallery' });
-      await expect(galleryLink).toBeVisible({ timeout: 5000 });
-    } finally {
-      // Cleanup
-      await deleteEvaluationByName(page, TEST_EVAL_NAME);
-      if (cleanup) {
-        const t = cleanup.token;
-        await deleteGalleryExhibit(t, cleanup.exhibitId).catch(() => {});
-        await deleteGalleryCollection(t, cleanup.collectionId).catch(() => {});
+        // Verify the Gallery link
+        const galleryLink = page.locator('a', { hasText: 'click here to view them in Gallery' });
+        await expect(galleryLink).toBeVisible({ timeout: 5000 });
+      } finally {
+        // Cleanup
+        await deleteEvaluationByName(page, TEST_EVAL_NAME);
+        if (cleanup) {
+          const t = cleanup.token;
+          await deleteGalleryExhibit(t, cleanup.exhibitId).catch(() => {});
+          await deleteGalleryCollection(t, cleanup.collectionId).catch(() => {});
+        }
       }
-    }
-  });
+    });
 
-  test('Gallery Integration - Unread Articles Notification', async ({ citeAuthenticatedPage: page }) => {
-    const TEST_EVAL_NAME = 'E2E Gallery Unread Articles';
-    let cleanup: { token: string; collectionId: string; exhibitId: string } | undefined;
+    test('Gallery Integration - Unread Articles Notification', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
 
-    try {
-      const result = await setupGalleryAndCiteEvaluation(page, {
-        evalName: TEST_EVAL_NAME,
-        collectionName: 'E2E Unread Articles Collection',
-        teamName: 'Unread Articles Team',
-        teamShort: 'UAT',
-        articleCount: 3,
-      });
-      cleanup = result;
+      const TEST_EVAL_NAME = 'E2E Gallery Unread Articles';
+      let cleanup: { token: string; collectionId: string; exhibitId: string } | undefined;
 
-      await navigateToEvaluationDashboard(page, result.citeEvaluationId);
+      try {
+        const result = await setupGalleryAndCiteEvaluation(page, {
+          evalName: TEST_EVAL_NAME,
+          collectionName: 'E2E Unread Articles Collection',
+          teamName: 'Unread Articles Team',
+          teamShort: 'UAT',
+          articleCount: 3,
+        });
+        cleanup = result;
 
-      // Verify unread notification with count
-      const unreadNotification = page.locator('text=/unread Gallery item/');
-      await expect(unreadNotification).toBeVisible({ timeout: 15000 });
+        await navigateToEvaluationDashboard(page, result.citeEvaluationId);
 
-      const notificationText = await unreadNotification.textContent();
-      expect(notificationText).toMatch(/\d+ unread Gallery item/);
+        // Verify unread notification with count
+        const unreadNotification = page.locator('text=/unread Gallery item/');
+        await expect(unreadNotification).toBeVisible({ timeout: 15000 });
 
-      // Verify Gallery link with correct URL
-      const galleryLink = page.locator('a', { hasText: 'click here to view them in Gallery' });
-      await expect(galleryLink).toBeVisible({ timeout: 5000 });
+        const notificationText = await unreadNotification.textContent();
+        expect(notificationText).toMatch(/\d+ unread Gallery item/);
 
-      const href = await galleryLink.getAttribute('href');
-      expect(href).toMatch(serviceUrlPattern(Services.Gallery.UI));
-    } finally {
-      // Cleanup
-      await deleteEvaluationByName(page, TEST_EVAL_NAME);
-      if (cleanup) {
-        const t = cleanup.token;
-        await deleteGalleryExhibit(t, cleanup.exhibitId).catch(() => {});
-        await deleteGalleryCollection(t, cleanup.collectionId).catch(() => {});
+        // Verify Gallery link with correct URL
+        const galleryLink = page.locator('a', { hasText: 'click here to view them in Gallery' });
+        await expect(galleryLink).toBeVisible({ timeout: 5000 });
+
+        const href = await galleryLink.getAttribute('href');
+        expect(href).toMatch(serviceUrlPattern(Services.Gallery.UI));
+      } finally {
+        // Cleanup
+        await deleteEvaluationByName(page, TEST_EVAL_NAME);
+        if (cleanup) {
+          const t = cleanup.token;
+          await deleteGalleryExhibit(t, cleanup.exhibitId).catch(() => {});
+          await deleteGalleryCollection(t, cleanup.collectionId).catch(() => {});
+        }
       }
-    }
+    });
   });
-});
+}

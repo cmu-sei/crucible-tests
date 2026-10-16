@@ -4,7 +4,14 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, seedCompleteEvaluation, cleanupCompleteEvaluation } from '../../fixtures';
+import {
+  test,
+  expect,
+  seedCompleteEvaluation,
+  cleanupCompleteEvaluation,
+  CITE_THEMES,
+  setCiteTheme,
+} from '../../fixtures';
 import { navigateToAdminSection, waitForAdminListLoad } from '../../test-helpers';
 
 /**
@@ -18,77 +25,81 @@ import { navigateToAdminSection, waitForAdminListLoad } from '../../test-helpers
  * failure surfaced as a "Bad Request" bottom sheet rather than a visible field error,
  * so the assertions below check for that sheet explicitly.
  */
-test.describe('Administration - Evaluations', () => {
+for (const theme of CITE_THEMES) {
+  test.describe(`${theme} theme › Administration - Evaluations`, () => {
 
-  let seedData: { scoringModelId: string; evaluationId: string; teamTypeId: string } | null = null;
+    let seedData: { scoringModelId: string; evaluationId: string; teamTypeId: string } | null = null;
 
-  test('Add Evaluation Team', async ({ citeAuthenticatedPage: page }) => {
-    const evalName = `E2E AddTeam Evaluation ${Date.now()}`;
-    const teamName = `E2E AddTeam Team ${Date.now()}`;
-    const teamShortName = 'EAT';
+    test('Add Evaluation Team', async ({ citeAuthenticatedPage: page }) => {
+      await setCiteTheme(page, theme);
 
-    // 1. Seed an evaluation (with a team type to pick in the dialog) via the API
-    seedData = await seedCompleteEvaluation(evalName, 0);
+      const evalName = `E2E AddTeam Evaluation ${theme} ${Date.now()}`;
+      const teamName = `E2E AddTeam Team ${theme} ${Date.now()}`;
+      const teamShortName = 'EAT';
 
-    // 2. Open the evaluation from the admin list
-    await navigateToAdminSection(page, 'Evaluations');
-    await waitForAdminListLoad(page, '/api/evaluations', true);
+      // 1. Seed an evaluation (with a team type to pick in the dialog) via the API
+      seedData = await seedCompleteEvaluation(evalName, 0);
 
-    const searchBox = page
-      .locator('input[placeholder="Search"], input[type="search"], input[aria-label="Search"]')
-      .first();
-    await expect(searchBox).toBeVisible({ timeout: 5000 });
-    await searchBox.clear();
-    await searchBox.fill(evalName);
-    await page.waitForTimeout(1000);
+      // 2. Open the evaluation from the admin list
+      await navigateToAdminSection(page, 'Evaluations');
+      await waitForAdminListLoad(page, '/api/evaluations', true);
 
-    const evalRow = page.locator('tbody tr').filter({ hasText: evalName }).first();
-    await expect(evalRow).toBeVisible({ timeout: 10000 });
-    await evalRow.click();
-    await page.waitForTimeout(1000);
+      const searchBox = page
+        .locator('input[placeholder="Search"], input[type="search"], input[aria-label="Search"]')
+        .first();
+      await expect(searchBox).toBeVisible({ timeout: 5000 });
+      await searchBox.clear();
+      await searchBox.fill(evalName);
+      await page.waitForTimeout(1000);
 
-    // 3. Expand the Teams panel
-    const teamsPanel = page.locator('mat-expansion-panel').filter({ hasText: 'Teams' }).first();
-    await expect(teamsPanel).toBeVisible({ timeout: 10000 });
-    await teamsPanel.locator('mat-expansion-panel-header').first().click();
-    await page.waitForTimeout(1000);
+      const evalRow = page.locator('tbody tr').filter({ hasText: evalName }).first();
+      await expect(evalRow).toBeVisible({ timeout: 10000 });
+      await evalRow.click();
+      await page.waitForTimeout(1000);
 
-    // 4. Fill in the Add Team dialog, leaving Hide Scoresheet untouched
-    const addTeamButton = teamsPanel.locator('button[title="Add Team"]');
-    await expect(addTeamButton).toBeVisible({ timeout: 5000 });
-    await addTeamButton.click();
+      // 3. Expand the Teams panel
+      const teamsPanel = page.locator('mat-expansion-panel').filter({ hasText: 'Teams' }).first();
+      await expect(teamsPanel).toBeVisible({ timeout: 10000 });
+      await teamsPanel.locator('mat-expansion-panel-header').first().click();
+      await page.waitForTimeout(1000);
 
-    const teamDialog = page.locator('mat-dialog-container');
-    await expect(teamDialog).toBeVisible({ timeout: 5000 });
-    await teamDialog.getByRole('textbox').first().fill(teamName);
-    await teamDialog.getByRole('textbox').nth(1).fill(teamShortName);
-    await teamDialog.getByRole('combobox', { name: 'Team Type' }).click();
-    await page.waitForTimeout(500);
-    await page.getByRole('option', { name: `Team Type for ${evalName}` }).first().click();
-    await page.waitForTimeout(500);
+      // 4. Fill in the Add Team dialog, leaving Hide Scoresheet untouched
+      const addTeamButton = teamsPanel.locator('button[title="Add Team"]');
+      await expect(addTeamButton).toBeVisible({ timeout: 5000 });
+      await addTeamButton.click();
 
-    const createResponse = page.waitForResponse(
-      (r) => r.url().includes('/api/teams') && r.request().method() === 'POST',
-      { timeout: 15000 }
-    );
-    await teamDialog.getByRole('button', { name: 'Save' }).click();
+      const teamDialog = page.locator('mat-dialog-container');
+      await expect(teamDialog).toBeVisible({ timeout: 5000 });
+      await teamDialog.getByRole('textbox').first().fill(teamName);
+      await teamDialog.getByRole('textbox').nth(1).fill(teamShortName);
+      await teamDialog.getByRole('combobox', { name: 'Team Type' }).click();
+      await page.waitForTimeout(500);
+      await page.getByRole('option', { name: `Team Type for ${evalName}` }).first().click();
+      await page.waitForTimeout(500);
 
-    // expect: The API accepts the new team
-    expect((await createResponse).status()).toBe(201);
+      const createResponse = page.waitForResponse(
+        (r) => r.url().includes('/api/teams') && r.request().method() === 'POST',
+        { timeout: 15000 }
+      );
+      await teamDialog.getByRole('button', { name: 'Save' }).click();
 
-    // expect: The dialog closes and no error sheet is raised
-    await expect(teamDialog).not.toBeVisible({ timeout: 10000 });
-    await expect(page.locator('mat-bottom-sheet-container')).toHaveCount(0);
+      // expect: The API accepts the new team
+      expect((await createResponse).status()).toBe(201);
 
-    // expect: The new team is listed in the panel
-    const teamRow = teamsPanel.locator('mat-expansion-panel-header').filter({ hasText: teamName });
-    await expect(teamRow).toBeVisible({ timeout: 10000 });
+      // expect: The dialog closes and no error sheet is raised
+      await expect(teamDialog).not.toBeVisible({ timeout: 10000 });
+      await expect(page.locator('mat-bottom-sheet-container')).toHaveCount(0);
+
+      // expect: The new team is listed in the panel
+      const teamRow = teamsPanel.locator('mat-expansion-panel-header').filter({ hasText: teamName });
+      await expect(teamRow).toBeVisible({ timeout: 10000 });
+    });
+
+    test.afterEach(async () => {
+      if (seedData) {
+        await cleanupCompleteEvaluation(seedData);
+        seedData = null;
+      }
+    });
   });
-
-  test.afterEach(async () => {
-    if (seedData) {
-      await cleanupCompleteEvaluation(seedData);
-      seedData = null;
-    }
-  });
-});
+}

@@ -4,42 +4,60 @@
 // spec: console/console-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
-import { getFirstVmId } from '../../fixtures';
+import { test, expect, gotoConsole, CONSOLE_THEMES } from '../../fixtures';
+import { seedViewWithVm, SeededViewWithVm } from '../../../playerVm/vm-helpers';
 
-test.describe('Console Rendering', () => {
-  // Regression: the console did not render until the window was clicked/focused
-  // because readOnly$ (bound via | async in an OnPush component) was assigned
-  // late, so change detection only ran on a window:focus event (console.ui
-  // #732). This test navigates to the console and asserts the component renders
-  // without any click or focus interaction.
-  test('Console renders without window focus', async ({
-    consoleAuthenticatedPage: page,
-  }) => {
-    // 1. Discover a real VM id from the first available view
-    const vmId = await getFirstVmId(page);
-    test.skip(!vmId, 'No VMs available for the admin user to test against');
+for (const theme of CONSOLE_THEMES) {
+  test.describe(`${theme} theme › Console Rendering`, () => {
+    // The console route needs a VM the authenticated user can read. This spec
+    // seeds its own, once per theme, so the light and dark runs never share a
+    // record — a discovered VM would make the test conditional on whatever the
+    // environment holds, and "no VM found" would then report green while
+    // asserting nothing about rendering. A seeded VM has `Type=Unknown`, which
+    // console.ui's template handles on the same branch as vSphere, so the
+    // console shell mounts exactly as it does for a real machine (it just never
+    // connects to a screen).
+    let seeded: SeededViewWithVm;
 
-    // 2. Open the console route directly. Do not click or focus anything after
-    //    this — the component must render on its own.
-    await page.goto(`${Services.Console.UI}/vm/${vmId}/console`);
+    test.beforeAll(async () => {
+      seeded = await seedViewWithVm(`E2E Console Rendering ${theme}`);
+    });
 
-    // 3. The console component renders without interaction. app-console is the
-    //    options bar + screen/overlay host; before the fix this stayed as bare
-    //    Angular placeholder comments until a window:focus event fired.
-    await expect(page.locator('app-console')).toBeVisible({ timeout: 30000 });
+    test.afterAll(async () => {
+      await seeded?.cleanup();
+    });
 
-    // 4. Sanity-check that real content rendered inside it (options bar and/or
-    //    the connecting overlay), not an empty host. Any one of these proves
-    //    change detection ran without a focus event.
-    const consoleContent = page.locator(
-      'app-options-bar, app-options-bar2, app-novnc, #wmksContainer, #screen'
-    );
-    await expect(consoleContent.first()).toBeAttached({ timeout: 30000 });
+    // Regression: the console did not render until the window was clicked/focused
+    // because readOnly$ (bound via | async in an OnPush component) was assigned
+    // late, so change detection only ran on a window:focus event (console.ui
+    // #732). This test navigates to the console and asserts the component renders
+    // without any click or focus interaction.
+    test('Console renders without window focus', async ({
+      consoleAuthenticatedPage: page,
+    }) => {
+      // 1. Open the console route for the seeded VM record directly. Do not click
+      //    or focus anything after this — the component must render on its own.
+      //    The record has no hypervisor behind it, so the console never connects;
+      //    that is fine, the test is about the component rendering.
+      await gotoConsole(page, `/vm/${seeded.vmId}/console`, theme);
 
-    // 5. The valid-VM console must not be showing the not-found page.
-    await expect(
-      page.getByRole('heading', { name: 'VM Not Found' })
-    ).toHaveCount(0);
+      // 2. The console component renders without interaction. app-console is the
+      //    options bar + screen/overlay host; before the fix this stayed as bare
+      //    Angular placeholder comments until a window:focus event fired.
+      await expect(page.locator('app-console')).toBeVisible({ timeout: 30000 });
+
+      // 3. Real content rendered inside it: the options bar with its "Console
+      //    options" gear menu button, and the connecting overlay (the seeded record
+      //    has no hypervisor VM, so it never connects).
+      const optionsBar = page.locator('app-options-bar, app-options-bar2').first();
+      await expect(optionsBar).toBeVisible({ timeout: 30000 });
+      await expect(optionsBar.getByRole('button', { name: 'Console options' })).toBeVisible();
+      await expect(page.locator('app-console').getByText(/Connecting/)).toBeVisible({ timeout: 30000 });
+
+      // 4. The valid-VM console must not be showing the not-found page. That page
+      //    is what a 403/404 on the VM lookup produces, so this also confirms the
+      //    seeded VM is readable by the browser session.
+      await expect(page.getByRole('heading', { name: 'VM Not Found' })).toHaveCount(0);
+    });
   });
-});
+}

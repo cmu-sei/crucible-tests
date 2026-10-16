@@ -4,25 +4,28 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, CASTER_THEMES, setCasterTheme } from '../../fixtures';
 
-test.describe('Performance and Optimization', () => {
-  test('API Call Optimization', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Performance and Optimization`, () => {
+    test('API Call Optimization', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
-    const apiCalls: string[] = [];
-    page.on('request', (request) => {
-      if (request.url().includes('/api/')) {
-        apiCalls.push(request.url());
-      }
+      const apiCalls: string[] = [];
+      page.on('request', (request) => {
+        if (request.url().includes('/api/')) {
+          apiCalls.push(request.url());
+        }
+      });
+
+      await expect(page.getByText('My Projects')).toBeVisible();
+
+      await page.goto(Services.Caster.UI + '/admin');
+      await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible({ timeout: 10000 });
+
+      expect(apiCalls.length).toBeGreaterThan(0);
+      const uniqueCalls = [...new Set(apiCalls)];
+      expect(apiCalls.length).toBeLessThan(uniqueCalls.length * 5);
     });
-
-    await expect(page.getByText('My Projects')).toBeVisible();
-
-    await page.goto(Services.Caster.UI + '/admin');
-    await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible({ timeout: 10000 });
-
-    expect(apiCalls.length).toBeGreaterThan(0);
-    const uniqueCalls = [...new Set(apiCalls)];
-    expect(apiCalls.length).toBeLessThan(uniqueCalls.length * 5);
   });
-});
+}

@@ -4,37 +4,40 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen } from '../../fixtures';
+import { test, expect, expectCasterProjectOpen, CASTER_THEMES, setCasterTheme } from '../../fixtures';
 
-test.describe('Runs Management (Plan, Apply, Destroy)', () => {
-  test('Cancel Running Operation', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
-    const projectName = `Cancel-Run-Project-${Date.now()}`;
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Runs Management (Plan, Apply, Destroy)`, () => {
+    test('Cancel Running Operation', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+      await setCasterTheme(page, theme);
+      const projectName = `Cancel-Run-Project-${Date.now()}`;
 
-    await expect(page.getByText('My Projects')).toBeVisible();
+      await expect(page.getByText('My Projects')).toBeVisible();
 
-    await page.locator('button[mattooltip="Add New Project"]').click();
-    await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
-    await page.getByRole('textbox', { name: 'Name' }).fill(projectName);
-    await page.getByRole('button', { name: 'Save' }).click();
-    await expectCasterProjectOpen(page, projectName);
+      await page.locator('button[mattooltip="Add New Project"]').click();
+      await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
+      await page.getByRole('textbox', { name: 'Name' }).fill(projectName);
+      await page.getByRole('button', { name: 'Save' }).click();
+      await expectCasterProjectOpen(page, projectName);
 
-    // Extract project ID from URL for cleanup
-    const projectId = page.url().match(/\/projects\/([^/]+)/)?.[1];
-    if (projectId) cleanupCasterProject(projectId);
+      // Extract project ID from URL for cleanup
+      const projectId = page.url().match(/\/projects\/([^/]+)/)?.[1];
+      if (projectId) cleanupCasterProject(projectId);
 
-    await page.getByTitle('Add New Directory').click();
-    await expect(page.getByRole('dialog', { name: 'Create New Directory?' })).toBeVisible();
-    await page.getByRole('textbox', { name: 'Name' }).fill('Cancel-Run-Dir');
-    await page.getByRole('button', { name: 'Save' }).click();
-    await expect(page.getByRole('button', { name: 'Cancel-Run-Dir' })).toBeVisible({ timeout: 10000 });
+      await page.getByTitle('Add New Directory').click();
+      await expect(page.getByRole('dialog', { name: 'Create New Directory?' })).toBeVisible();
+      await page.getByRole('textbox', { name: 'Name' }).fill('Cancel-Run-Dir');
+      await page.getByRole('button', { name: 'Save' }).click();
+      await expect(page.getByRole('button', { name: 'Cancel-Run-Dir' })).toBeVisible({ timeout: 10000 });
 
-    await page.getByRole('button', { name: 'Cancel-Run-Dir' }).click();
-    await page.getByRole('button', { name: 'WORKSPACES' }).click();
-    await expect(page.getByText('Add Workspace')).toBeVisible();
+      await page.getByRole('button', { name: 'Cancel-Run-Dir' }).click();
+      await page.getByRole('button', { name: 'WORKSPACES' }).click();
+      await expect(page.getByText('Add Workspace')).toBeVisible();
 
-    const cancelButton = page.getByRole('button', { name: /cancel/i });
-    if (await cancelButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await cancelButton.click();
-    }
+      const cancelButton = page.getByRole('button', { name: /cancel/i });
+      if (await cancelButton.isVisible({ timeout: 3000 }).catch(() => false)) {
+        await cancelButton.click();
+      }
+    });
   });
-});
+}

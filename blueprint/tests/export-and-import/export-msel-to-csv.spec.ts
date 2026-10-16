@@ -3,7 +3,7 @@
 
 // spec: specs/blueprint-test-plan.md
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import fs from 'fs';
 import {
   getBlueprintToken,
@@ -29,58 +29,61 @@ import {
  * surface. Both real options are exercised here, with assertions matching what the app
  * actually produces. The filename is left to the app; only the extension is asserted.
  */
-test.describe('Export and Import', () => {
-  let token: string;
-  let mselId: string;
-  let mselName: string;
+for (const theme of BLUEPRINT_THEMES) {
+    test.describe(`${theme} theme › Export and Import`, () => {
+    let token: string;
+    let mselId: string;
+    let mselName: string;
 
-  test.beforeEach(async () => {
-    token = await getBlueprintToken();
-    mselName = tempBlueprintName('TestBP-Export');
-    const msel = await createMsel(token, { name: mselName, description: 'Seeded for export' });
-    mselId = msel.id;
+    test.beforeEach(async () => {
+      token = await getBlueprintToken();
+      mselName = tempBlueprintName('TestBP-Export');
+      const msel = await createMsel(token, { name: mselName, description: 'Seeded for export' });
+      mselId = msel.id;
 
-    // Give the export something to contain.
-    await createRenderableScenarioEvent(token, mselId, 'Exported event', { deltaSeconds: 300 });
-  });
+      // Give the export something to contain.
+      await createRenderableScenarioEvent(token, mselId, 'Exported event', { deltaSeconds: 300 });
+    });
 
-  test.afterEach(async () => {
-    try {
-      if (mselId) await deleteMsel(token, mselId);
-    } catch (err) {
-      console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
-    }
-  });
+    test.afterEach(async () => {
+      try {
+        if (mselId) await deleteMsel(token, mselId);
+      } catch (err) {
+        console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
+      }
+    });
 
-  test('Export MSEL to CSV', async ({ blueprintAuthenticatedPage: page }) => {
-    await page.goto(`${Services.Blueprint.UI}/build`, { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('table').first()).toBeVisible({ timeout: 15000 });
+    test('Export MSEL to CSV', async ({ blueprintAuthenticatedPage: page }) => {
+    await applyBlueprintTheme(page, theme);
+      await page.goto(`${Services.Blueprint.UI}/build`, { waitUntil: 'domcontentloaded' });
+      await expect(page.getByRole('table').first()).toBeVisible({ timeout: 15000 });
 
-    // Search narrows the paginated list onto this test's own row.
-    const mselRow = await findMselRowByName(page, mselName);
-    await expect(mselRow).toBeVisible();
+      // Search narrows the paginated list onto this test's own row.
+      const mselRow = await findMselRowByName(page, mselName);
+      await expect(mselRow).toBeVisible();
 
-    // Both formats go through `downloadMselFile`, which settles the mat-menu overlay before and
-    // after each open — necessary here in particular, since this spec opens the same menu twice.
+      // Both formats go through `downloadMselFile`, which settles the mat-menu overlay before and
+      // after each open — necessary here in particular, since this spec opens the same menu twice.
 
-    // --- xlsx ---
-    const xlsx = await downloadMselFile(page, mselRow, /Download xlsx file/i);
-    expect(xlsx.suggestedFilename()).toMatch(/\.xlsx$/i);
+      // --- xlsx ---
+      const xlsx = await downloadMselFile(page, mselRow, /Download xlsx file/i);
+      expect(xlsx.suggestedFilename()).toMatch(/\.xlsx$/i);
 
-    const xlsxPath = await xlsx.path();
-    expect(xlsxPath, 'xlsx download produced no file on disk').toBeTruthy();
-    expect(fs.statSync(xlsxPath!).size).toBeGreaterThan(0);
+      const xlsxPath = await xlsx.path();
+      expect(xlsxPath, 'xlsx download produced no file on disk').toBeTruthy();
+      expect(fs.statSync(xlsxPath!).size).toBeGreaterThan(0);
 
-    // --- json ---
-    const json = await downloadMselFile(page, mselRow, /Download json file/i);
-    expect(json.suggestedFilename()).toMatch(/\.json$/i);
+      // --- json ---
+      const json = await downloadMselFile(page, mselRow, /Download json file/i);
+      expect(json.suggestedFilename()).toMatch(/\.json$/i);
 
-    const jsonPath = await json.path();
-    expect(jsonPath, 'json download produced no file on disk').toBeTruthy();
-    expect(fs.statSync(jsonPath!).size).toBeGreaterThan(0);
+      const jsonPath = await json.path();
+      expect(jsonPath, 'json download produced no file on disk').toBeTruthy();
+      expect(fs.statSync(jsonPath!).size).toBeGreaterThan(0);
 
-    // The JSON export must actually describe the seeded MSEL, not merely be non-empty.
-    const exported = JSON.parse(fs.readFileSync(jsonPath!, 'utf8'));
-    expect(JSON.stringify(exported)).toContain(mselName);
-  });
-});
+      // The JSON export must actually describe the seeded MSEL, not merely be non-empty.
+      const exported = JSON.parse(fs.readFileSync(jsonPath!, 'utf8'));
+      expect(JSON.stringify(exported)).toContain(mselName);
+    });
+    });
+}

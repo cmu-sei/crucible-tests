@@ -11,36 +11,41 @@ import {
   createCasterGroup,
   deleteCasterGroup,
   gotoCasterGroupsAdmin,
+  CASTER_THEMES,
+  setCasterTheme,
 } from '../../fixtures';
 
-test.describe('Groups Management', () => {
-  test('Delete Group', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Groups Management`, () => {
+    test('Delete Group', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
-    await gotoCasterGroupsAdmin(page);
+      await gotoCasterGroupsAdmin(page);
 
-    // 1. Create a group to delete
-    await createCasterGroup(page, 'Group To Delete');
-    const groupCell = casterGroupCell(page, 'Group To Delete');
-    await expect(groupCell).toBeVisible();
+      // 1. Create a group to delete
+      await createCasterGroup(page, 'Group To Delete');
+      const groupCell = casterGroupCell(page, 'Group To Delete');
+      await expect(groupCell).toBeVisible();
 
-    // 2. Click delete icon (trash, first button) for the group
-    const groupRow = page.getByRole('row').filter({ has: groupCell });
-    await groupRow.getByRole('button').first().click();
+      // 2. Click delete icon (trash, first button) for the group
+      const groupRow = page.getByRole('row').filter({ has: groupCell });
+      await groupRow.getByRole('button').first().click();
 
-    // 3. Verify confirmation dialog appears
-    // Scoped by name: an unscoped getByRole('dialog') also matches a previous
-    // dialog that is still mid-exit-animation, which fails strict mode.
-    const dialog = page.getByRole('dialog', { name: 'Delete Group?' });
-    await expect(dialog).toBeVisible({ timeout: 10000 });
+      // 3. Verify confirmation dialog appears
+      // Scoped by name: an unscoped getByRole('dialog') also matches a previous
+      // dialog that is still mid-exit-animation, which fails strict mode.
+      const dialog = page.getByRole('dialog', { name: 'Delete Group?' });
+      await expect(dialog).toBeVisible({ timeout: 10000 });
 
-    // 4. Click "No" to cancel deletion
-    await dialog.getByRole('button', { name: 'No' }).click();
-    await expect(dialog).toHaveCount(0, { timeout: 10000 });
-    await expect(groupCell).toBeVisible();
+      // 4. Click "No" to cancel deletion
+      await dialog.getByRole('button', { name: 'No' }).click();
+      await expect(dialog).toHaveCount(0, { timeout: 10000 });
+      await expect(groupCell).toBeVisible();
 
-    // 5. Click delete icon again and confirm
-    // expect: Group is removed from the table
-    await deleteCasterGroup(page, 'Group To Delete');
-    await expect(groupCell).toHaveCount(0);
+      // 5. Click delete icon again and confirm
+      // expect: Group is removed from the table
+      await deleteCasterGroup(page, 'Group To Delete');
+      await expect(groupCell).toHaveCount(0);
+    });
   });
-});
+}

@@ -11,10 +11,10 @@ test.describe('Home Page and Navigation', () => {
 
     // 1. Log in and navigate to the home page
     // expect: Application loads with default theme
-    await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Admin User', exact: true })).toBeVisible();
 
     // 2. Locate and click the theme toggle button (in user menu)
-    await page.getByRole('button', { name: 'Admin User' }).click();
+    await page.getByRole('button', { name: 'Admin User', exact: true }).click();
 
     // expect: The user menu opens with a Dark Theme toggle
     const darkThemeToggle = page.getByRole('switch', { name: 'Dark Theme' });
@@ -28,7 +28,7 @@ test.describe('Home Page and Navigation', () => {
     await page.keyboard.press('Escape');
 
     // Reopen the menu to verify the toggle state persists
-    await page.getByRole('button', { name: 'Admin User' }).click();
+    await page.getByRole('button', { name: 'Admin User', exact: true }).click();
     await expect(darkThemeToggle).toBeVisible();
 
     // Toggle back to verify it works in both directions
@@ -36,6 +36,6 @@ test.describe('Home Page and Navigation', () => {
     await page.keyboard.press('Escape');
 
     // expect: Theme preference can be toggled
-    await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Admin User', exact: true })).toBeVisible();
   });
 });

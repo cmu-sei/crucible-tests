@@ -5,60 +5,63 @@
 
 import { test, expect } from '@playwright/test';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
-import { createTestEventTemplate, deleteEventTemplateByName } from '../../test-helpers';
+import { ALLOY_THEMES, applyAlloyTheme, createTestEventTemplate, deleteEventTemplateByName } from '../../test-helpers';
 
-test.describe('Event Templates Management', () => {
-  let templateName: string;
+for (const theme of ALLOY_THEMES) {
+  test.describe(`${theme} theme › Event Templates Management`, () => {
+    let templateName: string;
 
-  test.beforeEach(async ({ page }) => {
-    await authenticateWithKeycloak(page, Services.Alloy.UI);
-    templateName = `Dynamic Host Test ${Date.now()}`;
-    await createTestEventTemplate(page, templateName);
+    test.beforeEach(async ({ page }) => {
+      await authenticateWithKeycloak(page, Services.Alloy.UI);
+      await applyAlloyTheme(page, theme);
+      templateName = `Dynamic Host Test ${Date.now()}`;
+      await createTestEventTemplate(page, templateName);
+    });
+
+    test.afterEach(async ({ page }) => {
+      await deleteEventTemplateByName(page, templateName);
+    });
+
+    test('Use Dynamic Host Configuration', async ({ page }) => {
+      // 1. Navigate to admin Event Templates section
+      await page.goto(`${Services.Alloy.UI}/admin`);
+      await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
+
+      // 2. Click edit icon for the test event template
+      await page.getByRole('button', { name: `Edit: ${templateName}` }).click();
+
+      // expect: Edit Event Template dialog appears
+      await expect(page.getByRole('dialog', { name: 'Edit Event Template' })).toBeVisible();
+
+      // 3. Locate the "Use Dynamic Host" checkbox
+      const dynamicHostCheckbox = page.getByRole('checkbox', { name: 'Use Dynamic Host' });
+
+      // expect: Checkbox is visible with label "Use Dynamic Host"
+      await expect(dynamicHostCheckbox).toBeVisible();
+
+      // Remember original state for restore
+      const wasChecked = await dynamicHostCheckbox.isChecked();
+
+      // 4. Check the "Use Dynamic Host" checkbox
+      if (!wasChecked) {
+        await dynamicHostCheckbox.check();
+      }
+
+      // expect: Checkbox becomes checked
+      await expect(dynamicHostCheckbox).toBeChecked();
+
+      // 5. Click "Save" button
+      await page.getByRole('button', { name: 'Save' }).click();
+
+      // expect: Template is updated successfully
+
+      // Restore: uncheck the Use Dynamic Host checkbox
+      await page.getByRole('button', { name: `Edit: ${templateName}` }).first().click();
+      await expect(page.getByRole('dialog', { name: 'Edit Event Template' })).toBeVisible();
+      if (!wasChecked) {
+        await page.getByRole('checkbox', { name: 'Use Dynamic Host' }).uncheck();
+      }
+      await page.getByRole('button', { name: 'Save' }).click();
+    });
   });
-
-  test.afterEach(async ({ page }) => {
-    await deleteEventTemplateByName(page, templateName);
-  });
-
-  test('Use Dynamic Host Configuration', async ({ page }) => {
-    // 1. Navigate to admin Event Templates section
-    await page.goto(`${Services.Alloy.UI}/admin`);
-    await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
-
-    // 2. Click edit icon for the test event template
-    await page.getByRole('button', { name: `Edit: ${templateName}` }).click();
-
-    // expect: Edit Event Template dialog appears
-    await expect(page.getByRole('dialog', { name: 'Edit Event Template' })).toBeVisible();
-
-    // 3. Locate the "Use Dynamic Host" checkbox
-    const dynamicHostCheckbox = page.getByRole('checkbox', { name: 'Use Dynamic Host' });
-
-    // expect: Checkbox is visible with label "Use Dynamic Host"
-    await expect(dynamicHostCheckbox).toBeVisible();
-
-    // Remember original state for restore
-    const wasChecked = await dynamicHostCheckbox.isChecked();
-
-    // 4. Check the "Use Dynamic Host" checkbox
-    if (!wasChecked) {
-      await dynamicHostCheckbox.check();
-    }
-
-    // expect: Checkbox becomes checked
-    await expect(dynamicHostCheckbox).toBeChecked();
-
-    // 5. Click "Save" button
-    await page.getByRole('button', { name: 'Save' }).click();
-
-    // expect: Template is updated successfully
-
-    // Restore: uncheck the Use Dynamic Host checkbox
-    await page.getByRole('button', { name: `Edit: ${templateName}` }).first().click();
-    await expect(page.getByRole('dialog', { name: 'Edit Event Template' })).toBeVisible();
-    if (!wasChecked) {
-      await page.getByRole('checkbox', { name: 'Use Dynamic Host' }).uncheck();
-    }
-    await page.getByRole('button', { name: 'Save' }).click();
-  });
-});
+}

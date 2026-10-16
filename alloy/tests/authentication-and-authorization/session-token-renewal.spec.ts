@@ -6,28 +6,32 @@
 
 import { test, expect } from '@playwright/test';
 import { authenticateWithKeycloak, Services, serviceUrlPattern } from '../../../shared-fixtures';
-test.describe('Authentication and Authorization', () => {
-  test('Session Token Renewal', async ({ page }) => {
-    // Collect console messages to check for token renewal
-    const consoleMessages: string[] = [];
-    page.on('console', (msg) => consoleMessages.push(msg.text()));
+import { ALLOY_THEMES, applyAlloyTheme } from '../../test-helpers';
+for (const theme of ALLOY_THEMES) {
+  test.describe(`${theme} theme › Authentication and Authorization`, () => {
+    test('Session Token Renewal', async ({ page }) => {
+      // Collect console messages to check for token renewal
+      const consoleMessages: string[] = [];
+      page.on('console', (msg) => consoleMessages.push(msg.text()));
 
-    // 1. Log in as admin user
-    await authenticateWithKeycloak(page, Services.Alloy.UI);
+      // 1. Log in as admin user
+      await authenticateWithKeycloak(page, Services.Alloy.UI);
+      await applyAlloyTheme(page, theme);
 
-    // expect: Successfully authenticated
-    await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
+      // expect: Successfully authenticated
+      await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible();
 
-    // 2. Wait for silent token renewal (check console logs for token refresh)
-    // Reload the page to trigger a token check and verify session persists
-    await page.reload();
+      // 2. Wait for silent token renewal (check console logs for token refresh)
+      // Reload the page to trigger a token check and verify session persists
+      await page.reload();
 
-    // expect: No user interaction is required for token renewal
-    // expect: The user session remains active
-    await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible({ timeout: 30000 });
+      // expect: No user interaction is required for token renewal
+      // expect: The user session remains active
+      await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible({ timeout: 30000 });
 
-    // expect: The application automatically renews the authentication token
-    // Verify we are still on the app (not redirected to Keycloak)
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Alloy.UI));
+      // expect: The application automatically renews the authentication token
+      // Verify we are still on the app (not redirected to Keycloak)
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Alloy.UI));
+    });
   });
-});
+}

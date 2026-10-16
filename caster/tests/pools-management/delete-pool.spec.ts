@@ -4,21 +4,24 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, CASTER_THEMES, setCasterTheme } from '../../fixtures';
 
-test.describe('Pools Management', () => {
-  test('Delete Pool', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Pools Management`, () => {
+    test('Delete Pool', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
-    await page.goto(Services.Caster.UI + '/admin?section=VLANs');
-    await expect(page.getByRole('heading', { name: 'Pools' })).toBeVisible({ timeout: 10000 });
+      await page.goto(Services.Caster.UI + '/admin?section=VLANs');
+      await expect(page.getByRole('heading', { name: 'Pools' })).toBeVisible({ timeout: 10000 });
 
-    const deleteButton = page.getByRole('button', { name: /delete/i }).first();
-    if (await deleteButton.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await deleteButton.click();
-      const confirmButton = page.getByRole('button', { name: 'Confirm' });
-      if (await confirmButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-        await confirmButton.click();
+      const deleteButton = page.getByRole('button', { name: /delete/i }).first();
+      if (await deleteButton.isVisible({ timeout: 5000 }).catch(() => false)) {
+        await deleteButton.click();
+        const confirmButton = page.getByRole('button', { name: 'Confirm' });
+        if (await confirmButton.isVisible({ timeout: 3000 }).catch(() => false)) {
+          await confirmButton.click();
+        }
       }
-    }
+    });
   });
-});
+}

@@ -4,22 +4,25 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, CASTER_THEMES, setCasterTheme } from '../../fixtures';
 
-test.describe('Global Workspace Settings', () => {
-  test('Enable Disable Workspace Operations', async ({ casterAuthenticatedPage: page }) => {
+for (const theme of CASTER_THEMES) {
+  test.describe(`${theme} theme › Global Workspace Settings`, () => {
+    test('Enable Disable Workspace Operations', async ({ casterAuthenticatedPage: page }) => {
+      await setCasterTheme(page, theme);
 
-    await page.goto(Services.Caster.UI + '/admin?section=Workspaces');
-    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible({ timeout: 10000 });
+      await page.goto(Services.Caster.UI + '/admin?section=Workspaces');
+      await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible({ timeout: 10000 });
 
-    const disableToggle = page.getByRole('switch', { name: 'Disable Workspace Operations' });
-    await expect(disableToggle).toBeVisible();
+      const disableToggle = page.getByRole('switch', { name: 'Disable Workspace Operations' });
+      await expect(disableToggle).toBeVisible();
 
-    // 2. Toggle on
-    await disableToggle.click();
+      // 2. Toggle on
+      await disableToggle.click();
 
-    // 4. Toggle back off
-    await disableToggle.click();
-    await expect(disableToggle).toBeVisible();
+      // 4. Toggle back off
+      await disableToggle.click();
+      await expect(disableToggle).toBeVisible();
+    });
   });
-});
+}
