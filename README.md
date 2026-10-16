@@ -149,6 +149,10 @@ cd /mnt/data/crucible/crucible-tests
 ./run-tests.sh all --workers 4
 ./run-tests.sh cite --workers 50%
 
+# Run only the light (or dark) variant of theme-parameterized tests
+./run-tests.sh player --theme light
+./run-tests.sh all --theme dark
+
 # Skip service health checks
 ./run-tests.sh topomojo --no-check
 
@@ -162,6 +166,8 @@ npx playwright test --project=chromium topomojo/tests/
 The script automatically checks that **Keycloak** and the **target application** are reachable before running tests. Use `--no-check` to skip these checks.
 
 By default the number of parallel workers comes from `playwright.config.ts` (1 on CI, 2 locally). Use `--workers <n>` to override it per run — accepting either a count (`4`) or a percentage of CPU cores (`50%`). The flag is ignored for the interactive `ui` and `debug` modes, which Playwright always runs with a single worker. Note that tests share a single Crucible stack, so raising the worker count increases concurrent load on Keycloak and the apps and can surface auth/timing flakiness.
+
+Most authenticated specs run once per theme, under describe blocks titled `light theme › ...` and `dark theme › ...`. Use `--theme light|dark` to run just one of those variants; it works by excluding the other theme's titles (`--grep-invert`), so tests that aren't theme-parameterized (e.g. Gameboard, Moodle, TopoMojo) still run. It combines with `--filter` and with every command, including `quick`, `ui`, `headed` and `debug`.
 
 **Supported applications:** `alloy`, `blueprint`, `caster`, `cite`, `gallery`, `gameboard`, `keycloak`, `moodle`, `player`, `steamfitter`, `topomojo`
 
