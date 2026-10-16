@@ -261,24 +261,26 @@ export async function createTrueFalseQuestion(
 }
 
 /**
- * Add a bank question to the quiz's question list. mod_groupquiz interposes a
- * points form between "Add Questions to Group Quiz" and the question landing in
- * the list, so both steps happen here.
+ * Add bank questions to the quiz's question list with "Add Questions to Group
+ * Quiz". Each one lands at its question's default mark.
  */
-export async function addQuestionToQuiz(
+export async function addQuestionsToQuiz(
   page: Page,
   cmid: string,
-  questionName: string,
-  points = '1.00'
+  questionNames: string[]
 ): Promise<void> {
   await gotoMoodle(page, `/mod/groupquiz/edit.php?cmid=${cmid}`);
   // The embedded bank shows the seeded course's own category, which holds only the
-  // question this test created, so the row is found by name rather than by paging.
-  const bankRow = page
-    .locator('#categoryquestions tbody tr')
-    .filter({ hasText: questionName });
-  const rowCheckbox = bankRow.locator('input[type="checkbox"]').first();
-  await rowCheckbox.check();
+  // questions this test created, so rows are found by name rather than by paging.
+  let rowCheckbox;
+  for (const questionName of questionNames) {
+    rowCheckbox = page
+      .locator('#categoryquestions tbody tr')
+      .filter({ hasText: questionName })
+      .locator('input[type="checkbox"]')
+      .first();
+    await rowCheckbox.check();
+  }
   const addSelected = page.locator('input[name="addquestionlist"]');
   // The bank ships the button disabled and the question bank's toggle-group JS enables
   // it in response to a selection. Checking the row before that JS has bound leaves the
@@ -291,11 +293,15 @@ export async function addQuestionToQuiz(
     await expect(addSelected).toBeEnabled({ timeout: 30000 });
   }
   await addSelected.click();
-  const pointsField = page.locator('#id_points');
-  await pointsField.waitFor({ state: 'visible', timeout: ACTION_TIMEOUT });
-  await pointsField.fill(points);
-  await page.locator('#id_submitbutton').click();
-  await expect(page.locator('#questionrow')).toContainText(questionName);
+  await page.waitForURL(/\/mod\/groupquiz\/edit\.php\?cmid=/, URL_WAIT);
+  for (const questionName of questionNames) {
+    await expect(page.locator('#questionrow')).toContainText(questionName);
+  }
+}
+
+/** Add one bank question to the quiz's question list. */
+export async function addQuestionToQuiz(page: Page, cmid: string, questionName: string): Promise<void> {
+  await addQuestionsToQuiz(page, cmid, [questionName]);
 }
 
 // ---------------------------------------------------------------------------
