@@ -48,7 +48,7 @@ test.describe('mod_groupquiz group attempt', () => {
     });
     const questionName = `GQ TF ${suffix}`;
     await createTrueFalseQuestion(page, cmid, questionName, 'The sky is blue.');
-    await addQuestionToQuiz(page, cmid, questionName, '1.00');
+    await addQuestionToQuiz(page, cmid, questionName);
 
     studentUsername = `gqstudent${suffix.toLowerCase()}`;
     studentFullName = `GQ Student ${suffix}`;

@@ -7,9 +7,11 @@ import { test, expect } from '../fixtures';
 import {
   addGroupQuiz,
   addQuestionToQuiz,
+  addQuestionsToQuiz,
   createCourse,
   createTrueFalseQuestion,
   deleteCourse,
+  duplicateActivity,
   gotoMoodle,
   openAddGroupQuizForm,
   seedCourseWithGrouping,
@@ -183,7 +185,7 @@ test.describe('mod_groupquiz instructor workflow', () => {
     await expect(page.locator('#categoryquestions')).toContainText(questionName);
     await expect(page.locator('#questionrow')).toContainText('No questions have been added yet');
 
-    await addQuestionToQuiz(page, cmid, questionName, '1.00');
+    await addQuestionToQuiz(page, cmid, questionName);
 
     // The question list shows the question, its point value and its controls.
     const listItem = page.locator('#questionrow ol.questionlist li[data-questionid]');
@@ -234,7 +236,7 @@ test.describe('mod_groupquiz instructor workflow', () => {
     });
     const questionName = `GQ TF ${suffix}`;
     await createTrueFalseQuestion(page, cmid, questionName, 'The sky is blue.');
-    await addQuestionToQuiz(page, cmid, questionName, '1.00');
+    await addQuestionToQuiz(page, cmid, questionName);
 
     await page
       .locator('#questionrow')
@@ -253,5 +255,107 @@ test.describe('mod_groupquiz instructor workflow', () => {
     await expect(page.locator('#region-main')).toContainText(
       'There are no questions added to this quiz.'
     );
+  });
+
+  test('instructor adds several bank questions at once', async ({ moodleAdminPage: page }) => {
+    const suffix = seedSuffix();
+    const seed = await seedCourseWithGrouping(page, suffix);
+    seededCourseIds.push(seed.course.id);
+    const cmid = await addGroupQuiz(page, {
+      courseId: seed.course.id,
+      name: `GQ Quiz ${suffix}`,
+      groupingName: seed.groupingName,
+    });
+    const first = `GQ TF one ${suffix}`;
+    const second = `GQ TF two ${suffix}`;
+    await createTrueFalseQuestion(page, cmid, first, 'The sky is blue.');
+    await createTrueFalseQuestion(page, cmid, second, 'Grass is green.');
+
+    // Both land in one submit, in bank order, at their default mark.
+    await addQuestionsToQuiz(page, cmid, [first, second]);
+    // Redirect notices sit inside #region-main on 5.0 but above it on 5.2+.
+    await expect(page.getByRole('alert')).toContainText('Added 2 question(s) to the group quiz.');
+    const listItems = page.locator('#questionrow ol.questionlist li[data-questionid]');
+    await expect(listItems).toHaveCount(2);
+    await expect(listItems.nth(0).locator('.name')).toContainText(first);
+    await expect(listItems.nth(1).locator('.name')).toContainText(second);
+    await expect(listItems.nth(0).locator('.name')).toContainText('Question Points: 1.0000000');
+    await expect(listItems.nth(1).locator('.name')).toContainText('Question Points: 1.0000000');
+
+    // A question already on the quiz is skipped rather than added twice.
+    await addQuestionsToQuiz(page, cmid, [first]);
+    await expect(page.getByRole('alert')).toContainText(
+      'Added 0 question(s) to the group quiz. Skipped 1 already on it.'
+    );
+    await expect(listItems).toHaveCount(2);
+  });
+
+  test('the question bank will not delete a question the quiz uses', async ({
+    moodleAdminPage: page,
+  }) => {
+    const suffix = seedSuffix();
+    const seed = await seedCourseWithGrouping(page, suffix);
+    seededCourseIds.push(seed.course.id);
+    const cmid = await addGroupQuiz(page, {
+      courseId: seed.course.id,
+      name: `GQ Quiz ${suffix}`,
+      groupingName: seed.groupingName,
+    });
+    const questionName = `GQ TF ${suffix}`;
+    await createTrueFalseQuestion(page, cmid, questionName, 'The sky is blue.');
+
+    // Core's delete confirmation stars every question it would only hide because an
+    // activity still uses it.
+    const inUseNotice = "Denotes questions which can't be deleted because they are in use.";
+    const openDeleteConfirmation = async () => {
+      await gotoMoodle(page, `/question/edit.php?cmid=${cmid}`);
+      const row = page.locator('#categoryquestions tbody tr').filter({ hasText: questionName });
+      await row.getByRole('button', { name: 'Edit' }).click();
+      await row.getByRole('menuitem', { name: 'Delete' }).click();
+      return page.locator('.modal-dialog').filter({ visible: true }).filter({ hasText: questionName });
+    };
+
+    await addQuestionToQuiz(page, cmid, questionName);
+    await expect(await openDeleteConfirmation()).toContainText(inUseNotice);
+
+    // Taking it off the quiz releases it.
+    await gotoMoodle(page, `/mod/groupquiz/edit.php?cmid=${cmid}`);
+    await page.locator('#questionrow').getByRole('link', { name: 'Delete question 1' }).click();
+    await expect(page.locator('#region-main')).toContainText('Successfully deleted question');
+    const confirmation = await openDeleteConfirmation();
+    await expect(confirmation).toContainText(questionName);
+    await expect(confirmation).not.toContainText(inUseNotice);
+  });
+
+  test('a duplicated group quiz keeps its questions and grouping', async ({
+    moodleAdminPage: page,
+  }) => {
+    const suffix = seedSuffix();
+    const seed = await seedCourseWithGrouping(page, suffix);
+    seededCourseIds.push(seed.course.id);
+    const cmid = await addGroupQuiz(page, {
+      courseId: seed.course.id,
+      name: `GQ Quiz ${suffix}`,
+      groupingName: seed.groupingName,
+    });
+    const first = `GQ TF one ${suffix}`;
+    const second = `GQ TF two ${suffix}`;
+    await createTrueFalseQuestion(page, cmid, first, 'The sky is blue.');
+    await createTrueFalseQuestion(page, cmid, second, 'Grass is green.');
+    await addQuestionsToQuiz(page, cmid, [first, second]);
+
+    const copyId = await duplicateActivity(page, seed.course.id, cmid);
+    expect(copyId).not.toBe(cmid);
+
+    // The copy has both questions, in the original's order.
+    await gotoMoodle(page, `/mod/groupquiz/edit.php?cmid=${copyId}`);
+    const listItems = page.locator('#questionrow ol.questionlist li[data-questionid]');
+    await expect(listItems).toHaveCount(2);
+    await expect(listItems.nth(0).locator('.name')).toContainText(first);
+    await expect(listItems.nth(1).locator('.name')).toContainText(second);
+
+    // And it still uses the original's grouping.
+    await gotoMoodle(page, `/course/modedit.php?update=${copyId}`);
+    await expect(page.locator('#id_grouping option:checked')).toHaveText(seed.groupingName);
   });
 });
