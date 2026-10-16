@@ -26,10 +26,10 @@ import { getUserToken } from '../../../keycloak-admin';
  * take out data other specs are using concurrently.
  *
  * The seeded card sits at (move 0, inject 0) with two articles, so the fresh exhibit's
- * Wall heading reads "2 unread articles" — `wall.component.ts#setShownCardList` computes
+ * Wall card badge reads "2 unread" — `wall.component.ts#setShownCardList` computes
  * `unreadCount` as `userArticles.filter(ua => !ua.isRead).length`. Marking one of the two
- * read in the Archive must therefore take the heading to "1 unread article" (singular;
- * the trailing "s" is a separate conditional span). A second card at (1, 0) stays
+ * read in the Archive must therefore take the badge to "1 unread", with the tooltip
+ * switching to the singular "1 unread article on this card". A second card at (1, 0) stays
  * unreleased, which is what keeps the tab-title count at exactly 2.
  */
 
@@ -210,8 +210,12 @@ for (const theme of GALLERY_THEMES) {
 
       // expect: Each card shows the unread article count. Card 1's two articles are
       // released at (0, 0); card 2 sits at move 1 and so reports nothing posted yet.
-      await expect(releasedCard.getByRole('heading', { level: 3 })).toHaveText('2 unread articles');
-      await expect(cards.filter({ hasText: 'Card 2' }).getByRole('heading', { level: 3 })).toHaveText(
+      await expect(releasedCard.locator('.card-unread')).toHaveText('2 unread');
+      await expect(releasedCard.locator('.card-unread')).toHaveAttribute(
+        'title',
+        '2 unread articles on this card'
+      );
+      await expect(cards.filter({ hasText: 'Card 2' }).locator('.card-empty')).toHaveText(
         'No articles posted'
       );
 
@@ -228,8 +232,8 @@ for (const theme of GALLERY_THEMES) {
       await expect(intelArticle).toHaveCount(1);
       await expect(archiveCards.filter({ hasText: newsArticleName })).toHaveCount(1);
 
-      // The card header carries `article-unread` until the article is read.
-      await expect(intelArticle.locator('mat-card-header')).toHaveClass(/article-unread/);
+      // The card carries `article-unread` until the article is read.
+      await expect(intelArticle).toHaveClass(/article-unread/);
 
       const readButton = intelArticle.getByRole('button', { name: 'Read' });
       await expect(readButton).toBeEnabled();
@@ -242,7 +246,7 @@ for (const theme of GALLERY_THEMES) {
       expect(readResponse.status()).toBe(200);
 
       // expect: The Read button toggles to indicate the article has been read.
-      await expect(intelArticle.locator('mat-card-header')).toHaveClass(/article-read/);
+      await expect(intelArticle).toHaveClass(/article-read/);
       await expect(readButton.locator('mat-icon')).toHaveClass(/mdi-checkbox-marked-outline/);
       // The unread count in the tab title drops by exactly one.
       await expect.poll(async () => unreadFromTitle(await page.title())).toBe(1);
@@ -251,15 +255,14 @@ for (const theme of GALLERY_THEMES) {
       await page.getByRole('button', { name: 'Wall' }).click();
       await expect(page).toHaveTitle('Gallery Wall');
 
-      // expect: The unread article count on the corresponding card decreases.
-      // Singular "article" here, so the assertion cannot be satisfied by the old
-      // "2 unread articles" text.
-      await expect(
-        page
-          .locator('section.cards mat-card')
-          .filter({ hasText: releasedCardName })
-          .getByRole('heading', { level: 3 })
-      ).toHaveText('1 unread article');
+      // expect: The unread article count on the corresponding card decreases. The
+      // badge reads just "N unread"; its tooltip carries the singular/plural noun.
+      const releasedUnread = page
+        .locator('section.cards mat-card')
+        .filter({ hasText: releasedCardName })
+        .locator('.card-unread');
+      await expect(releasedUnread).toHaveText('1 unread');
+      await expect(releasedUnread).toHaveAttribute('title', '1 unread article on this card');
     });
   });
 }

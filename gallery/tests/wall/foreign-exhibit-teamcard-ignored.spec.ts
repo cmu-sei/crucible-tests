@@ -190,7 +190,7 @@ for (const theme of GALLERY_THEMES) {
         isShownOnWall: false,
       });
 
-      const wallCardTitles = page.locator('section.cards mat-card mat-card-title');
+      const wallCardTitles = page.locator('section.cards mat-card .card-title');
 
       // Record the TeamCardUpdated frames this tab actually receives, so delivery of the
       // foreign event can be asserted rather than assumed. Registered before the first

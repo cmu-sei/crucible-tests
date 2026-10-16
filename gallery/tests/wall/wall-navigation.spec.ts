@@ -4,7 +4,14 @@
 // spec: gallery/gallery-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, gotoExhibitSection, GALLERY_THEMES, setGalleryTheme } from '../../fixtures';
+import {
+  test,
+  expect,
+  gotoExhibitSection,
+  CARD_DATE_TEXT,
+  GALLERY_THEMES,
+  setGalleryTheme,
+} from '../../fixtures';
 
 /**
  * Wall View Functionality §3.4 — Navigation to Archive.
@@ -48,7 +55,7 @@ for (const theme of GALLERY_THEMES) {
       await expect(articleCards.filter({ hasText: 'Reporting Article 1' })).toHaveCount(0);
       // `archive.component.html` maps sourceType -> icon; Intel is mdi-shield-lock.
       await expect(intelArticle.locator('mat-icon.source-icon')).toHaveClass(/mdi-shield-lock/);
-      await expect(intelArticle.getByText(/\d{1,2}\/\d{1,2}\/\d{2},? .*ET/)).toBeVisible();
+      await expect(intelArticle.getByText(CARD_DATE_TEXT)).toBeVisible();
       await expect(intelArticle.getByRole('button', { name: 'View' })).toBeVisible();
       await expect(intelArticle.getByRole('button', { name: 'Read' })).toBeVisible();
       await expect(intelArticle.getByRole('button', { name: 'Share' })).toBeVisible();

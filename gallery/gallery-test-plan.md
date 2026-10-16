@@ -200,7 +200,7 @@ Exceptions, which run once:
 
 **Steps:**
   1. Navigate to the Wall view and observe unread article counts on cards
-    - expect: Each card shows the unread article count (e.g. '5 unread articles', '1 unread article')
+    - expect: Each card shows the unread article count (e.g. '5 unread', '1 unread')
     - expect: Cards with unread articles display the count prominently
   2. Navigate to the Archive view and mark an article as 'Read' using the Read button
     - expect: The Read button toggles to indicate the article has been read
@@ -973,7 +973,7 @@ the shared exhibit.
     - expect: Fields accept the changes
   3. Change the source type
     - expect: Source type dropdown allows selection change
-  4. Change the status (Unused, Closed, Critical, Affected, Open)
+  4. Change the status (Gray, Green, Yellow, Orange, Red)
     - expect: Status dropdown allows selection
   5. Click 'Save' button
     - expect: Article is updated successfully
@@ -998,16 +998,16 @@ the shared exhibit.
 **File:** `tests/articles/article-status.spec.ts`
 
 **Steps:**
-  1. Create or edit an article and set status to 'Unused' (0)
-    - expect: Article status is set to Unused
-  2. Change status to 'Open' (50)
-    - expect: Status updates to Open
-  3. Change status to 'Affected' (40)
-    - expect: Status updates to Affected
-  4. Change status to 'Critical' (20)
-    - expect: Status updates to Critical
-  5. Change status to 'Closed' (10)
-    - expect: Status updates to Closed
+  1. Create or edit an article and set status to 'Gray' (0)
+    - expect: Article status is set to Gray
+  2. Change status to 'Green' (50)
+    - expect: Status updates to Green
+  3. Change status to 'Yellow' (40)
+    - expect: Status updates to Yellow
+  4. Change status to 'Orange' (20)
+    - expect: Status updates to Orange
+  5. Change status to 'Red' (10)
+    - expect: Status updates to Red
   6. Verify status is displayed correctly in the archive and wall views
     - expect: Status indicator reflects the current status across all views
 

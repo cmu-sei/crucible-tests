@@ -121,6 +121,15 @@ export async function openMatSelect(trigger: Locator): Promise<Locator> {
 }
 
 /**
+ * A wall or archive card's simulated date/time, e.g. "10/13/26, 8:35 PM EDT".
+ *
+ * The cards render it with `toLocaleString('en-US', { ..., timeZoneName: 'short' })` in
+ * the viewer's own time zone, so the zone is whatever the browser runs in ("UTC" in the
+ * dev container, "GMT+2" where no abbreviation exists) rather than a fixed "ET".
+ */
+export const CARD_DATE_TEXT = /\d{1,2}\/\d{1,2}\/\d{2}, \d{1,2}:\d{2}\s[AP]M [A-Z][A-Z0-9+:-]+/;
+
+/**
  * All known group name prefixes used by gallery group tests.
  * This is the single source of truth so that any test can clean up ALL prefixes.
  */
@@ -711,7 +720,7 @@ export async function apiCreateCard(
  *
  * `PUT /api/cards/{id}` broadcasts `CardUpdated`, which `signalr.service.ts` upserts
  * into the (collection-scoped) card store. A card's name is rendered as the Wall's
- * `mat-card-title`, so a rename is an independently-observable consequence of a
+ * `.card-title`, so a rename is an independently-observable consequence of a
  * SignalR frame — useful as a liveness marker on the same connection.
  */
 export async function apiRenameCard(
@@ -964,7 +973,7 @@ export async function apiCreateArticle(
         move: options.move ?? 0,
         inject: options.inject ?? 0,
         // Enums serialize as strings — Startup registers a JsonStringEnumConverter.
-        status: 'Open',
+        status: 'Green',
         sourceType: 'News',
         sourceName: 'Playwright',
         url: '',
