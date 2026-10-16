@@ -945,6 +945,8 @@ export async function apiCreateArticle(
     inject?: number;
     description?: string;
     summary?: string;
+    /** ISO timestamp; defaults to now. */
+    datePosted?: string;
   } = {}
 ): Promise<{ id: string; name: string; move: number; inject: number }> {
   const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
@@ -966,7 +968,7 @@ export async function apiCreateArticle(
         sourceType: 'News',
         sourceName: 'Playwright',
         url: '',
-        datePosted: new Date().toISOString(),
+        datePosted: options.datePosted ?? new Date().toISOString(),
         openInNewTab: false,
       },
     });
