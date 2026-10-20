@@ -213,16 +213,28 @@ export async function addGroupQuiz(
 }
 
 /**
- * Fill a Moodle "rich text" field. This install renders the raw textarea for
- * question text, but a site with TinyMCE enabled hides it behind an iframe.
+ * Fill a Moodle "rich text" field. With TinyMCE the textarea is replaced by an
+ * iframe after page load, and TinyMCE resets the iframe body when it finishes
+ * initialising, so wait for that before typing or the text is lost on submit.
  */
 async function fillEditorField(page: Page, fieldId: string, text: string): Promise<void> {
-  const textarea = page.locator(`#${fieldId}`);
-  if (await textarea.isVisible().catch(() => false)) {
-    await textarea.fill(text);
+  const iframe = page.locator(`#${fieldId}_ifr`);
+  const hasTiny = await iframe
+    .waitFor({ state: 'attached', timeout: ACTION_TIMEOUT })
+    .then(() => true)
+    .catch(() => false);
+  if (!hasTiny) {
+    await page.locator(`#${fieldId}`).fill(text);
     return;
   }
-  await page.frameLocator(`#${fieldId}_ifr`).locator('body').fill(text);
+  await page.waitForFunction(
+    (id) => (window as any).tinymce?.get(id)?.initialized === true,
+    fieldId,
+    { timeout: ACTION_TIMEOUT }
+  );
+  const body = page.frameLocator(`#${fieldId}_ifr`).locator('body');
+  await body.fill(text);
+  await expect(body).toHaveText(text);
 }
 
 /**
@@ -261,24 +273,26 @@ export async function createTrueFalseQuestion(
 }
 
 /**
- * Add a bank question to the quiz's question list. mod_groupquiz interposes a
- * points form between "Add Questions to Group Quiz" and the question landing in
- * the list, so both steps happen here.
+ * Add bank questions to the quiz's question list with "Add Questions to Group
+ * Quiz". Each one lands at its question's default mark.
  */
-export async function addQuestionToQuiz(
+export async function addQuestionsToQuiz(
   page: Page,
   cmid: string,
-  questionName: string,
-  points = '1.00'
+  questionNames: string[]
 ): Promise<void> {
   await gotoMoodle(page, `/mod/groupquiz/edit.php?cmid=${cmid}`);
   // The embedded bank shows the seeded course's own category, which holds only the
-  // question this test created, so the row is found by name rather than by paging.
-  const bankRow = page
-    .locator('#categoryquestions tbody tr')
-    .filter({ hasText: questionName });
-  const rowCheckbox = bankRow.locator('input[type="checkbox"]').first();
-  await rowCheckbox.check();
+  // questions this test created, so rows are found by name rather than by paging.
+  let rowCheckbox;
+  for (const questionName of questionNames) {
+    rowCheckbox = page
+      .locator('#categoryquestions tbody tr')
+      .filter({ hasText: questionName })
+      .locator('input[type="checkbox"]')
+      .first();
+    await rowCheckbox.check();
+  }
   const addSelected = page.locator('input[name="addquestionlist"]');
   // The bank ships the button disabled and the question bank's toggle-group JS enables
   // it in response to a selection. Checking the row before that JS has bound leaves the
@@ -291,16 +305,53 @@ export async function addQuestionToQuiz(
     await expect(addSelected).toBeEnabled({ timeout: 30000 });
   }
   await addSelected.click();
-  const pointsField = page.locator('#id_points');
-  await pointsField.waitFor({ state: 'visible', timeout: ACTION_TIMEOUT });
-  await pointsField.fill(points);
-  await page.locator('#id_submitbutton').click();
-  await expect(page.locator('#questionrow')).toContainText(questionName);
+  await page.waitForURL(/\/mod\/groupquiz\/edit\.php\?cmid=/, URL_WAIT);
+  for (const questionName of questionNames) {
+    await expect(page.locator('#questionrow')).toContainText(questionName);
+  }
+}
+
+/** Add one bank question to the quiz's question list. */
+export async function addQuestionToQuiz(page: Page, cmid: string, questionName: string): Promise<void> {
+  await addQuestionsToQuiz(page, cmid, [questionName]);
 }
 
 // ---------------------------------------------------------------------------
 // Users, enrolment and group membership
 // ---------------------------------------------------------------------------
+
+/**
+ * Duplicate an activity from the course page, which runs it through a backup and
+ * restore inside the course. Returns the copy's cmid.
+ */
+export async function duplicateActivity(
+  page: Page,
+  courseId: string,
+  cmid: string
+): Promise<string> {
+  await gotoMoodle(page, `/course/view.php?id=${courseId}`);
+  // 5.3 exposes the edit-mode toggle as a switch rather than a checkbox.
+  const editMode = page.getByLabel('Edit mode', { exact: true });
+  if (!(await editMode.isChecked())) {
+    await editMode.check();
+    await page.waitForLoadState('domcontentloaded');
+  }
+  const activity = page.locator(`li.activity[data-id="${cmid}"]`);
+  const name = (await activity.locator('.instancename').first().innerText()).split('\n')[0].trim();
+  // Follow the menu item's link rather than clicking it: the course page user tour
+  // can open over the menu at any point and swallow the click.
+  const href = await activity.getByRole('menuitem', { name: 'Duplicate', includeHidden: true }).getAttribute('href');
+  expect(href, 'the activity menu should offer Duplicate').toBeTruthy();
+  await page.goto(href as string);
+  await page.waitForLoadState('domcontentloaded');
+  const copy = page
+    .locator('li.activity')
+    .filter({ has: page.locator('.instancename', { hasText: `${name} (copy)` }) });
+  await expect(copy).toHaveCount(1, { timeout: ACTION_TIMEOUT });
+  const copyId = await copy.getAttribute('data-id');
+  expect(copyId, 'the duplicated activity should be on the course page').toBeTruthy();
+  return copyId as string;
+}
 
 /**
  * Create a manual-auth Moodle account. The specs need a student who can log in
