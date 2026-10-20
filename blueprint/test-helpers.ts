@@ -584,45 +584,6 @@ export async function listMselDataFields(token: string, mselId: string): Promise
   return r.data ?? [];
 }
 
-/**
- * Create a DataField whose value is chosen from the given options, e.g. a Double with
- * values 1.5 and 2.5. Each option's name and value are the same text.
- */
-export async function createOptionListDataField(
-  token: string,
-  mselId: string,
-  field: { name: string; dataType: string; displayOrder: number },
-  options: string[]
-): Promise<any> {
-  const r = await blueprintCall<any>(token, '/api/dataFields', {
-    method: 'POST',
-    body: {
-      onScenarioEventList: true,
-      onExerciseView: false,
-      ...field,
-      mselId,
-      isChosenFromList: true,
-      isInformationField: false,
-      isFacilitationField: false,
-      isInitiallyHidden: false,
-      dataOptions: [],
-    },
-  });
-  if (!r.ok) {
-    throw new Error(`createOptionListDataField "${field.name}" failed (${r.status}): ${r.text}`);
-  }
-  for (const [i, option] of options.entries()) {
-    const o = await blueprintCall(token, '/api/dataOptions', {
-      method: 'POST',
-      body: { dataFieldId: r.data.id, optionName: option, optionValue: option, displayOrder: i + 1 },
-    });
-    if (!o.ok) {
-      throw new Error(`createOptionListDataField: POST dataOptions "${option}" failed (${o.status}): ${o.text}`);
-    }
-  }
-  return r.data;
-}
-
 /** Fetch a single scenario event, including its `dataValues`. */
 export async function getScenarioEvent(token: string, eventId: string): Promise<any> {
   const r = await blueprintCall<any>(token, `/api/scenarioEvents/${eventId}`);
@@ -749,25 +710,6 @@ export async function deleteTeam(token: string, teamId: string): Promise<void> {
   if (!r.ok && r.status !== 404) {
     console.warn(`deleteTeam(${teamId}) returned ${r.status}: ${r.text}`);
   }
-}
-
-/**
- * Create a Player application on the specified MSEL via the Blueprint API.
- * Returns the application id — pair every call with `deletePlayerApplication` in test teardown.
- */
-export async function createPlayerApplication(
-  token: string,
-  mselId: string,
-  name: string = tempBlueprintName('TestBP-App')
-): Promise<{ id: string; name: string }> {
-  const r = await blueprintCall<any>(token, '/api/playerApplications', {
-    method: 'POST',
-    body: { mselId, name, url: 'http://localhost', embeddable: true, loadInBackground: false },
-  });
-  if (!r.ok) {
-    throw new Error(`createPlayerApplication failed (${r.status}): ${r.text}`);
-  }
-  return { id: r.data.id as string, name: r.data.name as string };
 }
 
 /**
