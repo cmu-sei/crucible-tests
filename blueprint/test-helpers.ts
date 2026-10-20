@@ -31,6 +31,7 @@ import os from 'os';
 import path from 'path';
 import { randomUUID } from 'crypto';
 import { authSessionStatePath } from '../auth-paths';
+import { setMselIntegrationState } from './db-helpers';
 
 // ============================================================================
 // Token acquisition
@@ -249,6 +250,10 @@ export async function getMsel(token: string, mselId: string): Promise<any> {
  * Note `status` must be a member of `MselItemStatus` — Pending, Entered, Approved,
  * Complete, Pushing, Pulling, Deployed, Archived. Anything else (e.g. "Active") is
  * rejected with a 400 JSON-conversion error, which is correct API behaviour, not a bug.
+ * Pushing, Pulling and Deployed belong to the integration pipeline: moving a MSEL into or
+ * out of one is a 409. The integration IDs (`playerViewId` and the rest) and
+ * `integrationStatus` are not on the edit request, so the API ignores them here. Seed that
+ * state with `setMselIntegrationState` (db-helpers.ts) instead.
  */
 export async function updateMsel(
   token: string,
@@ -771,9 +776,9 @@ export async function removeUserFromTeam(token: string, teamUserId: string): Pro
  * Verified live: with all three satisfied, `my-join-msels` returns the seeded MSEL; the join
  * surface has no other prerequisite.
  *
- * `playerViewId` is a plain settable field, so no real Player view is needed — the join list
- * only checks it for non-null. Note it must be set with a **full GET-then-PUT**: the update
- * path maps the whole view model, so a partial body nulls everything omitted.
+ * Deployed and `playerViewId` are set only by the integration pipeline (blueprint.api #205), so
+ * both are written to the database with `setMselIntegrationState`. No real Player view is
+ * needed: the join list only checks `playerViewId` for non-null.
  *
  * Caller must delete: `deleteMsel` removes the MSEL and cascades its teams; the TeamUser row
  * goes with the team. Returns the ids needed either way.
@@ -788,21 +793,8 @@ export async function seedJoinableMsel(
   const msel = await createMsel(token, {
     name,
     description: 'Seeded to appear on the Join an Event surface',
-    status: 'Deployed',
   });
-
-  // PlayerViewId is not settable on create, so patch it in. Full GET-then-PUT — see above.
-  const current = await blueprintCall<any>(token, `/api/msels/${msel.id}`);
-  if (!current.ok) {
-    throw new Error(`seedJoinableMsel: GET msel failed (${current.status}): ${current.text}`);
-  }
-  const put = await blueprintCall(token, `/api/msels/${msel.id}`, {
-    method: 'PUT',
-    body: { ...current.data, playerViewId: randomUUID() },
-  });
-  if (!put.ok) {
-    throw new Error(`seedJoinableMsel: PUT playerViewId failed (${put.status}): ${put.text}`);
-  }
+  await setMselIntegrationState(msel.id, { status: 'Deployed', playerViewId: randomUUID() });
 
   const team = await createTeam(token, msel.id, {
     name: opts.teamName ?? tempBlueprintName('TestBP-JoinTeam'),
