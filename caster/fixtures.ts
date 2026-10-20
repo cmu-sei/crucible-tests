@@ -78,6 +78,27 @@ async function getCasterApiContext(page: Page): Promise<{ apiUrl: string; token:
 }
 
 /**
+ * Call the Caster API as the signed-in user and return the JSON response.
+ * Throws with the response body on a non-2xx status.
+ * @param path - path under /api, e.g. `files/${id}`
+ */
+export async function casterApi(page: Page, method: string, path: string, body?: unknown): Promise<any> {
+  const { apiUrl, token } = await getCasterApiContext(page);
+  return page.evaluate(
+    async ({ url, method, token, body }) => {
+      const resp = await fetch(url, {
+        method,
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      if (!resp.ok) throw new Error(`${method} ${url}: ${resp.status} ${await resp.text()}`);
+      return resp.json();
+    },
+    { url: `${apiUrl}/api/${path}`, method, token, body }
+  );
+}
+
+/**
  * Delete a Caster project via the API.
  * Reads the API URL from the Angular app's runtime settings, then calls
  * fetch() from the browser context with the authenticated user's token.
