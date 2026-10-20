@@ -201,10 +201,17 @@ export interface MoodleCrucibleParticipant {
 
 /**
  * Creates a disposable, manually-enrolled student for the course containing a
- * Crucible activity. The participant is never used to log in or deploy a lab;
- * it exists only as an isolated table row for manage-deployments UI tests.
+ * Crucible activity. The participant is never used to log in; by default it
+ * exists only as an isolated table row for manage-deployments UI tests.
+ *
+ * Passing `alloyGuid` makes it an OAuth2 user with that GUID as its idnumber,
+ * which is all `get_user_alloy_guid()` needs for a bulk deploy to start a real
+ * Alloy event for it.
  */
-export async function seedMoodleCrucibleParticipant(cmid: string | number): Promise<MoodleCrucibleParticipant> {
+export async function seedMoodleCrucibleParticipant(
+  cmid: string | number,
+  alloyGuid?: string
+): Promise<MoodleCrucibleParticipant> {
   const client = await connectMoodleDatabase();
   const suffix = `${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
   const username = `__e2e_crucible_schedule_${suffix}`;
@@ -243,12 +250,12 @@ export async function seedMoodleCrucibleParticipant(cmid: string | number): Prom
          username, password, idnumber, firstname, lastname, email,
          timecreated, timemodified
        ) VALUES (
-         'manual', 1, 0, 0, 0, 1,
-         $1, '', '', 'E2E', $2, $3,
+         $5, 1, 0, 0, 0, 1,
+         $1, '', $6, 'E2E', $2, $3,
          $4, $4
        )
        RETURNING id`,
-      [username, displayName, `${username}@example.invalid`, now]
+      [username, displayName, `${username}@example.invalid`, now, alloyGuid ? 'oauth2' : 'manual', alloyGuid ?? '']
     );
     // pg hands bigint back as a string; coerced here so the returned ids compare
     // as numbers against ids read from other queries.
@@ -312,7 +319,9 @@ export async function cleanupMoodleCrucibleParticipant(
 
     await client.query(`DELETE FROM mdl_crucible_attempts WHERE userid = $1`, [participant.userId]);
     await client.query(`DELETE FROM mdl_user_enrolments WHERE userid = $1`, [participant.userId]);
-    await client.query(`DELETE FROM mdl_user WHERE id = $1 AND username = $2`, [
+    // delete_user() renames the account it deletes, so a participant a privacy
+    // request already removed is matched by its deleted flag instead.
+    await client.query(`DELETE FROM mdl_user WHERE id = $1 AND (username = $2 OR deleted = 1)`, [
       participant.userId,
       participant.username,
     ]);
@@ -923,8 +932,11 @@ export async function cleanupMoodleTopomojoParticipants(
           AND userid IN (SELECT id FROM mdl_user WHERE username LIKE '\\_\\_e2e\\_topomojo\\_%')`,
       [userIds]
     );
+    // delete_user() renames the account it deletes, so a participant a privacy
+    // request already removed is matched by its deleted flag instead.
     await client.query(
-      `DELETE FROM mdl_user WHERE id = ANY($1::bigint[]) AND username LIKE '\\_\\_e2e\\_topomojo\\_%'`,
+      `DELETE FROM mdl_user
+        WHERE id = ANY($1::bigint[]) AND (username LIKE '\\_\\_e2e\\_topomojo\\_%' OR deleted = 1)`,
       [userIds]
     );
   } finally {
