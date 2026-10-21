@@ -1330,6 +1330,12 @@ rather than by row count.
     - expect: Table headers are properly labeled with ARIA attributes
     - expect: Row and column information is accessible to screen readers
     - expect: List items have descriptive labels
+  4. Visit the home sections (Scenarios, Scenario Templates, History) and every admin section (Scenario Templates, Scenarios, Users, each Roles tab, Groups and an expanded group), with a seeded group, user and custom role so their row and column buttons render
+    - expect: Every visible icon-only button has a non-empty accessible name (an aria-label, a resolving aria-labelledby, or a title; a matTooltip alone is not a name)
+    - expect: The admin sidebar's arrow buttons are named after their sections
+    - expect: Row buttons are named after their row (e.g. 'Delete <group>', 'Add <user>', 'Copy ID of <user>', 'Rename role <role>')
+    - expect: Every aria-labelledby on the page refers to an element id that exists
+    - expect: Every visible image (the Crucible logo, system-message images) has alt text
 
 #### 13.6. Color Contrast and Visibility
 

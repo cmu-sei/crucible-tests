@@ -848,7 +848,8 @@ export async function citeIsDarkTheme(page: Page): Promise<boolean> {
  */
 export function citeThemeUrl(url: string, theme: CiteTheme): string {
   const themed = new URL(url);
-  themed.searchParams.set('theme', theme);
+  // The param takes the Theme enum value; any other value (e.g. 'dark') reads as light.
+  themed.searchParams.set('theme', `${theme}-theme`);
   return themed.toString();
 }
 
@@ -862,7 +863,7 @@ export function citeThemeUrl(url: string, theme: CiteTheme): string {
  * applying once, right after authentication. The saved auth state carries no
  * Akita store, so every test's fresh browser context starts light.
  *
- * Use the toggle rather than the `?theme=dark` query param: the param is read in
+ * Use the toggle rather than the `?theme=dark-theme` query param: the param is read in
  * `AppComponent`'s constructor, so it only applies on a fresh app bootstrap and is
  * a no-op for a client-side navigation within an already-running app. The one
  * place the param is the right tool is a spec's first navigation, before the app
@@ -906,6 +907,14 @@ export async function setCiteTheme(page: Page, theme: CiteTheme): Promise<void> 
         }),
       want,
     );
+}
+
+/**
+ * The evaluation toolbar's move counter, e.g. "Move 1 of 3" (displayed move of the
+ * highest move number). Assert on it with `toHaveText('Move 1 of 3')`.
+ */
+export function citeMoveLabel(page: Page) {
+  return page.getByText(/^Move \d+ of \d+$/);
 }
 
 export { expect } from '@playwright/test';

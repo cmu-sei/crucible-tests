@@ -275,12 +275,12 @@ for (const theme of CITE_THEMES) {
 
         await navigateToEvaluationDashboard(page, result.citeEvaluationId);
 
-        // Verify "You have X unread Gallery item(s)" notification
-        const unreadNotification = page.locator('text=/unread Gallery item/');
+        // Verify the Gallery card's "X unread in Gallery" count
+        const unreadNotification = page.getByText(/^\d+ unread in Gallery$/);
         await expect(unreadNotification).toBeVisible({ timeout: 15000 });
 
         // Verify the Gallery link
-        const galleryLink = page.locator('a', { hasText: 'click here to view them in Gallery' });
+        const galleryLink = page.getByRole('link', { name: 'Open Gallery' });
         await expect(galleryLink).toBeVisible({ timeout: 5000 });
       } finally {
         // Cleanup
@@ -311,15 +311,12 @@ for (const theme of CITE_THEMES) {
 
         await navigateToEvaluationDashboard(page, result.citeEvaluationId);
 
-        // Verify unread notification with count
-        const unreadNotification = page.locator('text=/unread Gallery item/');
-        await expect(unreadNotification).toBeVisible({ timeout: 15000 });
-
-        const notificationText = await unreadNotification.textContent();
-        expect(notificationText).toMatch(/\d+ unread Gallery item/);
+        // Verify the unread count matches the 3 seeded articles
+        const unreadNotification = page.getByText(/^\d+ unread in Gallery$/);
+        await expect(unreadNotification).toHaveText('3 unread in Gallery', { timeout: 15000 });
 
         // Verify Gallery link with correct URL
-        const galleryLink = page.locator('a', { hasText: 'click here to view them in Gallery' });
+        const galleryLink = page.getByRole('link', { name: 'Open Gallery' });
         await expect(galleryLink).toBeVisible({ timeout: 5000 });
 
         const href = await galleryLink.getAttribute('href');

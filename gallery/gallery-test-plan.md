@@ -915,7 +915,7 @@ the shared exhibit.
 
 **Steps:**
   1. Log in and observe the top navigation bar
-    - expect: Gallery logo/icon is visible on the left as a clickable link
+    - expect: Gallery logo/icon is visible on the left as a clickable link named "Gallery home"
     - expect: Application title 'Gallery - Exercise Information Sharing' is displayed
     - expect: 'Admin User' button is visible on the right
   2. Click the Gallery logo
@@ -977,7 +977,7 @@ the shared exhibit.
     - expect: Status dropdown allows selection
   5. Click 'Save' button
     - expect: Article is updated successfully
-    - expect: Changes are reflected in the archive and wall views
+    - expect: The status change is reflected on the wall (the archive does not display status, and only lists exhibit-scoped articles, which the admin article panel does not edit)
 
 #### 11.3. Delete Article
 
@@ -1008,8 +1008,8 @@ the shared exhibit.
     - expect: Status updates to Orange
   5. Change status to 'Red' (10)
     - expect: Status updates to Red
-  6. Verify status is displayed correctly in the archive and wall views
-    - expect: Status indicator reflects the current status across all views
+  6. Verify status is displayed correctly on the wall
+    - expect: The wall card takes the current status color and icon (the archive does not display status)
 
 ### 12. Card Management
 
@@ -1364,4 +1364,4 @@ Collection dialog is dismissed via Cancel without saving.
   4. Open Admin → Collections → Add Collection, fill Name so Save enables, and measure the buttons without saving
     - expect: The filled Save button is painted `--mat-sys-primary` and its `on-primary` label meets 4.5:1
     - expect: The Cancel label is `--mat-sys-primary` and meets 4.5:1 on the dialog surface
-    - **pending upstream:** fails in both themes with the shipped palette — `#008740` on the light dialog surface `#F9F9F9` measures 4.39:1, and `#00A34D` on the dark surface `#313131` measures 3.93:1. Gallery's neutral palette is lighter in dark mode than the M3 baseline the design spec's shades were chosen against. Passes without a test change once the configured primaries (or the surfaces) are compliant.
+    - note: gallery.ui overrides the light `surface` to white, because `#008740` measures 4.39:1 on the palette's `#F9F9F9`, and its dark-mode primary is measured against Gallery's own `#313131` dark surface rather than the M3 baseline

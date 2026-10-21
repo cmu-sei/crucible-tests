@@ -357,28 +357,5 @@ for (const theme of GALLERY_THEMES) {
       const wallCardAfter = page.locator('mat-card.card').filter({ hasText: cardName });
       await expect(wallCardAfter).toHaveClass(/\borange-status\b/);
     });
-
-    // eslint-disable-next-line playwright/no-skipped-test
-    test.skip('Edit Existing Article - changes reflected in the archive view', () => {
-      // Not implementable as written. The plan's step 5 expects "Changes are
-      // reflected in the archive and wall views", but the archive has no status
-      // indicator to reflect: archive.component.html renders each userArticle's
-      // sourceType icon, name, sourceName, datePosted and summary plus the
-      // View/Read/Share/More actions, and never renders `article.status`. In
-      // archive.component.ts, `status` is only read inside applyFilter's search
-      // predicate and sortArticles' comparator.
-      //
-      // The other edited fields (name, summary, sourceType) *are* rendered in the
-      // archive, but only for exhibit-scoped articles reached through a team's
-      // UserArticles — which the admin article panel cannot create, since it only
-      // manages collection-level articles (exhibitId null; see
-      // ArticleService.GetByCollectionAsync). Asserting the admin edit in the
-      // archive would therefore mean editing a *different*, API-seeded article and
-      // claiming it proved the admin dialog worked.
-      //
-      // Re-enable once either (a) the archive renders article status, or (b) the
-      // admin panel can manage exhibit-scoped articles, at which point the same
-      // record can be edited in admin and observed in the archive.
-    });
   });
 }
