@@ -9,6 +9,7 @@ import {
   oidcStorageKey,
   authenticateWithKeycloak,
   waitForFirstVisible,
+  requirePrecondition,
 } from '../shared-fixtures';
 import { authSessionStatePath, authStatePath } from '../auth-paths';
 
@@ -581,6 +582,146 @@ export async function deleteCasterGroup(page: Page, name: string): Promise<void>
 
   await casterGroupCell(page, name).waitFor({ state: 'detached', timeout: 20000 });
   await dialog.waitFor({ state: 'detached', timeout: 10000 });
+}
+
+/** A Caster API response: the status code and the parsed JSON body (null when there is none). */
+export interface CasterApiResponse<T = any> {
+  status: number;
+  body: T;
+}
+
+/**
+ * Call the Caster API as the signed-in user. Seeding through the API keeps a spec
+ * on the screen it is testing, and lets API-level specs assert status codes the
+ * UI never shows. `path` is relative to `/api/`.
+ */
+export async function casterApi<T = any>(
+  page: Page,
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
+  path: string,
+  data?: unknown
+): Promise<CasterApiResponse<T>> {
+  const { apiUrl, token } = await getCasterApiContext(page);
+  const res = await page.request.fetch(`${apiUrl}/api/${path.replace(/^\//, '')}`, {
+    method,
+    headers: { Authorization: `Bearer ${token}` },
+    data,
+  });
+  const text = await res.text();
+  let body: any = null;
+  try {
+    body = text ? JSON.parse(text) : null;
+  } catch {
+    body = text;
+  }
+  return { status: res.status(), body };
+}
+
+/** POST to the Caster API and return the created entity, failing loudly if it wasn't created. */
+async function casterCreate<T = any>(page: Page, path: string, data: unknown): Promise<T> {
+  const res = await casterApi<T>(page, 'POST', path, data);
+  if (res.status !== 201 && res.status !== 200) {
+    throw new Error(`POST /api/${path} returned ${res.status}: ${JSON.stringify(res.body)}`);
+  }
+  return res.body;
+}
+
+/** Create a project through the API and return its ID. Register it with `cleanupCasterProject`. */
+export async function seedCasterProject(page: Page, name: string): Promise<string> {
+  return (await casterCreate(page, 'projects', { name })).id;
+}
+
+/** Create a directory through the API and return its ID. */
+export async function seedCasterDirectory(
+  page: Page,
+  projectId: string,
+  name: string,
+  settings: { parentId?: string; terraformVersion?: string; parallelism?: number } = {}
+): Promise<string> {
+  return (await casterCreate(page, 'directories', { name, projectId, ...settings })).id;
+}
+
+/** Create a design through the API and return its ID. */
+export async function seedCasterDesign(page: Page, directoryId: string, name: string): Promise<string> {
+  return (await casterCreate(page, 'designs', { name, directoryId })).id;
+}
+
+/** Create a file through the API and return its ID. */
+export async function seedCasterFile(
+  page: Page,
+  directoryId: string,
+  name: string,
+  content: string,
+  workspaceId?: string
+): Promise<string> {
+  return (await casterCreate(page, 'files', { name, directoryId, content, workspaceId })).id;
+}
+
+/** Create a workspace through the API and return its ID. */
+export async function seedCasterWorkspace(page: Page, directoryId: string, name: string): Promise<string> {
+  return (await casterCreate(page, 'workspaces', { name, directoryId })).id;
+}
+
+/**
+ * Open a project and expand one of its top-level directories in the sidebar.
+ * The section buttons (FILES, WORKSPACES, DESIGNS) render only once it is expanded.
+ */
+export async function openCasterDirectory(page: Page, projectId: string, directoryName: string): Promise<void> {
+  await page.goto(`${Services.Caster.UI}/projects/${projectId}`);
+  const directory = page.getByRole('button', { name: directoryName, exact: true });
+  await directory.waitFor({ state: 'visible', timeout: 15000 });
+  await directory.click();
+  await page
+    .getByRole('region', { name: directoryName })
+    .getByRole('button', { name: 'FILES', exact: true })
+    .waitFor({ state: 'visible', timeout: 10000 });
+}
+
+/**
+ * What the open file's editor holds, read from Monaco rather than its virtualized
+ * DOM, which only renders the visible lines. Null until Monaco has loaded, so
+ * `expect.poll` can wait on it.
+ */
+export async function casterEditorContent(page: Page): Promise<string | null> {
+  return page.evaluate(() => (window as any).monaco?.editor?.getEditors?.()[0]?.getValue() ?? null);
+}
+
+/**
+ * The modules in `caster/module-catalog/`, which the Designer and file-editor specs
+ * build designs and files from. Keyed by the Path Caster gives each module.
+ */
+export const TEST_MODULES = {
+  blankMachine: 'crucible-modules/blank-machine',
+  routerGateway: 'crucible-modules/router-gateway',
+} as const;
+
+/**
+ * Require the test module catalog to be what Caster's module source serves, and
+ * return the matching modules by key. Listing modules syncs the sources first, so
+ * a catalog published since the last sync is picked up here.
+ *
+ * The catalog has to come from a git module source, so it is something the
+ * deployment owns rather than something a test can seed: Caster's
+ * `POST /api/modules` cannot create a module (it fails with a missing AutoMapper
+ * map), and the dev stack's source is the Gitea repository
+ * `crucible/crucible-terraform-modules`. Publish the catalog there with
+ * `caster/module-catalog/publish.sh`.
+ */
+export async function requireTestModuleCatalog(
+  page: Page
+): Promise<Record<keyof typeof TEST_MODULES, { id: string; name: string; path: string }>> {
+  const res = await casterApi<any[]>(page, 'GET', 'modules');
+  const modules = res.status === 200 ? res.body : [];
+  const found = Object.fromEntries(
+    Object.entries(TEST_MODULES).map(([key, path]) => [key, modules.find((m) => m.path === path)])
+  ) as Record<keyof typeof TEST_MODULES, any>;
+
+  requirePrecondition(
+    Object.values(found).every(Boolean),
+    `Caster's module source does not serve the test module catalog (${Object.values(TEST_MODULES).join(', ')}). ` +
+      'Start the AppHost with Launch__Gitea=true and run caster/module-catalog/publish.sh.'
+  );
+  return found;
 }
 
 /**

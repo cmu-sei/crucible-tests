@@ -22,9 +22,11 @@
 //
 // Verified live against this stack, browser-driven:
 //
-//   * A MSEL can be created directly as Deployed (`createMsel(token, {status:'Deployed'})`),
-//     and its /build row is findable with `findMselRowByName` — the search box is a reactive
-//     `[formControl]`, so `fill()` collapses the paginated list onto the row.
+//   * Deployed is set only by the integration pipeline (blueprint.api #205: creating a MSEL as
+//     Deployed is a 409), so the seeded MSEL is created as Pending and its status is written
+//     to the database with `setMselIntegrationState`. Its /build row is findable with
+//     `findMselRowByName` — the search box is a reactive `[formControl]`, so `fill()`
+//     collapses the paginated list onto the row.
 //   * The End Event flow does NOT live on /build. `msel-list` has no End Event control at
 //     all; only `/manage?msel=<id>` renders one (manage.component.html gates the End Date /
 //     Time input and the End Event button on `msel.status === 'Deployed'`). The plan item's
@@ -53,6 +55,7 @@ import {
   findMselRowByName,
   tempBlueprintName,
 } from '../../test-helpers';
+import { setMselIntegrationState } from '../../db-helpers';
 
 for (const theme of BLUEPRINT_THEMES) {
     test.describe(`${theme} theme › Launch and Join Event Workflows`, () => {
@@ -66,14 +69,14 @@ for (const theme of BLUEPRINT_THEMES) {
       const msel = await createMsel(token, {
         name: mselName,
         description: 'Seeded Deployed MSEL for the End Event flow.',
-        status: 'Deployed',
       });
       mselId = msel.id;
+      await setMselIntegrationState(mselId, { status: 'Deployed' });
 
-      // Precondition, asserted: the MSEL really persisted as Deployed. Everything below —
+      // Precondition, asserted: the API really reports the MSEL as Deployed. Everything below —
       // the list's status cell, the End Date field, the End Event button — is gated on it, so
-      // a silent status coercion must fail here rather than mid-test.
-      expect(msel.status, 'seeded MSEL must be Deployed').toBe('Deployed');
+      // a seed the API does not see must fail here rather than mid-test.
+      expect((await getMsel(token, mselId)).status, 'seeded MSEL must be Deployed').toBe('Deployed');
     });
 
     test.afterEach(async () => {

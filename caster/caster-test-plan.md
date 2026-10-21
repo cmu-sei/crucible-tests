@@ -19,6 +19,7 @@ Exceptions, which run once:
   - 2.4 Theme Toggle — the theme switch is its subject.
   - 17.8 Add User Modal - Light and Dark Theming — it samples both themes within one test to
     compare them.
+  - 23 API Rules — they call the API directly and render nothing.
 
 ## Test Scenarios
 
@@ -267,6 +268,53 @@ Exceptions, which run once:
     - expect: Projects are sorted by creation date
     - expect: Newest or oldest first depending on initial sort direction
 
+#### 3.8. Return To The Project From Manage Project
+
+**File:** `tests/projects-management/return-to-project-from-manage-project.spec.ts`
+
+**Steps:**
+  1. Open a project, then choose Manage Project from the user menu
+    - expect: The URL is `/projects/<id>/memberships`, headed with the project name
+    - expect: A "Return to Project" button is shown, with a matching tooltip
+  2. Click "Return to Project"
+    - expect: The project itself opens (`/projects/<id>`), not the project list
+
+#### 3.9. Return From Project Memberships In Administration
+
+**File:** `tests/projects-management/return-to-project-from-manage-project.spec.ts`
+
+**Steps:**
+  1. Open Administration → Projects and search for the project
+    - expect: One matching row
+  2. Click the project's name
+    - expect: Its memberships open in place, still under `/admin`
+    - expect: The way back is labelled "Return", not "Return to Project"
+  3. Click "Return"
+    - expect: The project list is shown again
+
+#### 3.10. Export And Import A Project With Its Settings
+
+**File:** `tests/projects-management/export-and-import-project.spec.ts`
+
+**Steps:**
+  1. Seed a project with a directory pinned to a non-default Terraform version and parallelism 7, a file, and a workspace pinned to that version with parallelism 3
+  2. Export the project as a Zip from the sidebar's Export Project dialog
+    - expect: An archive downloads
+  3. Import the archive into a new, empty project from Import Project
+    - expect: "Import Successful"
+    - expect: The directory and its file are listed
+    - expect: The directory keeps its Terraform version and parallelism
+    - expect: The workspace import created keeps its own Terraform version and parallelism
+
+#### 3.11. Import A Folder Compressed In macOS Finder
+
+**File:** `tests/projects-management/export-and-import-project.spec.ts`
+
+**Steps:**
+  1. Import `data/finder-compressed.zip`: a folder holding main.tf, a .DS_Store and a GIF, plus Finder's `__MACOSX/` AppleDouble files, all but main.tf containing NUL bytes
+    - expect: "Import Successful", not a 500 (the dialog does not yet show the result's warning about the GIF)
+    - expect: The directory holds main.tf only; no `__MACOSX` directory, no `._` or .DS_Store files, and the binary GIF is dropped
+
 ### 4. Directories Management
 
 **Seed:** `tests/seed.spec.ts`
@@ -291,7 +339,7 @@ Exceptions, which run once:
     - expect: Directories list is visible
   2. Click 'Create Directory' or 'Add Directory' button
     - expect: A directory creation dialog is displayed
-  3. Enter 'Test Infrastructure Directory' in the Name field
+  3. Enter 'Test-Infrastructure-Directory' in the Name field
     - expect: The name field accepts input
   4. Enter 'This is a test directory containing Terraform configurations' in the Description field
     - expect: The description field accepts input
@@ -360,18 +408,17 @@ Exceptions, which run once:
 
 **File:** `tests/directories-management/upload-files-to-directory.spec.ts`
 
+Caster has no single-file upload; files reach a directory by importing an archive into it.
+
 **Steps:**
-  1. Navigate to a directory's detail view
-    - expect: Directory file explorer is visible
-  2. Click 'Upload File' or 'Add File' button
-    - expect: A file upload dialog is displayed
-  3. Select a Terraform file (.tf) from local system
-    - expect: The file is selected for upload
-  4. Click 'Upload' button
-    - expect: The file is uploaded successfully
-    - expect: A success notification is displayed
-    - expect: The file appears in the directory file list
-    - expect: File content can be viewed
+  1. Right-click the directory in the sidebar and choose Import
+    - expect: The "Import Directory: <name>" dialog, with Import disabled until a file is chosen
+  2. Choose `data/terraform-files.zip` (variables.tf and network.tf)
+    - expect: The archive's name is shown and Import is enabled
+  3. Click Import
+    - expect: "Import Successful"
+    - expect: Both files appear in the directory's file list
+    - expect: A file's content can be viewed in the editor
 
 #### 4.7. Create New File in Directory
 
@@ -397,18 +444,15 @@ Exceptions, which run once:
 **File:** `tests/directories-management/edit-file-in-directory.spec.ts`
 
 **Steps:**
-  1. Navigate to a directory's detail view
-    - expect: Directory file list is visible
-  2. Click on a file to view/edit
-    - expect: File content is displayed in an editor
-    - expect: Syntax highlighting is applied for Terraform files
-  3. Modify the file content
-    - expect: Editor allows content modification
-    - expect: Changes are tracked
-  4. Click 'Save' button
-    - expect: The file is saved successfully
-    - expect: A success notification is displayed
-    - expect: Changes are persisted
+  1. Open a file from the directory's file list
+    - expect: Its content is displayed in the editor, and Save Changes is disabled
+  2. Click "Edit this file" and add a line
+    - expect: The change is tracked; Save Changes and Discard Changes are enabled
+  3. Click Save Changes
+    - expect: The request carries the content and at most the name, never a directory or workspace ID
+    - expect: The change is persisted, and the file is still in its directory
+  4. Click Finish editing
+    - expect: "Edit this file" is offered again
 
 #### 4.9. Delete File from Directory
 
@@ -440,6 +484,45 @@ Exceptions, which run once:
     - expect: A new directory is created as a copy
     - expect: The new directory appears in the directories list
     - expect: All files from original directory are copied
+
+#### 4.11. Directory Names Are Limited To Archive-Safe Characters
+
+**File:** `tests/directories-management/directory-name-validation.spec.ts`
+
+**Steps:**
+  1. Try to create directories named `has space`, `..`, `__Workspaces__` and `slash/name`
+    - expect: Each shows "One or more validation errors occurred.", whose Error Details give the rule: letters, numbers, -, _ and . only, not . or .., and not `__Workspaces__` or `__Caster__`
+    - expect: None of them is created
+  2. Create one named `Infra_v1.2-final`
+    - expect: It is created and listed
+
+#### 4.12. Renaming A Directory Follows The Same Rule
+
+**File:** `tests/directories-management/directory-name-validation.spec.ts`
+
+**Steps:**
+  1. Rename a directory to `Rename Me` through the API
+    - expect: 400 naming the rule, and the name unchanged
+  2. Rename it to `Renamed_Dir`
+    - expect: It is renamed, and the sidebar shows the new name
+
+#### 4.13. Insert A Module Into A File
+
+**File:** `tests/directories-management/insert-module-into-file.spec.ts`
+
+**Requires:** the test module catalog (see 9.5).
+
+**Steps:**
+  1. Open a file and its module list without editing it
+    - expect: Hovering a module card explains "Edit this file to insert the module"
+    - expect: The module's variables open read-only, with Insert disabled
+  2. Click "Edit this file" and pick Blank Machine again
+    - expect: Insert is enabled at once, without changing a field
+  3. Fill `vm_name` and Insert
+    - expect: A `module "Blank_Machine"` block is appended, sourced at `?ref=v1.1.0`
+    - expect: `enable_backup = false` keeps Terraform's lower-case bool spelling
+  4. Discard Changes, then Finish editing
+    - expect: The file is back to its saved content
 
 ### 5. Workspaces Management
 
@@ -482,17 +565,14 @@ Exceptions, which run once:
 **File:** `tests/workspaces-management/edit-workspace.spec.ts`
 
 **Steps:**
-  1. Navigate to a Project's Workspaces tab
-    - expect: Workspaces list is visible
-  2. Click on a workspace or its edit icon
-    - expect: The workspace edit dialog is displayed
-    - expect: Form fields are populated with current values
-  3. Modify the Name field
-    - expect: The name field accepts the new value
-  4. Click 'Save' button
-    - expect: The workspace is updated successfully
-    - expect: A success notification is displayed
-    - expect: The updated values are reflected in the workspace list
+  1. Expand a directory's WORKSPACES section
+    - expect: The workspace is listed
+  2. Right-click the workspace and choose Edit
+    - expect: The "Edit Workspace" dialog, holding the current name, with Save disabled
+  3. Change the Name to `WS_Edited`
+  4. Click Save
+    - expect: The request leaves out the directory ID
+    - expect: The list shows the new name, and the workspace is still in its directory
 
 #### 5.4. Delete Workspace
 
@@ -962,6 +1042,38 @@ Exceptions, which run once:
     - expect: The design is deleted successfully
     - expect: A success notification is displayed
     - expect: The design is removed from the list
+
+#### 9.5. Add A Module To A Design
+
+**File:** `tests/designs-management/add-module-to-design.spec.ts`
+
+**Requires:** the test module catalog in `caster/module-catalog/` served by Caster's module source. In the dev stack that means the AppHost running with `Launch__Gitea=true` and `caster/module-catalog/publish.sh` run once; the spec skips otherwise. Blank Machine has a required `vm_name`, a bool `enable_backup` (default false) and a number `cpus` (default 4); Router / Gateway has a required `wan_network`; both are tagged v1.0.0 and v1.1.0.
+
+**Steps:**
+  1. Open a design, click Add Module and pick Blank Machine
+    - expect: Its variables open before anything is created, with v1.1.0 selected, the name `Blank_Machine`, `enable_backup` false and `cpus` 4
+    - expect: Add is disabled until the required `vm_name` is filled
+  2. Fill `vm_name` and click Add
+    - expect: The dialog closes and a `Blank_Machine` card is shown
+    - expect: It is saved with version v1.1.0 and the `vm_name` value
+  3. Edit the module and clear `vm_name`
+    - expect: "Required" is shown and Save is disabled
+
+#### 9.6. Default Module Names Are Valid And Unique
+
+**File:** `tests/designs-management/add-module-to-design.spec.ts`
+
+**Requires:** the test module catalog (see 9.5).
+
+**Steps:**
+  1. Add Blank Machine twice
+    - expect: The defaults are `Blank_Machine`, then `Blank_Machine_2`
+  2. Pick Router / Gateway
+    - expect: The default name is `Router_Gateway`
+  3. Change its name to `2 routers`
+    - expect: "Must start with a letter or _, then letters, numbers, - and _ only" at once, and Add disabled
+  4. Put `Router_Gateway` back and Add
+    - expect: The design holds `Blank_Machine`, `Blank_Machine_2` and `Router_Gateway`
 
 ### 10. Host Machines Management
 
@@ -1440,6 +1552,17 @@ accessibility contract is covered separately by 17.7.
     - expect: An error message is displayed indicating workspace is locked
     - expect: Run creation is prevented
     - expect: User is informed they must unlock the workspace first
+
+#### 15.8. File Names Cannot Leave The Working Directory
+
+**File:** `tests/error-handling/file-name-validation.spec.ts`
+
+**Steps:**
+  1. Try to add files named `../escape.tf`, `nested/main.tf`, `..` and ` padded.tf`
+    - expect: Each shows "One or more validation errors occurred.", whose Error Details give the rule: not . or .., no path separators or control characters, no leading or trailing whitespace
+    - expect: None of them is created
+  2. Add `my vars.auto.tfvars`
+    - expect: A space inside a name stays allowed, and the file is listed
 
 ### 16. Integration with Alloy
 
@@ -2302,3 +2425,80 @@ afterwards because it persists per user.
     - expect: Action is performed on the run (e.g., run is cancelled)
     - expect: Success notification is displayed
     - expect: Run status updates in the table or run is removed if completed
+
+### 23. API Rules
+
+Rules the Caster API enforces that the UI gives no way to break: its Terraform Version
+fields only offer installed versions, it has no way to move a directory, and its edit
+requests no longer send ownership IDs. Each spec calls the API as the signed-in admin
+through `casterApi` in `caster/fixtures.ts`, and runs once rather than per theme.
+
+#### 23.1. Terraform Version Must Be One Caster Can Run
+
+**File:** `tests/api-rules/directory-rules.spec.ts`
+
+**Steps:**
+  1. Create a directory pinned to `0.0.0-not-installed`
+    - expect: 400 on `TerraformVersion` ("The specified version is not available…"), and no directory
+  2. Create one with an installed version, then PATCH its version to `../../bin`
+    - expect: 400, and the version unchanged
+  3. Create a workspace pinned to `0.0.0-not-installed`
+    - expect: 400 on `TerraformVersion`
+
+#### 23.2. Directories Move Only Within Their Project And Never Under Themselves
+
+**File:** `tests/api-rules/directory-rules.spec.ts`
+
+**Steps:**
+  1. Make a directory its own parent, then a child of its grandchild
+    - expect: 409 "A Directory cannot be its own parent or a child of its descendants", tree unchanged
+  2. Move a directory under one in another project
+    - expect: 409 "Parent and child Directories must be in the same Project"
+  3. Move a directory under another in its project
+    - expect: It moves
+  4. PATCH a child with `parentId: null`
+    - expect: It becomes top-level, and its own child moves with it
+
+#### 23.3. Edits Ignore Ownership IDs In The Body
+
+**File:** `tests/api-rules/edit-ownership-rules.spec.ts`
+
+**Steps:**
+  1. PUT a file with another directory's ID in the body
+    - expect: The content changes; the file stays in its directory
+  2. PUT a workspace with another directory's ID in the body
+    - expect: The rename applies; the workspace stays in its directory
+
+#### 23.4. Design Module Edits Ignore The Design ID In The Body
+
+**File:** `tests/api-rules/edit-ownership-rules.spec.ts`
+
+**Requires:** the test module catalog (see 9.5).
+
+**Steps:**
+  1. PUT a design module with another design's ID in the body
+    - expect: Name, version and values change; it stays on its design
+
+#### 23.5. A File Belongs To Its Workspace Directory
+
+**File:** `tests/api-rules/edit-ownership-rules.spec.ts`
+
+**Steps:**
+  1. Create a file in one directory for a workspace of another directory in the same project
+    - expect: 409 "File and Workspace must be in the same Directory", even for an administrator
+  2. Create one for a workspace that does not exist
+    - expect: 404 "Workspace not found"
+  3. Create one for the workspace in its own directory
+    - expect: 201, in that workspace
+
+#### 23.6. Tagging Versions Exactly The Requested Files
+
+**File:** `tests/api-rules/edit-ownership-rules.spec.ts`
+
+**Steps:**
+  1. Tag with an empty, then a missing, file list
+    - expect: 403, since there is no file to authorize against
+  2. Tag a batch where one file does not exist
+    - expect: 404, and the file that does exist gets no tagged version
+  3. Tag one file, listed twice
+    - expect: One tagged version, for that file only

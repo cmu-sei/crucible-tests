@@ -4,7 +4,7 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, seedCompleteEvaluation, cleanupCompleteEvaluation, CITE_THEMES, setCiteTheme } from '../../fixtures';
+import { test, expect, Services, seedCompleteEvaluation, cleanupCompleteEvaluation, CITE_THEMES, setCiteTheme, citeMoveLabel } from '../../fixtures';
 
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Evaluation Dashboard Interface`, () => {
@@ -50,8 +50,7 @@ for (const theme of CITE_THEMES) {
       }
 
       // expect: Now at move 3
-      let moveLabel = page.locator('text="Move:"').locator('..').getByRole('heading', { name: /^3$/ });
-      await expect(moveLabel).toBeVisible({ timeout: 10000 });
+      await expect(citeMoveLabel(page)).toHaveText('Move 3 of 3', { timeout: 10000 });
 
       // expect: Increment should be disabled (can't go beyond current move)
       await expect(incrementButton).toBeDisabled({ timeout: 5000 });
@@ -66,8 +65,7 @@ for (const theme of CITE_THEMES) {
       }
 
       // expect: Back at move 0
-      moveLabel = page.locator('text="Move:"').locator('..').getByRole('heading', { name: /^0$/ });
-      await expect(moveLabel).toBeVisible({ timeout: 5000 });
+      await expect(citeMoveLabel(page)).toHaveText('Move 0 of 3', { timeout: 5000 });
 
       // expect: Decrement should now be disabled (can't go below 0)
       await expect(decrementButton).toBeDisabled({ timeout: 5000 });

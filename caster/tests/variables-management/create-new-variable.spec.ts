@@ -11,7 +11,7 @@ for (const theme of CASTER_THEMES) {
     test('Create New Variable', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
       await setCasterTheme(page, theme);
       const projectName = 'Var Create Project';
-      const directoryName = 'Var Create Dir';
+      const directoryName = 'Var-Create-Dir';
 
       await expect(page.getByText('My Projects')).toBeVisible();
 

@@ -389,14 +389,11 @@ for (const theme of BLUEPRINT_THEMES) {
       await expect(editor.getByRole('combobox', { name: integerField, exact: true })).toBeVisible();
       await expect(editor.getByRole('textbox', { name: integerField, exact: true })).toHaveCount(0);
 
-      // Double: the drop-down is rendered...
+      // Double: likewise a drop-down only. data-value.component.html once guarded the numeric
+      // input without parentheses, so `|| dataType === Double` escaped the option-list check
+      // and a Double option-list field also rendered a free-text input (fixed in Blueprint.Ui#363).
       await expect(editor.getByRole('combobox', { name: doubleField, exact: true })).toBeVisible();
-      // Pending upstream: data-value.component.html guards the numeric input with
-      // `!isChosenFromList && dataType === Integer || dataType === Double`. Without parentheses
-      // the `|| Double` escapes the option-list check, so a Double option-list field also
-      // renders a free-text input bound to the same value. Asserting the stray input until the
-      // guard is parenthesised; this should then expect a count of 0, as for Integer above.
-      await expect(editor.getByRole('textbox', { name: doubleField, exact: true })).toHaveCount(1);
+      await expect(editor.getByRole('textbox', { name: doubleField, exact: true })).toHaveCount(0);
 
       await editor.getByRole('button', { name: 'Cancel' }).click();
       await expect(editor).toBeHidden();

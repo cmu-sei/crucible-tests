@@ -7,7 +7,7 @@
 // This file combines all scoresheet tests into a single file to run them serially,
 // avoiding parallel execution issues where multiple tests compete for the same "Admin User" visibility.
 
-import { test, expect, Services, serviceUrlPattern, ensureScoringModelExists, getCiteApiToken, purgeStaleEvaluations, settleForResponse, CITE_THEMES, setCiteTheme } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, ensureScoringModelExists, getCiteApiToken, purgeStaleEvaluations, settleForResponse, CITE_THEMES, setCiteTheme, citeMoveLabel } from '../../fixtures';
 import { navigateToAdminSection, deleteEvaluationByName, deleteTeamTypeByName } from '../../test-helpers';
 import { request as pwRequest, type Locator } from '@playwright/test';
 
@@ -671,9 +671,8 @@ for (const theme of CITE_THEMES) {
       const scoresheetTable = page.getByRole('table').first();
       await expect(scoresheetTable).toBeVisible({ timeout: 10000 });
 
-      // The current move info is shown in the header
-      const moveHeading = page.getByRole('heading', { name: /Move:/ });
-      await expect(moveHeading).toBeVisible({ timeout: 5000 });
+      // The current move info is shown in the toolbar (advanced to move 1 of moves 0-1)
+      await expect(citeMoveLabel(page)).toHaveText('Move 1 of 1', { timeout: 5000 });
 
       // The SubmissionReview (report) button is available for viewing score summaries
       const reportButton = page.locator('button[title="SubmissionReview"]');

@@ -11,7 +11,7 @@ for (const theme of CASTER_THEMES) {
     test('Environment Variables vs Terraform Variables', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
       await setCasterTheme(page, theme);
       const projectName = 'Var Types Project';
-      const directoryName = 'Var Types Dir';
+      const directoryName = 'Var-Types-Dir';
 
       await expect(page.getByText('My Projects')).toBeVisible();
 

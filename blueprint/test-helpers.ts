@@ -31,6 +31,7 @@ import os from 'os';
 import path from 'path';
 import { randomUUID } from 'crypto';
 import { authSessionStatePath } from '../auth-paths';
+import { setMselIntegrationState } from './db-helpers';
 
 // ============================================================================
 // Token acquisition
@@ -249,6 +250,10 @@ export async function getMsel(token: string, mselId: string): Promise<any> {
  * Note `status` must be a member of `MselItemStatus` — Pending, Entered, Approved,
  * Complete, Pushing, Pulling, Deployed, Archived. Anything else (e.g. "Active") is
  * rejected with a 400 JSON-conversion error, which is correct API behaviour, not a bug.
+ * Pushing, Pulling and Deployed belong to the integration pipeline: moving a MSEL into or
+ * out of one is a 409. The integration IDs (`playerViewId` and the rest) and
+ * `integrationStatus` are not on the edit request, so the API ignores them here. Seed that
+ * state with `setMselIntegrationState` (db-helpers.ts) instead.
  */
 export async function updateMsel(
   token: string,
@@ -584,45 +589,6 @@ export async function listMselDataFields(token: string, mselId: string): Promise
   return r.data ?? [];
 }
 
-/**
- * Create a DataField whose value is chosen from the given options, e.g. a Double with
- * values 1.5 and 2.5. Each option's name and value are the same text.
- */
-export async function createOptionListDataField(
-  token: string,
-  mselId: string,
-  field: { name: string; dataType: string; displayOrder: number },
-  options: string[]
-): Promise<any> {
-  const r = await blueprintCall<any>(token, '/api/dataFields', {
-    method: 'POST',
-    body: {
-      onScenarioEventList: true,
-      onExerciseView: false,
-      ...field,
-      mselId,
-      isChosenFromList: true,
-      isInformationField: false,
-      isFacilitationField: false,
-      isInitiallyHidden: false,
-      dataOptions: [],
-    },
-  });
-  if (!r.ok) {
-    throw new Error(`createOptionListDataField "${field.name}" failed (${r.status}): ${r.text}`);
-  }
-  for (const [i, option] of options.entries()) {
-    const o = await blueprintCall(token, '/api/dataOptions', {
-      method: 'POST',
-      body: { dataFieldId: r.data.id, optionName: option, optionValue: option, displayOrder: i + 1 },
-    });
-    if (!o.ok) {
-      throw new Error(`createOptionListDataField: POST dataOptions "${option}" failed (${o.status}): ${o.text}`);
-    }
-  }
-  return r.data;
-}
-
 /** Fetch a single scenario event, including its `dataValues`. */
 export async function getScenarioEvent(token: string, eventId: string): Promise<any> {
   const r = await blueprintCall<any>(token, `/api/scenarioEvents/${eventId}`);
@@ -752,25 +718,6 @@ export async function deleteTeam(token: string, teamId: string): Promise<void> {
 }
 
 /**
- * Create a Player application on the specified MSEL via the Blueprint API.
- * Returns the application id — pair every call with `deletePlayerApplication` in test teardown.
- */
-export async function createPlayerApplication(
-  token: string,
-  mselId: string,
-  name: string = tempBlueprintName('TestBP-App')
-): Promise<{ id: string; name: string }> {
-  const r = await blueprintCall<any>(token, '/api/playerApplications', {
-    method: 'POST',
-    body: { mselId, name, url: 'http://localhost', embeddable: true, loadInBackground: false },
-  });
-  if (!r.ok) {
-    throw new Error(`createPlayerApplication failed (${r.status}): ${r.text}`);
-  }
-  return { id: r.data.id as string, name: r.data.name as string };
-}
-
-/**
  * Delete a Player application by id. Safe to call on a non-existent id — swallows 404.
  */
 export async function deletePlayerApplication(token: string, id: string): Promise<void> {
@@ -829,9 +776,9 @@ export async function removeUserFromTeam(token: string, teamUserId: string): Pro
  * Verified live: with all three satisfied, `my-join-msels` returns the seeded MSEL; the join
  * surface has no other prerequisite.
  *
- * `playerViewId` is a plain settable field, so no real Player view is needed — the join list
- * only checks it for non-null. Note it must be set with a **full GET-then-PUT**: the update
- * path maps the whole view model, so a partial body nulls everything omitted.
+ * Deployed and `playerViewId` are set only by the integration pipeline (blueprint.api #205), so
+ * both are written to the database with `setMselIntegrationState`. No real Player view is
+ * needed: the join list only checks `playerViewId` for non-null.
  *
  * Caller must delete: `deleteMsel` removes the MSEL and cascades its teams; the TeamUser row
  * goes with the team. Returns the ids needed either way.
@@ -846,21 +793,8 @@ export async function seedJoinableMsel(
   const msel = await createMsel(token, {
     name,
     description: 'Seeded to appear on the Join an Event surface',
-    status: 'Deployed',
   });
-
-  // PlayerViewId is not settable on create, so patch it in. Full GET-then-PUT — see above.
-  const current = await blueprintCall<any>(token, `/api/msels/${msel.id}`);
-  if (!current.ok) {
-    throw new Error(`seedJoinableMsel: GET msel failed (${current.status}): ${current.text}`);
-  }
-  const put = await blueprintCall(token, `/api/msels/${msel.id}`, {
-    method: 'PUT',
-    body: { ...current.data, playerViewId: randomUUID() },
-  });
-  if (!put.ok) {
-    throw new Error(`seedJoinableMsel: PUT playerViewId failed (${put.status}): ${put.text}`);
-  }
+  await setMselIntegrationState(msel.id, { status: 'Deployed', playerViewId: randomUUID() });
 
   const team = await createTeam(token, msel.id, {
     name: opts.teamName ?? tempBlueprintName('TestBP-JoinTeam'),

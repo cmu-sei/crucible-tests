@@ -4,48 +4,65 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen, CASTER_THEMES, setCasterTheme } from '../../fixtures';
+import {
+  test,
+  expect,
+  casterApi,
+  openCasterDirectory,
+  seedCasterDirectory,
+  seedCasterProject,
+  seedCasterWorkspace,
+  CASTER_THEMES,
+  setCasterTheme,
+} from '../../fixtures';
 
 for (const theme of CASTER_THEMES) {
   test.describe(`${theme} theme › Workspaces Management`, () => {
-    test('Edit Workspace', async ({ casterAuthenticatedPage: page, cleanupCasterProjectByName }) => {
+    test('Edit Workspace', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
       await setCasterTheme(page, theme);
+      const projectId = await seedCasterProject(page, `Edit WS Project ${Date.now()}`);
+      cleanupCasterProject(projectId);
+      const directoryId = await seedCasterDirectory(page, projectId, 'Edit-WS-Dir');
+      const workspaceId = await seedCasterWorkspace(page, directoryId, 'WS_To_Edit');
 
-      const projectName = 'Edit WS Project';
-      await cleanupCasterProjectByName(projectName);
+      // 1. List the directory's workspaces
+      await openCasterDirectory(page, projectId, 'Edit-WS-Dir');
+      await page.getByRole('button', { name: 'WORKSPACES', exact: true }).click();
+      const workspaces = page.getByRole('region', { name: 'WORKSPACES' });
+      await expect(workspaces.getByRole('button', { name: 'WS_To_Edit', exact: true })).toBeVisible();
 
-      await expect(page.getByText('My Projects')).toBeVisible();
-      await page.reload();
+      // 2. Edit it from its context menu
+      await workspaces.getByRole('button', { name: 'WS_To_Edit', exact: true }).click({ button: 'right' });
+      await page.getByRole('menuitem', { name: 'Edit' }).click();
 
-      await page.locator('[mattooltip="Add New Project"]').click();
-      const projectDialog = page.getByRole('dialog', { name: 'Create New Project?' });
-      await expect(projectDialog).toBeVisible();
-      await projectDialog.getByRole('textbox', { name: 'Name' }).fill(projectName);
-      await projectDialog.getByRole('button', { name: 'Save' }).click();
-      await expectCasterProjectOpen(page, projectName);
+      // expect: the edit dialog, holding the current values
+      const dialog = page.getByRole('dialog', { name: 'Edit Workspace' });
+      const name = dialog.getByRole('textbox', { name: 'Name' });
+      await expect(name).toHaveValue('WS_To_Edit');
+      await expect(dialog.getByRole('button', { name: 'Save' })).toBeDisabled();
 
-      await page.getByTitle('Add New Directory').click();
-      const dirDialog = page.getByRole('dialog', { name: 'Create New Directory?' });
-      await expect(dirDialog).toBeVisible();
-      await dirDialog.getByRole('textbox', { name: 'Name' }).fill('Edit WS Dir');
-      await dirDialog.getByRole('button', { name: 'Save' }).click();
-      await expect(page.getByRole('button', { name: 'Edit WS Dir' })).toBeVisible({ timeout: 10000 });
+      // 3. Rename it
+      await name.fill('WS_Edited');
 
-      await page.getByRole('button', { name: 'Edit WS Dir' }).click();
-      await page.getByRole('button', { name: 'WORKSPACES' }).click();
-      await expect(page.getByText('Add Workspace')).toBeVisible();
+      // 4. Save
+      const save = page.waitForRequest(
+        (r) => ['PUT', 'PATCH'].includes(r.method()) && new URL(r.url()).pathname.endsWith(`/api/workspaces/${workspaceId}`)
+      );
+      await dialog.getByRole('button', { name: 'Save' }).click();
+      const body = (await save).postDataJSON();
 
-      await page.getByText('Add Workspace').click();
-      const wsDialog = page.getByRole('dialog', { name: 'Create New Workspace?' });
-      await expect(wsDialog).toBeVisible();
-      // Workspace names must match pattern: ^[a-zA-Z0-9-_.]+$ (no spaces allowed)
-      await wsDialog.getByRole('textbox', { name: 'Name' }).fill('WS_To_Edit');
-      await wsDialog.getByRole('button', { name: 'Save' }).click();
+      // expect: the request leaves out the directory; the API keeps the stored one
+      expect(body).toMatchObject({ name: 'WS_Edited' });
+      expect(body).not.toHaveProperty('directoryId');
 
-      const wsItem = page.getByText('WS_To_Edit');
-      if (await wsItem.isVisible({ timeout: 5000 }).catch(() => false)) {
-        await wsItem.click();
-      }
+      // expect: the list shows the new name, and the workspace is still in its directory
+      await expect(dialog).toBeHidden();
+      await expect(workspaces.getByRole('button', { name: 'WS_Edited', exact: true })).toBeVisible();
+      await expect(workspaces.getByRole('button', { name: 'WS_To_Edit', exact: true })).toHaveCount(0);
+      expect((await casterApi(page, 'GET', `workspaces/${workspaceId}`)).body).toMatchObject({
+        name: 'WS_Edited',
+        directoryId,
+      });
     });
   });
 }

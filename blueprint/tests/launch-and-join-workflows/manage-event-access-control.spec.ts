@@ -10,6 +10,7 @@ import {
   deleteMsel,
   tempBlueprintName,
 } from '../../test-helpers';
+import { setMselIntegrationState } from '../../db-helpers';
 
 /**
  * Verifies both branches of the `/manage` page's access gate.
@@ -57,12 +58,14 @@ for (const theme of BLUEPRINT_THEMES) {
       const msel = await createMsel(token, {
         name: mselName,
         description: 'Seeded Deployed MSEL for the manage-page permitted branch.',
-        // The manage view only renders controls for a Deployed MSEL; any other status
-        // redirects away via post_logout_redirect_uri.
-        status: 'Deployed',
       });
 
       try {
+        // The manage view only renders controls for a Deployed MSEL; any other status
+        // redirects away via post_logout_redirect_uri. Only the integration pipeline sets
+        // Deployed, so it is seeded in the database.
+        await setMselIntegrationState(msel.id, { status: 'Deployed' });
+
         await page.goto(`${Services.Blueprint.UI}/manage?msel=${msel.id}`, {
           waitUntil: 'domcontentloaded',
         });

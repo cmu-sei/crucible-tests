@@ -28,7 +28,6 @@ import {
   getBlueprintToken,
   createMsel,
   deleteMsel,
-  updateMsel,
   createTeam,
   createInvitation,
   listInvitations,
@@ -38,6 +37,7 @@ import {
   signInToBlueprintAs,
   tempBlueprintName,
 } from '../../test-helpers';
+import { setMselIntegrationState } from '../../db-helpers';
 
 /** A context for the temporary user, with Player answered by a stub page. */
 async function newInviteeContext(browser: Browser): Promise<BrowserContext> {
@@ -95,10 +95,11 @@ test.describe('Invitation Links', () => {
     await createBlueprintUser(token, { id: kcUser.id, name: kcUser.username });
 
     mselName = tempBlueprintName('TestBP-InvitationJoin');
-    const msel = await createMsel(token, { name: mselName, status: 'Deployed' });
+    const msel = await createMsel(token, { name: mselName });
     mselId = msel.id;
     playerViewId = randomUUID();
-    await updateMsel(token, mselId, { playerViewId });
+    // Only the integration pipeline sets Deployed and the Player view, so both are seeded.
+    await setMselIntegrationState(mselId, { status: 'Deployed', playerViewId });
     alphaId = (await createTeam(token, mselId, { name: 'Alpha Team', shortName: 'ALPHA' })).id;
     bravoId = (await createTeam(token, mselId, { name: 'Bravo Team', shortName: 'BRAVO' })).id;
     await createInvitation(token, mselId, alphaId, { emailDomain: '@test.local', maxUsersAllowed: 2 });

@@ -1,0 +1,1 @@
+{ "output": { "address": { "value": "${var.wan_network}", "description": "WAN address" } } }

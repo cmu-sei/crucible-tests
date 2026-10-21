@@ -4,7 +4,7 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, seedCompleteEvaluation, cleanupCompleteEvaluation, CITE_THEMES, setCiteTheme } from '../../fixtures';
+import { test, expect, Services, seedCompleteEvaluation, cleanupCompleteEvaluation, CITE_THEMES, setCiteTheme, citeMoveLabel } from '../../fixtures';
 
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Evaluation Dashboard Interface`, () => {
@@ -26,9 +26,8 @@ for (const theme of CITE_THEMES) {
       await page.waitForLoadState('domcontentloaded');
       await expect(page).toHaveURL(new RegExp(seededData.evaluationId), { timeout: 15000 });
 
-      // expect: Dashboard displays with "of 3" indicating 3 moves exist
-      const movesTotal = page.getByRole('heading', { name: 'of 3' });
-      await expect(movesTotal).toBeVisible({ timeout: 10000 });
+      // expect: Dashboard displays "of 3", the highest of moves 0-3
+      await expect(citeMoveLabel(page)).toHaveText('Move 0 of 3', { timeout: 10000 });
 
       // 2. Advance current move so we can navigate back through history
       const advanceButton = page.getByRole('button', { name: 'Advance Move' });
@@ -42,8 +41,7 @@ for (const theme of CITE_THEMES) {
       await page.waitForTimeout(2000);
 
       // expect: Now on move 1
-      let moveLabel = page.locator('text="Move:"').locator('..').getByRole('heading', { name: /^1$/ });
-      await expect(moveLabel).toBeVisible({ timeout: 10000 });
+      await expect(citeMoveLabel(page)).toHaveText('Move 1 of 3', { timeout: 10000 });
 
       // 3. Now we can use decrement to go back to move 0
       const decrementButton = page.getByRole('button', { name: 'Decrement Displayed Move' });
@@ -52,8 +50,7 @@ for (const theme of CITE_THEMES) {
       await page.waitForTimeout(1000);
 
       // expect: Back to viewing move 0
-      moveLabel = page.locator('text="Move:"').locator('..').getByRole('heading', { name: /^0$/ });
-      await expect(moveLabel).toBeVisible({ timeout: 5000 });
+      await expect(citeMoveLabel(page)).toHaveText('Move 0 of 3', { timeout: 5000 });
 
       // 4. Now increment to go forward again
       const incrementButton = page.getByRole('button', { name: 'Increment Displayed Move' });
@@ -62,8 +59,7 @@ for (const theme of CITE_THEMES) {
       await page.waitForTimeout(1000);
 
       // expect: Back to move 1
-      moveLabel = page.locator('text="Move:"').locator('..').getByRole('heading', { name: /^1$/ });
-      await expect(moveLabel).toBeVisible({ timeout: 5000 });
+      await expect(citeMoveLabel(page)).toHaveText('Move 1 of 3', { timeout: 5000 });
     });
 
     test.afterEach(async () => {

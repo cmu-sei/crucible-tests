@@ -11,7 +11,7 @@ for (const theme of CASTER_THEMES) {
     test('Create Sensitive Variable', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
       await setCasterTheme(page, theme);
       const projectName = 'Sensitive Var Project';
-      const directoryName = 'Sensitive Var Dir';
+      const directoryName = 'Sensitive-Var-Dir';
 
       await expect(page.getByText('My Projects')).toBeVisible();
 

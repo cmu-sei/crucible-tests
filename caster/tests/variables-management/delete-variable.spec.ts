@@ -11,7 +11,7 @@ for (const theme of CASTER_THEMES) {
     test('Delete Variable', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
       await setCasterTheme(page, theme);
       const projectName = 'Var Delete Project';
-      const directoryName = 'Var Delete Dir';
+      const directoryName = 'Var-Delete-Dir';
 
       await expect(page.getByText('My Projects')).toBeVisible();
 
