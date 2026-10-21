@@ -12,7 +12,7 @@ for (const theme of CASTER_THEMES) {
       await setCasterTheme(page, theme);
       const uniqueId = Date.now();
       const projectName = `Design Delete Project ${uniqueId}`;
-      const dirName = `Design Del Dir ${uniqueId}`;
+      const dirName = `Design-Del-Dir-${uniqueId}`;
 
       await expect(page.getByText('My Projects')).toBeVisible();
 

@@ -31,19 +31,19 @@ for (const theme of CASTER_THEMES) {
       const createDirectoryDialog = page.getByRole('dialog', { name: 'Create New Directory?' });
       await expect(createDirectoryDialog).toBeVisible();
 
-      // 3. Enter 'Test Infrastructure Directory' in the Name field
+      // 3. Enter 'Test-Infrastructure-Directory' in the Name field
       const nameField = createDirectoryDialog.getByRole('textbox', { name: 'Name' });
-      await nameField.fill('Test Infrastructure Directory');
+      await nameField.fill('Test-Infrastructure-Directory');
 
       // expect: The name field accepts input
-      await expect(nameField).toHaveValue('Test Infrastructure Directory');
+      await expect(nameField).toHaveValue('Test-Infrastructure-Directory');
 
       // 7. Click 'Save' button
       await createDirectoryDialog.getByRole('button', { name: 'Save' }).click();
 
       // expect: The directory is created successfully
       // expect: The new directory appears in the sidebar
-      await expect(page.getByRole('button', { name: 'Test Infrastructure Directory' })).toBeVisible({ timeout: 10000 });
+      await expect(page.getByRole('button', { name: 'Test-Infrastructure-Directory' })).toBeVisible({ timeout: 10000 });
     });
   });
 }

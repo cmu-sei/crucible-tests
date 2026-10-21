@@ -26,18 +26,18 @@ for (const theme of CASTER_THEMES) {
 
       await page.getByText('Add Directory').first().click();
       await expect(page.getByRole('dialog', { name: 'Create New Directory?' })).toBeVisible();
-      await page.getByRole('textbox', { name: 'Name' }).fill('Original Directory');
+      await page.getByRole('textbox', { name: 'Name' }).fill('Original-Directory');
       await page.getByRole('button', { name: 'Save' }).click();
-      await expect(page.getByRole('button', { name: 'Original Directory' })).toBeVisible({ timeout: 10000 });
+      await expect(page.getByRole('button', { name: 'Original-Directory' })).toBeVisible({ timeout: 10000 });
 
-      await page.getByRole('button', { name: 'Original Directory' }).click();
+      await page.getByRole('button', { name: 'Original-Directory' }).click();
 
       const cloneButton = page.getByTitle('Clone Directory');
       if (await cloneButton.isVisible({ timeout: 3000 }).catch(() => false)) {
         await cloneButton.click();
         const nameInput = page.getByRole('textbox', { name: 'Name' });
         if (await nameInput.isVisible({ timeout: 3000 }).catch(() => false)) {
-          await nameInput.fill('Cloned Directory');
+          await nameInput.fill('Cloned-Directory');
           await page.getByRole('button', { name: 'Save' }).click();
         }
       }

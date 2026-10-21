@@ -27,12 +27,12 @@ for (const theme of CASTER_THEMES) {
 
       await page.getByText('Add Directory').first().click();
       await expect(page.getByRole('dialog', { name: 'Create New Directory?' })).toBeVisible();
-      await page.getByRole('textbox', { name: 'Name' }).fill('Detail Directory');
+      await page.getByRole('textbox', { name: 'Name' }).fill('Detail-Directory');
       await page.getByRole('button', { name: 'Save' }).click();
-      await expect(page.getByRole('button', { name: 'Detail Directory' })).toBeVisible({ timeout: 10000 });
+      await expect(page.getByRole('button', { name: 'Detail-Directory' })).toBeVisible({ timeout: 10000 });
 
       // 2. Click on the directory name
-      await page.getByRole('button', { name: 'Detail Directory' }).click();
+      await page.getByRole('button', { name: 'Detail-Directory' }).click();
 
       // expect: Sections are available for: FILES, WORKSPACES, DIRECTORIES, DESIGNS
       await expect(page.getByRole('button', { name: 'FILES' })).toBeVisible();

@@ -26,11 +26,11 @@ for (const theme of CASTER_THEMES) {
 
       await page.getByText('Add Directory').first().click();
       await expect(page.getByRole('dialog', { name: 'Create New Directory?' })).toBeVisible();
-      await page.getByRole('textbox', { name: 'Name' }).fill('Delete File Dir');
+      await page.getByRole('textbox', { name: 'Name' }).fill('Delete-File-Dir');
       await page.getByRole('button', { name: 'Save' }).click();
-      await expect(page.getByRole('button', { name: 'Delete File Dir' })).toBeVisible({ timeout: 10000 });
+      await expect(page.getByRole('button', { name: 'Delete-File-Dir' })).toBeVisible({ timeout: 10000 });
 
-      await page.getByRole('button', { name: 'Delete File Dir' }).click();
+      await page.getByRole('button', { name: 'Delete-File-Dir' }).click();
       await page.getByRole('button', { name: 'FILES' }).click();
 
       // Click Add File to create a new file
