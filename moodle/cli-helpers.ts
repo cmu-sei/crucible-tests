@@ -133,3 +133,78 @@ export function queueMoodleTopomojoBulkDeploy(
   }
   return parsed;
 }
+
+/**
+ * Queues a Crucible bulk deploy the way `manage_deployments_action.php` does — a
+ * job row per user plus an adhoc task — and returns the job id.
+ *
+ * The launcher starts each event through the plugin's system OAuth client and
+ * hands Alloy the user's `idnumber` as their Alloy GUID, so a DB-seeded user
+ * gets a real event without ever logging in.
+ */
+export function queueMoodleCrucibleBulkDeploy(cmid: string | number, userIds: number[]): number {
+  const idList = userIds.map(id => Number(id)).join(',');
+  const jobid = runMoodlePhp(
+    `$cm = get_coursemodule_from_id('crucible', ${Number(cmid)}, 0, false, MUST_EXIST);`
+    + ` $c = $DB->get_record('crucible', ['id' => $cm->instance], '*', MUST_EXIST);`
+    + ` $repo = new \\mod_crucible\\local\\bulkdeploy\\job_repository();`
+    // Crucible processes one user at a time, so the batch size is always 1.
+    + ` $jobid = $repo->create_job((int) $c->id, (int) $cm->course, (int) get_admin()->id, 1, null, [${idList}]);`
+    + ` $task = new \\mod_crucible\\task\\bulkdeploy_run();`
+    + ` $task->set_custom_data((object) ['jobid' => $jobid]);`
+    + ` $task->set_component('mod_crucible');`
+    // Left unscheduled for the same reason as queueMoodleTopomojoBulkDeploy().
+    + ` \\core\\task\\manager::queue_adhoc_task($task);`
+    + ` echo $jobid;`
+  );
+  const parsed = Number(jobid);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`Expected a bulk-deploy job id, got: ${jobid}`);
+  }
+  return parsed;
+}
+
+/**
+ * Deletes a user's personal data the way a privacy officer does: a "Delete all
+ * of my personal data" request is created and approved as the site admin, then
+ * tool_dataprivacy's own adhoc tasks pre-process and carry it out. Processing
+ * calls every plugin's privacy provider and finally deletes the user account,
+ * so only ever pass a disposable user.
+ *
+ * Returns the request's final status number. A delete request that ran ends at
+ * 10 (DATAREQUEST_STATUS_DELETED), not 5 (COMPLETE).
+ */
+export async function deleteMoodleUserDataViaPrivacyRequest(userId: number, timeoutMs: number = 120_000): Promise<number> {
+  const asAdmin = `\\core\\session\\manager::set_user(get_admin());`;
+  const requestid = Number(runMoodlePhp(
+    asAdmin
+    + ` $r = \\tool_dataprivacy\\api::create_data_request(${Number(userId)},`
+    + ` \\tool_dataprivacy\\api::DATAREQUEST_TYPE_DELETE, 'e2e privacy deletion', `
+    + ` \\tool_dataprivacy\\data_request::DATAREQUEST_CREATION_MANUAL, false);`
+    + ` echo $r->get('id');`
+  ));
+  if (!Number.isInteger(requestid) || requestid <= 0) {
+    throw new Error(`Expected a data request id for user ${userId}, got: ${requestid}`);
+  }
+
+  // Pre-processing moves the request to "Awaiting approval".
+  runMoodleAdhocTask('\\tool_dataprivacy\\task\\initiate_data_request_task');
+  runMoodlePhp(`${asAdmin} \\tool_dataprivacy\\api::approve_data_request(${requestid});`);
+
+  // The container's own cron can claim the queued task first, in which case this
+  // run finds nothing to do and the request is still mid-processing - so poll for
+  // a status past "Approved" (3) and "Processing" (4) rather than read it once.
+  const readStatus = () => Number(runMoodlePhp(
+    `echo $DB->get_field('tool_dataprivacy_request', 'status', ['id' => ${requestid}], MUST_EXIST);`
+  ));
+  const deadline = Date.now() + timeoutMs;
+  let status = readStatus();
+  while ([3, 4].includes(status) && Date.now() < deadline) {
+    runMoodleAdhocTask('\\tool_dataprivacy\\task\\process_data_request_task');
+    status = readStatus();
+    if ([3, 4].includes(status)) {
+      await new Promise(resolve => setTimeout(resolve, 2_000));
+    }
+  }
+  return status;
+}
