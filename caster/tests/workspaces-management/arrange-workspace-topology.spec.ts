@@ -139,6 +139,24 @@ test.describe('Workspaces Management', () => {
     expect(await nodePosition(page, router)).toEqual({ x: Math.round(moved.x), y: Math.round(moved.y) });
   });
 
+  test('Show a Saved Topology Layout', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+    // Every node placed, as when someone has arranged the whole topology:
+    // a grid of their own, unlike anything the automatic layout draws.
+    const ids: string[] = proxmoxTopology.nodes.map((n: { id: string }) => n.id);
+    const layout = Object.fromEntries(ids.map((id, i) => [id, { x: (i % 4) * 200, y: Math.floor(i / 4) * 150 }]));
+    await page.route('**/api/workspaces/*/topology', (route) =>
+      route.fulfill({ json: { ...proxmoxTopology, layout } })
+    );
+
+    // 1. Open the workspace's topology
+    await openTopology(page, cleanupCasterProject);
+
+    // expect: every node is where it was saved
+    for (const id of ids) {
+      expect(await nodePosition(page, id), id).toEqual(layout[id]);
+    }
+  });
+
   test('Give a Topology Machine a Role', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
     await routeTopologyWithSavedLayout(page);
     await openTopology(page, cleanupCasterProject);
