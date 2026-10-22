@@ -28,12 +28,12 @@ for (const theme of CASTER_THEMES) {
       await page.getByTitle('Add New Directory').click();
       const dirDialog = page.getByRole('dialog', { name: 'Create New Directory?' });
       await expect(dirDialog).toBeVisible();
-      await dirDialog.getByRole('textbox', { name: 'Name' }).fill('WS List Dir');
+      await dirDialog.getByRole('textbox', { name: 'Name' }).fill('WS-List-Dir');
       await dirDialog.getByRole('button', { name: 'Save' }).click();
-      await expect(page.getByRole('button', { name: 'WS List Dir' })).toBeVisible({ timeout: 10000 });
+      await expect(page.getByRole('button', { name: 'WS-List-Dir' })).toBeVisible({ timeout: 10000 });
 
       // Expand directory and navigate to WORKSPACES
-      await page.getByRole('button', { name: 'WS List Dir' }).click();
+      await page.getByRole('button', { name: 'WS-List-Dir' }).click();
 
       // expect: WORKSPACES section is available
       await expect(page.getByRole('button', { name: 'WORKSPACES' })).toBeVisible();

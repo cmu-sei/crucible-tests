@@ -27,12 +27,12 @@ for (const theme of CASTER_THEMES) {
 
       await page.getByText('Add Directory').first().click();
       await expect(page.getByRole('dialog', { name: 'Create New Directory?' })).toBeVisible();
-      await page.getByRole('textbox', { name: 'Name' }).fill('Original Dir Name');
+      await page.getByRole('textbox', { name: 'Name' }).fill('Original-Dir-Name');
       await page.getByRole('button', { name: 'Save' }).click();
-      await expect(page.getByRole('button', { name: 'Original Dir Name' })).toBeVisible({ timeout: 10000 });
+      await expect(page.getByRole('button', { name: 'Original-Dir-Name' })).toBeVisible({ timeout: 10000 });
 
       // Click on the directory to expand it
-      await page.getByRole('button', { name: 'Original Dir Name' }).click();
+      await page.getByRole('button', { name: 'Original-Dir-Name' }).click();
 
       // Look for an edit/rename option - try inline edit by double-clicking or looking for edit button
       const editButton = page.locator('button:has(.mdi-pencil)').first();
@@ -43,11 +43,11 @@ for (const theme of CASTER_THEMES) {
         const nameInput = page.getByRole('textbox', { name: 'Name' });
         if (await nameInput.isVisible({ timeout: 3000 }).catch(() => false)) {
           await nameInput.clear();
-          await nameInput.fill('Updated Dir Name');
+          await nameInput.fill('Updated-Dir-Name');
           await page.getByRole('button', { name: 'Save' }).click();
 
           // expect: The directory is updated successfully
-          await expect(page.getByText('Updated Dir Name')).toBeVisible({ timeout: 10000 });
+          await expect(page.getByText('Updated-Dir-Name')).toBeVisible({ timeout: 10000 });
         }
       }
     });

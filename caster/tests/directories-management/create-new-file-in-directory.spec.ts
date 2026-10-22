@@ -27,12 +27,12 @@ for (const theme of CASTER_THEMES) {
 
       await page.getByText('Add Directory').first().click();
       await expect(page.getByRole('dialog', { name: 'Create New Directory?' })).toBeVisible();
-      await page.getByRole('textbox', { name: 'Name' }).fill('File Directory');
+      await page.getByRole('textbox', { name: 'Name' }).fill('File-Directory');
       await page.getByRole('button', { name: 'Save' }).click();
-      await expect(page.getByRole('button', { name: 'File Directory' })).toBeVisible({ timeout: 10000 });
+      await expect(page.getByRole('button', { name: 'File-Directory' })).toBeVisible({ timeout: 10000 });
 
       // Expand directory and FILES section
-      await page.getByRole('button', { name: 'File Directory' }).click();
+      await page.getByRole('button', { name: 'File-Directory' }).click();
       await page.getByRole('button', { name: 'FILES' }).click();
 
       // 2. Click 'Add File' button

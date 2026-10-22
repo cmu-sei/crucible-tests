@@ -4,7 +4,7 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, seedCompleteEvaluation, cleanupCompleteEvaluation, CITE_THEMES, setCiteTheme } from '../../fixtures';
+import { test, expect, Services, seedCompleteEvaluation, cleanupCompleteEvaluation, CITE_THEMES, setCiteTheme, citeMoveLabel } from '../../fixtures';
 
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Evaluation Dashboard Interface`, () => {
@@ -26,9 +26,8 @@ for (const theme of CITE_THEMES) {
       await page.waitForLoadState('domcontentloaded');
       await expect(page).toHaveURL(new RegExp(seededData.evaluationId), { timeout: 15000 });
 
-      // expect: Dashboard displays with "of 3" indicating 3 moves exist
-      const movesTotal = page.getByRole('heading', { name: 'of 3' });
-      await expect(movesTotal).toBeVisible({ timeout: 10000 });
+      // expect: Dashboard displays "of 3", the highest of moves 0-3
+      await expect(citeMoveLabel(page)).toHaveText('Move 0 of 3', { timeout: 10000 });
 
       // 2. Advance current move twice so we have history to navigate
       const advanceButton = page.getByRole('button', { name: 'Advance Move' });
@@ -49,8 +48,12 @@ for (const theme of CITE_THEMES) {
       await page.waitForTimeout(2000);
 
       // expect: Now on move 2
-      let moveLabel = page.locator('text="Move:"').locator('..').getByRole('heading', { name: /^2$/ });
-      await expect(moveLabel).toBeVisible({ timeout: 10000 });
+      await expect(citeMoveLabel(page)).toHaveText('Move 2 of 3', { timeout: 10000 });
+
+      // expect: The situation card shows the current move without a "Previous move" label
+      const previousLabel = page.getByText('Previous move', { exact: true });
+      await expect(page.getByRole('heading', { name: 'Move 2', level: 2 })).toBeVisible({ timeout: 5000 });
+      await expect(previousLabel).toHaveCount(0);
 
       // 3. Use decrement button to go back to move 1
       const decrementButton = page.getByRole('button', { name: 'Decrement Displayed Move' });
@@ -59,16 +62,19 @@ for (const theme of CITE_THEMES) {
       await page.waitForTimeout(1000);
 
       // expect: Now viewing move 1
-      moveLabel = page.locator('text="Move:"').locator('..').getByRole('heading', { name: /^1$/ });
-      await expect(moveLabel).toBeVisible({ timeout: 5000 });
+      await expect(citeMoveLabel(page)).toHaveText('Move 1 of 3', { timeout: 5000 });
+
+      // expect: The situation card shows move 1's own situation, labeled as a previous move
+      await expect(page.getByRole('heading', { name: 'Move 1', level: 2 })).toBeVisible({ timeout: 5000 });
+      await expect(previousLabel).toBeVisible();
+      await expect(page.getByText('Situation for Move 1', { exact: true })).toBeVisible();
 
       // 4. Decrement again to move 0
       await decrementButton.click();
       await page.waitForTimeout(1000);
 
       // expect: Now viewing move 0
-      moveLabel = page.locator('text="Move:"').locator('..').getByRole('heading', { name: /^0$/ });
-      await expect(moveLabel).toBeVisible({ timeout: 5000 });
+      await expect(citeMoveLabel(page)).toHaveText('Move 0 of 3', { timeout: 5000 });
     });
 
     test.afterEach(async () => {

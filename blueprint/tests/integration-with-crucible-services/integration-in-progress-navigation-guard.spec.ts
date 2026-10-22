@@ -8,10 +8,11 @@
 // `integrationStatus` is set and is not an ERROR, leaving the page in-app asks
 // `confirm('An integration push is in progress. Are you sure you want to leave?')`.
 //
-// Reaching that state: the precondition is seeded by writing `integrationStatus` through the
-// MSEL PUT, which the API maps from the request body. A real push is not used — its status
-// only lasts while the background integration worker runs (a race against the test), and it
-// leaves Player/Gallery/CITE records that need a pull to clean up. The push pipeline itself is
+// Reaching that state: the precondition is seeded in the database as a push leaves it — status
+// Pushing with its `integrationStatus` — because both are set only by the integration pipeline
+// (blueprint.api #205 dropped them from the MSEL edit request). A real push is not used — its
+// status only lasts while the background integration worker runs (a race against the test), and
+// it leaves Player/Gallery/CITE records that need a pull to clean up. The push pipeline itself is
 // Blueprint.Api.Tests' job (IntegrationServicePushTests); this spec covers what the browser
 // does with the status.
 //
@@ -24,9 +25,9 @@ import {
   getBlueprintToken,
   createMsel,
   deleteMsel,
-  updateMsel,
   navigateToMsel,
 } from '../../test-helpers';
+import { setMselIntegrationState } from '../../db-helpers';
 
 const GUARD_MESSAGE = 'An integration push is in progress';
 
@@ -53,7 +54,10 @@ for (const theme of BLUEPRINT_THEMES) {
       blueprintAuthenticatedPage: page,
     }) => {
       await applyBlueprintTheme(page, theme);
-      await updateMsel(token, mselId, { integrationStatus: 'Pushing Integrations' });
+      await setMselIntegrationState(mselId, {
+        status: 'Pushing',
+        integrationStatus: 'Pushing Integrations',
+      });
 
       // 1. Open the MSEL
       await navigateToMsel(page, mselId);
@@ -84,7 +88,10 @@ for (const theme of BLUEPRINT_THEMES) {
       blueprintAuthenticatedPage: page,
     }) => {
       await applyBlueprintTheme(page, theme);
-      await updateMsel(token, mselId, { integrationStatus: 'Pushing Integrations' });
+      await setMselIntegrationState(mselId, {
+        status: 'Pushing',
+        integrationStatus: 'Pushing Integrations',
+      });
 
       // 1. Open the MSEL
       await navigateToMsel(page, mselId);
@@ -110,8 +117,12 @@ for (const theme of BLUEPRINT_THEMES) {
       blueprintAuthenticatedPage: page,
     }) => {
       await applyBlueprintTheme(page, theme);
-      // An ERROR status means nothing is running any more, so the guard lets the user go.
-      await updateMsel(token, mselId, { integrationStatus: 'ERROR: Player push failed' });
+      // An ERROR status means nothing is running any more, so the guard lets the user go. A
+      // failed push stays in Pushing with the error as its integration status.
+      await setMselIntegrationState(mselId, {
+        status: 'Pushing',
+        integrationStatus: 'ERROR: Player push failed',
+      });
 
       // 1. Open the MSEL
       await navigateToMsel(page, mselId);

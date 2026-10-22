@@ -4,7 +4,7 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, seedCompleteEvaluation, cleanupCompleteEvaluation, CITE_THEMES, setCiteTheme } from '../../fixtures';
+import { test, expect, Services, seedCompleteEvaluation, cleanupCompleteEvaluation, CITE_THEMES, setCiteTheme, citeMoveLabel } from '../../fixtures';
 
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Evaluation Dashboard Interface`, () => {
@@ -29,9 +29,8 @@ for (const theme of CITE_THEMES) {
       // expect: Dashboard page loads with evaluation content
       await page.waitForLoadState('domcontentloaded');
 
-      // expect: Move header is displayed
-      const moveLabel = page.getByRole('heading', { name: 'Move:' });
-      await expect(moveLabel).toBeVisible({ timeout: 10000 });
+      // expect: Move counter is displayed in the toolbar
+      await expect(citeMoveLabel(page)).toHaveText('Move 0 of 0', { timeout: 10000 });
 
       // expect: Team selection is visible
       const teamLabel = page.getByText('Team:');

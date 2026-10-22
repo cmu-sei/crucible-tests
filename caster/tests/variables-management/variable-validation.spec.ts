@@ -11,7 +11,7 @@ for (const theme of CASTER_THEMES) {
     test('Variable Validation', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
       await setCasterTheme(page, theme);
       const projectName = 'Var Validation Project';
-      const directoryName = 'Var Validation Dir';
+      const directoryName = 'Var-Validation-Dir';
 
       await expect(page.getByText('My Projects')).toBeVisible();
 

@@ -12,7 +12,7 @@ for (const theme of CASTER_THEMES) {
       await setCasterTheme(page, theme);
       const uniqueId = Date.now();
       const projectName = `Design Create Project ${uniqueId}`;
-      const dirName = `Design Directory ${uniqueId}`;
+      const dirName = `Design-Directory-${uniqueId}`;
 
       // Setup: Create project and directory
       await expect(page.getByText('My Projects')).toBeVisible();

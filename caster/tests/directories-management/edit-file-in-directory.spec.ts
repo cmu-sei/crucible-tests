@@ -4,51 +4,72 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen, CASTER_THEMES, setCasterTheme } from '../../fixtures';
+import {
+  test,
+  expect,
+  casterApi,
+  casterEditorContent,
+  openCasterDirectory,
+  seedCasterDirectory,
+  seedCasterFile,
+  seedCasterProject,
+  CASTER_THEMES,
+  setCasterTheme,
+} from '../../fixtures';
 
 for (const theme of CASTER_THEMES) {
   test.describe(`${theme} theme › Directories Management`, () => {
     test('Edit File in Directory', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
       await setCasterTheme(page, theme);
-      const uniqueSuffix = Date.now().toString();
+      const projectId = await seedCasterProject(page, `Edit File Project ${Date.now()}`);
+      cleanupCasterProject(projectId);
+      const directoryId = await seedCasterDirectory(page, projectId, 'Edit-File-Dir');
+      const fileId = await seedCasterFile(page, directoryId, 'edit-test.tf', '# before\n');
 
-      await expect(page.getByText('My Projects')).toBeVisible();
+      // 1. Open the file from the directory's file list
+      await openCasterDirectory(page, projectId, 'Edit-File-Dir');
+      await page.getByRole('button', { name: 'FILES', exact: true }).click();
+      await page.getByRole('region', { name: 'FILES' }).getByText('edit-test.tf', { exact: true }).click();
 
-      await page.locator('button:has(.mdi-plus-circle)').click();
-      await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
-      await page.getByRole('textbox', { name: 'Name' }).fill(`Edit File Project ${uniqueSuffix}`);
-      await page.getByRole('button', { name: 'Save' }).click();
-      await expectCasterProjectOpen(page, `Edit File Project ${uniqueSuffix}`);
+      // expect: its content in the editor, read-only until editing starts
+      await expect.poll(() => casterEditorContent(page)).toBe('# before\n');
+      await expect(page.getByRole('button', { name: 'Save Changes' })).toBeDisabled();
 
-      // Register project for cleanup after test completes
-      const projectId = page.url().match(/\/projects\/([a-f0-9-]+)/)?.[1];
-      if (projectId) cleanupCasterProject(projectId);
+      // 2. Start editing and add a line
+      await page.getByRole('button', { name: 'Edit this file' }).click();
+      await expect(page.getByRole('button', { name: 'Finish editing' })).toBeVisible();
+      // Monaco's own input is invisible; clicking its rendered lines focuses it.
+      await page.locator('.monaco-editor .view-lines').click();
+      await page.keyboard.press('ControlOrMeta+End');
+      await page.keyboard.type('# after\n');
 
-      await page.getByText('Add Directory').first().click();
-      await expect(page.getByRole('dialog', { name: 'Create New Directory?' })).toBeVisible();
-      await page.getByRole('textbox', { name: 'Name' }).fill('Edit File Dir');
-      await page.getByRole('button', { name: 'Save' }).click();
-      await expect(page.getByRole('button', { name: 'Edit File Dir' })).toBeVisible({ timeout: 10000 });
+      // expect: the change is tracked, so it can be saved or discarded
+      await expect.poll(() => casterEditorContent(page)).toContain('# after');
+      await expect(page.getByRole('button', { name: 'Save Changes' })).toBeEnabled();
+      await expect(page.getByRole('button', { name: 'Discard Changes' })).toBeEnabled();
 
-      await page.getByRole('button', { name: 'Edit File Dir' }).click();
-      await page.getByRole('button', { name: 'FILES' }).click();
+      // 3. Save
+      const save = page.waitForRequest(
+        (r) => ['PUT', 'PATCH'].includes(r.method()) && new URL(r.url()).pathname.endsWith(`/api/files/${fileId}`)
+      );
+      await page.getByRole('button', { name: 'Save Changes' }).click();
+      const body = (await save).postDataJSON();
 
-      await page.getByText('Add File').click();
+      // expect: the request carries the content and at most the name; the API keeps
+      // the file's directory and workspace from what it has stored
+      expect(body.content).toContain('# after');
+      expect(Object.keys(body).filter((k) => !['name', 'content'].includes(k))).toEqual([]);
 
-      // If a dialog appears for creating a file, fill it
-      const dialog = page.getByRole('dialog');
-      if (await dialog.isVisible({ timeout: 3000 }).catch(() => false)) {
-        const fileNameInput = page.getByRole('textbox', { name: 'Name' });
-        if (await fileNameInput.isVisible({ timeout: 3000 }).catch(() => false)) {
-          await fileNameInput.fill('edit-test.tf');
-          await page.getByRole('button', { name: 'Save' }).click();
-        }
-      }
+      // expect: the save lands, and the file is still in its directory
+      await expect(page.getByRole('button', { name: 'Save Changes' })).toBeDisabled();
+      const saved = (await casterApi(page, 'GET', `files/${fileId}`)).body;
+      expect(saved.content).toContain('# before\n');
+      expect(saved.content).toContain('# after');
+      expect(saved.directoryId).toBe(directoryId);
 
-      const fileItem = page.getByText('edit-test.tf');
-      if (await fileItem.isVisible({ timeout: 5000 }).catch(() => false)) {
-        await fileItem.click();
-      }
+      // 4. Stop editing
+      await page.getByRole('button', { name: 'Finish editing' }).click();
+      await expect(page.getByRole('button', { name: 'Edit this file' })).toBeVisible();
     });
   });
 }

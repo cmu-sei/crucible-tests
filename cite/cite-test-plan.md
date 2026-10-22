@@ -17,14 +17,16 @@ what the spec drives:
     browser context starts light. The multi-user scenarios (14.1–14.3, 15.8) apply the
     theme to each browser instance.
   - **Unauthenticated specs** (1.1 Successful Authentication Flow, 1.2 Failed
-    Authentication, 1.5 Unauthorized Access Protection, 15.6 Deep Link Access) request the
+    Authentication, 1.5 Unauthorized Access Protection, 1.6 Theme Query Param Survives
+    Login, 15.6 Deep Link Access) request the
     theme on their entry URL with CITE's `?theme=` query param (`citeThemeUrl`), since the
     Keycloak screens come before any CITE UI. Those that log in (1.1, 15.6) then call
     `setCiteTheme` once CITE's shell is up.
   - **Specs where the user menu can't be reached after load** (the hub-unavailable
-    messages, where the system-message bottom sheet's backdrop covers the top bar) open
-    CITE through `citeThemeUrl`, so the theme applies from the first paint, and assert it
-    took effect.
+    messages, where the system-message bottom sheet's backdrop covers the top bar) apply
+    the theme with `setCiteTheme` before blocking the hub, then reload, and assert the
+    saved theme took effect. 1.6 checks the `?theme=` param on its own; it never uses the
+    user menu.
   - **API-only specs** (the scoring-model import and not-found checks) open no browser
     page, so there is no theme to apply. They still run under both theme titles, and name
     the data they seed per theme so the two runs never share a row.
@@ -110,6 +112,17 @@ what the spec drives:
   2. Attempt to navigate directly to a protected route (e.g., http://localhost:4721/admin)
     - expect: User is redirected to Keycloak login page
     - expect: Protected route is not accessible without authentication
+
+#### 1.6. Theme Query Param Survives Login
+
+**File:** `tests/cite/authentication/theme-query-param-survives-login.spec.ts`
+
+**Steps:**
+  1. From a fresh unauthenticated state, open CITE with `?theme=<theme>-theme` on the entry URL
+    - expect: User is redirected to Keycloak login page
+  2. Log in as admin
+    - expect: CITE's shell renders in the requested theme without using the user menu
+    - expect: The URL still carries `?theme=<theme>-theme` (the top bar initializing after the redirect must not restore light over it)
 
 ### 2. Home Page and Evaluation List
 
@@ -208,9 +221,10 @@ what the spec drives:
 
 **Steps:**
   1. Navigate to evaluation dashboard
-    - expect: Evaluation description is visible
-    - expect: Current move number is displayed
-    - expect: Evaluation status is shown
+    - expect: Evaluation description is visible in the toolbar
+    - expect: The toolbar move counter reads "Move 0 of 0" (only the default move exists)
+    - expect: Actions, Duties and Roles panels show their counts, e.g. "Actions (0)", even when empty
+    - expect: The situation card shows the current move's title ("Default Move") with no "Previous move" label
     - expect: Section navigation tabs are available (Dashboard, Scoresheet, Report, Aggregate)
 
 #### 3.3. Team Selection
@@ -253,6 +267,7 @@ what the spec drives:
   2. Click the previous move button or arrow
     - expect: Move number decrements by one
     - expect: Dashboard updates to show previous move data
+    - expect: The situation card shows that move's title and its own situation, labeled "Previous move" (the current move has no label)
     - expect: Submission data refreshes for the previous move
 
 #### 3.6. Move Navigation - Boundary Conditions
@@ -1414,10 +1429,9 @@ Score without CanSubmit Permission); this case deliberately probes the API layer
 **Steps:**
   1. Navigate to evaluation dashboard with Gallery integration enabled
     - expect: Dashboard displays with gallery content area
-  2. Observe articles or gallery content in the dashboard or right side panel
-    - expect: Gallery articles are displayed if configured
-    - expect: Articles are relevant to current evaluation
-    - expect: Gallery SignalR connection is active
+  2. Observe the Gallery card on the dashboard
+    - expect: The card reads "N unread in Gallery"
+    - expect: An "Open Gallery" link is shown
 
 #### 16.2. Gallery Integration - Unread Articles Notification
 
@@ -1426,10 +1440,9 @@ Score without CanSubmit Permission); this case deliberately probes the API layer
 **Steps:**
   1. Navigate to evaluation with new gallery articles
     - expect: Dashboard displays
-  2. Observe unread articles indicator
-    - expect: Unread articles count is displayed if available
-    - expect: Notification badge or indicator is visible
-    - expect: User is aware of new content
+  2. Observe the Gallery card on the dashboard
+    - expect: The card reads "3 unread in Gallery" for the 3 seeded articles
+    - expect: The "Open Gallery" link points at the Gallery UI
 
 ### 17. Accessibility
 

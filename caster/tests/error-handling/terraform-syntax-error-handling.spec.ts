@@ -30,11 +30,11 @@ for (const theme of CASTER_THEMES) {
 
       await page.getByTitle('Add New Directory').click();
       await expect(page.getByRole('dialog', { name: 'Create New Directory?' })).toBeVisible();
-      await page.getByRole('textbox', { name: 'Name' }).fill('TF Error Dir');
+      await page.getByRole('textbox', { name: 'Name' }).fill('TF-Error-Dir');
       await page.getByRole('button', { name: 'Save' }).click();
-      await expect(page.getByRole('button', { name: 'TF Error Dir' })).toBeVisible({ timeout: 10000 });
+      await expect(page.getByRole('button', { name: 'TF-Error-Dir' })).toBeVisible({ timeout: 10000 });
 
-      await page.getByRole('button', { name: 'TF Error Dir' }).click();
+      await page.getByRole('button', { name: 'TF-Error-Dir' }).click();
       await page.getByRole('button', { name: 'FILES' }).click();
 
       await page.getByText('Add File').click();

@@ -1,0 +1,7 @@
+{
+  "variable": {
+    "vm_name": { "type": "string", "description": "Name of the VM" },
+    "enable_backup": { "type": "bool", "description": "Back the VM up nightly", "default": false },
+    "cpus": { "type": "number", "description": "vCPU count", "default": 4 }
+  }
+}

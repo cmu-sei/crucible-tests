@@ -11,9 +11,11 @@ for (const theme of GALLERY_THEMES) {
     test('Top Navigation Bar', async ({ galleryAuthenticatedPage: page }) => {
       await setGalleryTheme(page, theme);
       // 1. Log in and observe the top navigation bar
-      // expect: Gallery logo/icon is visible on the left as a clickable link
-      const logoLink = page.locator('a[href="/"]').first();
+      // expect: Gallery logo/icon is visible on the left as a clickable link named
+      // "Gallery home" (an icon-only link needs an accessible name)
+      const logoLink = page.getByRole('link', { name: 'Gallery home' });
       await expect(logoLink).toBeVisible();
+      await expect(logoLink).toHaveAttribute('href', '/');
 
       // expect: Application title 'Gallery - Exercise Information Sharing' is displayed
       await expect(page.getByText('Gallery - Exercise Information Sharing')).toBeVisible();
@@ -26,7 +28,7 @@ for (const theme of GALLERY_THEMES) {
       await gotoGalleryAdmin(page);
 
       // Click logo to go back to home
-      await page.locator('a[href="/"]').first().click();
+      await page.getByRole('link', { name: 'Gallery home' }).click();
 
       // expect: User is navigated to the My Exhibits home page
       await expect(page).toHaveTitle('Gallery');

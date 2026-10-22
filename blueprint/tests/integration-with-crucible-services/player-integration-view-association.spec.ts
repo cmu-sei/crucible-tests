@@ -14,6 +14,7 @@ import {
   tempBlueprintName,
   navigateToMsel,
 } from '../../test-helpers';
+import { clearMselIntegrationState, setMselIntegrationState } from '../../db-helpers';
 
 /**
  * Verifies a MSEL's Player-view association is displayed on the Config (Info) tab and
@@ -36,8 +37,9 @@ import {
  *   user to choose from; `grep -rn playerViewId blueprint.ui/src` finds only *display*
  *   sites. The association is minted server-side by Push Integrations
  *   (`IntegrationService.cs` ~line 299: `msel.PlayerViewId = Guid.NewGuid()`), which then
- *   creates that view in Player. So the test seeds the association through the API — the
- *   same field the push path writes — and asserts how the UI renders it.
+ *   creates that view in Player. The API keeps that id server-owned (blueprint.api #205), so
+ *   the test writes it to the database — the same column the push path writes — and asserts
+ *   how the UI renders it.
  * - **The view *name* next to the checkbox used not to render.** The UI fetched
  *   `{PlayerApiUrl}/views/{id}` from the browser, which CORS blocks: Player's API allows only
  *   its own UI's origin. Blueprint now reads the name server-side instead, via
@@ -78,23 +80,22 @@ for (const theme of BLUEPRINT_THEMES) {
       });
       mselId = msel.id;
 
-      // Associate the Player view exactly as the push path does: usePlayer + playerViewId.
-      await updateMsel(token, mselId, { usePlayer: true, playerViewId });
+      // Associate the Player view as the push path leaves it: usePlayer + playerViewId. Only
+      // usePlayer is on the MSEL edit request; the view id is seeded in the database.
+      await updateMsel(token, mselId, { usePlayer: true });
+      await setMselIntegrationState(mselId, { playerViewId });
     });
 
     test.afterEach(async () => {
       try {
         if (mselId) {
           // Clear the association and leave a non-Deployed status first: deleting a
-          // *Deployed* MSEL runs PullIntegrationsAsync, which would try to delete the
-          // Player view out from under our own cleanup below. Logged rather than
-          // swallowed if it fails — the delete below still runs either way.
+          // *Deployed* MSEL queues a pull, which would try to delete the Player view out
+          // from under our own cleanup below. Moving a MSEL out of Deployed is the
+          // pipeline's, so this is done in the database. Logged rather than swallowed if it
+          // fails — the delete below still runs either way.
           try {
-            await updateMsel(token, mselId, {
-              status: 'Approved',
-              usePlayer: false,
-              playerViewId: null,
-            });
+            await clearMselIntegrationState(mselId);
           } catch (err) {
             console.warn(`Could not clear integrations on MSEL ${mselId} before delete: ${err}`);
           }
@@ -177,8 +178,9 @@ for (const theme of BLUEPRINT_THEMES) {
     }) => {
       await applyBlueprintTheme(page, theme);
       // `fetchIntegrationNames()` returns early unless the MSEL is Deployed, so that is a
-      // real precondition for the name lookup and is seeded here.
-      await updateMsel(token, mselId, { status: 'Deployed' });
+      // real precondition for the name lookup and is seeded here. Only the pipeline sets
+      // Deployed, so it is written to the database.
+      await setMselIntegrationState(mselId, { status: 'Deployed' });
 
       await navigateToMsel(page, mselId);
 

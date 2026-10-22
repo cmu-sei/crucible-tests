@@ -4,7 +4,7 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, seedCompleteEvaluation, cleanupCompleteEvaluation, CITE_THEMES, setCiteTheme } from '../../fixtures';
+import { test, expect, Services, seedCompleteEvaluation, cleanupCompleteEvaluation, CITE_THEMES, setCiteTheme, citeMoveLabel } from '../../fixtures';
 
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Evaluation Dashboard Interface`, () => {
@@ -28,25 +28,20 @@ for (const theme of CITE_THEMES) {
       await page.waitForLoadState('domcontentloaded');
       await expect(page).toHaveURL(new RegExp(seededData.evaluationId), { timeout: 15000 });
 
-      // expect: Evaluation description/name is visible in the header
-      const evalHeading = page.getByRole('heading', { name: new RegExp(description.substring(0, 20)) });
-      await expect(evalHeading).toBeVisible({ timeout: 10000 });
+      // expect: Evaluation description/name is visible in the toolbar
+      await expect(page.getByText(description, { exact: true })).toBeVisible({ timeout: 10000 });
 
-      // expect: Move counter label is displayed
-      const moveLabel = page.getByRole('heading', { name: 'Move:' });
-      await expect(moveLabel).toBeVisible({ timeout: 10000 });
+      // expect: Move counter shows "Move 0 of 0" since only the default move exists
+      await expect(citeMoveLabel(page)).toHaveText('Move 0 of 0', { timeout: 10000 });
 
-      // expect: Move total is displayed (e.g., "of 0" since no moves added)
-      const moveTotal = page.getByRole('heading', { name: 'of 0' });
-      await expect(moveTotal).toBeVisible({ timeout: 10000 });
+      // expect: Dashboard panels show their counts, even when empty
+      for (const panel of ['Actions', 'Duties', 'Roles']) {
+        await expect(page.getByRole('button', { name: new RegExp(`^${panel} \\(\\d+\\)$`) })).toBeVisible({ timeout: 10000 });
+      }
 
-      // expect: Dashboard sections are available (Actions, Duties, Roles)
-      const actionsSection = page.getByText('Actions:');
-      await expect(actionsSection).toBeVisible({ timeout: 10000 });
-
-      // expect: Current Move situation is displayed
-      const currentMoveLabel = page.getByText('Current Move:');
-      await expect(currentMoveLabel).toBeVisible({ timeout: 10000 });
+      // expect: Current move situation card shows the move title, not a "Previous move" label
+      await expect(page.getByRole('heading', { name: 'Default Move', level: 2 })).toBeVisible({ timeout: 10000 });
+      await expect(page.getByText('Previous move', { exact: true })).toHaveCount(0);
     });
 
     test.afterEach(async () => {

@@ -22,11 +22,11 @@ for (const theme of CASTER_THEMES) {
 
       await page.getByTitle('Add New Directory').click();
       await expect(page.getByRole('dialog', { name: 'Create New Directory?' })).toBeVisible();
-      await page.getByRole('textbox', { name: 'Name' }).fill('Alloy Dir');
+      await page.getByRole('textbox', { name: 'Name' }).fill('Alloy-Dir');
       await page.getByRole('button', { name: 'Save' }).click();
-      await expect(page.getByRole('button', { name: 'Alloy Dir' })).toBeVisible({ timeout: 10000 });
+      await expect(page.getByRole('button', { name: 'Alloy-Dir' })).toBeVisible({ timeout: 10000 });
 
-      await page.getByRole('button', { name: 'Alloy Dir' }).click();
+      await page.getByRole('button', { name: 'Alloy-Dir' }).click();
       const workspacesButton = page.getByRole('button', { name: /WORKSPACES/i });
       await expect(workspacesButton).toBeVisible({ timeout: 10000 });
       await workspacesButton.click();
