@@ -319,6 +319,18 @@ Runs once per theme, with that theme as the starting state.
     - expect: The notification is sent to all users in the view
     - expect: The text field is cleared
 
+#### 3.6.1. Send Field Appears When the Join Reply Arrives Late
+
+**File:** `player/tests/view-details/notification-send-late-join.spec.ts`
+
+**Steps:**
+  1. Hold the notification hubs' System join replies (which carry whether the viewer may post), then navigate to a view
+    - expect: Every hub has answered its Join
+  2. Open the Notifications panel before any reply is delivered
+    - expect: The send field is not shown yet
+  3. Deliver the held replies
+    - expect: The send field and 'Send' button appear with no further interaction
+
 #### 3.7. Notification Character Limit
 
 **File:** `player/tests/view-details/notification-character-limit.spec.ts`

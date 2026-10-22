@@ -29,11 +29,11 @@ for (const theme of CASTER_THEMES) {
       // Create directory
       await page.getByText('Add Directory').first().click();
       await expect(page.getByRole('dialog', { name: 'Create New Directory?' })).toBeVisible();
-      await page.getByRole('textbox', { name: 'Name' }).fill('Listed Directory');
+      await page.getByRole('textbox', { name: 'Name' }).fill('Listed-Directory');
       await page.getByRole('button', { name: 'Save' }).click();
 
       // expect: Directories are displayed in the project sidebar
-      await expect(page.getByRole('button', { name: 'Listed Directory' })).toBeVisible({ timeout: 10000 });
+      await expect(page.getByRole('button', { name: 'Listed-Directory' })).toBeVisible({ timeout: 10000 });
 
       // expect: Add Directory option is visible in the sidebar
       await expect(page.getByText('Add Directory').nth(1)).toBeVisible();

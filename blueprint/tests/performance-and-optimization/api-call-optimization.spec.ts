@@ -108,53 +108,31 @@ for (const theme of BLUEPRINT_THEMES) {
         return acc;
       }, {});
       const worst = Object.entries(callsByPath).sort((a, b) => b[1] - a[1])[0];
-      // Threshold is 12, not a rounder number, because of how permissions are currently loaded:
-      // `PermissionDataService` is a root singleton that stores permissions in `_permissions` but
-      // does not consult it before fetching, and 15 components call `load()` in ngOnInit. Measured:
-      // `/api/me/systempermissions` is requested 11 times across these 4 page loads, against 4 for
-      // the next-busiest endpoint. 12 sits just above that, so this fails if the duplication grows;
-      // tighten it once the cache is reused. It is deliberately NOT set to 11 to avoid a spec that
-      // encodes today's exact count as the expectation.
+      // expect: no endpoint is requested more than once per page load. The navigation is four
+      // page loads, and each loads the app afresh. `/api/me/systempermissions` used to be the
+      // exception: `PermissionDataService.load()` refetched on every call, and the components
+      // that mount together each call it, so it was requested 11 times. It now fetches once and
+      // shares the result (blueprint.ui fix/optimize-api-calls).
       expect(
         worst[1],
         `endpoint ${worst[0]} was requested ${worst[1]} times across 4 page loads`
-      ).toBeLessThan(12);
+      ).toBeLessThanOrEqual(4);
 
-      // expect: loading state suppresses rapid-fire duplicates — the same URL requested twice
-      // inside 100ms. Compared against all earlier calls, not just the immediate next one: the
-      // previous version only looked at `apiCalls[index + 1]`, so an interleaved third request
-      // hid a duplicate pair.
+      // expect: no rapid-fire duplicates — the same URL requested twice inside 100ms. Compared
+      // against all earlier calls, not just the immediate next one: the previous version only
+      // looked at `apiCalls[index + 1]`, so an interleaved third request hid a duplicate pair.
+      // These used to come from components mounting together: the permissions refetch, the
+      // admin page's two unit loads, the MSEL page reloading its users as its contributor units
+      // arrived, and the MSEL info page looking its creator up again on every user-store change.
       const rapidDuplicates = apiCalls.filter((call, i) =>
         apiCalls
           .slice(0, i)
           .some((earlier) => earlier.url === call.url && call.timestamp - earlier.timestamp < 100)
       );
-      const dupsByPath = rapidDuplicates.reduce<Record<string, number>>((acc, call) => {
-        const path = call.url.split('?')[0];
-        acc[path] = (acc[path] ?? 0) + 1;
-        return acc;
-      }, {});
-
-      // The permissions refetch accounts for most of these: 7 of the 11 observed rapid duplicates
-      // are `/api/me/systempermissions`, fired near-simultaneously by components mounting together.
-      // Excluding that known endpoint, everything else must stay minimal -- so a NEW source of
-      // duplicate requests fails this, while the expected one does not mask it.
-      const permissionsPath = `${Services.Blueprint.API}/me/systempermissions`;
-      const otherDuplicates = Object.entries(dupsByPath).filter(
-        ([path]) => !path.endsWith('/me/systempermissions')
-      );
-      const otherDuplicateCount = otherDuplicates.reduce((n, [, count]) => n + count, 0);
       expect(
-        otherDuplicateCount,
-        `unexpected rapid duplicate requests (excluding the known ${permissionsPath}): ` +
-          JSON.stringify(otherDuplicates)
-      ).toBeLessThan(5);
-
-      // And the known duplication itself must not grow. Tighten/remove once the cache is reused.
-      expect(
-        dupsByPath[permissionsPath] ?? 0,
-        'rapid duplicate /me/systempermissions requests'
-      ).toBeLessThanOrEqual(8);
+        rapidDuplicates.map((call) => call.url.split('?')[0]),
+        'rapid duplicate requests'
+      ).toEqual([]);
     });
     });
 }

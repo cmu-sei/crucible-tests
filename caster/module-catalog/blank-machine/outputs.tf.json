@@ -1,0 +1,1 @@
+{ "output": { "id": { "value": "${var.vm_name}", "description": "VM id" } } }

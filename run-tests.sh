@@ -258,6 +258,9 @@ Options:
   --app <app>           Run tests for specific app
   --browser <name>      Run tests in a single browser: chromium | firefox.
                         When omitted, tests run in both browsers (default).
+  --theme <name>        Run only the light or dark variant of themed tests:
+                        light | dark. Tests that aren't parameterized by theme
+                        still run. When omitted, both themes run (default).
   --workers <n>         Number of parallel workers (passed to Playwright).
                         Accepts a count (e.g. 4) or a percentage (e.g. 50%).
                         When omitted, the playwright.config.ts default is used.
@@ -274,6 +277,7 @@ Examples:
   $0 blueprint --target minikube  # Run Blueprint tests against a minikube deployment
   $0 all --browser chromium  # Run all tests in chromium only
   $0 all --workers 4         # Run all tests with 4 parallel workers
+  $0 player --theme light    # Run Player tests in light theme only
 
 EOF
 }
@@ -285,6 +289,7 @@ NO_CHECK=false
 FILTER=""
 BROWSER=""
 WORKERS=""
+THEME=""
 VERBOSE=false
 SHOW_HELP=false
 
@@ -325,6 +330,18 @@ while [[ $# -gt 0 ]]; do
                     ;;
                 *)
                     print_error "Invalid --browser value: '$2' (valid values: chromium, firefox)"
+                    exit 1
+                    ;;
+            esac
+            shift 2
+            ;;
+        --theme)
+            case "$2" in
+                light|dark)
+                    THEME="$2"
+                    ;;
+                *)
+                    print_error "Invalid --theme value: '$2' (valid values: light, dark)"
                     exit 1
                     ;;
             esac
@@ -429,6 +446,15 @@ if [ -n "$WORKERS" ]; then
     WORKERS_ARG="--workers $WORKERS"
 fi
 
+# Build the Playwright --grep-invert argument from --theme (empty = run both themes).
+# Themed specs title their describe blocks "<theme> theme › ...", so excluding the
+# other theme keeps the requested one plus every test that isn't themed at all.
+THEME_ARGS=()
+case "$THEME" in
+    light) THEME_ARGS=(--grep-invert "dark theme ›") ;;
+    dark)  THEME_ARGS=(--grep-invert "light theme ›") ;;
+esac
+
 # Execute command
 case $COMMAND in
     all)
@@ -436,15 +462,15 @@ case $COMMAND in
         if [ -n "$APP" ]; then
             print_warning "Running tests for app: $APP"
             if [ -n "$FILTER" ]; then
-                npx playwright test "$APP/tests/" $BROWSER_ARG $WORKERS_ARG --grep "$FILTER"
+                npx playwright test "$APP/tests/" $BROWSER_ARG "${THEME_ARGS[@]}" $WORKERS_ARG --grep "$FILTER"
             else
-                npx playwright test "$APP/tests/" $BROWSER_ARG $WORKERS_ARG
+                npx playwright test "$APP/tests/" $BROWSER_ARG "${THEME_ARGS[@]}" $WORKERS_ARG
             fi
         else
             if [ -n "$FILTER" ]; then
-                npx playwright test $BROWSER_ARG $WORKERS_ARG --grep "$FILTER"
+                npx playwright test $BROWSER_ARG "${THEME_ARGS[@]}" $WORKERS_ARG --grep "$FILTER"
             else
-                npx playwright test $BROWSER_ARG $WORKERS_ARG
+                npx playwright test $BROWSER_ARG "${THEME_ARGS[@]}" $WORKERS_ARG
             fi
         fi
         ;;
@@ -453,10 +479,10 @@ case $COMMAND in
         print_header "Running Quick Smoke Tests"
         if [ -n "$APP" ]; then
             print_warning "Running smoke tests for: $APP"
-            npx playwright test "$APP/tests/" $BROWSER_ARG $WORKERS_ARG --grep "login|home"
+            npx playwright test "$APP/tests/" $BROWSER_ARG "${THEME_ARGS[@]}" $WORKERS_ARG --grep "login|home"
         else
             print_warning "Running smoke tests for all apps"
-            npx playwright test $BROWSER_ARG $WORKERS_ARG --grep "login|home"
+            npx playwright test $BROWSER_ARG "${THEME_ARGS[@]}" $WORKERS_ARG --grep "login|home"
         fi
         print_success "Smoke tests complete!"
         ;;
@@ -469,9 +495,9 @@ case $COMMAND in
             print_warning "Running UI tests for: $APP"
         fi
         if [ -n "$FILTER" ]; then
-            npx playwright test "$TEST_PATH" $BROWSER_ARG --ui --grep "$FILTER"
+            npx playwright test "$TEST_PATH" $BROWSER_ARG "${THEME_ARGS[@]}" --ui --grep "$FILTER"
         else
-            npx playwright test "$TEST_PATH" $BROWSER_ARG --ui
+            npx playwright test "$TEST_PATH" $BROWSER_ARG "${THEME_ARGS[@]}" --ui
         fi
         ;;
 
@@ -483,9 +509,9 @@ case $COMMAND in
             print_warning "Running headed tests for: $APP"
         fi
         if [ -n "$FILTER" ]; then
-            npx playwright test "$TEST_PATH" $BROWSER_ARG $WORKERS_ARG --headed --grep "$FILTER"
+            npx playwright test "$TEST_PATH" $BROWSER_ARG "${THEME_ARGS[@]}" $WORKERS_ARG --headed --grep "$FILTER"
         else
-            npx playwright test "$TEST_PATH" $BROWSER_ARG $WORKERS_ARG --headed
+            npx playwright test "$TEST_PATH" $BROWSER_ARG "${THEME_ARGS[@]}" $WORKERS_ARG --headed
         fi
         ;;
 
@@ -497,9 +523,9 @@ case $COMMAND in
             print_warning "Running debug tests for: $APP"
         fi
         if [ -n "$FILTER" ]; then
-            npx playwright test "$TEST_PATH" $BROWSER_ARG --debug --grep "$FILTER"
+            npx playwright test "$TEST_PATH" $BROWSER_ARG "${THEME_ARGS[@]}" --debug --grep "$FILTER"
         else
-            npx playwright test "$TEST_PATH" $BROWSER_ARG --debug
+            npx playwright test "$TEST_PATH" $BROWSER_ARG "${THEME_ARGS[@]}" --debug
         fi
         ;;
 
@@ -517,9 +543,9 @@ case $COMMAND in
         if echo "$ALL_APPS" | grep -qw "$COMMAND"; then
             print_header "Running $COMMAND Tests"
             if [ -n "$FILTER" ]; then
-                npx playwright test "$COMMAND/tests/" $BROWSER_ARG $WORKERS_ARG --grep "$FILTER"
+                npx playwright test "$COMMAND/tests/" $BROWSER_ARG "${THEME_ARGS[@]}" $WORKERS_ARG --grep "$FILTER"
             else
-                npx playwright test "$COMMAND/tests/" $BROWSER_ARG $WORKERS_ARG
+                npx playwright test "$COMMAND/tests/" $BROWSER_ARG "${THEME_ARGS[@]}" $WORKERS_ARG
             fi
         else
             echo -e "${RED}Unknown command: $COMMAND${NC}"

@@ -280,12 +280,10 @@ for (const theme of GALLERY_THEMES) {
     // button (Save) must each reach 4.5:1. Uses Admin → Collections "Add Collection"
     // without submitting.
     //
-    // Pending upstream: the Cancel check fails in both themes with Gallery's shipped
-    // palette. The spec's Gallery primaries were chosen against M3's baseline surfaces,
-    // but Gallery's own neutral palette paints the dialog `#F9F9F9` (light) and
-    // `#313131` (dark): `#008740` measures 4.39:1 and `#00A34D` 3.93:1 there. The
-    // expected colors come from the served settings, so this goes green without a test
-    // change once the configured primaries (or the surfaces) are made compliant.
+    // Gallery's neutral palette is lighter than the M3 baseline the spec's shades
+    // were chosen against, so gallery.ui paints the light surface white (`#008740`
+    // only reaches 4.5:1 on white) and uses a dark-mode primary measured against its
+    // own `#313131` dark surface. The expected colors come from the served settings.
     test('Primary and on-primary text contrast (WCAG 1.4.3)', async ({ galleryAuthenticatedPage: page }) => {
       await setGalleryTheme(page, theme);
       await gotoGalleryAdmin(page);

@@ -14,13 +14,13 @@ import {
   getBlueprintToken,
   createMsel,
   deleteMsel,
-  updateMsel,
   createTeam,
   createInvitation,
   listInvitations,
   navigateToMselSection,
   tempBlueprintName,
 } from '../../test-helpers';
+import { setMselIntegrationState } from '../../db-helpers';
 
 /** The list row for one invitation, found by its (per-domain) Edit button. */
 function invitationRow(page: Page, emailDomain: string): Locator {
@@ -123,7 +123,8 @@ for (const theme of BLUEPRINT_THEMES) {
       await expect(copyLinkButton(row)).toBeDisabled();
       await expect(copyLinkButton(row)).toHaveAttribute('title', /^Copy Invitation Link: ?$/);
 
-      await updateMsel(token, mselId!, { status: 'Deployed' });
+      // Only the integration pipeline sets Deployed, so it is seeded in the database.
+      await setMselIntegrationState(mselId!, { status: 'Deployed' });
       await navigateToMselSection(page, mselId!, 'Invitations');
 
       // expect: a Deployed MSEL offers a join link for the invitation's team.
@@ -159,29 +160,17 @@ for (const theme of BLUEPRINT_THEMES) {
       });
       await expect(maxUses).toHaveValue('2');
 
-      // Pending upstream: the list opens this dialog on the frozen store entity, and every field is
-      // [(ngModel)]-bound to it, so the first keystroke throws "Cannot assign to read only
-      // property" into an error dialog, and Save then PUTs the invitation unchanged. When the list
-      // passes a copy, drop the error-dialog steps and expect the row to show '@bravo2.test' with
-      // 7 max and 7 remaining uses.
+      // The dialog edits a copy of the stored invitation (blueprint.ui #364). It used to bind the
+      // frozen store entity, so typing threw "Cannot assign to read only property" into an error
+      // dialog and the edit was lost.
       const emailField = dialog.getByRole('textbox', { name: 'User emails end with ...' });
-      const typeErrors = page
-        .getByRole('dialog')
-        .filter({ has: page.getByRole('heading', { name: 'TypeError' }) });
-      // A fill that lands while the dialog's bindings are still settling can be overwritten with no
-      // error at all (seen on Firefox), so it is reissued until the error sheet appears.
-      await expect(async () => {
-        await emailField.fill('@bravo2.test');
-        await expect(typeErrors.first()).toBeVisible({ timeout: 2000 });
-      }).toPass({ timeout: 15000 });
-      // Firefox's fill fires several input events, so several sheets can open, each replacing the
-      // last. The engines word the error differently.
-      const typeError = typeErrors.last();
-      await expect(typeError).toContainText(
-        /Cannot assign to read only property 'emailDomain'|"emailDomain" is read-only/
-      );
-      await typeError.getByRole('button', { name: 'Close' }).click();
-      await expect(typeErrors).toHaveCount(0);
+      await emailField.fill('@bravo2.test');
+      await expect(emailField).toHaveValue('@bravo2.test');
+      await maxUses.fill('7');
+      await expect(maxUses).toHaveValue('7');
+      await expect(
+        page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: 'TypeError' }) })
+      ).toHaveCount(0);
 
       const saved = page.waitForResponse(
         (r) => r.url().includes('/api/invitations/') && r.request().method() === 'PUT'
@@ -190,15 +179,18 @@ for (const theme of BLUEPRINT_THEMES) {
       expect((await saved).ok()).toBe(true);
       await expect(dialog).toBeHidden();
 
-      // expect: the row reflects the edit (currently: the edit is lost)
-      const row = invitationRow(page, '@bravo.test');
+      // expect: the row shows the edited domain, with 7 max and 7 remaining uses
+      const row = invitationRow(page, '@bravo2.test');
       await expect(row.getByRole('cell').nth(1)).toHaveText('BRAVO');
-      await expect(row.getByRole('cell').nth(4)).toHaveText('2');
-      await expect(invitationRow(page, '@bravo2.test')).toHaveCount(0);
+      await expect(row.getByRole('cell').nth(4)).toHaveText('7');
+      await expect(row.getByRole('cell').nth(5)).toHaveText('7');
+      await expect(invitationRow(page, '@bravo.test')).toHaveCount(0);
 
+      // Secondary: the edit persisted, on the same team and with its use count untouched.
       const [edited] = await listInvitations(token, mselId!);
-      expect(edited).toMatchObject({ teamId: bravoId, emailDomain: '@bravo.test' });
-      expect(Number(edited.maxUsersAllowed)).toBe(2);
+      expect(edited).toMatchObject({ teamId: bravoId, emailDomain: '@bravo2.test' });
+      expect(Number(edited.maxUsersAllowed)).toBe(7);
+      expect(Number(edited.userCount)).toBe(0);
     });
 
     test('Search invitations by team or email domain', async ({ blueprintAuthenticatedPage: page }) => {

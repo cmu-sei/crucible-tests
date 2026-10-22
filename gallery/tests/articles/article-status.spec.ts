@@ -358,20 +358,5 @@ for (const theme of GALLERY_THEMES) {
         }
       }
     });
-
-    // eslint-disable-next-line playwright/no-skipped-test
-    test.skip('Article Status Workflow - status displayed in the archive view', () => {
-      // Not implementable as written. The plan's step 6 expects the status
-      // indicator to reflect the current status "across all views", but the archive
-      // has no status indicator at all: archive.component.html renders each
-      // userArticle's sourceType icon, name, sourceName, datePosted and summary
-      // plus the View/Read/Share/More actions, and never renders `article.status`.
-      // In archive.component.ts, `status` is read only inside applyFilter's search
-      // predicate and sortArticles' comparator — neither is a display.
-      //
-      // Asserting anything status-shaped in the archive would mean asserting
-      // something the view does not show. Re-enable once the archive renders
-      // article status.
-    });
   });
 }

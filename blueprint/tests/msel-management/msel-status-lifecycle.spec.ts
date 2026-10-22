@@ -12,6 +12,7 @@ import {
   tempBlueprintName,
   navigateToMsel,
 } from '../../test-helpers';
+import { setMselIntegrationState } from '../../db-helpers';
 
 /**
  * Moving a MSEL through its status lifecycle from the Config tab.
@@ -30,6 +31,10 @@ import {
  * `Blueprint.Api.Data/Enumerations.cs`: Pending, Entered, Approved, Complete, Pushing,
  * Pulling, Deployed, Archived. Note "Active" is NOT a member — PUTting it yields a 400
  * JSON-conversion error, which is correct API behaviour rather than a defect.
+ *
+ * Pushing, Pulling and Deployed are set only by the integration pipeline (blueprint.api
+ * #205 answers 409 to an edit into or out of them), so the dropdown does not offer them, and
+ * a MSEL in one shows its status locked (blueprint.ui #364).
  */
 for (const theme of BLUEPRINT_THEMES) {
     test.describe(`${theme} theme › MSEL Management`, () => {
@@ -65,12 +70,15 @@ for (const theme of BLUEPRINT_THEMES) {
       await expect(statusDropdown).toContainText('Pending');
       await expect(saveButton).toBeDisabled();
 
-      // The lifecycle statuses the UI offers must match the API enum.
+      // The lifecycle statuses the UI offers are the ones a user may set; the pipeline's are not.
       await statusDropdown.click();
-      for (const status of ['Pending', 'Entered', 'Approved', 'Complete', 'Deployed', 'Archived']) {
+      for (const status of ['Pending', 'Entered', 'Approved', 'Complete', 'Archived']) {
         await expect(page.getByRole('option', { name: status, exact: true })).toBeVisible({
           timeout: 10000,
         });
+      }
+      for (const status of ['Pushing', 'Pulling', 'Deployed']) {
+        await expect(page.getByRole('option', { name: status, exact: true })).toHaveCount(0);
       }
 
       await page.getByRole('option', { name: 'Entered', exact: true }).click();
@@ -119,6 +127,18 @@ for (const theme of BLUEPRINT_THEMES) {
       await approvePromise;
 
       expect((await getMsel(token, mselId)).status).toBe('Approved');
+    });
+
+    test('A deployed MSEL shows its status locked', async ({ blueprintAuthenticatedPage: page }) => {
+      await applyBlueprintTheme(page, theme);
+      // Only the integration pipeline sets Deployed, so it is seeded in the database.
+      await setMselIntegrationState(mselId, { status: 'Deployed' });
+      await navigateToMsel(page, mselId);
+
+      // expect: the field still shows the status, but it cannot be changed from here
+      const statusDropdown = page.getByRole('combobox', { name: /MSEL Status/i });
+      await expect(statusDropdown).toContainText('Deployed', { timeout: 15000 });
+      await expect(statusDropdown).toHaveAttribute('aria-disabled', 'true');
     });
     });
 }

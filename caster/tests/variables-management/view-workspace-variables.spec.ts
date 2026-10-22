@@ -11,7 +11,7 @@ for (const theme of CASTER_THEMES) {
     test('View Workspace Variables', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
       await setCasterTheme(page, theme);
       const projectName = 'Var View Project';
-      const directoryName = 'Var View Dir';
+      const directoryName = 'Var-View-Dir';
 
       await expect(page.getByText('My Projects')).toBeVisible();
 

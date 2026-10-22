@@ -1,0 +1,1 @@
+{ "variable": { "wan_network": { "type": "string", "description": "Upstream network" } } }

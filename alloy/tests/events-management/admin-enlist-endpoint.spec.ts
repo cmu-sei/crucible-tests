@@ -92,32 +92,30 @@ async function createEventTemplate(token: string): Promise<CreatedEventTemplate>
   return result.data;
 }
 
+// Alloy only creates events by launching a template (alloy.api #77 removed
+// POST /api/events). The template has no Player View, Caster Directory or
+// Steamfitter Scenario Template, so the launch reaches Active within seconds.
 async function createActiveEvent(
   token: string,
   eventTemplateId: string
 ): Promise<CreatedEvent> {
-  const name = `AdminEnlist Event ${Date.now()} ${Math.floor(Math.random() * 1_000_000)}`;
-  const result = await apiCall<CreatedEvent>(token, '/api/events', {
-    method: 'POST',
-    body: {
-      eventTemplateId,
-      name,
-      description: 'Automated admin enlist endpoint test. Will be deleted after the test.',
-      status: 'Active',
-      internalStatus: 'Launched',
-      lastLaunchStatus: 'Active',
-      lastLaunchInternalStatus: 'Launched',
-      lastEndStatus: 'Ended',
-      lastEndInternalStatus: 'Ended',
-      statusDate: new Date().toISOString(),
-      launchDate: new Date().toISOString(),
-      expirationDate: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-    },
-  });
+  const result = await apiCall<CreatedEvent>(
+    token,
+    `/api/eventTemplates/${eventTemplateId}/events2`,
+    { method: 'POST', body: {} }
+  );
 
   if (!result.ok) {
-    throw new Error(`Failed to create Alloy event (${result.status}): ${result.text}`);
+    throw new Error(`Failed to launch Alloy event (${result.status}): ${result.text}`);
   }
+
+  const eventId = result.data.id;
+  await expect
+    .poll(
+      async () => (await apiCall<{ status: string }>(token, `/api/events/${eventId}`)).data?.status,
+      { message: `Alloy event ${eventId} did not become Active`, timeout: 60_000 }
+    )
+    .toBe('Active');
 
   return result.data;
 }

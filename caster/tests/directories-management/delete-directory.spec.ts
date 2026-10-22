@@ -27,12 +27,12 @@ for (const theme of CASTER_THEMES) {
 
       await page.getByText('Add Directory').first().click();
       await expect(page.getByRole('dialog', { name: 'Create New Directory?' })).toBeVisible();
-      await page.getByRole('textbox', { name: 'Name' }).fill('Dir To Delete');
+      await page.getByRole('textbox', { name: 'Name' }).fill('Dir-To-Delete');
       await page.getByRole('button', { name: 'Save' }).click();
-      await expect(page.getByRole('button', { name: 'Dir To Delete' })).toBeVisible({ timeout: 10000 });
+      await expect(page.getByRole('button', { name: 'Dir-To-Delete' })).toBeVisible({ timeout: 10000 });
 
       // 2. Click on the directory to expand it
-      await page.getByRole('button', { name: 'Dir To Delete' }).click();
+      await page.getByRole('button', { name: 'Dir-To-Delete' }).click();
 
       // Look for a delete button/icon within the directory section
       // The directory may have a delete option accessible via a button with delete/trash icon
@@ -51,7 +51,7 @@ for (const theme of CASTER_THEMES) {
       }
 
       // Verify directory is removed or test passes if delete mechanism works
-      await expect(page.getByRole('button', { name: 'Dir To Delete' })).toBeHidden({ timeout: 10000 }).catch(() => {
+      await expect(page.getByRole('button', { name: 'Dir-To-Delete' })).toBeHidden({ timeout: 10000 }).catch(() => {
         // Directory may still be visible if delete requires different interaction
       });
     });
