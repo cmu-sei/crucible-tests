@@ -138,6 +138,28 @@ for (const theme of ALLOY_THEMES) {
       await expect(systemMessage(page)).toHaveCount(0);
     });
 
+    test('A Rejected Hub Token Is Not Reported As An Outage', async ({ page }) => {
+      const warnings: string[] = [];
+      page.on('console', (msg) => {
+        if (msg.type() === 'warning' && msg.text().startsWith('Alloy hub rejected the token')) {
+          warnings.push(msg.text());
+        }
+      });
+      await page.route('**/hubs/engine/negotiate**', (route) =>
+        route.fulfill({ status: 401, body: '' })
+      );
+
+      // 1. Open Administration, which connects to the hub
+      await authenticateWithKeycloak(page, Services.Alloy.UI);
+      await applyAlloyTheme(page, theme);
+      await page.goto(`${Services.Alloy.UI}/admin`);
+      await expect(page.getByRole('table')).toBeVisible();
+
+      // expect: the refusal is logged, but the user is not told the API is unreachable
+      await expect.poll(() => warnings.length).toBeGreaterThanOrEqual(1);
+      await expect(systemMessage(page)).toHaveCount(0);
+    });
+
     test('A Caster Directory List That Cannot Load Says So', async ({ page }) => {
       const reason = 'Could not load the Caster directories. Caster could not be reached.';
       await page.route('**/api/directories', (route) => route.fulfill(problem(502, reason)));
