@@ -148,7 +148,22 @@ for (const theme of CASTER_THEMES) {
       const tabBody = page.locator('.mat-mdc-tab-body-active .mat-mdc-tab-body-content');
       expect(await tabBody.evaluate((el) => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
 
-      // 3. Go full screen
+      // 3. Click empty space, then the DMZ network
+      const box = (await view.locator('.graph').boundingBox())!;
+      await page.mouse.click(box.x + 10, box.y + box.height - 10);
+      await expect(details).toBeHidden();
+      const dmz = await nodePosition(page, 'module.network.proxmox_sdn_vnet.segment["dmz"]');
+      await page.mouse.click(dmz.x, dmz.y);
+
+      // expect: the machines on it, one to a line
+      await expect(details.locator('.details-title')).toHaveText('demo-dmz');
+      await expect(details.locator('tr', { hasText: 'Machines' }).locator('td > div')).toHaveText([
+        'fw-edge-demo',
+        'mail-demo',
+        'web-demo',
+      ]);
+
+      // 4. Go full screen
       // Away from the view toggle, whose tooltip covers the button.
       await page.mouse.move(x, y + 100);
       await view.getByRole('button', { name: 'Full screen' }).click();
@@ -160,7 +175,7 @@ for (const theme of CASTER_THEMES) {
         'A network this workspace connects machines to but does not create'
       );
 
-      // 4. Leave full screen
+      // 5. Leave full screen
       await view.getByRole('button', { name: 'Exit full screen' }).click();
       await expect.poll(() => page.evaluate(() => document.fullscreenElement)).toBeNull();
       await expect(view.getByRole('button', { name: 'Full screen' })).toBeVisible();
