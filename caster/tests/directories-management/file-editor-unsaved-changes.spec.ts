@@ -5,37 +5,46 @@
 // seed: seed.spec.ts
 
 import { Page } from '@playwright/test';
-import { test, expect, expectCasterProjectOpen, casterApi } from '../../fixtures';
+import {
+  test,
+  expect,
+  casterApi,
+  casterEditorContent,
+  openCasterDirectory,
+  seedCasterDirectory,
+  seedCasterFile,
+  seedCasterProject,
+} from '../../fixtures';
 
-/**
- * Create a project in the UI, then a directory and one file through the API,
- * and open the file in the editor. Returns the file ID.
- */
-async function openNewFile(
+const DIRECTORY = 'Editor-Changes-Dir';
+
+/** Seed a project, a directory and one file, and open the file. Returns the file ID. */
+async function openSeededFile(
   page: Page,
   cleanupCasterProject: (projectId: string) => void,
   fileName: string,
   content: string
 ): Promise<string> {
-  const projectName = `Editor Changes Project ${Date.now()}`;
-
-  await expect(page.getByText('My Projects')).toBeVisible();
-  await page.locator('button:has(.mdi-plus-circle)').click();
-  await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
-  await page.getByRole('textbox', { name: 'Name' }).fill(projectName);
-  await page.getByRole('button', { name: 'Save' }).click();
-  const projectId = await expectCasterProjectOpen(page, projectName);
+  const projectId = await seedCasterProject(page, `Editor Changes Project ${Date.now()}`);
   cleanupCasterProject(projectId);
+  const directoryId = await seedCasterDirectory(page, projectId, DIRECTORY);
+  const fileId = await seedCasterFile(page, directoryId, fileName, content);
+  expect((await casterApi(page, 'GET', `files/${fileId}`)).body.content).toBe(content);
 
-  const directory = await casterApi(page, 'POST', 'directories', { projectId, name: 'editor-dir' });
-  const file = await casterApi(page, 'POST', 'files', { directoryId: directory.id, name: fileName, content });
-  expect((await casterApi(page, 'GET', `files/${file.id}`)).content).toBe(content);
+  await openCasterDirectory(page, projectId, DIRECTORY);
+  await page.getByRole('button', { name: 'FILES', exact: true }).click();
+  await page.getByRole('region', { name: 'FILES' }).getByText(fileName, { exact: true }).click();
+  return fileId;
+}
 
-  await page.reload();
-  await page.getByRole('button', { name: 'editor-dir' }).click();
-  await page.getByRole('button', { name: 'FILES' }).click();
-  await page.getByText(fileName, { exact: true }).click();
-  return file.id;
+/** Start editing the open file and type at its end. */
+async function typeAtEnd(page: Page, text: string): Promise<void> {
+  await page.getByRole('button', { name: 'Edit this file' }).click();
+  await expect(page.getByRole('button', { name: 'Finish editing' })).toBeVisible();
+  // Monaco's own input is invisible; clicking its rendered lines focuses it.
+  await page.locator('.monaco-editor .view-lines').click();
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.type(text);
 }
 
 test.describe('Directories Management', () => {
@@ -45,15 +54,14 @@ test.describe('Directories Management', () => {
   }) => {
     // Monaco shows mixed endings as all-CRLF, which used to mark the file
     // unsaved as soon as it opened
-    const fileId = await openNewFile(
+    const fileId = await openSeededFile(
       page,
       cleanupCasterProject,
       'mixed.tf',
       'variable "a" {}\r\nvariable "b" {}\nvariable "c" {}\r\n'
     );
-    const editor = page.locator('#editor .monaco-editor');
     const save = page.getByRole('button', { name: 'Save Changes' });
-    await expect(editor).toContainText('variable "c" {}', { timeout: 15000 });
+    await expect.poll(() => casterEditorContent(page)).toContain('variable "c" {}');
 
     // Opening the file without editing it leaves it saved
     await expect(save).toBeDisabled();
@@ -64,19 +72,15 @@ test.describe('Directories Management', () => {
     await expect(page.getByRole('button', { name: 'Close mixed.tf' })).toBeHidden();
 
     // Edit and save: the stored file has LF endings only
-    await page.getByText('mixed.tf', { exact: true }).click();
-    await expect(editor).toContainText('variable "c" {}', { timeout: 15000 });
-    await page.getByRole('button', { name: 'Edit this file' }).click();
-    await expect(page.getByRole('button', { name: 'Finish editing' })).toBeVisible();
-    await editor.click();
-    await page.keyboard.press('Control+End');
-    await page.keyboard.type('variable "d" {}');
+    await page.getByRole('region', { name: 'FILES' }).getByText('mixed.tf', { exact: true }).click();
+    await expect.poll(() => casterEditorContent(page)).toContain('variable "c" {}');
+    await typeAtEnd(page, 'variable "d" {}');
     await expect(save).toBeEnabled();
     await save.click();
     await expect(save).toBeDisabled();
 
     const saved = await casterApi(page, 'GET', `files/${fileId}`);
-    expect(saved.content).toBe('variable "a" {}\nvariable "b" {}\nvariable "c" {}\nvariable "d" {}');
+    expect(saved.body.content).toBe('variable "a" {}\nvariable "b" {}\nvariable "c" {}\nvariable "d" {}');
 
     await page.getByRole('button', { name: 'Finish editing' }).click();
     await expect(page.getByRole('button', { name: 'Edit this file' })).toBeVisible();
@@ -88,33 +92,31 @@ test.describe('Directories Management', () => {
   }) => {
     // A rename (like a lock change) reaches the editor without content, which
     // used to reload the file over the user's unsaved edits
-    const fileId = await openNewFile(page, cleanupCasterProject, 'draft.tf', 'variable "a" {}\n');
-    const editor = page.locator('#editor .monaco-editor');
+    const fileId = await openSeededFile(page, cleanupCasterProject, 'draft.tf', 'variable "a" {}\n');
     const save = page.getByRole('button', { name: 'Save Changes' });
-    await expect(editor).toContainText('variable "a" {}', { timeout: 15000 });
+    await expect.poll(() => casterEditorContent(page)).toBe('variable "a" {}\n');
 
-    await page.getByRole('button', { name: 'Edit this file' }).click();
-    await expect(page.getByRole('button', { name: 'Finish editing' })).toBeVisible();
-    await editor.click();
-    await page.keyboard.press('Control+End');
-    await page.keyboard.type('variable "draft" {}');
+    await typeAtEnd(page, 'variable "draft" {}');
     await expect(save).toBeEnabled();
 
     const reloads: string[] = [];
     page.on('request', (r) => {
       if (r.method() === 'GET' && r.url().endsWith(`/api/files/${fileId}`)) reloads.push(r.url());
     });
-    await casterApi(page, 'POST', `files/${fileId}/actions/rename`, { name: 'renamed.tf' });
+    const rename = await casterApi(page, 'POST', `files/${fileId}/actions/rename`, { name: 'renamed.tf' });
+    expect(rename.status).toBe(200);
     await expect(page.getByRole('button', { name: 'Close renamed.tf' })).toBeVisible();
     await page.waitForLoadState('networkidle');
 
     expect(reloads).toEqual([]);
-    await expect(editor).toContainText('variable "draft" {}');
+    await expect.poll(() => casterEditorContent(page)).toBe('variable "a" {}\nvariable "draft" {}');
     await expect(save).toBeEnabled();
 
     await save.click();
     await expect(save).toBeDisabled();
-    expect((await casterApi(page, 'GET', `files/${fileId}`)).content).toBe('variable "a" {}\nvariable "draft" {}');
+    expect((await casterApi(page, 'GET', `files/${fileId}`)).body.content).toBe(
+      'variable "a" {}\nvariable "draft" {}'
+    );
 
     await page.getByRole('button', { name: 'Finish editing' }).click();
     await expect(page.getByRole('button', { name: 'Edit this file' })).toBeVisible();
