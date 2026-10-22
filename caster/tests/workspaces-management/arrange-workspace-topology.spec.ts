@@ -34,10 +34,10 @@ type NodeLayout = { x?: number | null; y?: number | null; role?: string | null }
  */
 async function routeTopologyWithSavedLayout(page: Page) {
   let saved: Record<string, NodeLayout> = {};
-  page.on('response', async (response) => {
-    if (response.request().method() === 'PATCH' && response.url().endsWith('/topology/layout') && response.ok()) {
-      saved = await response.json();
-    }
+  await page.route('**/api/workspaces/*/topology/layout', async (route) => {
+    const response = await route.fetch();
+    if (response.ok()) saved = await response.json();
+    await route.fulfill({ response });
   });
   await page.route('**/api/workspaces/*/topology', (route) =>
     route.fulfill({ json: { ...proxmoxTopology, layout: saved } })
@@ -58,7 +58,17 @@ async function openTopology(page: Page, cleanupCasterProject: (id: string) => vo
 
 async function showTopology(page: Page) {
   await page.getByRole('button', { name: 'WORKSPACES', exact: true }).click();
-  await page.getByText('Topology_Layout_Workspace', { exact: true }).click();
+  await openWorkspace(page);
+}
+
+/** Close the workspace's tab and open it again, so the view fetches its topology anew. */
+async function reopenTopology(page: Page) {
+  await page.getByRole('button', { name: 'Close Topology_Layout_Workspace' }).click();
+  await openWorkspace(page);
+}
+
+async function openWorkspace(page: Page) {
+  await page.getByRole('region', { name: 'WORKSPACES' }).getByText('Topology_Layout_Workspace', { exact: true }).click();
   await page.getByRole('radio', { name: 'topology' }).click();
   await expect
     .poll(() => graph(page).evaluate((c: any) => c._cyreg?.cy?.nodes().length ?? 0), { timeout: 10000 })
@@ -113,7 +123,7 @@ test.describe('Workspaces Management', () => {
 
     // 1. Drag the router somewhere else
     const save = layoutSave(page);
-    await drag(page, router, 120, 60);
+    await drag(page, router, -120, 60);
 
     // expect: just the router is saved, where it now is, with no role
     const body = (await save).postDataJSON();
@@ -123,8 +133,7 @@ test.describe('Workspaces Management', () => {
     expect((await (await save).response())?.status()).toBe(200);
 
     // 2. Open the workspace again
-    await page.reload();
-    await showTopology(page);
+    await reopenTopology(page);
 
     // expect: the router is where it was left
     expect(await nodePosition(page, router)).toEqual({ x: Math.round(moved.x), y: Math.round(moved.y) });
@@ -150,8 +159,7 @@ test.describe('Workspaces Management', () => {
     );
 
     // 2. Open the workspace again and click the router
-    await page.reload();
-    await showTopology(page);
+    await reopenTopology(page);
     const again = await nodeOnPage(page, router);
     await page.mouse.click(again.x, again.y);
 
@@ -168,17 +176,17 @@ test.describe('Workspaces Management', () => {
     // expect: nothing to reset until a node is moved
     await expect(reset).toBeDisabled();
 
-    // 1. Give the router a role, then drag it
+    // 1. Drag the router, then give it a role
+    const dragSave = layoutSave(page);
+    await drag(page, router, -150, 0);
+    await dragSave;
+    await expect(reset).toBeEnabled();
     const { x, y } = await nodeOnPage(page, router);
     await page.mouse.click(x, y);
     await view.locator('.details').getByRole('combobox', { name: 'Role' }).click();
     const roleSave = layoutSave(page);
     await page.getByRole('option', { name: 'Router' }).click();
     await roleSave;
-    const dragSave = layoutSave(page);
-    await drag(page, router, 150, 0);
-    await dragSave;
-    await expect(reset).toBeEnabled();
 
     // 2. Reset the layout
     await reset.click();
