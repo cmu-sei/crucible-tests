@@ -196,6 +196,26 @@ This updated test plan covers recent feature additions including: configurable b
     - expect: Main content area uses overflow auto, not scroll
     - expect: No scrollbar gutters are drawn when content fits
 
+#### 2.7. Dark Theme
+
+**File:** `topomojo/tests/home/dark-theme.spec.ts`
+
+**Steps:**
+  1. Load the landing page with `?theme=dark-theme`
+    - expect: `html` has the `dark-theme` class and the page background is dark
+  2. Reload without the query param
+    - expect: The dark theme is still applied
+  3. Load with an unknown `?theme=` value
+    - expect: The saved dark theme is kept
+  4. Load with `?theme=light-theme`
+    - expect: The light theme is applied
+  5. Click "Switch to dark theme" in the navigation bar, then reload
+    - expect: The dark theme is applied and survives the reload; the toggle reads "Switch to light theme"
+  6. With a dark OS preference and no saved theme, load the landing page
+    - expect: The dark theme is applied
+  7. Choose the light theme with the toggle and reload
+    - expect: The saved choice wins over the OS preference
+
 ### 3. Workspace Management
 
 **Seed:** `seed.spec.ts`
