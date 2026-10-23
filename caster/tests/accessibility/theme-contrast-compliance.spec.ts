@@ -14,6 +14,7 @@ import {
   setCasterTheme,
   CASTER_THEMES,
 } from '../../fixtures';
+import { expectFaviconInTopBarColor } from '../../../theme-helpers';
 
 /**
  * Accessibility and Usability — real WCAG contrast on the Caster home page and an
@@ -281,6 +282,9 @@ for (const theme of CASTER_THEMES) {
       const toolbar = page.locator('mat-toolbar.toolbar');
       await expect(toolbar).toHaveCSS('background-color', hexToRgb(settings.AppTopBarHexColor!));
       await expect(toolbar).toHaveCSS('color', hexToRgb(settings.AppTopBarHexTextColor!));
+
+      // The favicon is recolored to the top-bar color too.
+      await expectFaviconInTopBarColor(page, settings.AppTopBarHexColor!);
 
       // Material primary roles: the active mode's pair, verbatim.
       expect(await cssVar(page, '--mat-sys-primary'), `${theme}: --mat-sys-primary`).toBe(
