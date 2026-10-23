@@ -18,7 +18,7 @@ test.describe('Home Page and Navigation', () => {
     await expect(main).toHaveCSS('overflow-y', 'auto');
 
     // expect: Home page content fits, so no scrollbar gutters are drawn
-    const gutters = await main.evaluate((el) => ({
+    const gutters = await main.evaluate((el: HTMLElement) => ({
       vertical: el.offsetWidth - el.clientWidth,
       horizontal: el.offsetHeight - el.clientHeight,
     }));
