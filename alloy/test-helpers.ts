@@ -272,7 +272,7 @@ export async function createTestEventTemplate(
   await ensureOnAdminPage(page);
 
   // Click Add Event Template to open the create dialog (no API call yet).
-  const createDialog = page.getByRole('dialog', { name: 'Create New Event Template' });
+  const createDialog = page.getByRole('dialog', { name: 'Add Event Template' });
   await page.getByRole('button', { name: 'Add Event Template' }).click();
   await waitForDialogOpen(createDialog);
 
