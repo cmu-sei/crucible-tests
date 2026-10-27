@@ -1418,6 +1418,29 @@ app's layered settings files as served (`settings.json`, deep-merged with
   4. Pick a template whose URL uses {viewId} and Save
     - expect: 'Unknown variable(s): {viewId}' (pending upstream); after changing to {playerViewId} it saves
 
+#### 19.7. Add a Blueprint Player Application Template to a MSEL
+
+**File:** `blueprint/tests/player-applications/blueprint-player-application-templates.spec.ts`
+
+**Steps:**
+  1. In Admin 'Player Application Templates', click 'Add a template Player Application', fill Name, URL, Icon URL, uncheck Embeddable, check Load in Background, Save
+    - expect: Dialog 'Add a Player Application Template'; the template is listed with its URL and stored with no MSEL
+  2. In a MSEL with Player enabled, open Player Apps → Add
+    - expect: The template is offered, titled with its URL, and not under the 'From Player' group
+  3. Pick it and Save
+    - expect: Dialog prefilled with the template's name, URL, icon, Embeddable and Load in Background
+    - expect: The MSEL has one application with those values and its own id; the template is still a template with no MSEL
+
+#### 19.8. Edit and Delete a Blueprint Player Application Template
+
+**File:** `blueprint/tests/player-applications/blueprint-player-application-templates.spec.ts`
+
+**Steps:**
+  1. Seed a template; in Admin 'Player Application Templates', edit it and rename it
+    - expect: Dialog 'Edit Player Application Template' prefilled; the list and the API show the new name only
+  2. Delete it and confirm Yes
+    - expect: 'Delete Player Application Template' confirmation names it; the row and the record are gone
+
 ### 20. Invitations
 
 **Seed:** `/mnt/data/crucible-tests/blueprint/tests/seed.setup.ts`
