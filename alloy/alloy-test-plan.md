@@ -444,6 +444,24 @@ Alloy is an advanced orchestration application within the Crucible cybersecurity
     - expect: Changes to the clone do not affect the original template
     - expect: Clone and original remain independent
 
+#### 3.14. Export and Import Event Templates
+
+**File:** `tests/event-templates-management/export-and-import-event-templates.spec.ts`
+
+**Steps:**
+  1. Navigate to admin Event Templates section and create a template
+    - expect: The template appears in the list
+  2. Select the template's checkbox and click "Export 1 Selected Event Template"
+    - expect: The Export Event Templates dialog shows "Selected Event Templates: 1"
+  3. Click "Export"
+    - expect: "<template name>.json" downloads, holding the template as a JSON object, and the dialog closes
+  4. Click "Import Event Templates", "Choose File" the downloaded file and click "Import"
+    - expect: The dialog shows "Imported Event Templates: 1" and, under "Imported with changes:", "Renamed to "<template name> - <user>" because an Event Template named "<template name>" already exists."
+    - expect: The copy is in the list with a new id, and the original keeps its name and id
+  5. Import a .json file holding an array of two templates with unused names
+    - expect: The dialog shows "Imported Event Templates: 2" and "Import Successful"
+    - expect: Both templates are in the list under their own names
+
 ### 4. Events Management
 
 **Seed:** `tests/seed.spec.ts`
