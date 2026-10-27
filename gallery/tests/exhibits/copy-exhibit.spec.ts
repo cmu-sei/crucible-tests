@@ -58,9 +58,9 @@ for (const theme of GALLERY_THEMES) {
 
       // 1. Click the Copy button (clipboard icon) on the exhibit row
       // ExhibitService.CopyAsync -> privateExhibitCopyAsync(..., copyTheCollection: false)
-      // reuses the source exhibit's Name and CollectionId verbatim (only the collection
-      // name gets a " - <username>" suffix, and only on the upload path). So the copy is a
-      // second row with the SAME name in the SAME collection, with move/inject reset to 0.
+      // keeps the source CollectionId and names the copy "<name> - <user>", as collection
+      // copy does. So the copy is a second row in the SAME collection, named after the
+      // signed-in user, with move/inject reset to 0.
       const copyResponsePromise = page.waitForResponse(
         (response) =>
           response.url().includes(`/api/exhibits/${original.id}/copy`) && response.request().method() === 'POST'
@@ -74,7 +74,7 @@ for (const theme of GALLERY_THEMES) {
         await copyResponse.json();
 
       expect(copy.id).not.toBe(original.id);
-      expect(copy.name).toBe(testExhibitName);
+      expect(copy.name).toBe(`${testExhibitName} - Admin User`);
       expect(copy.collectionId).toBe(collectionId);
       expect(copy.currentMove).toBe(0);
       expect(copy.currentInject).toBe(0);
