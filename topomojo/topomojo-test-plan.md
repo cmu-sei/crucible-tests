@@ -1298,6 +1298,34 @@ This updated test plan covers recent feature additions including: configurable b
     - expect: Observer can view gamespaces without interacting
     - expect: Read-only view is enforced
 
+#### 8.29. Admin - Disks
+
+**File:** `topomojo/tests/admin/admin-disk-browser.spec.ts`
+
+**Steps:**
+  1. Navigate to admin dashboard and click 'Disks'
+    - expect: Heading is 'Disks' on vSphere or 'Template VMs' on Proxmox
+    - expect: Help text names the Detail key to paste into (`Disks[].Path` or `Template`)
+    - expect: 'Global Only' is on by default, like the Files page
+    - expect: Name, Workspace, and Modified (vSphere) or Created (Proxmox) columns
+    - expect: Only global entries are listed, each with a Global badge
+  2. Turn 'Global Only' off and search for an entry's name
+    - expect: Every entry is listed, then only those matching the search
+  3. Click the 'Name' header
+    - expect: Entries are listed by name ascending, then descending
+
+#### 8.30. Admin - Disks Workspace Copy
+
+**File:** `topomojo/tests/admin/admin-disk-browser-workspace-copy.spec.ts`
+
+**Steps:**
+  1. Seed a stock template on a global Proxmox template VM, link it into a new workspace, unlink it, and Initialize it
+    - expect: The copy is listed by the template-sources API under the workspace and template, with a creation date from the clone, not its parent
+  2. Open admin 'Disks'
+    - expect: The copy is hidden while 'Global Only' is on
+  3. Turn 'Global Only' off and search for the workspace name
+    - expect: The copy's row shows the workspace name, 'Template: <name>', and a Created date
+
 ### 9. About Page
 
 **Seed:** `seed.spec.ts`
