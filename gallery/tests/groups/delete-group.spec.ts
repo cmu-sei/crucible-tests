@@ -50,15 +50,15 @@ for (const theme of GALLERY_THEMES) {
       // position rather than by name.
       await row.getByRole('button').first().click();
 
-      // expect: A 'Delete Group?' confirmation dialog appears naming the group.
+      // expect: A 'Delete Group' confirmation dialog appears naming the group.
       // Scoped by accessible name (`admin-groups.component.ts` opens this confirm
-      // with `title: 'Delete Group?'`, which crucible-dialog renders in an
+      // with `title: 'Delete Group'`, which crucible-dialog renders in an
       // <h2 mat-dialog-title>). An unscoped getByRole('dialog') would also match the
       // create dialog while it is still playing its exit animation, failing strict
       // mode with "resolved to 2 elements".
-      const confirmDialog = page.getByRole('dialog', { name: 'Delete Group?' });
+      const confirmDialog = page.getByRole('dialog', { name: 'Delete Group' });
       await expect(confirmDialog).toBeVisible();
-      await expect(confirmDialog).toContainText(`Delete Group ${testGroupName}?`);
+      await expect(confirmDialog).toContainText(`Are you sure that you want to delete ${testGroupName}?`);
 
       // 2. Click 'Cancel'
       await confirmDialog.getByRole('button', { name: 'Cancel' }).click();

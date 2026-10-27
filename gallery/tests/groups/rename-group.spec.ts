@@ -57,12 +57,12 @@ for (const theme of GALLERY_THEMES) {
       // the last button rather than by name.
       await originalRow.getByRole('button').last().click();
 
-      // expect: A 'Rename <group>' dialog opens with the Name field prefilled.
+      // expect: A 'Rename Group' dialog opens with the Name field prefilled.
       // Scoped by accessible name (`updateGroup()` titles the dialog
-      // 'Rename ' + group.name): an unscoped getByRole('dialog') would also match a
+      // 'Rename Group'): an unscoped getByRole('dialog') would also match a
       // dialog still playing its exit animation, failing strict mode with
       // "resolved to 2 elements".
-      const dialog = page.getByRole('dialog', { name: `Rename ${originalName}` });
+      const dialog = page.getByRole('dialog', { name: 'Rename Group' });
       await expect(dialog).toBeVisible();
 
       const nameInput = dialog.getByRole('textbox', { name: 'Name' });

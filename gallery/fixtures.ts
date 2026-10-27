@@ -1147,7 +1147,7 @@ export async function createGalleryGroup(page: Page, name: string): Promise<void
   // getByRole({ name }) cannot reach them — hence the structural locator.
   await page.locator('app-admin-groups th.mat-column-actions button').first().click();
 
-  const dialog = page.getByRole('dialog', { name: 'Create New Group?' });
+  const dialog = page.getByRole('dialog', { name: 'Add Group' });
   await expect(dialog).toBeVisible();
   await dialog.getByRole('textbox', { name: 'Name' }).fill(name);
   await dialog.getByRole('button', { name: 'Save' }).click();
