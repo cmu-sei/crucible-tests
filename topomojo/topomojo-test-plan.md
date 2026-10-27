@@ -816,6 +816,28 @@ This updated test plan covers recent feature additions including: configurable b
     - expect: Template is unlinked from parent
     - expect: Template becomes independent
 
+#### 6.8. Template Delete on Proxmox
+
+**File:** `topomojo/tests/template/template-delete-proxmox.spec.ts`
+
+**Steps:**
+  1. Seed a workspace copy (stock template on a global template VM, linked, unlinked, and initialized), then a second stock template whose Template names that copy, and delete the second stock template
+    - expect: The copy is still listed; deleting a stock template leaves the template VM it names
+  2. Seed a workspace copy and delete the unlinked template
+    - expect: The copy is no longer listed, and the global base it was cloned from still is
+
+#### 6.9. Template Clone on Proxmox
+
+**File:** `topomojo/tests/template/template-clone-proxmox.spec.ts`
+
+**Steps:**
+  1. Seed a stock template on a global template VM and clone it
+    - expect: The clone's Detail names its own template VM (its id), with the original's as its parent; the original is unchanged
+  2. Initialize the clone
+    - expect: The clone's template VM is listed, labeled with the clone's name
+  3. Delete the clone
+    - expect: The clone's template VM is no longer listed, and the global base still is
+
 ### 7. File Management
 
 **Seed:** `seed.spec.ts`

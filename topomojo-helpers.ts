@@ -466,8 +466,8 @@ export interface TopoMojoTemplateDetail {
  * Create a stock template (admin only) with the given Detail JSON. On Proxmox,
  * `Template` in the Detail names the PVE template vm the template clones from.
  *
- * Pair every call with `deleteStockTemplate` in teardown, never a bare delete:
- * see the note there.
+ * Pair every call with `deleteStockTemplate` in teardown when `Template` names a template
+ * VM the deployment owns, otherwise `deleteTemplate`.
  */
 export async function createStockTemplate(
   token: string,
@@ -485,18 +485,29 @@ export async function createStockTemplate(
 }
 
 /**
- * Delete a stock template without touching the hypervisor template it points at.
+ * Delete a template. On Proxmox this deletes the template VM only when the template owns it
+ * (an unlinked workspace copy); a stock template's shared base is left alone.
+ */
+export async function deleteTemplate(token: string, templateId: string): Promise<void> {
+  const r = await tmCall(token, `/api/template/${templateId}`, { method: 'DELETE' });
+  // A template that's already gone answers 400 with a ResourceNotFound validation error.
+  if (!r.ok && r.status !== 404 && !(r.status === 400 && r.text.includes('ResourceNotFound'))) {
+    throw new Error(`deleteTemplate(${templateId}) returned ${r.status}: ${r.text}`);
+  }
+}
+
+/**
+ * Delete a stock template that points at a template VM the deployment owns, such as a global
+ * Proxmox base, without any chance of deleting that VM.
  *
- * Pending upstream: deleting a stock (unlinked) template on Proxmox destroys the PVE
- * template vm its Detail `Template` names, even when that vm is a shared base other
- * templates clone from. vSphere skips stock disks outside the template's workspace;
- * Proxmox has no such guard. Until it does, this repoints `Template` at a name no vm
- * has before deleting, so the delete finds nothing to destroy. Once Proxmox only
- * deletes a template's own copy, this can be a plain DELETE.
+ * TopoMojo releases before the Proxmox delete guard destroyed the template VM a stock
+ * template names when the template was deleted. Repointing `Template` at a name no VM has
+ * first makes this cleanup safe against those releases too. Use `deleteTemplate` when the
+ * delete itself is the behavior under test.
  */
 export async function deleteStockTemplate(token: string, templateId: string): Promise<void> {
   const cur = await tmCall<TopoMojoTemplateDetail>(token, `/api/template-detail/${templateId}`);
-  if (cur.status === 404) {
+  if (cur.status === 404 || (cur.status === 400 && cur.text.includes('ResourceNotFound'))) {
     return;
   }
   if (!cur.ok) {
@@ -510,14 +521,32 @@ export async function deleteStockTemplate(token: string, templateId: string): Pr
     body: { ...cur.data, detail: JSON.stringify(detail) },
   });
   if (!put.ok) {
-    // Never fall through to the delete: it would destroy the shared base.
+    // Never fall through to the delete: on an older release it would destroy the base.
     throw new Error(`deleteStockTemplate: could not repoint ${templateId} (${put.status}): ${put.text}`);
   }
 
-  const del = await tmCall(token, `/api/template/${templateId}`, { method: 'DELETE' });
-  if (!del.ok && del.status !== 404) {
-    throw new Error(`deleteStockTemplate(${templateId}) returned ${del.status}: ${del.text}`);
+  await deleteTemplate(token, templateId);
+}
+
+/** Clone a template (admin only). The clone is unlinked and unpublished. */
+export async function cloneTemplate(token: string, templateId: string, name?: string): Promise<TopoMojoTemplateDetail> {
+  const r = await tmCall<TopoMojoTemplateDetail>(token, '/api/template/clone', {
+    method: 'POST',
+    body: { id: templateId, name },
+  });
+  if (!r.ok) {
+    throw new Error(`cloneTemplate failed (${r.status}): ${r.text}`);
   }
+  return r.data;
+}
+
+/** A template's Detail, parsed. */
+export async function getTemplateDetail(token: string, templateId: string): Promise<{ meta: TopoMojoTemplateDetail; detail: any }> {
+  const r = await tmCall<TopoMojoTemplateDetail>(token, `/api/template-detail/${templateId}`);
+  if (!r.ok) {
+    throw new Error(`getTemplateDetail(${templateId}) failed (${r.status}): ${r.text}`);
+  }
+  return { meta: r.data, detail: JSON.parse(r.data.detail || '{}') };
 }
 
 /** Add a stock template to a workspace as a linked template. */
