@@ -15,7 +15,7 @@ for (const theme of CASTER_THEMES) {
 
       // The add-project button is the only button sibling of "My Projects" text
       await page.getByText('My Projects').locator('..').getByRole('button').click();
-      await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
+      await expect(page.getByRole('dialog', { name: 'Add Project' })).toBeVisible();
       const projectName = `Loading Test Project ${Date.now()}`;
       await page.getByRole('textbox', { name: 'Name' }).fill(projectName);
 
@@ -25,7 +25,7 @@ for (const theme of CASTER_THEMES) {
 
       // expect: Dialog closes and project appears
       cleanupCasterProject(await expectCasterProjectOpen(page, projectName));
-      await expect(page.getByRole('dialog', { name: 'Create New Project?' })).not.toBeVisible();
+      await expect(page.getByRole('dialog', { name: 'Add Project' })).not.toBeVisible();
     });
   });
 }

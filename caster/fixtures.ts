@@ -526,7 +526,7 @@ export async function gotoCasterGroupsAdmin(page: Page): Promise<void> {
  */
 export async function openCreateGroupDialog(page: Page): Promise<Locator> {
   const addButton = page.getByRole('table').getByRole('button').first();
-  const dialog = page.getByRole('dialog', { name: 'Create New Group?' });
+  const dialog = page.getByRole('dialog', { name: 'Add Group' });
 
   for (let attempt = 0; attempt < 3; attempt++) {
     await addButton.click();
@@ -576,7 +576,7 @@ export async function deleteCasterGroup(page: Page, name: string): Promise<void>
     .first()
     .click();
 
-  const dialog = page.getByRole('dialog', { name: 'Delete Group?' });
+  const dialog = page.getByRole('dialog', { name: 'Delete Group' });
   await dialog.waitFor({ state: 'visible', timeout: 10000 });
   await dialog.getByRole('button', { name: 'Delete' }).click();
 

@@ -17,7 +17,7 @@ for (const theme of CASTER_THEMES) {
       await expect(page.getByText('My Projects')).toBeVisible();
 
       await page.locator('button[mattooltip="Add New Project"]').click();
-      await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
+      await expect(page.getByRole('dialog', { name: 'Add Project' })).toBeVisible();
       await page.getByRole('textbox', { name: 'Name' }).fill(projectName);
       await page.getByRole('button', { name: 'Save' }).click();
       await expectCasterProjectOpen(page, projectName);
@@ -27,7 +27,7 @@ for (const theme of CASTER_THEMES) {
       if (projectId) cleanupCasterProject(projectId);
 
       await page.getByTitle('Add New Directory').click();
-      await expect(page.getByRole('dialog', { name: 'Create New Directory?' })).toBeVisible();
+      await expect(page.getByRole('dialog', { name: 'Add Directory' })).toBeVisible();
       await page.getByRole('textbox', { name: 'Name' }).fill(dirName);
       await page.getByRole('button', { name: 'Save' }).click();
       await expect(page.getByRole('button', { name: dirName })).toBeVisible({ timeout: 10000 });
