@@ -955,6 +955,21 @@ step 4: the checkbox the user never clicks is the one whose value used to be sen
     - expect: Membership is created successfully
     - expect: User appears in memberships list
 
+#### 8.9. Admin - Severity Levels
+
+**File:** `tests/cite/scoring-models/severity-levels.spec.ts`
+
+**Steps:**
+  1. Open a scoring model without levels of its own in the admin Scoring Models section
+    - expect: The Severity Levels section reads "Using the default CISA levels."
+  2. Click Customize Levels
+    - expect: The six default levels are listed, highest first, as editable rows
+  3. Rename Emergency to Critical and click Save
+    - expect: The scoring model's severity levels are Critical, Severe, High, Medium, Low and Baseline
+  4. Open the dashboard of an evaluation whose scoring model has the levels Calm (from 0) and Storm (from 60)
+    - expect: The Score Summary lists "Level 1 - Storm" and "Level 0 - Calm" with the ranges "60+" and "0-59.99" and their descriptions
+    - expect: The new submission's score of 0 is in Calm, the current level
+
 ### 9. Administration - Submissions
 
 **Seed:** `tests/seed.setup.ts`
