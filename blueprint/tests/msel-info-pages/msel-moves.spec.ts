@@ -106,7 +106,7 @@ for (const theme of BLUEPRINT_THEMES) {
         await expect(rowFor(firstDescription)).toHaveCount(1);
 
         await page.getByRole('button', { name: 'Delete Move 1' }).click();
-        await confirm.getByRole('button', { name: 'Yes' }).click();
+        await confirm.getByRole('button', { name: 'Delete' }).click();
         await expect(rowFor(firstDescription)).toHaveCount(0);
         await expect(rowFor(secondDescription)).toHaveCount(1);
       } finally {

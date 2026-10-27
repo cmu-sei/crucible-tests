@@ -84,7 +84,7 @@ for (const theme of BLUEPRINT_THEMES) {
 
         // Confirming removes it.
         await page.getByRole('button', { name: `Delete ${name}` }).click();
-        await confirm.getByRole('button', { name: 'Yes' }).click();
+        await confirm.getByRole('button', { name: 'Delete' }).click();
         await expect(row).toHaveCount(0);
 
         // Secondary: the delete reached the server.

@@ -132,8 +132,8 @@ for (const theme of BLUEPRINT_THEMES) {
 
       // 7. Deleting the scale asks first; answering No keeps it.
       await row.getByTitle(`Delete ${scaleName}`).click();
-      const confirm = page.getByRole('dialog').filter({ hasText: 'Delete Scale' });
-      await expect(confirm).toContainText(`Are you sure you want to delete ${scaleName}?`);
+      const confirm = page.getByRole('dialog').filter({ hasText: 'Delete Proficiency Scale' });
+      await expect(confirm).toContainText(`Are you sure that you want to delete ${scaleName}?`);
       await confirm.getByRole('button', { name: 'No' }).click();
       await expect(confirm).toBeHidden();
       await expect(row).toBeVisible();
@@ -142,7 +142,7 @@ for (const theme of BLUEPRINT_THEMES) {
       const scaleDeleted = page.waitForResponse(
         (r) => r.url().toLowerCase().includes('/api/proficiencyscales/') && r.request().method() === 'DELETE'
       );
-      await page.getByRole('dialog').filter({ hasText: 'Delete Scale' }).getByRole('button', { name: 'Yes' }).click();
+      await page.getByRole('dialog').filter({ hasText: 'Delete Proficiency Scale' }).getByRole('button', { name: 'Delete' }).click();
       expect((await scaleDeleted).ok()).toBe(true);
       await expect(page.locator('mat-row.element-row').filter({ hasText: scaleName })).toHaveCount(0);
     });

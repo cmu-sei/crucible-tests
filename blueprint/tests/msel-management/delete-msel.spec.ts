@@ -29,7 +29,7 @@ import {
  * status is `Deployed`, or the MSEL `isTemplate`. The template case is asserted here.
  *
  * The confirm dialog is Angular Material's, reached via `getByRole('dialog')`; it renders
- * "Are you sure that you want to delete <name>?" with NO / YES buttons (see
+ * "Are you sure that you want to delete <name>?" with No / Delete buttons (see
  * `msel-list.component.ts` `delete()`).
  */
 for (const theme of BLUEPRINT_THEMES) {
@@ -118,7 +118,7 @@ for (const theme of BLUEPRINT_THEMES) {
         (r) => r.url().includes(`/api/msels/${mselId}`) && r.request().method() === 'DELETE',
         { timeout: 15000 }
       );
-      await confirmDialog.getByRole('button', { name: /^YES$/i }).click();
+      await confirmDialog.getByRole('button', { name: 'Delete' }).click();
       expect((await deleteResponse).status()).toBe(204);
 
       await expect(confirmDialog).not.toBeVisible({ timeout: 10000 });

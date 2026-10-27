@@ -72,7 +72,7 @@ for (const theme of BLUEPRINT_THEMES) {
         await expect(confirm).toContainText(
           `Are you sure that you want to delete ${editedDescription}?`
         );
-        await confirm.getByRole('button', { name: 'Yes' }).click();
+        await confirm.getByRole('button', { name: 'Delete' }).click();
         await expect(editedRow).toHaveCount(0);
       } finally {
         for (const t of await listTemplates(token, 'citeActions')) {
@@ -177,7 +177,7 @@ for (const theme of BLUEPRINT_THEMES) {
         await page
           .getByRole('dialog')
           .filter({ hasText: 'Delete CITE Action' })
-          .getByRole('button', { name: 'Yes' })
+          .getByRole('button', { name: 'Delete' })
           .click();
         await expect(rows).toHaveCount(1);
       } finally {
