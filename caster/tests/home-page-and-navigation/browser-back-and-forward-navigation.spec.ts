@@ -18,7 +18,7 @@ for (const theme of CASTER_THEMES) {
 
       // Create a project for navigation testing - click the add project button (plus icon next to "My Projects")
       await page.getByText('My Projects').locator('..').getByRole('button').click();
-      await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
+      await expect(page.getByRole('dialog', { name: 'Add Project' })).toBeVisible();
       await page.getByRole('textbox', { name: 'Name' }).fill(projectName);
       await page.getByRole('button', { name: 'Save' }).click();
       cleanupCasterProject(await expectCasterProjectOpen(page, projectName));

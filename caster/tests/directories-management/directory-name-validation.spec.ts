@@ -36,7 +36,7 @@ for (const theme of CASTER_THEMES) {
       for (const name of ['has space', '..', '__Workspaces__', 'slash/name']) {
         // 1. Try to create a directory with a name the rule rejects
         await page.getByText('Add Directory').filter({ visible: true }).first().click();
-        const create = page.getByRole('dialog', { name: 'Create New Directory?' });
+        const create = page.getByRole('dialog', { name: 'Add Directory' });
         await create.getByRole('textbox', { name: 'Name' }).fill(name);
         await create.getByRole('button', { name: 'Save' }).click();
 
@@ -57,7 +57,7 @@ for (const theme of CASTER_THEMES) {
       // 2. Create one using every character the rule allows
       const allowed = 'Infra_v1.2-final';
       await page.getByText('Add Directory').filter({ visible: true }).first().click();
-      const create = page.getByRole('dialog', { name: 'Create New Directory?' });
+      const create = page.getByRole('dialog', { name: 'Add Directory' });
       await create.getByRole('textbox', { name: 'Name' }).fill(allowed);
       await create.getByRole('button', { name: 'Save' }).click();
 

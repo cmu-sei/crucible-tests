@@ -17,7 +17,7 @@ for (const theme of CASTER_THEMES) {
 
       // Create project - click the "+" button next to "My Projects"
       await page.locator('button:has(.mdi-plus-circle)').click();
-      await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
+      await expect(page.getByRole('dialog', { name: 'Add Project' })).toBeVisible();
       await page.getByRole('textbox', { name: 'Name' }).fill(`Directory Test Project ${uniqueSuffix}`);
       await page.getByRole('button', { name: 'Save' }).click();
 
@@ -28,7 +28,7 @@ for (const theme of CASTER_THEMES) {
       await page.getByText('Add Directory').first().click();
 
       // expect: A directory creation dialog is displayed
-      const createDirectoryDialog = page.getByRole('dialog', { name: 'Create New Directory?' });
+      const createDirectoryDialog = page.getByRole('dialog', { name: 'Add Directory' });
       await expect(createDirectoryDialog).toBeVisible();
 
       // 3. Enter 'Test-Infrastructure-Directory' in the Name field

@@ -20,7 +20,7 @@ for (const theme of CASTER_THEMES) {
 
       // Create and navigate to a project to trigger SignalR
       await page.getByText('My Projects').locator('..').locator('button').click();
-      await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
+      await expect(page.getByRole('dialog', { name: 'Add Project' })).toBeVisible();
       await page.getByRole('textbox', { name: 'Name' }).fill('SignalR Test Project');
       await page.getByRole('button', { name: 'Save' }).click();
       await expectCasterProjectOpen(page, 'SignalR Test Project');

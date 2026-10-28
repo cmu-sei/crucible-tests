@@ -19,14 +19,14 @@ for (const theme of CASTER_THEMES) {
       await page.reload();
 
       await page.locator('[mattooltip="Add New Project"]').click();
-      const projectDialog = page.getByRole('dialog', { name: 'Create New Project?' });
+      const projectDialog = page.getByRole('dialog', { name: 'Add Project' });
       await expect(projectDialog).toBeVisible();
       await projectDialog.getByRole('textbox', { name: 'Name' }).fill(projectName);
       await projectDialog.getByRole('button', { name: 'Save' }).click();
       await expectCasterProjectOpen(page, projectName);
 
       await page.getByTitle('Add New Directory').click();
-      const dirDialog = page.getByRole('dialog', { name: 'Create New Directory?' });
+      const dirDialog = page.getByRole('dialog', { name: 'Add Directory' });
       await expect(dirDialog).toBeVisible();
       await dirDialog.getByRole('textbox', { name: 'Name' }).fill('WS-List-Dir');
       await dirDialog.getByRole('button', { name: 'Save' }).click();
