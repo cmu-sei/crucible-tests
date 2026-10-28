@@ -418,17 +418,18 @@ export async function setScenarioView(scenarioId: string, viewId: string): Promi
 }
 
 /**
- * Seed a scenario via the Steamfitter API. Returns the created scenario ID.
+ * Seed a standalone scenario via the Steamfitter API. Returns the created scenario ID.
  *
- * A scenario may be created standalone (name/description only) or bound to a
- * `scenarioTemplateId`. Name/description must be at least 4 characters. Optionally
- * bind a Player `viewId` so the scenario is startable (a scenario cannot start
- * without a view).
+ * Name/description must be at least 4 characters. Optionally bind a Player `viewId`
+ * so the scenario is startable (a scenario cannot start without a view). `POST
+ * scenarios` takes only the fields of a new scenario (`ScenarioCreate`) and ignores
+ * any other, a scenario template's id included: a scenario of a template is made
+ * from it with `POST scenarioTemplates/{id}/scenarios`, which copies its tasks.
  */
 export async function seedScenario(
   name: string = `E2E Scenario ${Date.now()}`,
   description: string = 'E2E seeded scenario',
-  options: { scenarioTemplateId?: string; viewId?: string; durationHours?: number } = {}
+  options: { viewId?: string } = {}
 ): Promise<string> {
   const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
   try {
@@ -441,9 +442,7 @@ export async function seedScenario(
       data: {
         name,
         description,
-        scenarioTemplateId: options.scenarioTemplateId,
         viewId: options.viewId,
-        durationHours: options.durationHours ?? 1,
       },
     });
     if (!response.ok()) {

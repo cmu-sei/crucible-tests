@@ -1595,10 +1595,13 @@ available; skip a provider's variant when no VM of that provider is present.
 **File:** `tests/steamfitter/player-vm-api-integration/vm-dispatch-error-handling.spec.ts`
 
 **Steps:**
-  1. Create and execute a VM-targeted task whose target VM id does not exist in the Player VM API (e.g., a random Moid guid)
+  1. Create and execute a VM-targeted task whose VM list names a VM id that is not in the scenario's view (e.g., a random guid)
     - expect: The task fails gracefully with an error result
-    - expect: The error indicates the VM could not be resolved / found, not a StackStorm error
+    - expect: The error says no VM matched ('No matched VMs!' with the VM mask), not a StackStorm error: a task runs only on VMs of its scenario's view
     - expect: The application remains functional after the error
-  2. (If an environment has a VM of a provider that does not support the chosen action) Execute that action against such a VM
+  2. Import a scenario template whose task's action parameters name a VM (`Moid`, `VmName`) of another view, create a scenario of it on a view, and execute the task with a VM mask matching a VM of that view
+    - expect: The imported task stores the `{moid}` and `{VmName}` markers, not the VM the file named
+    - expect: The task runs on the VM of the scenario's view that its mask matched, and its result names that VM; the VM the file named is never acted on
+  3. (If an environment has a VM of a provider that does not support the chosen action) Execute that action against such a VM
     - expect: The task fails with a clear 'provider does not support operation' style error
     - expect: The failure is recorded in the task results with the provider and operation named
