@@ -216,3 +216,25 @@ export function hexToRgb(hex: string): string {
   const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
   return `rgb(${r}, ${g}, ${b})`;
 }
+
+/**
+ * Wait for `CrucibleFaviconService` to swap the page's `<link rel="icon">` for its
+ * recolored copy (a `data:` or `blob:` URL), then assert that SVG fills with the
+ * top-bar color. Fails while the app still points at a static `.ico`, which the
+ * service leaves alone.
+ */
+export async function expectFaviconInTopBarColor(page: Page, topBarHex: string): Promise<void> {
+  const icon = page.locator('link[rel~="icon"]');
+  await expect(icon, 'favicon should be replaced by its recolored SVG').toHaveAttribute(
+    'href',
+    /^(data|blob):/,
+    { timeout: 10000 }
+  );
+  const svg = await page.evaluate(async () => {
+    const href = (document.querySelector('link[rel~="icon"]') as HTMLLinkElement).href;
+    return (await fetch(href)).text();
+  });
+  expect(svg.toUpperCase(), 'favicon SVG should fill with the top-bar color').toContain(
+    `FILL:${topBarHex.toUpperCase()}`
+  );
+}
