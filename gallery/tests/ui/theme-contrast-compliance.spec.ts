@@ -288,7 +288,7 @@ for (const theme of GALLERY_THEMES) {
       await setGalleryTheme(page, theme);
       await gotoGalleryAdmin(page);
       await page.getByRole('button', { name: 'Add Collection' }).click();
-      const dialog = page.getByRole('dialog', { name: 'New Collection' });
+      const dialog = page.getByRole('dialog', { name: 'Add Collection' });
       await expect(dialog).toBeVisible();
 
       // Save stays disabled (and greyed) until the form is dirty and valid; fill

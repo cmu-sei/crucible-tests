@@ -78,7 +78,7 @@ async function createActiveEvalWithMoveAndTeam(
   // 1. Create a team type
   await navigateToAdminSection(page, 'Team Types');
 
-  const addTeamTypeButton = page.getByRole('button', { name: 'Add TeamType' });
+  const addTeamTypeButton = page.getByRole('button', { name: 'Add Team Type' });
   await expect(addTeamTypeButton).toBeVisible({ timeout: 10000 });
   await addTeamTypeButton.click();
 
@@ -674,8 +674,8 @@ for (const theme of CITE_THEMES) {
       // The current move info is shown in the toolbar (advanced to move 1 of moves 0-1)
       await expect(citeMoveLabel(page)).toHaveText('Move 1 of 1', { timeout: 5000 });
 
-      // The SubmissionReview (report) button is available for viewing score summaries
-      const reportButton = page.locator('button[title="SubmissionReview"]');
+      // The Submission Review (report) button is available for viewing score summaries
+      const reportButton = page.locator('button[title="Submission Review"]');
       await expect(reportButton).toBeVisible({ timeout: 5000 });
 
       // Cleanup

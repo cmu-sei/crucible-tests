@@ -155,13 +155,13 @@ for (const theme of GALLERY_THEMES) {
       await expect(panel.getByRole('button', { name: `Delete ${seededCardName}` })).toHaveCount(1);
 
       // 2. Create a new card with name and description
-      await panel.getByRole('button', { name: 'Add a Card' }).click();
-      await expect(page.getByRole('dialog', { name: 'Add a Card' })).toBeVisible();
+      await panel.getByRole('button', { name: 'Add Card' }).click();
+      await expect(page.getByRole('dialog', { name: 'Add Card' })).toBeVisible();
 
       // The dialog is titled by mode (admin-card-edit-dialog.component.html binds
-      // [dialogTitle] to `data.card?.id ? 'Edit Card' : 'Add a Card'`), so the add dialog
-      // is titled "Add a Card" rather than "Edit Card".
-      const cardDialog = page.getByRole('dialog', { name: 'Add a Card' });
+      // [dialogTitle] to `data.card?.id ? 'Edit Card' : 'Add Card'`), so the add dialog
+      // is titled "Add Card" rather than "Edit Card".
+      const cardDialog = page.getByRole('dialog', { name: 'Add Card' });
       await expect(cardDialog).toBeVisible();
 
       await cardDialog.getByRole('textbox', { name: 'Name' }).fill(newCardName);

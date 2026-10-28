@@ -47,7 +47,7 @@ for (const theme of CITE_THEMES) {
       await membershipsPanel.locator('mat-expansion-panel-header').click();
       await page.waitForTimeout(1000);
 
-      // 4. Verify the two-panel membership layout is visible (Users/Groups and ScoringModel Members)
+      // 4. Verify the two-panel membership layout is visible (Users/Groups and Scoring Model Members)
       const membershipContent = membershipsPanel.locator('.mat-expansion-panel-body, mat-expansion-panel-body').first();
       await expect(membershipContent).toBeVisible({ timeout: 5000 });
 
@@ -55,7 +55,7 @@ for (const theme of CITE_THEMES) {
       const usersGroupsToolbar = membershipsPanel.locator('text=Users/Groups').first();
       await expect(usersGroupsToolbar).toBeVisible({ timeout: 10000 });
 
-      const membersToolbar = membershipsPanel.locator('text=ScoringModel Members').first();
+      const membersToolbar = membershipsPanel.locator('text=Scoring Model Members').first();
       await expect(membersToolbar).toBeVisible({ timeout: 10000 });
     });
 
