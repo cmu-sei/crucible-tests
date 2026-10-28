@@ -267,6 +267,57 @@ export async function seedTask(
   }
 }
 
+/**
+ * List the scenario templates whose name starts with `prefix`, via the Steamfitter
+ * API. Used to find a template the UI created (e.g. by import, which renames a
+ * copy "<name> - <user>"), whose id the test never saw.
+ */
+export async function apiGetScenarioTemplatesByNamePrefix(
+  prefix: string
+): Promise<Array<{ id: string; name: string; description: string; durationHours: number }>> {
+  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
+  try {
+    const token = await getSteamfitterApiToken(apiContext);
+    const response = await apiContext.get(`${Services.Steamfitter.API}/api/scenarioTemplates`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    });
+    if (!response.ok()) {
+      throw new Error(`Failed to list scenario templates: ${response.status()}`);
+    }
+    const templates: Array<{ id: string; name: string; description: string; durationHours: number }> =
+      await response.json();
+    return templates.filter((t) => t.name.startsWith(prefix));
+  } finally {
+    await apiContext.dispose();
+  }
+}
+
+/**
+ * List the tasks of a scenario template via the Steamfitter API, so a spec can
+ * assert on the task tree (triggerTaskId / triggerCondition) the UI only shows
+ * indirectly.
+ */
+export async function apiGetScenarioTemplateTasks(
+  scenarioTemplateId: string
+): Promise<
+  Array<{ id: string; name: string; triggerTaskId: string | null; triggerCondition: string; score: number }>
+> {
+  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
+  try {
+    const token = await getSteamfitterApiToken(apiContext);
+    const response = await apiContext.get(
+      `${Services.Steamfitter.API}/api/scenarioTemplates/${scenarioTemplateId}/tasks`,
+      { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } }
+    );
+    if (!response.ok()) {
+      throw new Error(`Failed to list tasks: ${response.status()} ${await response.text()}`);
+    }
+    return await response.json();
+  } finally {
+    await apiContext.dispose();
+  }
+}
+
 // ========================================================================
 // Player API integration (views) — optional dependency
 // ========================================================================

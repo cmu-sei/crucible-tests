@@ -256,6 +256,25 @@ Exceptions, which run once:
     - expect: The scenario template remains in the list unchanged
     - expect: No deletion occurs
 
+#### 3.7. Export and Import Scenario Template
+
+**File:** `tests/steamfitter/scenario-templates-management/export-import-scenario-template.spec.ts`
+
+**Steps:**
+  1. Seed a scenario template with a parent task and a child task triggered by the parent
+    - expect: The template appears in the Scenario Templates list
+  2. Tick the template's checkbox
+    - expect: The export button reads 'Export 1 Selected Scenario Template'
+  3. Click it, then 'Export' in the 'Export Scenario Templates' dialog
+    - expect: The dialog says 'Selected Scenario Templates: 1' and that VM Credential passwords are included
+    - expect: A .json file named after the template is downloaded
+  4. Click 'Import Scenario Templates', choose the file, click 'Import'
+    - expect: The result lists one imported template, renamed '<name> - <user>' because the source still exists, and a note saying so
+    - expect: No failures
+    - expect: The imported template has new ids and the same task tree (child triggered by parent on Success)
+  5. Import a file that is not a scenario template export
+    - expect: The file is listed under failures and no template is created
+
 ### 4. Scenario Template Tasks
 
 **Seed:** `tests/seed.spec.ts`
