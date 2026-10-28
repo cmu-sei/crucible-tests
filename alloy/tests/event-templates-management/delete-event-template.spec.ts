@@ -24,10 +24,10 @@ for (const theme of ALLOY_THEMES) {
       await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
       await expect(page.getByRole('table')).toBeVisible();
 
-      // 2. Create a new template via the "Create New Event Template" dialog (PR #711).
+      // 2. Create a new template via the "Add Event Template" dialog (PR #711).
       //    The name is given a unique prefix so afterEach can clean up if delete fails.
       const uniqueName = `${DELETE_PREFIX} ${Date.now()}`;
-      const createDialog = page.getByRole('dialog', { name: 'Create New Event Template' });
+      const createDialog = page.getByRole('dialog', { name: 'Add Event Template' });
       await page.getByRole('button', { name: 'Add Event Template' }).click();
       await waitForDialogOpen(createDialog);
 

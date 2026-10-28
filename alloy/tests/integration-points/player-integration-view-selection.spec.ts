@@ -17,9 +17,9 @@ for (const theme of ALLOY_THEMES) {
       await page.goto(`${Services.Alloy.UI}/admin`);
       await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
 
-      // "Add Event Template" opens the "Create New Event Template" form directly
+      // The "Add Event Template" button opens the dialog of the same name directly
       // (Alloy.ui PR #711), which has the same fields as the edit dialog.
-      const dialog = page.getByRole('dialog', { name: 'Create New Event Template' });
+      const dialog = page.getByRole('dialog', { name: 'Add Event Template' });
       await page.getByRole('button', { name: 'Add Event Template' }).click();
 
       // expect: Form is displayed

@@ -1387,7 +1387,7 @@ rather than by row count.
 
 **File:** `tests/steamfitter/ui-responsiveness-and-accessibility/theme-contrast-compliance.spec.ts`
 
-Checks real WCAG contrast on the home page and the Admin → Groups "Create New Group?"
+Checks real WCAG contrast on the home page and the Admin → Groups "Add Group"
 dialog, and the color settings contract from the Crucible colors design spec
 (`design-specs/angular/colors.md` in the crucible-development repository). Expected
 colours are read from the served `settings.json` / `settings.shared.json` /
