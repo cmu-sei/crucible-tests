@@ -45,6 +45,12 @@ for (const theme of CITE_THEMES) {
       // 4. Verify the seeded team appears
       const teamItem = page.getByRole('button').filter({ hasText: `Team for ${evalName}` }).first();
       await expect(teamItem).toBeVisible({ timeout: 10000 });
+
+      // 5. Expand the team: the seed adds Admin User without naming a role, and every team
+      //    membership gets the Member role by default rather than none
+      await teamItem.click();
+      const memberRow = page.locator('app-admin-team-member-list').getByRole('row').filter({ hasText: 'Admin User' });
+      await expect(memberRow.getByRole('combobox')).toHaveText('Member', { timeout: 10000 });
     });
 
     test.afterEach(async () => {

@@ -63,6 +63,26 @@ for (const theme of CITE_THEMES) {
       const actionsRegion = page.getByRole('region', { name: 'Actions' });
       const actionItem = actionsRegion.getByRole('cell', { name: 'Test Action Description', exact: true }).first();
       await expect(actionItem).toBeVisible({ timeout: 10000 });
+
+      // 6. Edit the action: the API cannot move an existing action to another team, so
+      //    Team is locked, and the save sends only the editable fields
+      const actionRow = actionsRegion.getByRole('row').filter({ hasText: 'Test Action Description' });
+      await actionRow.locator('button[title="Edit Action"]').click();
+      const editDialog = page.getByRole('dialog');
+      await expect(editDialog).toBeVisible({ timeout: 5000 });
+      await expect(editDialog.getByRole('combobox', { name: 'Team' })).toHaveAttribute('aria-disabled', 'true');
+
+      const editDescription = editDialog.getByRole('textbox', { name: 'Action Description' });
+      await editDescription.fill('Edited Action Description');
+      const updateResponse = page.waitForResponse(
+        (r) => r.url().includes('/api/actions/') && r.request().method() === 'PUT',
+      );
+      await editDialog.getByRole('button', { name: 'Save' }).click();
+      expect((await updateResponse).status()).toBe(200);
+      await expect(editDialog).not.toBeVisible({ timeout: 10000 });
+
+      // 7. Verify the edited action keeps its place in the actions table
+      await expect(actionsRegion.getByRole('cell', { name: 'Edited Action Description', exact: true }).first()).toBeVisible({ timeout: 10000 });
     });
 
     test.afterEach(async () => {
