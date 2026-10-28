@@ -36,7 +36,7 @@ test.describe('Home Page and Navigation', () => {
     }
 
     // expect: Logout button is visible
-    const logoutButton = page.locator('button:has-text("Logout"), button:has-text("Sign Out"), button:has(mat-icon:text("logout"))').first();
+    const logoutButton = page.getByRole('link', { name: 'Logout' });
     await expect(logoutButton).toBeVisible({ timeout: 10000 });
   });
 });

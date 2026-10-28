@@ -14,7 +14,7 @@ test.describe('Authentication and Authorization', () => {
 
     // 2. Navigate to /admin route
     // Click the Admin button instead of using goto() since TopoMojo is a SPA
-    const adminButton = page.getByRole('button', { name: 'Admin' });
+    const adminButton = page.getByRole('link', { name: 'Admin' });
     await expect(adminButton).toBeVisible({ timeout: 10000 });
     await adminButton.click();
 
