@@ -6,7 +6,8 @@
 
 import { test, expect, Services } from '../../fixtures';
 
-const DARK_BG_RGB = 'rgb(33, 37, 41)';
+// $dark-bg (#212529), or #101215 under a configured background image (html.has-bg-image).
+const DARK_BG_RGB = /^rgb\((33, 37, 41|16, 18, 21)\)$/;
 const LIGHT_BG_RGB = 'rgb(255, 255, 255)';
 
 test.describe('Home Page and Navigation', () => {
@@ -19,6 +20,10 @@ test.describe('Home Page and Navigation', () => {
     const html = page.locator('html');
     await expect(html).toHaveClass(/\bdark-theme\b/, { timeout: 15000 });
     await expect(page.locator('body')).toHaveCSS('background-color', DARK_BG_RGB);
+
+    // theme-init.js applies the class before Angular starts; the app saves the choice once it does
+    await expect(page.locator('nav.navbar')).toBeVisible({ timeout: 15000 });
+    await expect.poll(() => page.evaluate(() => localStorage.getItem('topomojo.theme'))).toBe('dark-theme');
 
     // 2. Reload without the query param
     await page.goto(Services.TopoMojo.UI, { waitUntil: 'domcontentloaded' });
