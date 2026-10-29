@@ -967,7 +967,7 @@ step 4: the checkbox the user never clicks is the one whose value used to be sen
   3. Rename Emergency to Critical and click Save
     - expect: The scoring model's severity levels are Critical, Severe, High, Medium, Low and Baseline
   4. Open the dashboard of an evaluation whose scoring model has the levels Calm (from 0) and Storm (from 60)
-    - expect: The Score Summary lists "Level 1 - Storm" and "Level 0 - Calm" with the ranges "60+" and "0-59.99" and their descriptions
+    - expect: The Score Summary lists "Level 1 - Storm" and "Level 0 - Calm" with the ranges "60+" and "<60" and their descriptions
     - expect: The new submission's score of 0 is in Calm, the current level
 
 ### 9. Administration - Submissions

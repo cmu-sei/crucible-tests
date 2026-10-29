@@ -117,7 +117,7 @@ for (const theme of CITE_THEMES) {
       // expect: the Score Summary lists the scoring model's levels, highest first, with their ranges
       await expect(summary.getByRole('heading', { level: 2 })).toHaveText(['Level 1 - Storm', 'Level 0 - Calm'], { timeout: 15000 });
       await expect(summary.getByText('60+', { exact: true })).toBeVisible();
-      await expect(summary.getByText('0-59.99', { exact: true })).toBeVisible();
+      await expect(summary.getByText('<60', { exact: true })).toBeVisible();
       await expect(summary.getByText('Act now')).toBeVisible();
 
       // expect: a new submission's score of 0 is in Calm, the current level
