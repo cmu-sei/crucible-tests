@@ -31,14 +31,25 @@ const DASHBOARD_PENDING = ['join-card', 'build-card', 'assess-card'].map(
   (card) => `.${card} > .card-footer > .mat-primary[color="primary"] > .mdc-button__label`
 );
 
+const LEARN_MORE_HOVERED_PENDING = '.value-card[role="button"]:nth-child(1) > .learn-more > span';
+
 const readIsDark = (page: Page) => page.evaluate(() => document.body.classList.contains('darkMode'));
 
 /**
  * Assert axe finds no contrast violations on the page, other than the `pending` ones: the
  * targets of known violations, each of which must still be reported, so the list fails once
  * the app is fixed and the entry can go.
+ *
+ * The pointer is moved to the page's corner first unless `keepPointer` is set, so whatever the
+ * last click left it over is not measured in its hover state. Firefox keeps applying `:hover`
+ * where the pointer was left across a navigation, and Chromium does not.
  */
-async function expectNoContrastViolations(page: Page, screen: string, pending: string[] = []) {
+async function expectNoContrastViolations(
+  page: Page,
+  screen: string,
+  { pending = [], keepPointer = false }: { pending?: string[]; keepPointer?: boolean } = {}
+) {
+  if (!keepPointer) await page.mouse.move(0, 0);
   const results = await new AxeBuilder({ page }).withRules(['color-contrast']).analyze();
   const nodes = results.violations.flatMap((v) => v.nodes);
   const detail = nodes
@@ -77,7 +88,19 @@ test.describe('Accessibility and Usability', () => {
       // for normal text in both themes: #0078af on #eeeeee (4.2:1) in light, #00a3ee on
       // #3d3d3d (3.86:1) in dark. Pinned here so the rest of the sweep runs; when the buttons
       // or the card background change to pass, this fails and the list should be emptied.
-      await expectNoContrastViolations(page, `${theme} dashboard`, DASHBOARD_PENDING);
+      await expectNoContrastViolations(page, `${theme} dashboard`, { pending: DASHBOARD_PENDING });
+
+      // The capability cards' "Click to learn more" is transparent until its card is hovered,
+      // so it is only measured with the pointer on a card, after the fade-in.
+      // Pending upstream: on hover it is primary text on --mat-sys-surface-container-high, short
+      // of AA's 4.5:1 for its 12px text. Pinned like the buttons above.
+      const capabilityCard = page.locator('.value-card').first();
+      await capabilityCard.hover();
+      await expect(capabilityCard.locator('.learn-more')).toHaveCSS('opacity', '1');
+      await expectNoContrastViolations(page, `${theme} dashboard, capability card hovered`, {
+        pending: [...DASHBOARD_PENDING, LEARN_MORE_HOVERED_PENDING],
+        keepPointer: true,
+      });
 
       // 2. The /build MSEL list.
       await page.goto(`${Services.Blueprint.UI}/build`);
