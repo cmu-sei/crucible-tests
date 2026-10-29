@@ -1319,6 +1319,34 @@ export async function findMselRowByName(page: Page, name: string) {
 }
 
 /**
+ * One of the Event Dashboard's mission cards, by the heading it carries: `JOIN`, `LAUNCH`,
+ * `BUILD`, `ASSESS`, or one of the empty states, `NO ACCESS` and `NOT LOADED`.
+ *
+ * Each card is a `<div class="mission-card" role="button" tabindex="…">` (dashboard.component.html),
+ * so the returned locator is the element that takes focus and the click. Its accessible name is
+ * all of its text run together ("BUILD Design & Planning 5 Events Draft …"), which changes with
+ * the counts, so the card is matched by its exact `<h2>` heading instead. The capability cards
+ * above the grid are `.value-card`s with `<h3>` headings and are never matched.
+ */
+export function dashboardCard(page: Page, heading: string): Locator {
+  return page
+    .locator('.mission-card')
+    .filter({ has: page.getByRole('heading', { level: 2, name: heading, exact: true }) });
+}
+
+/**
+ * A MSEL's card on the /join page, by its unique name.
+ *
+ * The cards are `.event-card`s in `.event-grid` (join.component.html), each with the name in an
+ * `<h2 class="card-title">` and a `Join` link to `/join?msel=<id>`, which joins on navigation.
+ */
+export function joinPageCard(page: Page, mselName: string): Locator {
+  return page.locator('.event-grid .event-card').filter({
+    has: page.getByRole('heading', { level: 2, name: mselName, exact: true }),
+  });
+}
+
+/**
  * Open a /build row's Download menu, pick a format, and return the resulting download.
  *
  * Every spec that exports a MSEL through the UI needs this, and the naive version

@@ -5,9 +5,23 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, serviceUrlPattern, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
+import { getBlueprintToken, createMsel, deleteMsel } from '../../test-helpers';
 
 for (const theme of BLUEPRINT_THEMES) {
     test.describe(`${theme} theme › Search and Filtering`, () => {
+    let token: string;
+    let mselId: string | undefined;
+
+    // The list is counted below, so it must hold at least one MSEL whatever the database has.
+    test.beforeEach(async () => {
+      token = await getBlueprintToken();
+      mselId = (await createMsel(token)).id;
+    });
+
+    test.afterEach(async () => {
+      if (mselId) await deleteMsel(token, mselId);
+    });
+
     test('MSEL Filtering by Date Range', async ({ blueprintAuthenticatedPage: page }) => {
     await applyBlueprintTheme(page, theme);
       await page.goto(`${Services.Blueprint.UI}/build`);
@@ -32,6 +46,9 @@ for (const theme of BLUEPRINT_THEMES) {
         'mat-row, ' +
         '[class*="list-item"]'
       );
+      // `count()` does not wait, and the shell's `main` is visible before the MSELs arrive, so
+      // wait for the first of the table's rows before counting.
+      await expect(page.locator('mat-row').first()).toBeVisible({ timeout: 15000 });
       const initialCount = await mselItems.count();
       expect(initialCount).toBeGreaterThan(0);
       

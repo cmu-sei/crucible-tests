@@ -96,17 +96,18 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
     - expect: The user's name is displayed in the topbar
     - expect: The main content area displays a card-based layout
   2. Check for available dashboard cards
-    - expect: If user has join MSELs, a 'Join an Event' card is visible with subtitle 'Access In-Progress Events'
-    - expect: If user has launch MSELs, a 'Start an Event' card is visible with subtitle 'Launch New events'
-    - expect: If user has build MSELs or create permission, a 'Manage an Event' card is visible with subtitle 'Design and Plan Events'
-    - expect: If no MSELs are available and no create permission, a 'Nothing to see here!' card is displayed
+    - expect: A JOIN card is always visible with subtitle 'Active Exercises' and the number of joinable events; it is disabled when there are none
+    - expect: If user has launch MSELs, a LAUNCH card is visible with subtitle 'Initiate New Missions'
+    - expect: If user has build MSELs or create permission, a BUILD card is visible with subtitle 'Design & Planning'
+    - expect: If user can assess a MSEL, an ASSESS card is visible with subtitle 'Evaluation & Scoring'
+    - expect: If no MSELs are available, no create permission and nothing to assess, a NO ACCESS card is displayed
 
 #### 2.2. Navigate to Join Events
 
 **File:** `blueprint/tests/event-dashboard-and-navigation/navigate-to-join-events.spec.ts`
 
 **Steps:**
-  1. From Event Dashboard, click on 'Join an Event' card
+  1. From Event Dashboard, click on the JOIN card
     - expect: Navigation to /join occurs
     - expect: Page displays list of available MSELs to join
     - expect: Topbar still displays with navigation back to dashboard
@@ -116,7 +117,7 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
 **File:** `blueprint/tests/event-dashboard-and-navigation/navigate-to-launch-events.spec.ts`
 
 **Steps:**
-  1. From Event Dashboard, click on 'Start an Event' card
+  1. From Event Dashboard, click on the LAUNCH card
     - expect: Navigation to /launch occurs
     - expect: Page displays list of available MSELs to launch
     - expect: Topbar still displays with navigation back to dashboard
@@ -126,7 +127,7 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
 **File:** `blueprint/tests/event-dashboard-and-navigation/navigate-to-build-events.spec.ts`
 
 **Steps:**
-  1. From Event Dashboard, click on 'Manage an Event' card
+  1. From Event Dashboard, click on the BUILD card
     - expect: Navigation to /build occurs
     - expect: Page displays MSEL list
     - expect: Admin button is visible if user has admin permissions
@@ -618,7 +619,7 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
 **File:** `blueprint/tests/launch-and-join-workflows/launch-new-event.spec.ts`
 
 **Steps:**
-  1. Navigate to Event Dashboard and click 'Start an Event', then click 'Start' on a MSEL card
+  1. Navigate to Event Dashboard and click the LAUNCH card, then click 'Start' on a MSEL card
     - expect: Launch process begins
     - expect: Progress spinner is displayed on the card
     - expect: Launch status message is shown
@@ -644,7 +645,7 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
 **File:** `blueprint/tests/launch-and-join-workflows/join-active-event.spec.ts`
 
 **Steps:**
-  1. Navigate to Event Dashboard and click 'Join an Event', then click 'Join' on a MSEL card
+  1. Navigate to Event Dashboard and click the JOIN card, then click 'Join' on a MSEL card
     - expect: Join page displays with available MSELs to join
     - expect: Only MSELs with status 'Deployed' are shown
     - expect: User is redirected to the event participant view
@@ -1131,7 +1132,7 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
     - expect: Focus retraces the forward order exactly
   3. Focus the Name column sort header and press Enter three times
     - expect: Each press changes the column's aria-sort, and both ascending and descending are reached
-  4. Navigate to the Event Dashboard and Tab to the 'Manage an Event' card
+  4. Navigate to the Event Dashboard and Tab to the BUILD card
     - expect: The card is reachable by keyboard
   5. Press Enter, then Space, on the focused card
     - expect: The card activates and navigates to /build (currently fails upstream: the cards only handle mouse clicks, so the spec asserts that no click fires)

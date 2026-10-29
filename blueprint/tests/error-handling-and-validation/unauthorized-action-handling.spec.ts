@@ -17,6 +17,7 @@ import {
   deleteKeycloakUser,
   tempUsername,
 } from '../../../keycloak-admin';
+import { dashboardCard } from '../../test-helpers';
 
 test.describe('Error Handling and Validation', () => {
   test.describe('Unauthorized Action Handling', () => {
@@ -62,11 +63,21 @@ test.describe('Error Handling and Validation', () => {
       await expect(page.locator('app-root mat-toolbar').first()).toBeVisible({ timeout: 30000 });
       await permissionsLoaded;
 
-      // expect: the dashboard offers nothing to do — no Join/Start/Manage card.
-      await expect(page.getByText('Nothing to see here!')).toBeVisible({ timeout: 15000 });
-      await expect(page.getByText('Manage an Event')).toHaveCount(0);
-      await expect(page.getByText('Start an Event')).toHaveCount(0);
-      await expect(page.getByText('Join an Event')).toHaveCount(0);
+      // expect: the dashboard offers nothing to do. It shows its NO ACCESS card, and no
+      // LAUNCH, BUILD or ASSESS card.
+      await expect(dashboardCard(page, 'NO ACCESS')).toBeVisible({ timeout: 15000 });
+      await expect(dashboardCard(page, 'NO ACCESS')).toContainText('Authorization Required');
+      await expect(dashboardCard(page, 'LAUNCH')).toHaveCount(0);
+      await expect(dashboardCard(page, 'BUILD')).toHaveCount(0);
+      await expect(dashboardCard(page, 'ASSESS')).toHaveCount(0);
+
+      // expect: the JOIN card is always shown, but with nothing to join it is greyed out and its
+      // button is disabled.
+      const joinCard = dashboardCard(page, 'JOIN');
+      await expect(joinCard).toBeVisible();
+      await expect(joinCard).toHaveClass(/disabled-card/);
+      await expect(joinCard).toContainText('No active events available to join');
+      await expect(joinCard.getByRole('button', { name: 'Join Event' })).toBeDisabled();
 
       // expect: the user menu has Logout but no Administration entry.
       await page.locator('app-root mat-toolbar button strong').first().click();

@@ -5,6 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, serviceUrlPattern, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
+import { dashboardCard } from '../../test-helpers';
 
 for (const theme of BLUEPRINT_THEMES) {
     test.describe(`${theme} theme › Event Dashboard and Navigation`, () => {
@@ -36,23 +37,25 @@ for (const theme of BLUEPRINT_THEMES) {
       await expect(topbarEl).toContainText(/admin/i, { timeout: 10000 });
 
       // 2. Check for available dashboard cards
-      // expect: If user has join MSELs, a 'Join an Event' card is visible with subtitle 'Access In-Progress Events'
-      // expect: If user has launch MSELs, a 'Start an Event' card is visible with subtitle 'Launch New events'
-      // expect: If user has build MSELs or create permission, a 'Manage an Event' card is visible with subtitle 'Design and Plan Events'
-      // expect: If no MSELs are available and no create permission, a 'Nothing to see here!' card is displayed
-      // Which card appears depends on the account's MSELs and permissions, so assert on
-      // the union of the four possibilities. `locator.isVisible()` cannot express this:
-      // its `timeout` option is ignored, so probing each card in turn only sampled the
-      // DOM at that instant and failed whenever the dashboard was still showing the
-      // "Initializing Data" card. `or()` + `toBeVisible` polls until one card renders.
-      const anyDashboardCard = page
-        .locator('text=Join an Event')
-        .or(page.locator('text=Start an Event'))
-        .or(page.locator('text=Manage an Event'))
-        .or(page.locator('text=Nothing to see here!'))
-        .first();
+      // expect: A JOIN card is always shown, subtitled 'Active Exercises', with the count of
+      //   joinable events — disabled when there are none
+      // expect: A BUILD card, subtitled 'Design & Planning', is shown to a user with build
+      //   MSELs or the CreateMsels permission, which the admin account has
+      // The cards render only once the dashboard's data has loaded (it shows an
+      // "Initializing Data" card until then), so these assertions are also the wait for that.
+      const joinCard = dashboardCard(page, 'JOIN');
+      await expect(joinCard).toBeVisible({ timeout: 15000 });
+      await expect(joinCard).toContainText('Active Exercises');
+      await expect(joinCard).toContainText('Events Ready');
 
-      await expect(anyDashboardCard).toBeVisible({ timeout: 15000 });
+      const buildCard = dashboardCard(page, 'BUILD');
+      await expect(buildCard).toBeVisible();
+      await expect(buildCard).toContainText('Design & Planning');
+      await expect(buildCard.getByRole('button', { name: 'Manage Events' })).toBeVisible();
+
+      // expect: The empty states are not shown to a user with something to do
+      await expect(dashboardCard(page, 'NO ACCESS')).toHaveCount(0);
+      await expect(dashboardCard(page, 'NOT LOADED')).toHaveCount(0);
     });
     });
 }

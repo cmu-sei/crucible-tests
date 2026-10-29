@@ -36,6 +36,7 @@ import {
   navigateToMselSection,
   signInToBlueprintAs,
   tempBlueprintName,
+  joinPageCard,
 } from '../../test-helpers';
 import { setMselIntegrationState } from '../../db-helpers';
 
@@ -140,7 +141,7 @@ test.describe('Invitation Links', () => {
 
     // expect: the user is now on a team in the MSEL, so it is offered on their Join page
     await invitee.goto(`${Services.Blueprint.UI}/join`, { waitUntil: 'domcontentloaded' });
-    const card = invitee.locator('.card-container mat-card').filter({ hasText: mselName });
+    const card = joinPageCard(invitee, mselName);
     await expect(card).toBeVisible({ timeout: 30000 });
     await expect(card.getByTitle(`Join ${mselName}`)).toBeEnabled();
 
