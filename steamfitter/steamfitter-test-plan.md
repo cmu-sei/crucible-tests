@@ -237,7 +237,7 @@ Exceptions, which run once:
   2. Click the 'Delete' button for the test scenario template
     - expect: A confirmation dialog appears asking to confirm the deletion
     - expect: The dialog warns about the consequences of deletion
-  3. Click 'Confirm' or 'Delete' in the confirmation dialog
+  3. Click 'Delete' in the 'Delete Scenario Template' confirmation dialog, which asks 'Are you sure that you want to delete <name>?' and offers Delete and Cancel
     - expect: The dialog closes
     - expect: The scenario template is removed from the list
     - expect: The deletion is permanent
@@ -529,10 +529,10 @@ Exceptions, which run once:
 **Steps:**
   1. Navigate to a scenario that is associated with a Player view
     - expect: The scenario detail view is displayed
-    - expect: The 'Start Scenario' button is enabled
-  2. Click the 'Start Scenario' button
+    - expect: The row menu offers 'Start'
+  2. Click 'Start' in the row menu, then 'Start' in the 'Start Scenario' confirmation dialog ('Are you sure that you want to start <name>?')
     - expect: The scenario status changes to 'Active'
-    - expect: The 'Start Scenario' button changes to 'End Scenario Now'
+    - expect: The row menu offers 'End' in place of 'Start'
     - expect: An 'Execute' option appears in the task menu for manual tasks
     - expect: Time-based tasks begin executing according to their delay settings
 
@@ -543,9 +543,9 @@ Exceptions, which run once:
 **Steps:**
   1. Navigate to an active scenario
     - expect: The scenario status is 'Active'
-    - expect: The 'End Scenario Now' button is visible
-  2. Click the 'End Scenario Now' button
-    - expect: A confirmation dialog appears (if implemented)
+    - expect: The row menu offers 'End'
+  2. Click 'End' in the row menu
+    - expect: An 'End Scenario' confirmation dialog appears, asking 'Are you sure that you want to end <name>?' with End and Cancel
     - expect: After confirmation, the scenario status changes to 'Ended' or 'Completed'
     - expect: Tasks stop executing
     - expect: The scenario can no longer execute new tasks
@@ -1083,7 +1083,7 @@ rather than by row count.
     - expect: A list of VMs from the associated Player view is displayed
     - expect: Each VM shows its name and credential information (if configured)
 
-#### 11.2. Add VM Credentials
+#### 11.2. Add VM Credential
 
 **File:** `tests/steamfitter/vm-credentials-management/add-vm-credentials.spec.ts`
 
@@ -1387,7 +1387,7 @@ rather than by row count.
 
 **File:** `tests/steamfitter/ui-responsiveness-and-accessibility/theme-contrast-compliance.spec.ts`
 
-Checks real WCAG contrast on the home page and the Admin → Groups "Create New Group?"
+Checks real WCAG contrast on the home page and the Admin → Groups "Add Group"
 dialog, and the color settings contract from the Crucible colors design spec
 (`design-specs/angular/colors.md` in the crucible-development repository). Expected
 colours are read from the served `settings.json` / `settings.shared.json` /

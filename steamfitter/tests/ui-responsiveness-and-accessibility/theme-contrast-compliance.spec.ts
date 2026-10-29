@@ -27,7 +27,7 @@ import { expectFaviconInTopBarColor } from '../../../theme-helpers';
  * Read-only: it navigates and reads computed styles, seeds nothing, and depends on
  * no table rows (it measures the always-present "My Scenarios" section title,
  * column headers, the Administration icon button, and an unsaved Admin → Groups
- * "Create New Group?" dialog), so it needs no cleanup. The theme is persisted in
+ * "Add Group" dialog), so it needs no cleanup. The theme is persisted in
  * localStorage, so it is restored in afterEach to leave the context as it found it.
  */
 
@@ -314,7 +314,7 @@ for (const theme of STEAMFITTER_THEMES) {
       await expect(page.locator('table')).toBeVisible({ timeout: 10000 });
 
       await page.getByRole('button', { name: 'Add New Group', exact: true }).click();
-      const dialog = page.getByRole('dialog', { name: 'Create New Group?' });
+      const dialog = page.getByRole('dialog', { name: 'Add Group' });
       await expect(dialog).toBeVisible({ timeout: 5000 });
 
       // Save stays disabled (and greyed) until the form is valid and dirty; fill the
