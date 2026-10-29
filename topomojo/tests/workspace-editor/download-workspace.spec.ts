@@ -79,6 +79,9 @@ test.describe('Workspace Editor - Download Workspace', () => {
   });
 
   test('Manager downloads their workspace from the Settings tab', async ({ page }) => {
+    // An open, unpinned sidebar overlays the Settings form and swallows the click on Download.
+    // Pinned, it pushes the content aside instead.
+    await page.addInitScript(() => localStorage.setItem('topomojo.sidebar.pinned', 'true'));
     await authenticateTopoMojoWithKeycloak(page, manager!.user.username, PASSWORD);
     await page.goto(`${Services.TopoMojo.UI.replace(/\/$/, '')}/topo/${workspace!.id}/settings`);
     await expect(page.locator('#name-input')).toHaveValue(workspace!.name);
