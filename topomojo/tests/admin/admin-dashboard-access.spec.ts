@@ -43,7 +43,7 @@ test.describe('Admin Panel', () => {
     const machinesLink = page.getByRole('link', { name: 'Machines' });
     const usersLink = page.getByRole('link', { name: 'Users' });
     const settingsLink = page.getByRole('link', { name: 'Settings' });
-    const logLink = page.getByRole('link', { name: 'Log' });
+    const logLink = page.getByRole('link', { name: 'Log', exact: true });
 
     // Verify all admin navigation links are visible
     await expect(dashboardLink).toBeVisible();
