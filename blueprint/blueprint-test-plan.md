@@ -1771,3 +1771,25 @@ app's layered settings files as served (`settings.json`, deep-merged with
     - expect: The user moves into Group Members, then back into Users
   4. Delete the group and confirm with 'Delete'
     - expect: The confirmation reads 'Delete Group <name>?' and the group is removed
+
+### 25. AI Drafting
+
+**Seed:** each test creates its own template MSEL through the API and deletes it, and the drafted MSEL, afterward.
+
+The draft and profile endpoints are stubbed with a fixed draft, because a live model call is slow, costly, and different every time. Create MSEL goes to the real Blueprint API, which needs `Ai:Enabled`.
+
+#### 25.1. Draft a MSEL from Design Choices
+
+**File:** `blueprint/tests/ai-drafting/draft-msel-with-ai.spec.ts`
+
+**Steps:**
+  1. On '/build', click 'Draft MSEL with AI', choose the template, open 'Design choices (optional)', choose Format 'Discussion (tabletop)', enter 2 moves and a description, and click 'Draft'
+    - expect: The draft request carries the template and the design choices
+  2. Review the draft, and expand Move 0
+    - expect: 'Scenario and objectives' shows the problem and objective, and the move shows its purpose and expected decisions
+  3. Click 'Create MSEL'
+    - expect: The import succeeds and the report offers 'Open MSEL'
+    - expect: The MSEL has the pages Exercise Overview (participants), '<name> Read-In', Facilitator Guide (not for participants), Team Profiles, and Organization Profiles
+    - expect: The MSEL has an Expected Actions column on the event list but not the exercise view
+  4. Click 'Open MSEL'
+    - expect: The new MSEL's build page opens
