@@ -95,6 +95,25 @@ export async function navigateToAdminSection(page: Page, section?: string): Prom
 }
 
 /**
+ * Record the text frames the page's WebSockets receive, CITE's SignalR hub included, so a test
+ * can wait for a live update that changes nothing on screen. Call it before the navigation
+ * that opens the hub connection.
+ * @param page - Playwright Page object
+ * @returns The frames received so far; the array grows as frames arrive
+ */
+export function recordWebSocketMessages(page: Page): string[] {
+  const messages: string[] = [];
+  page.on('websocket', (socket) => {
+    socket.on('framereceived', (frame) => {
+      if (typeof frame.payload === 'string') {
+        messages.push(frame.payload);
+      }
+    });
+  });
+  return messages;
+}
+
+/**
  * Locate a row in a CITE admin list by name, typing into the Search box first so the
  * row is guaranteed onto the (paginated) first page.
  *
@@ -443,8 +462,14 @@ export async function deleteTeamTypeByName(page: Page, teamTypeName: string): Pr
  * Create an evaluation via the admin UI
  * @param page - Playwright Page object
  * @param evaluationName - Description for the new evaluation
+ * @param scoringModelName - The scoring model to copy; the caller makes sure it exists
+ *   (`ensureScoringModelExists` seeds the default)
  */
-export async function createEvaluation(page: Page, evaluationName: string): Promise<void> {
+export async function createEvaluation(
+  page: Page,
+  evaluationName: string,
+  scoringModelName: string = 'E2E Shared Scoring Model',
+): Promise<void> {
   await navigateToAdminSection(page, 'Evaluations');
 
   const addButton = page.getByRole('button', { name: 'Add Evaluation' });
@@ -472,8 +497,8 @@ export async function createEvaluation(page: Page, evaluationName: string): Prom
   await page.waitForTimeout(1000);
 
   // Check if options appeared, if not try clicking the trigger element directly
-  let firstOption = page.locator('mat-option').first();
-  let optionsVisible = await firstOption.isVisible({ timeout: 1000 }).catch(() => false);
+  const firstOption = page.locator('mat-option').first();
+  const optionsVisible = await firstOption.isVisible({ timeout: 1000 }).catch(() => false);
 
   if (!optionsVisible) {
     // Try clicking the mat-select element inside the form field
@@ -484,10 +509,12 @@ export async function createEvaluation(page: Page, evaluationName: string): Prom
     }
   }
 
-  // Wait for options to appear in the DOM
-  firstOption = page.locator('mat-option').first();
-  await expect(firstOption).toBeVisible({ timeout: 10000 });
-  await firstOption.click();
+  // Select the model by name, not the first option: the first is often another spec's
+  // seeded model, which that spec deletes while this one runs, and the create then
+  // answers 404 and no evaluation appears.
+  const modelOption = page.locator('mat-option').filter({ hasText: scoringModelName }).first();
+  await expect(modelOption).toBeVisible({ timeout: 10000 });
+  await modelOption.click();
 
   // Wait for the dropdown to close and the value to be set
   await page.waitForTimeout(1000);

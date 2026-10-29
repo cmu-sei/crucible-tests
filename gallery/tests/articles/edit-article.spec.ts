@@ -15,6 +15,7 @@ import {
   openMatSelect,
   GALLERY_THEMES,
   setGalleryTheme,
+  clickRowAction,
 } from '../../fixtures';
 
 /**
@@ -158,12 +159,9 @@ for (const theme of GALLERY_THEMES) {
       await openCollectionArticlesPanel(page, collectionName);
 
       // 1. Open the edit dialog for an existing article
-      // force: true is required. The button itself is enabled (disabled=null,
-      // aria-disabled=null) but the enclosing `<mat-expansion-panel-header disabled>`
-      // carries aria-disabled="true", and Playwright treats descendants of an
-      // aria-disabled ancestor as disabled — a plain click waits out the timeout.
+      // The row header is a disabled expansion-panel header; see clickRowAction in fixtures.ts.
       const editPanel = await ensureArticlesPanel(page, collectionName, articleName);
-      await editPanel.getByRole('button', { name: `Edit ${articleName}` }).click({ force: true });
+      await clickRowAction(editPanel.getByRole('button', { name: `Edit ${articleName}` }));
       await expect(page.getByRole('dialog', { name: 'Edit Article' })).toBeVisible();
 
       const dialog = page.getByRole('dialog', { name: 'Edit Article' });

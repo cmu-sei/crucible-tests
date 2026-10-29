@@ -133,6 +133,16 @@ test.describe('Integration and API', () => {
       inject: 0,
     });
 
+    // A UserArticle lets its user read the article in its exhibit, so the API accepts one
+    // only for a user on a team of that exhibit (`UserArticleService.CreateAsync`). Admin
+    // is put on a team in each exhibit, which is also the realistic shape: one person in
+    // two sections of the same course. No TeamCards or TeamArticles exist, so joining a
+    // team delivers nothing and the UserArticles below stay the only ones.
+    const teamA = await apiCreateTeam(exhibitA.id, { name: `UA Scoping Team A ${suffix}`, shortName: 'UASA' });
+    const teamB = await apiCreateTeam(exhibitB.id, { name: `UA Scoping Team B ${suffix}`, shortName: 'UASB' });
+    await apiAddUserToTeam(teamA.id, adminUserId);
+    await apiAddUserToTeam(teamB.id, adminUserId);
+
     await apiCreateUserArticle(exhibitB.id, adminUserId, bEarly.id);
     await apiCreateUserArticle(exhibitB.id, adminUserId, bCurrent.id);
     await apiCreateUserArticle(exhibitB.id, adminUserId, bFuture.id);

@@ -790,6 +790,12 @@ user because `admin` holds every system permission and reads every official scor
     - expect: Its member, added without naming a role, shows the Member role, the default
       every team membership gets
 
+A second test in `admin-evaluation-teams.spec.ts` expands a team with no members, then puts
+Admin User on another evaluation's team. The admin page is sent that membership live over
+SignalR, and the test waits for the hub message before checking.
+    - expect: Admin User is still listed among the users who can be added to this team
+    - expect: Admin User is not listed as a member of this team
+
 Steps 3-5 need their own spec because the read-back case seeds its team over the API
 and so never exercises the dialog. Leaving Hide Scoresheet untouched is the point of
 step 4: the checkbox the user never clicks is the one whose value used to be sent as
@@ -818,6 +824,12 @@ step 4: the checkbox the user never clicks is the one whose value used to be sen
   7. Change the description and save
     - expect: PUT /api/actions/{id} returns 200
     - expect: The edited description appears in the list
+
+A second test in the same file adds an action for all teams after another evaluation gains a
+team while the Actions panel is open. The admin page is sent that team live over SignalR, and
+the test waits for the hub message before adding.
+    - expect: Exactly one POST /api/actions, answered 201, for the evaluation's own team
+    - expect: No create for the other evaluation's team, which the API would refuse with 409
 
 #### 7.17. Admin - Manage Evaluation Duties
 
