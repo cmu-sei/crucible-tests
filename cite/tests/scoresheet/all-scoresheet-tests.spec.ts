@@ -8,7 +8,7 @@
 // avoiding parallel execution issues where multiple tests compete for the same "Admin User" visibility.
 
 import { test, expect, Services, serviceUrlPattern, ensureScoringModelExists, getCiteApiToken, purgeStaleEvaluations, settleForResponse, CITE_THEMES, setCiteTheme, citeMoveLabel } from '../../fixtures';
-import { navigateToAdminSection, deleteEvaluationByName, deleteTeamTypeByName } from '../../test-helpers';
+import { navigateToAdminSection, deleteEvaluationByName, deleteTeamTypeByName, waitForDialogOpen } from '../../test-helpers';
 import { request as pwRequest, type Locator } from '@playwright/test';
 
 async function waitForVisible(locator: Locator, timeout: number): Promise<boolean> {
@@ -83,7 +83,7 @@ async function createActiveEvalWithMoveAndTeam(
   await addTeamTypeButton.click();
 
   const teamTypeDialog = page.getByRole('dialog');
-  await expect(teamTypeDialog).toBeVisible({ timeout: 5000 });
+  await waitForDialogOpen(teamTypeDialog);
   await teamTypeDialog.getByRole('textbox').first().fill(teamTypeName);
   await teamTypeDialog.getByRole('button', { name: 'Save' }).click();
   await expect(teamTypeDialog).not.toBeVisible({ timeout: 10000 });
@@ -97,7 +97,7 @@ async function createActiveEvalWithMoveAndTeam(
   await addEvalButton.click();
 
   const evalDialog = page.getByRole('dialog', { name: 'Add Evaluation' });
-  await expect(evalDialog).toBeVisible({ timeout: 5000 });
+  await waitForDialogOpen(evalDialog);
 
   await page.getByRole('textbox', { name: 'Evaluation Description' }).fill(evalName);
 
@@ -172,7 +172,7 @@ async function createActiveEvalWithMoveAndTeam(
   await addMoveButton.click();
 
   const moveDialog = page.getByRole('dialog');
-  await expect(moveDialog).toBeVisible({ timeout: 5000 });
+  await waitForDialogOpen(moveDialog);
   await moveDialog.getByRole('textbox', { name: 'Move Description' }).fill('Move 1');
   await moveDialog.getByRole('button', { name: 'Save' }).click();
   await expect(moveDialog).not.toBeVisible({ timeout: 10000 });
@@ -189,7 +189,7 @@ async function createActiveEvalWithMoveAndTeam(
   await addTeamButton.click();
 
   const teamDialog = page.getByRole('dialog');
-  await expect(teamDialog).toBeVisible({ timeout: 5000 });
+  await waitForDialogOpen(teamDialog);
 
   await teamDialog.getByRole('textbox').first().fill(teamName);
   await teamDialog.getByRole('textbox').nth(1).fill(teamShortName);

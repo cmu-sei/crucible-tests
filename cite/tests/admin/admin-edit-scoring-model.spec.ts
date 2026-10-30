@@ -5,7 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, CITE_THEMES, setCiteTheme } from '../../fixtures';
-import { navigateToAdminSection, deleteScoringModelByName, findAdminRowByName } from '../../test-helpers';
+import { navigateToAdminSection, deleteScoringModelByName, findAdminRowByName, waitForDialogOpen } from '../../test-helpers';
 
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Administration - Scoring Models`, () => {
@@ -22,7 +22,7 @@ for (const theme of CITE_THEMES) {
       await addButton.click();
 
       const createDialog = page.getByRole('dialog');
-      await expect(createDialog).toBeVisible({ timeout: 5000 });
+      await waitForDialogOpen(createDialog);
 
       const descField = page.getByRole('textbox', { name: 'Scoring Model Description' });
       await descField.fill(TEST_MODEL_NAME);
@@ -44,7 +44,7 @@ for (const theme of CITE_THEMES) {
       await editButton.click();
 
       const editDialog = page.getByRole('dialog');
-      await expect(editDialog).toBeVisible({ timeout: 5000 });
+      await waitForDialogOpen(editDialog);
 
       const editDescField = editDialog.getByRole('textbox', { name: 'Scoring Model Description' });
       await expect(editDescField).toBeVisible({ timeout: 5000 });

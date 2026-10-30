@@ -5,7 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, seedCompleteEvaluation, cleanupCompleteEvaluation, CITE_THEMES, setCiteTheme } from '../../fixtures';
-import { navigateToAdminSection, waitForAdminListLoad } from '../../test-helpers';
+import { navigateToAdminSection, waitForAdminListLoad, waitForDialogOpen } from '../../test-helpers';
 
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Administration - Evaluations`, () => {
@@ -48,7 +48,7 @@ for (const theme of CITE_THEMES) {
       await addDutyButton.click();
 
       const dutyDialog = page.getByRole('dialog');
-      await expect(dutyDialog).toBeVisible({ timeout: 5000 });
+      await waitForDialogOpen(dutyDialog);
 
       // Fill in the duty name
       const dutyNameField = dutyDialog.getByRole('textbox', { name: 'Duty Name' });
@@ -74,7 +74,7 @@ for (const theme of CITE_THEMES) {
       const dutyRow = dutiesRegion.getByRole('row').filter({ hasText: 'Test Duty Name' });
       await dutyRow.locator('button[title="Edit Duty"]').click();
       const editDialog = page.getByRole('dialog');
-      await expect(editDialog).toBeVisible({ timeout: 5000 });
+      await waitForDialogOpen(editDialog);
       await expect(editDialog.getByRole('combobox', { name: 'Team' })).toHaveAttribute('aria-disabled', 'true');
 
       await editDialog.getByRole('textbox', { name: 'Duty Name' }).fill('Edited Duty Name');

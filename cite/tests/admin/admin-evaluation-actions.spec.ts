@@ -5,7 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, seedCompleteEvaluation, cleanupCompleteEvaluation, CITE_THEMES, setCiteTheme } from '../../fixtures';
-import { navigateToAdminSection, waitForAdminListLoad, recordWebSocketMessages } from '../../test-helpers';
+import { navigateToAdminSection, waitForAdminListLoad, recordWebSocketMessages, waitForDialogOpen } from '../../test-helpers';
 
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Administration - Evaluations`, () => {
@@ -50,7 +50,7 @@ for (const theme of CITE_THEMES) {
       await addActionButton.click();
 
       const actionDialog = page.getByRole('dialog');
-      await expect(actionDialog).toBeVisible({ timeout: 5000 });
+      await waitForDialogOpen(actionDialog);
 
       await actionDialog.getByRole('textbox', { name: 'Action Description' }).fill('Test Action Description');
 
@@ -70,7 +70,7 @@ for (const theme of CITE_THEMES) {
       const actionRow = actionsRegion.getByRole('row').filter({ hasText: 'Test Action Description' });
       await actionRow.locator('button[title="Edit Action"]').click();
       const editDialog = page.getByRole('dialog');
-      await expect(editDialog).toBeVisible({ timeout: 5000 });
+      await waitForDialogOpen(editDialog);
       await expect(editDialog.getByRole('combobox', { name: 'Team' })).toHaveAttribute('aria-disabled', 'true');
 
       const editDescription = editDialog.getByRole('textbox', { name: 'Action Description' });
@@ -133,7 +133,7 @@ for (const theme of CITE_THEMES) {
       });
       await addActionButton.click();
       const actionDialog = page.getByRole('dialog');
-      await expect(actionDialog).toBeVisible({ timeout: 5000 });
+      await waitForDialogOpen(actionDialog);
       await actionDialog.getByRole('textbox', { name: 'Action Description' }).fill('All Teams Action');
       await actionDialog.getByRole('button', { name: 'Save' }).click();
       await expect(actionDialog).not.toBeVisible({ timeout: 10000 });

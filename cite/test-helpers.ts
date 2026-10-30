@@ -1,7 +1,7 @@
 // Copyright 2026 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
-import { Page, expect } from '@playwright/test';
+import { Locator, Page, expect } from '@playwright/test';
 import { Services, waitForFirstVisible, settleForResponse } from '../shared-fixtures';
 
 /**
@@ -92,6 +92,27 @@ export async function navigateToAdminSection(page: Page, section?: string): Prom
 
     throw new Error(`Failed to navigate to admin section. Current URL: ${currentUrl}. ${error}`);
   }
+}
+
+/**
+ * Wait for a Material dialog to finish opening, not just to become visible.
+ *
+ * When its open animation ends, Material moves focus into the dialog: to the
+ * cdkFocusInitial Save button, or, because Save starts disabled on a pristine form,
+ * to the dialog container itself. A fill() that starts before then loses focus
+ * partway through, and in Firefox the text never reaches the field, which leaves
+ * Save disabled. Once focus is inside the dialog, that move has already happened.
+ * @param dialog - The dialog, or the mat-dialog-container that holds it
+ * @param timeout - How long to wait for each of visibility and focus
+ */
+export async function waitForDialogOpen(dialog: Locator, timeout: number = 5000): Promise<void> {
+  await expect(dialog).toBeVisible({ timeout });
+  await expect
+    .poll(
+      () => dialog.evaluate(el => (el.closest('mat-dialog-container') ?? el).contains(document.activeElement)),
+      { timeout },
+    )
+    .toBe(true);
 }
 
 /**
@@ -249,7 +270,7 @@ export async function deleteEvaluationByName(page: Page, evaluationName: string)
       await deleteButton.click();
 
       const confirmDialog = page.getByRole('dialog', { name: 'Delete this evaluation?' });
-      await expect(confirmDialog).toBeVisible({ timeout: 5000 });
+      await waitForDialogOpen(confirmDialog);
 
       const yesButton = confirmDialog.getByRole('button', { name: 'Yes' });
       await yesButton.click();
@@ -320,7 +341,7 @@ export async function deleteScoringModelByName(page: Page, scoringModelName: str
     await deleteButton.click();
 
     const confirmDialog = page.getByRole('dialog').first();
-    await expect(confirmDialog).toBeVisible({ timeout: 5000 });
+    await waitForDialogOpen(confirmDialog);
 
     const yesButton = confirmDialog.getByRole('button', { name: /Yes|Delete|Confirm/i });
     await yesButton.click();
@@ -381,7 +402,7 @@ export async function deleteGroupByName(page: Page, groupName: string): Promise<
     await deleteButton.click();
 
     const confirmDialog = page.getByRole('dialog').first();
-    await expect(confirmDialog).toBeVisible({ timeout: 5000 });
+    await waitForDialogOpen(confirmDialog);
 
     const yesButton = confirmDialog.getByRole('button', { name: /Yes|Delete|Confirm/i });
     await yesButton.click();
@@ -442,7 +463,7 @@ export async function deleteTeamTypeByName(page: Page, teamTypeName: string): Pr
     await deleteButton.click();
 
     const confirmDialog = page.getByRole('dialog').first();
-    await expect(confirmDialog).toBeVisible({ timeout: 5000 });
+    await waitForDialogOpen(confirmDialog);
 
     const yesButton = confirmDialog.getByRole('button', { name: /Yes|Delete|Confirm/i });
     await yesButton.click();
@@ -477,7 +498,7 @@ export async function createEvaluation(
   await addButton.click();
 
   const dialog = page.getByRole('dialog', { name: 'Add Evaluation' });
-  await expect(dialog).toBeVisible({ timeout: 5000 });
+  await waitForDialogOpen(dialog);
 
   const descField = page.getByRole('textbox', { name: 'Evaluation Description' });
   await descField.fill(evaluationName);
