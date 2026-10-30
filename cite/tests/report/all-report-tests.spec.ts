@@ -246,10 +246,11 @@ for (const theme of CITE_THEMES) {
       await expect(reportHeading).toContainText(DISPLAY_EVAL_NAME);
 
       // Verify the toggle and print buttons are present
-      const toggleButton = page.locator('button[title="Toggle between user and team scores"]');
-      await expect(toggleButton).toBeVisible({ timeout: 5000 });
+      const viewButtons = page.getByRole('group', { name: 'Displayed responses' });
+      await expect(viewButtons.getByRole('button', { name: 'User' })).toBeVisible({ timeout: 5000 });
+      await expect(viewButtons.getByRole('button', { name: 'Team' })).toBeVisible({ timeout: 5000 });
 
-      const printButton = page.locator('button[title="Print Submission Review"]');
+      const printButton = page.getByRole('button', { name: 'Print' });
       await expect(printButton).toBeVisible({ timeout: 5000 });
 
       // Cleanup
@@ -274,7 +275,7 @@ for (const theme of CITE_THEMES) {
       await expect(reportHeading).toBeVisible({ timeout: 10000 });
 
       // Verify the Print button is visible
-      const printButton = page.locator('button[title="Print Submission Review"]');
+      const printButton = page.getByRole('button', { name: 'Print' });
       await expect(printButton).toBeVisible({ timeout: 5000 });
       await expect(printButton).toBeEnabled({ timeout: 5000 });
 
@@ -317,21 +318,19 @@ for (const theme of CITE_THEMES) {
       // NOTE: the report's initial User/Team state is persisted in localStorage and can
       // carry over from a previous test in the same worker, so do NOT assume it starts on
       // "User". Instead, read the current state and assert that each toggle FLIPS it.
-      const toggleButton = page.locator('button[title="Toggle between user and team scores"]');
-      await expect(toggleButton).toBeVisible({ timeout: 5000 });
+      const viewButtons = page.getByRole('group', { name: 'Displayed submissions' });
+      const userButton = viewButtons.getByRole('button', { name: 'User' });
+      const teamButton = viewButtons.getByRole('button', { name: 'Team' });
+      await expect(userButton).toBeVisible({ timeout: 5000 });
 
-      const isUser = async () => ((await reportHeading.textContent()) ?? '').includes('User');
+      const startUser = (await userButton.getAttribute('aria-pressed')) === 'true';
 
-      const startUser = await isUser();
-
-      await toggleButton.click();
-      await page.waitForTimeout(1000);
-      // After one toggle the heading should be the opposite of where it started.
+      // Selecting the opposite view flips the heading.
+      await (startUser ? teamButton : userButton).click();
       await expect(reportHeading).toContainText(startUser ? 'Team' : 'User', { timeout: 5000 });
 
-      await toggleButton.click();
-      await page.waitForTimeout(1000);
-      // A second toggle returns it to the starting state.
+      // Selecting the starting view again returns it.
+      await (startUser ? userButton : teamButton).click();
       await expect(reportHeading).toContainText(startUser ? 'User' : 'Team', { timeout: 5000 });
 
       // Cleanup
