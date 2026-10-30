@@ -76,4 +76,41 @@ test.describe('Template Clone on Proxmox', () => {
     await expect.poll(() => findSource(token, clone.id), { timeout: 2 * 60_000 }).toBeUndefined();
     expect(await findSource(token, base!.name)).toBeTruthy();
   });
+
+  test('initializing a clone twice makes only one template VM', async () => {
+    test.setTimeout(10 * 60_000);
+    token = await getTopoMojoAdminToken();
+
+    const before = await getTemplateSources(token);
+    requirePrecondition(
+      before.field === 'template',
+      'the hypervisor is not Proxmox; template VMs are a Proxmox concept'
+    );
+    const base = before.sources.find(s => s.isGlobal);
+    requirePrecondition(base, 'Proxmox has no global template VM to base a test template on');
+
+    const suffix = `${Date.now()}`;
+    const stock = await createStockTemplate(token, `clone-twice-${suffix}`, {
+      Template: base!.name, Cpu: '1x1', Ram: 1, Eth: [{ Net: 'lan' }], Disks: [],
+    });
+    stockTemplateId = stock.id;
+    const clone = await cloneTemplate(token, stock.id, `clone-twice-${suffix}-copy`);
+    cloneId = clone.id;
+
+    // Initialize holds the request open for the whole clone, so a second one arrives while the first
+    // is still running. Proxmox does not list the clone yet, so only one of the two may go through.
+    const concurrent = await Promise.allSettled([
+      initializeTemplate(token, clone.id),
+      initializeTemplate(token, clone.id),
+    ]);
+    expect(concurrent.filter(r => r.status === 'fulfilled')).toHaveLength(1);
+    const refused = concurrent.find(r => r.status === 'rejected') as PromiseRejectedResult;
+    expect(String(refused.reason)).toContain('(400)');
+
+    // Right after it finishes, Proxmox still lags behind the clone, so this relies on the cache.
+    await expect(initializeTemplate(token, clone.id)).rejects.toThrow('(400)');
+
+    await expect.poll(() => findSource(token, clone.id), { timeout: 2 * 60_000 }).toBeTruthy();
+    expect(await findSource(token, base!.name)).toBeTruthy();
+  });
 });
