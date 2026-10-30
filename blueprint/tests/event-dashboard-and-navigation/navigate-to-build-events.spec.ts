@@ -5,26 +5,20 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, serviceUrlPattern, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
+import { dashboardCard } from '../../test-helpers';
 
 for (const theme of BLUEPRINT_THEMES) {
     test.describe(`${theme} theme › Event Dashboard and Navigation`, () => {
     test('Navigate to Build Events', async ({ blueprintAuthenticatedPage: page }) => {
     await applyBlueprintTheme(page, theme);
-      // 1. From Event Dashboard, click on 'Manage an Event' card
+      // 1. From Event Dashboard, click on the BUILD card
       await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 30000 });
 
-      const buildCard = page.locator(
-        'text=Manage an Event, mat-card:has-text("Manage"), [class*="build-card"]'
-      ).first();
-
-      const buildCardVisible = await buildCard.isVisible({ timeout: 5000 }).catch(() => false);
-
-      if (!buildCardVisible) {
-        // If no card present, navigate directly
-        await page.goto(`${Services.Blueprint.UI}/build`);
-      } else {
-        await buildCard.click();
-      }
+      // The admin account has CreateMsels, so the card is always offered to it. The click is
+      // the card's own `(click)="gotoUrl('build')"`; a direct goto would skip what is tested.
+      const buildCard = dashboardCard(page, 'BUILD');
+      await expect(buildCard).toBeVisible({ timeout: 15000 });
+      await buildCard.click();
 
       // expect: Navigation to /build occurs
       await expect(page).toHaveURL(/.*\/build.*/, { timeout: 10000 });

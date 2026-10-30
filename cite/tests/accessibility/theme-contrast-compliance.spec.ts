@@ -6,7 +6,7 @@
 
 import type { Locator, Page } from '@playwright/test';
 import { test, expect, Services, setCiteTheme, CITE_THEMES } from '../../fixtures';
-import { navigateToAdminSection } from '../../test-helpers';
+import { navigateToAdminSection, waitForDialogOpen } from '../../test-helpers';
 
 /**
  * Accessibility — real WCAG contrast on the CITE home page and an admin dialog,
@@ -299,7 +299,7 @@ for (const theme of CITE_THEMES) {
 
       await page.getByRole('button', { name: 'Add TeamType' }).click();
       const dialog = page.getByRole('dialog');
-      await expect(dialog).toBeVisible({ timeout: 5000 });
+      await waitForDialogOpen(dialog);
 
       // Save stays disabled (and greyed) until the name is filled; fill it so the
       // button renders in its enabled filled-primary state. The team type is only

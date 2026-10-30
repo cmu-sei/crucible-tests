@@ -27,9 +27,13 @@ for (const theme of CITE_THEMES) {
       const logoutButton = page.locator('button:has-text("Logout"), button:has-text("Sign Out"), button:has-text("Log Out")').first();
       await logoutButton.click();
 
-      // expect: User is logged out
-      // expect: User is redirected to Keycloak or CITE home
-      await page.waitForURL(serviceUrlPattern(Services.Cite.UI), { timeout: 30000 });
+      // expect: User is logged out and lands on the Keycloak login page.
+      // Keycloak's end-session redirects straight back to CITE, which then starts a fresh
+      // sign-in redirect. The page is on a CITE URL throughout the first leg, so waiting for
+      // that URL returns at once and the goto below collides with the in-flight redirect
+      // (Firefox aborts it with NS_BINDING_ABORTED). Wait for the login form instead.
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 30000 });
+      await expect(page.locator('#username')).toBeVisible({ timeout: 10000 });
 
       // expect: Authentication session is terminated
       // 4. Attempt to navigate to CITE UI again

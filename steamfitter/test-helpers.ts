@@ -233,19 +233,21 @@ export async function clickContextMenuItem(page: Page, name: string): Promise<vo
 
 /**
  * Confirm or cancel the CrucibleDialogService confirmation dialog (delete/copy/
- * create-scenario prompts). The dialog renders as a `role="dialog"` with submit
- * ("Confirm") and cancel ("Cancel") buttons; label matching is kept tolerant
- * (Yes/Delete, No) so a future label tweak in crucible-common doesn't break these.
+ * create-scenario/start/end prompts). The dialog renders as a `role="dialog"` whose
+ * buttons follow the standard Crucible wording: the action's verb ("Delete", "Copy",
+ * "Create", "Start", "End", "Execute") and "Cancel". Confirming names the verb the
+ * prompt is expected to offer, so a prompt for the wrong action does not pass.
  *
  * @param page - Playwright Page object
- * @param confirm - true to accept (submit), false to dismiss (cancel)
+ * @param confirm - true to accept with `confirmText`, false to dismiss with Cancel
+ * @param confirmText - the confirm button's label, e.g. 'Delete'
  */
-export async function respondToConfirmDialog(page: Page, confirm: boolean): Promise<void> {
+export async function respondToConfirmDialog(page: Page, confirm: true, confirmText: string): Promise<void>;
+export async function respondToConfirmDialog(page: Page, confirm: false): Promise<void>;
+export async function respondToConfirmDialog(page: Page, confirm: boolean, confirmText?: string): Promise<void> {
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible({ timeout: 5000 });
-  const button = confirm
-    ? dialog.getByRole('button', { name: /Confirm|Yes|Delete/i })
-    : dialog.getByRole('button', { name: /Cancel|No/i });
+  const button = dialog.getByRole('button', { name: confirm ? confirmText : 'Cancel', exact: true });
   await expect(button).toBeVisible({ timeout: 5000 });
   await button.click();
   await expect(dialog).not.toBeVisible({ timeout: 10000 });
@@ -333,7 +335,8 @@ export interface TaskDialogFields {
 }
 
 /**
- * Fill the Task add/edit dialog (crucible-dialog, title "Edit Task") and Save.
+ * Fill the Task add/edit dialog (crucible-dialog, titled "Add Task" for a new task and
+ * "Edit Task" for an existing one) and Save.
  *
  * The dialog is opened by the caller ("Add a Task" or the task menu's Edit). Its Save
  * button is gated only on a non-empty Name (`errorFree()`), so a name is enough to
@@ -351,7 +354,7 @@ export interface TaskDialogFields {
  */
 export async function fillTaskDialog(page: Page, fields: TaskDialogFields): Promise<void> {
   const dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('heading', { name: 'Edit Task' })).toBeVisible({ timeout: 5000 });
+  await expect(dialog.getByRole('heading', { name: /^(Add|Edit) Task$/ })).toBeVisible({ timeout: 5000 });
 
   // The dialog's Action list loads asynchronously; when it renders it re-binds the
   // dialog's one-way `[value]` inputs, which can wipe a value we filled a moment

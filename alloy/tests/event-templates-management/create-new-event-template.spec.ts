@@ -65,7 +65,7 @@ for (const theme of ALLOY_THEMES) {
       // may cause the table to re-render; filter to the specific template.
       const searchBox = page.getByRole('textbox', { name: 'Search' });
       await searchBox.fill(uniqueName);
-      await expect(page.getByRole('cell', { name: uniqueName })).toBeVisible({ timeout: 15000 });
+      await expect(page.getByRole('cell', { name: uniqueName, exact: true })).toBeVisible({ timeout: 15000 });
       await searchBox.fill('');
     });
   });

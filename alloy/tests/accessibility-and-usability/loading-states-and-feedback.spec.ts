@@ -28,11 +28,11 @@ for (const theme of ALLOY_THEMES) {
       await createTestEventTemplate(page, uniqueName, { durationHours: '1' });
 
       // expect: Success - the template appears in the list with the given name
-      await expect(page.getByRole('cell', { name: uniqueName })).toBeVisible({ timeout: 30000 });
+      await expect(page.getByRole('cell', { name: uniqueName, exact: true })).toBeVisible({ timeout: 30000 });
 
       // Verify the template is removed from the table
       await deleteEventTemplateByName(page, uniqueName);
-      await expect(page.getByRole('cell', { name: uniqueName })).not.toBeVisible({ timeout: 15000 });
+      await expect(page.getByRole('cell', { name: uniqueName, exact: true })).not.toBeVisible({ timeout: 15000 });
     });
   });
 }

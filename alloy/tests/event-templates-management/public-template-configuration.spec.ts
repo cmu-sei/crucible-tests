@@ -35,7 +35,7 @@ for (const theme of ALLOY_THEMES) {
       await expect(page.getByRole('dialog', { name: 'Edit Event Template' })).toBeVisible();
 
       // 3. Locate the "Public" checkbox
-      const publicCheckbox = page.getByRole('checkbox', { name: 'Public' });
+      const publicCheckbox = page.getByRole('checkbox', { name: 'Public', exact: true });
 
       // expect: Checkbox is visible with label "Public"
       await expect(publicCheckbox).toBeVisible();

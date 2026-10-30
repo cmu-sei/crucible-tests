@@ -5,7 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, seedScoringModel, apiDeleteScoringModel, settleForResponse, CITE_THEMES, setCiteTheme } from '../../fixtures';
-import { navigateToAdminSection, deleteEvaluationByName } from '../../test-helpers';
+import { navigateToAdminSection, deleteEvaluationByName, waitForDialogOpen } from '../../test-helpers';
 
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Administration - Evaluations`, () => {
@@ -32,7 +32,7 @@ for (const theme of CITE_THEMES) {
 
       // expect: Create evaluation dialog/form opens
       const dialog = page.getByRole('dialog', { name: 'Add Evaluation' });
-      await expect(dialog).toBeVisible({ timeout: 5000 });
+      await waitForDialogOpen(dialog);
 
       // 3. Enter evaluation description
       const descriptionField = page.getByRole('textbox', { name: 'Evaluation Description' });

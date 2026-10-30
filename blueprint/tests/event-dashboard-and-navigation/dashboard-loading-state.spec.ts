@@ -5,6 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, serviceUrlPattern, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
+import { dashboardCard } from '../../test-helpers';
 
 for (const theme of BLUEPRINT_THEMES) {
     test.describe(`${theme} theme › Event Dashboard and Navigation`, () => {
@@ -42,12 +43,12 @@ for (const theme of BLUEPRINT_THEMES) {
       // expect: After data loads, dashboard shows available cards.
       // The card assertion below is the wait — `toBeVisible` polls, so a separate
       // `waitForLoadState('networkidle')` added latency without adding certainty.
-      // Admin user sees "Manage an Event" card
-      const manageEventCard = page.getByRole('button', { name: /Manage an Event/i });
-      await expect(manageEventCard).toBeVisible({ timeout: 10000 });
+      // Admin user sees the BUILD card
+      const buildCard = dashboardCard(page, 'BUILD');
+      await expect(buildCard).toBeVisible({ timeout: 10000 });
 
       // Verify the card has the expected subtitle
-      await expect(page.getByText('Design and Plan Events')).toBeVisible();
+      await expect(buildCard).toContainText('Design & Planning');
 
       // If loading was seen, confirm it is now gone
       if (loadingVisible) {

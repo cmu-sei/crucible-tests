@@ -1,7 +1,7 @@
 // Copyright 2026 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
-import { Page, expect } from '@playwright/test';
+import { Locator, Page, expect } from '@playwright/test';
 import { Services, waitForFirstVisible, settleForResponse } from '../shared-fixtures';
 
 /**
@@ -92,6 +92,46 @@ export async function navigateToAdminSection(page: Page, section?: string): Prom
 
     throw new Error(`Failed to navigate to admin section. Current URL: ${currentUrl}. ${error}`);
   }
+}
+
+/**
+ * Wait for a Material dialog to finish opening, not just to become visible.
+ *
+ * When its open animation ends, Material moves focus into the dialog: to the
+ * cdkFocusInitial Save button, or, because Save starts disabled on a pristine form,
+ * to the dialog container itself. A fill() that starts before then loses focus
+ * partway through, and in Firefox the text never reaches the field, which leaves
+ * Save disabled. Once focus is inside the dialog, that move has already happened.
+ * @param dialog - The dialog, or the mat-dialog-container that holds it
+ * @param timeout - How long to wait for each of visibility and focus
+ */
+export async function waitForDialogOpen(dialog: Locator, timeout: number = 5000): Promise<void> {
+  await expect(dialog).toBeVisible({ timeout });
+  await expect
+    .poll(
+      () => dialog.evaluate(el => (el.closest('mat-dialog-container') ?? el).contains(document.activeElement)),
+      { timeout },
+    )
+    .toBe(true);
+}
+
+/**
+ * Record the text frames the page's WebSockets receive, CITE's SignalR hub included, so a test
+ * can wait for a live update that changes nothing on screen. Call it before the navigation
+ * that opens the hub connection.
+ * @param page - Playwright Page object
+ * @returns The frames received so far; the array grows as frames arrive
+ */
+export function recordWebSocketMessages(page: Page): string[] {
+  const messages: string[] = [];
+  page.on('websocket', (socket) => {
+    socket.on('framereceived', (frame) => {
+      if (typeof frame.payload === 'string') {
+        messages.push(frame.payload);
+      }
+    });
+  });
+  return messages;
 }
 
 /**
@@ -230,7 +270,7 @@ export async function deleteEvaluationByName(page: Page, evaluationName: string)
       await deleteButton.click();
 
       const confirmDialog = page.getByRole('dialog', { name: 'Delete this evaluation?' });
-      await expect(confirmDialog).toBeVisible({ timeout: 5000 });
+      await waitForDialogOpen(confirmDialog);
 
       const yesButton = confirmDialog.getByRole('button', { name: 'Yes' });
       await yesButton.click();
@@ -301,7 +341,7 @@ export async function deleteScoringModelByName(page: Page, scoringModelName: str
     await deleteButton.click();
 
     const confirmDialog = page.getByRole('dialog').first();
-    await expect(confirmDialog).toBeVisible({ timeout: 5000 });
+    await waitForDialogOpen(confirmDialog);
 
     const yesButton = confirmDialog.getByRole('button', { name: /Yes|Delete|Confirm/i });
     await yesButton.click();
@@ -362,7 +402,7 @@ export async function deleteGroupByName(page: Page, groupName: string): Promise<
     await deleteButton.click();
 
     const confirmDialog = page.getByRole('dialog').first();
-    await expect(confirmDialog).toBeVisible({ timeout: 5000 });
+    await waitForDialogOpen(confirmDialog);
 
     const yesButton = confirmDialog.getByRole('button', { name: /Yes|Delete|Confirm/i });
     await yesButton.click();
@@ -423,7 +463,7 @@ export async function deleteTeamTypeByName(page: Page, teamTypeName: string): Pr
     await deleteButton.click();
 
     const confirmDialog = page.getByRole('dialog').first();
-    await expect(confirmDialog).toBeVisible({ timeout: 5000 });
+    await waitForDialogOpen(confirmDialog);
 
     const yesButton = confirmDialog.getByRole('button', { name: /Yes|Delete|Confirm/i });
     await yesButton.click();
@@ -443,8 +483,14 @@ export async function deleteTeamTypeByName(page: Page, teamTypeName: string): Pr
  * Create an evaluation via the admin UI
  * @param page - Playwright Page object
  * @param evaluationName - Description for the new evaluation
+ * @param scoringModelName - The scoring model to copy; the caller makes sure it exists
+ *   (`ensureScoringModelExists` seeds the default)
  */
-export async function createEvaluation(page: Page, evaluationName: string): Promise<void> {
+export async function createEvaluation(
+  page: Page,
+  evaluationName: string,
+  scoringModelName: string = 'E2E Shared Scoring Model',
+): Promise<void> {
   await navigateToAdminSection(page, 'Evaluations');
 
   const addButton = page.getByRole('button', { name: 'Add Evaluation' });
@@ -452,7 +498,7 @@ export async function createEvaluation(page: Page, evaluationName: string): Prom
   await addButton.click();
 
   const dialog = page.getByRole('dialog', { name: 'Add Evaluation' });
-  await expect(dialog).toBeVisible({ timeout: 5000 });
+  await waitForDialogOpen(dialog);
 
   const descField = page.getByRole('textbox', { name: 'Evaluation Description' });
   await descField.fill(evaluationName);
@@ -472,8 +518,8 @@ export async function createEvaluation(page: Page, evaluationName: string): Prom
   await page.waitForTimeout(1000);
 
   // Check if options appeared, if not try clicking the trigger element directly
-  let firstOption = page.locator('mat-option').first();
-  let optionsVisible = await firstOption.isVisible({ timeout: 1000 }).catch(() => false);
+  const firstOption = page.locator('mat-option').first();
+  const optionsVisible = await firstOption.isVisible({ timeout: 1000 }).catch(() => false);
 
   if (!optionsVisible) {
     // Try clicking the mat-select element inside the form field
@@ -484,10 +530,12 @@ export async function createEvaluation(page: Page, evaluationName: string): Prom
     }
   }
 
-  // Wait for options to appear in the DOM
-  firstOption = page.locator('mat-option').first();
-  await expect(firstOption).toBeVisible({ timeout: 10000 });
-  await firstOption.click();
+  // Select the model by name, not the first option: the first is often another spec's
+  // seeded model, which that spec deletes while this one runs, and the create then
+  // answers 404 and no evaluation appears.
+  const modelOption = page.locator('mat-option').filter({ hasText: scoringModelName }).first();
+  await expect(modelOption).toBeVisible({ timeout: 10000 });
+  await modelOption.click();
 
   // Wait for the dropdown to close and the value to be set
   await page.waitForTimeout(1000);

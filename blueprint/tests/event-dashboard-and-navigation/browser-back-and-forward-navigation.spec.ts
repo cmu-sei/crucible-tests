@@ -20,6 +20,7 @@ import {
   deleteMsel,
   tempBlueprintName,
   findMselRowByName,
+  dashboardCard,
 } from '../../test-helpers';
 
 for (const theme of BLUEPRINT_THEMES) {
@@ -39,8 +40,8 @@ for (const theme of BLUEPRINT_THEMES) {
 
       // 1. Start on the dashboard.
       await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 30000 });
-      const dashboardCard = page.getByText('Manage an Event').first();
-      await expect(dashboardCard).toBeVisible({ timeout: 15000 });
+      const buildCard = dashboardCard(page, 'BUILD');
+      await expect(buildCard).toBeVisible({ timeout: 15000 });
 
       // 2. Go to the /build list and open the seeded MSEL from it.
       await page.goto(`${Services.Blueprint.UI}/build`);
@@ -64,7 +65,7 @@ for (const theme of BLUEPRINT_THEMES) {
 
       // 4. Back again: the dashboard.
       await page.goBack();
-      await expect(dashboardCard).toBeVisible({ timeout: 15000 });
+      await expect(buildCard).toBeVisible({ timeout: 15000 });
       await expect(addBlankMsel).toBeHidden();
 
       // 5. Forward: the list.

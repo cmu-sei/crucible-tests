@@ -5,7 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, seedCompleteEvaluation, cleanupCompleteEvaluation, CITE_THEMES, setCiteTheme } from '../../fixtures';
-import { navigateToAdminSection, waitForAdminListLoad } from '../../test-helpers';
+import { navigateToAdminSection, waitForAdminListLoad, waitForDialogOpen } from '../../test-helpers';
 
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Administration - Evaluations`, () => {
@@ -48,7 +48,7 @@ for (const theme of CITE_THEMES) {
       await addDutyButton.click();
 
       const dutyDialog = page.getByRole('dialog');
-      await expect(dutyDialog).toBeVisible({ timeout: 5000 });
+      await waitForDialogOpen(dutyDialog);
 
       // Fill in the duty name
       const dutyNameField = dutyDialog.getByRole('textbox', { name: 'Duty Name' });
@@ -68,6 +68,25 @@ for (const theme of CITE_THEMES) {
       const dutiesRegion = page.getByRole('region', { name: 'Duties' });
       const dutyItem = dutiesRegion.getByText('Test Duty Name').first();
       await expect(dutyItem).toBeVisible({ timeout: 10000 });
+
+      // 6. Edit the duty: the API cannot move an existing duty to another team, so Team
+      //    is locked, and the save sends only the name
+      const dutyRow = dutiesRegion.getByRole('row').filter({ hasText: 'Test Duty Name' });
+      await dutyRow.locator('button[title="Edit Duty"]').click();
+      const editDialog = page.getByRole('dialog');
+      await waitForDialogOpen(editDialog);
+      await expect(editDialog.getByRole('combobox', { name: 'Team' })).toHaveAttribute('aria-disabled', 'true');
+
+      await editDialog.getByRole('textbox', { name: 'Duty Name' }).fill('Edited Duty Name');
+      const updateResponse = page.waitForResponse(
+        (r) => r.url().includes('/api/duties/') && r.request().method() === 'PUT',
+      );
+      await editDialog.getByRole('button', { name: 'Save' }).click();
+      expect((await updateResponse).status()).toBe(200);
+      await expect(editDialog).not.toBeVisible({ timeout: 10000 });
+
+      // 7. Verify the edited duty appears within the Duties region
+      await expect(dutiesRegion.getByText('Edited Duty Name').first()).toBeVisible({ timeout: 10000 });
     });
 
     test.afterEach(async () => {

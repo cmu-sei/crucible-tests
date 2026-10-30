@@ -8,7 +8,7 @@
 // avoiding parallel execution issues where multiple tests compete for the same "Admin User" visibility.
 
 import { test, expect, Services, serviceUrlPattern, ensureScoringModelExists, getCiteApiToken, purgeStaleEvaluations, settleForResponse, CITE_THEMES, setCiteTheme, citeMoveLabel } from '../../fixtures';
-import { navigateToAdminSection, deleteEvaluationByName, deleteTeamTypeByName } from '../../test-helpers';
+import { navigateToAdminSection, deleteEvaluationByName, deleteTeamTypeByName, waitForDialogOpen } from '../../test-helpers';
 import { request as pwRequest, type Locator } from '@playwright/test';
 
 async function waitForVisible(locator: Locator, timeout: number): Promise<boolean> {
@@ -83,7 +83,7 @@ async function createActiveEvalWithMoveAndTeam(
   await addTeamTypeButton.click();
 
   const teamTypeDialog = page.getByRole('dialog');
-  await expect(teamTypeDialog).toBeVisible({ timeout: 5000 });
+  await waitForDialogOpen(teamTypeDialog);
   await teamTypeDialog.getByRole('textbox').first().fill(teamTypeName);
   await teamTypeDialog.getByRole('button', { name: 'Save' }).click();
   await expect(teamTypeDialog).not.toBeVisible({ timeout: 10000 });
@@ -97,7 +97,7 @@ async function createActiveEvalWithMoveAndTeam(
   await addEvalButton.click();
 
   const evalDialog = page.getByRole('dialog', { name: 'Add Evaluation' });
-  await expect(evalDialog).toBeVisible({ timeout: 5000 });
+  await waitForDialogOpen(evalDialog);
 
   await page.getByRole('textbox', { name: 'Evaluation Description' }).fill(evalName);
 
@@ -172,7 +172,7 @@ async function createActiveEvalWithMoveAndTeam(
   await addMoveButton.click();
 
   const moveDialog = page.getByRole('dialog');
-  await expect(moveDialog).toBeVisible({ timeout: 5000 });
+  await waitForDialogOpen(moveDialog);
   await moveDialog.getByRole('textbox', { name: 'Move Description' }).fill('Move 1');
   await moveDialog.getByRole('button', { name: 'Save' }).click();
   await expect(moveDialog).not.toBeVisible({ timeout: 10000 });
@@ -189,7 +189,7 @@ async function createActiveEvalWithMoveAndTeam(
   await addTeamButton.click();
 
   const teamDialog = page.getByRole('dialog');
-  await expect(teamDialog).toBeVisible({ timeout: 5000 });
+  await waitForDialogOpen(teamDialog);
 
   await teamDialog.getByRole('textbox').first().fill(teamName);
   await teamDialog.getByRole('textbox').nth(1).fill(teamShortName);
@@ -388,21 +388,28 @@ for (const theme of CITE_THEMES) {
     // Serial per theme, so a failure in one theme doesn't skip the other.
     test.describe.configure({ mode: 'serial' });
 
+    // The browser x theme groups of this file run on separate workers, often at the same
+    // time, so every name a group creates carries its project and theme. The cleanup at the
+    // start of each test and the purge below then only ever touch this group's own data;
+    // with shared names, one group's purge deleted another's evaluation mid-test.
+    let prefix = '';
+
     // Keep the evaluations list small/deterministic — the admin suite may have flooded it.
     test.beforeAll(async () => {
-      // Purge only this file's own evaluations: a broader purge deletes the
-      // evaluations other files are using on the other worker.
-      await purgeStaleEvaluations(['E2E SS-']);
+      prefix = `E2E SS-${test.info().project.name}-${theme} `;
+      // Purge only this group's own evaluations: a broader purge deletes the
+      // evaluations other files and groups are using on the other workers.
+      await purgeStaleEvaluations([prefix]);
     });
 
     test('Scoresheet Initial Load', async ({ citeAuthenticatedPage: page }) => {
       await setCiteTheme(page, theme);
 
-      const TT = 'E2E SS-IL Team Type';
-      const EV = 'E2E SS-IL Evaluation';
+      const TT = `${prefix}IL Team Type`;
+      const EV = `${prefix}IL Evaluation`;
 
       await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-IL Team', 'SIL');
-      await navigateToEvaluationScoresheet(page, EV, 'E2E SS-IL');
+      await navigateToEvaluationScoresheet(page, EV, `${prefix}IL`);
 
       // expect: Submission type buttons are visible (User / Team). These are the reliable
       // signal that the scoresheet rendered with an active team (navigateToEvaluationScoresheet
@@ -427,11 +434,11 @@ for (const theme of CITE_THEMES) {
     test('View User Submission', async ({ citeAuthenticatedPage: page }) => {
       await setCiteTheme(page, theme);
 
-      const TT = 'E2E SS-VU Team Type';
-      const EV = 'E2E SS-VU Evaluation';
+      const TT = `${prefix}VU Team Type`;
+      const EV = `${prefix}VU Evaluation`;
 
       await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-VU Team', 'SVU');
-      await navigateToEvaluationScoresheet(page, EV, 'E2E SS-VU');
+      await navigateToEvaluationScoresheet(page, EV, `${prefix}VU`);
 
       // Click the "User" submission type button
       const userButton = page.getByRole('button', { name: 'User', exact: true });
@@ -451,11 +458,11 @@ for (const theme of CITE_THEMES) {
     test('View Team Submission', async ({ citeAuthenticatedPage: page }) => {
       await setCiteTheme(page, theme);
 
-      const TT = 'E2E SS-VT Team Type';
-      const EV = 'E2E SS-VT Evaluation';
+      const TT = `${prefix}VT Team Type`;
+      const EV = `${prefix}VT Evaluation`;
 
       await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-VT Team', 'SVT');
-      await navigateToEvaluationScoresheet(page, EV, 'E2E SS-VT');
+      await navigateToEvaluationScoresheet(page, EV, `${prefix}VT`);
 
       // Click the "Team" submission type button
       const teamButton = page.getByRole('button', { name: 'Team', exact: true });
@@ -475,11 +482,11 @@ for (const theme of CITE_THEMES) {
     test('View Team Average Submission', async ({ citeAuthenticatedPage: page }) => {
       await setCiteTheme(page, theme);
 
-      const TT = 'E2E SS-TA Team Type';
-      const EV = 'E2E SS-TA Evaluation';
+      const TT = `${prefix}TA Team Type`;
+      const EV = `${prefix}TA Evaluation`;
 
       await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-TA Team', 'STA');
-      await navigateToEvaluationScoresheet(page, EV, 'E2E SS-TA');
+      await navigateToEvaluationScoresheet(page, EV, `${prefix}TA`);
 
       // The "Team Avg" button may or may not be visible depending on scoring model config.
       // If visible, click it; otherwise verify the scoresheet is loaded.
@@ -501,11 +508,11 @@ for (const theme of CITE_THEMES) {
     test('View Group Average Submission', async ({ citeAuthenticatedPage: page }) => {
       await setCiteTheme(page, theme);
 
-      const TT = 'E2E SS-GA Team Type';
-      const EV = 'E2E SS-GA Evaluation';
+      const TT = `${prefix}GA Team Type`;
+      const EV = `${prefix}GA Evaluation`;
 
       await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-GA Team', 'SGA');
-      await navigateToEvaluationScoresheet(page, EV, 'E2E SS-GA');
+      await navigateToEvaluationScoresheet(page, EV, `${prefix}GA`);
 
       // The "Group Avg" button may or may not be visible depending on scoring model/group config.
       // If visible, click it; otherwise verify the scoresheet is loaded.
@@ -527,11 +534,11 @@ for (const theme of CITE_THEMES) {
     test('View Official Submission', async ({ citeAuthenticatedPage: page }) => {
       await setCiteTheme(page, theme);
 
-      const TT = 'E2E SS-VO Team Type';
-      const EV = 'E2E SS-VO Evaluation';
+      const TT = `${prefix}VO Team Type`;
+      const EV = `${prefix}VO Evaluation`;
 
       await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-VO Team', 'SVO');
-      await navigateToEvaluationScoresheet(page, EV, 'E2E SS-VO');
+      await navigateToEvaluationScoresheet(page, EV, `${prefix}VO`);
 
       // The "Official" button may or may not be visible depending on scoring model config.
       // If visible, click it; otherwise verify the scoresheet is loaded.
@@ -553,11 +560,11 @@ for (const theme of CITE_THEMES) {
     test('Modify Score with CanSubmit Permission', async ({ citeAuthenticatedPage: page }) => {
       await setCiteTheme(page, theme);
 
-      const TT = 'E2E SS-MS Team Type';
-      const EV = 'E2E SS-MS Evaluation';
+      const TT = `${prefix}MS Team Type`;
+      const EV = `${prefix}MS Evaluation`;
 
       await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-MS Team', 'SMS');
-      await navigateToEvaluationScoresheet(page, EV, 'E2E SS-MS');
+      await navigateToEvaluationScoresheet(page, EV, `${prefix}MS`);
 
       // Ensure we're on User submission to have edit ability
       const userButton = page.getByRole('button', { name: 'User', exact: true });
@@ -597,11 +604,11 @@ for (const theme of CITE_THEMES) {
     test('Modify Score without CanSubmit Permission', async ({ citeAuthenticatedPage: page }) => {
       await setCiteTheme(page, theme);
 
-      const TT = 'E2E SS-MU Team Type';
-      const EV = 'E2E SS-MU Evaluation';
+      const TT = `${prefix}MU Team Type`;
+      const EV = `${prefix}MU Evaluation`;
 
       await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-MU Team', 'SMU');
-      await navigateToEvaluationScoresheet(page, EV, 'E2E SS-MU');
+      await navigateToEvaluationScoresheet(page, EV, `${prefix}MU`);
 
       // Switch to "Team" view where the admin user cannot directly modify scores
       const teamButton = page.getByRole('button', { name: 'Team', exact: true });
@@ -627,11 +634,11 @@ for (const theme of CITE_THEMES) {
     test('Add Comment to Score', async ({ citeAuthenticatedPage: page }) => {
       await setCiteTheme(page, theme);
 
-      const TT = 'E2E SS-AC Team Type';
-      const EV = 'E2E SS-AC Evaluation';
+      const TT = `${prefix}AC Team Type`;
+      const EV = `${prefix}AC Evaluation`;
 
       await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-AC Team', 'SAC');
-      await navigateToEvaluationScoresheet(page, EV, 'E2E SS-AC');
+      await navigateToEvaluationScoresheet(page, EV, `${prefix}AC`);
 
       // Switch to User submission to have edit ability
       const userButton = page.getByRole('button', { name: 'User', exact: true });
@@ -661,11 +668,11 @@ for (const theme of CITE_THEMES) {
     test('View Score Summary', async ({ citeAuthenticatedPage: page }) => {
       await setCiteTheme(page, theme);
 
-      const TT = 'E2E SS-VS Team Type';
-      const EV = 'E2E SS-VS Evaluation';
+      const TT = `${prefix}VS Team Type`;
+      const EV = `${prefix}VS Evaluation`;
 
       await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-VS Team', 'SVS');
-      await navigateToEvaluationScoresheet(page, EV, 'E2E SS-VS');
+      await navigateToEvaluationScoresheet(page, EV, `${prefix}VS`);
 
       // expect: Scoresheet displays with the evaluation heading and move info
       const scoresheetTable = page.getByRole('table').first();

@@ -13,6 +13,7 @@ import {
   apiDeleteCollectionById,
   GALLERY_THEMES,
   setGalleryTheme,
+  clickRowAction,
 } from '../../fixtures';
 
 /**
@@ -171,13 +172,10 @@ for (const theme of GALLERY_THEMES) {
       // 1. Open the delete action for an article
       await expectArticleRowCount(page, collectionName, articleName, 1);
 
-      // force: true is required. The button itself is enabled (disabled=null,
-      // aria-disabled=null) but the enclosing `<mat-expansion-panel-header disabled>`
-      // carries aria-disabled="true", and Playwright treats descendants of an
-      // aria-disabled ancestor as disabled — a plain click waits out the timeout.
+      // The row header is a disabled expansion-panel header; see clickRowAction in fixtures.ts.
       const openConfirmDialog = async () => {
         const panel = await ensureArticlesPanel(page, collectionName, articleName);
-        await panel.getByRole('button', { name: `Delete ${articleName}` }).click({ force: true });
+        await clickRowAction(panel.getByRole('button', { name: `Delete ${articleName}` }));
         const confirm = page.getByRole('dialog').filter({ hasText: 'Delete Article' });
         await expect(confirm).toBeVisible();
         return confirm;

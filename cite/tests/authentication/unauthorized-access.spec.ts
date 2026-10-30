@@ -14,15 +14,14 @@ for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Authentication and Authorization`, () => {
     test('Unauthorized Access Protection', async ({ page }) => {
 
-      // 1. Clear all cookies and local storage to simulate unauthenticated state
-      await page.context().clearCookies();
-      await page.goto(Services.Cite.UI);
-      await page.evaluate(() => {
-        localStorage.clear();
-        sessionStorage.clear();
-      });
+      // 1. Start from an unauthenticated state
+      // The empty storageState above already gives the context no cookies and no storage
+      // for any origin. Loading CITE here only to clear storage would start an OIDC
+      // redirect to Keycloak that races the navigation below; Firefox aborts one of the
+      // two (NS_BINDING_ABORTED).
 
       // expect: Session is cleared
+      expect(await page.context().cookies()).toEqual([]);
       // 2. Attempt to navigate directly to a protected route (e.g., http://localhost:4721/admin)
       // No CITE screen renders before the redirect, so the user-menu theme switch never
       // exists. The theme is requested on the protected URL instead, the only theme input an

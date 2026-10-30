@@ -15,6 +15,7 @@ import {
   openMatSelect,
   GALLERY_THEMES,
   setGalleryTheme,
+  clickRowAction,
 } from '../../fixtures';
 
 /**
@@ -169,12 +170,8 @@ for (const theme of GALLERY_THEMES) {
       /** Drive one status transition through the admin edit dialog and prove it persisted. */
       const setStatusViaDialog = async (status: string) => {
         const panel = await ensureArticlesPanel(page, collectionName, articleName);
-        // force: true is required. The button itself is enabled (disabled=null,
-        // aria-disabled=null) but the enclosing
-        // `<mat-expansion-panel-header disabled>` carries aria-disabled="true",
-        // and Playwright treats descendants of an aria-disabled ancestor as
-        // disabled — a plain click waits out the timeout.
-        await panel.getByRole('button', { name: `Edit ${articleName}` }).click({ force: true });
+        // The row header is a disabled expansion-panel header; see clickRowAction in fixtures.ts.
+        await clickRowAction(panel.getByRole('button', { name: `Edit ${articleName}` }));
         await expect(page.getByRole('dialog', { name: 'Edit Article' })).toBeVisible();
 
         const dialog = page.getByRole('dialog', { name: 'Edit Article' });
@@ -230,7 +227,7 @@ for (const theme of GALLERY_THEMES) {
       // Re-opening the dialog shows the final persisted status, so the value
       // round-trips back into the form rather than only into the request body.
       const reopenPanel = await ensureArticlesPanel(page, collectionName, articleName);
-      await reopenPanel.getByRole('button', { name: `Edit ${articleName}` }).click({ force: true });
+      await clickRowAction(reopenPanel.getByRole('button', { name: `Edit ${articleName}` }));
       await expect(page.getByRole('dialog', { name: 'Edit Article' })).toBeVisible();
       const reopened = page.getByRole('dialog', { name: 'Edit Article' });
       await expect(reopened.getByRole('combobox', { name: 'Status' })).toContainText('Red');
