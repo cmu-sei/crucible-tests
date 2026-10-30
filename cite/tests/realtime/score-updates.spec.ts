@@ -7,6 +7,7 @@
 import { test, expect, APIRequestContext } from '@playwright/test';
 import { Services, authenticateWithKeycloak } from '../../../shared-fixtures';
 import { CITE_THEMES, setCiteTheme } from '../../fixtures';
+import { findAdminRowByName } from '../../test-helpers';
 async function getApiToken(request: APIRequestContext): Promise<string> {
   const resp = await request.post(`${Services.Keycloak}/realms/crucible/protocol/openid-connect/token`, {
     form: {
@@ -21,7 +22,7 @@ async function getApiToken(request: APIRequestContext): Promise<string> {
   return data.access_token;
 }
 
-async function createEvaluation(request: APIRequestContext, token: string): Promise<string> {
+async function createEvaluation(request: APIRequestContext, token: string): Promise<{ id: string; description: string }> {
   const modelsResp = await request.get(`${Services.Cite.API}/api/scoringmodels`, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -39,16 +40,17 @@ async function createEvaluation(request: APIRequestContext, token: string): Prom
     scoringModelId = (await smResp.json()).id;
   }
 
+  const description = `E2E Test Evaluation - ${Date.now()}`;
   const resp = await request.post(`${Services.Cite.API}/api/evaluations`, {
     headers: { Authorization: `Bearer ${token}` },
     data: {
-      description: `E2E Test Evaluation - ${Date.now()}`,
+      description,
       scoringModelId,
       status: 'Active',
     },
   });
   const evaluation = await resp.json();
-  return evaluation.id;
+  return { id: evaluation.id, description };
 }
 
 async function deleteEvaluation(request: APIRequestContext, token: string, id: string): Promise<void> {
@@ -62,7 +64,7 @@ for (const theme of CITE_THEMES) {
     test('Real-time Score Updates', async ({ browser, request }) => {
       // Setup: Create evaluation via API
       const apiToken = await getApiToken(request);
-      const evaluationId = await createEvaluation(request, apiToken);
+      const { id: evaluationId, description } = await createEvaluation(request, apiToken);
 
       try {
         // 1. Open two browser instances with different users logged in to the same evaluation
@@ -80,7 +82,9 @@ for (const theme of CITE_THEMES) {
         for (const page of [page1, page2]) {
           await page.goto(`${Services.Cite.UI}/admin`);
           await expect(page).toHaveURL(/\/admin/, { timeout: 15000 });
-          const evalRow = page.getByRole('row').filter({ hasText: 'E2E Test Evaluation' }).first();
+          // Search for this run's evaluation: the list is paged, and earlier runs and other
+          // files' evaluations can push it off the first page.
+          const evalRow = await findAdminRowByName(page, description);
           await expect(evalRow).toBeVisible({ timeout: 15000 });
           await evalRow.click();
         }
