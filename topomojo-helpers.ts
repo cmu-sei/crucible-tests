@@ -441,3 +441,171 @@ export async function waitForGamespaceReady(
     + `(last seen isActive=${last?.isActive}, vms=${Array.isArray(last?.vms) ? last?.vms.length : 'none'})`
   );
 }
+
+// ── Templates ────────────────────────────────────────────────────────────────
+
+export interface TopoMojoTemplate {
+  id: string;
+  name: string;
+  workspaceId?: string | null;
+  isLinked?: boolean;
+}
+
+export interface TopoMojoTemplateDetail {
+  id: string;
+  name: string;
+  description?: string;
+  audience?: string;
+  networks?: string;
+  guestinfo?: string;
+  detail: string;
+  isPublished?: boolean;
+}
+
+/**
+ * Create a stock template (admin only) with the given Detail JSON. On Proxmox,
+ * `Template` in the Detail names the PVE template vm the template clones from.
+ *
+ * Pair every call with `deleteStockTemplate` in teardown when `Template` names a template
+ * VM the deployment owns, otherwise `deleteTemplate`.
+ */
+export async function createStockTemplate(
+  token: string,
+  name: string,
+  detail: object
+): Promise<TopoMojoTemplateDetail> {
+  const r = await tmCall<TopoMojoTemplateDetail>(token, '/api/template-detail', {
+    method: 'POST',
+    body: { name, description: 'Automated test template; deleted on teardown.', networks: 'lan', detail: JSON.stringify(detail) },
+  });
+  if (!r.ok) {
+    throw new Error(`createStockTemplate failed (${r.status}): ${r.text}`);
+  }
+  return r.data;
+}
+
+/**
+ * Delete a template. On Proxmox this deletes the template VM only when the template owns it
+ * (an unlinked workspace copy); a stock template's shared base is left alone.
+ */
+export async function deleteTemplate(token: string, templateId: string): Promise<void> {
+  const r = await tmCall(token, `/api/template/${templateId}`, { method: 'DELETE' });
+  // A template that's already gone answers 400 with a ResourceNotFound validation error.
+  if (!r.ok && r.status !== 404 && !(r.status === 400 && r.text.includes('ResourceNotFound'))) {
+    throw new Error(`deleteTemplate(${templateId}) returned ${r.status}: ${r.text}`);
+  }
+}
+
+/**
+ * Delete a stock template that points at a template VM the deployment owns, such as a global
+ * Proxmox base, without any chance of deleting that VM.
+ *
+ * TopoMojo releases before the Proxmox delete guard destroyed the template VM a stock
+ * template names when the template was deleted. Repointing `Template` at a name no VM has
+ * first makes this cleanup safe against those releases too. Use `deleteTemplate` when the
+ * delete itself is the behavior under test.
+ */
+export async function deleteStockTemplate(token: string, templateId: string): Promise<void> {
+  const cur = await tmCall<TopoMojoTemplateDetail>(token, `/api/template-detail/${templateId}`);
+  if (cur.status === 404 || (cur.status === 400 && cur.text.includes('ResourceNotFound'))) {
+    return;
+  }
+  if (!cur.ok) {
+    throw new Error(`deleteStockTemplate: could not load ${templateId} (${cur.status}): ${cur.text}`);
+  }
+
+  const detail = JSON.parse(cur.data.detail || '{}');
+  detail.Template = `crucible-tests-deleted-${templateId}`;
+  const put = await tmCall(token, '/api/template-detail', {
+    method: 'PUT',
+    body: { ...cur.data, detail: JSON.stringify(detail) },
+  });
+  if (!put.ok) {
+    // Never fall through to the delete: on an older release it would destroy the base.
+    throw new Error(`deleteStockTemplate: could not repoint ${templateId} (${put.status}): ${put.text}`);
+  }
+
+  await deleteTemplate(token, templateId);
+}
+
+/** Clone a template (admin only). The clone is unlinked and unpublished. */
+export async function cloneTemplate(token: string, templateId: string, name?: string): Promise<TopoMojoTemplateDetail> {
+  const r = await tmCall<TopoMojoTemplateDetail>(token, '/api/template/clone', {
+    method: 'POST',
+    body: { id: templateId, name },
+  });
+  if (!r.ok) {
+    throw new Error(`cloneTemplate failed (${r.status}): ${r.text}`);
+  }
+  return r.data;
+}
+
+/** A template's Detail, parsed. */
+export async function getTemplateDetail(token: string, templateId: string): Promise<{ meta: TopoMojoTemplateDetail; detail: any }> {
+  const r = await tmCall<TopoMojoTemplateDetail>(token, `/api/template-detail/${templateId}`);
+  if (!r.ok) {
+    throw new Error(`getTemplateDetail(${templateId}) failed (${r.status}): ${r.text}`);
+  }
+  return { meta: r.data, detail: JSON.parse(r.data.detail || '{}') };
+}
+
+/** Add a stock template to a workspace as a linked template. */
+export async function linkTemplate(token: string, templateId: string, workspaceId: string): Promise<TopoMojoTemplate> {
+  const r = await tmCall<TopoMojoTemplate>(token, '/api/template', {
+    method: 'POST',
+    body: { templateId, workspaceId },
+  });
+  if (!r.ok) {
+    throw new Error(`linkTemplate failed (${r.status}): ${r.text}`);
+  }
+  return r.data;
+}
+
+/** Unlink a workspace template so it gets its own copy of the parent's disk. */
+export async function unlinkTemplate(token: string, templateId: string, workspaceId: string): Promise<TopoMojoTemplate> {
+  const r = await tmCall<TopoMojoTemplate>(token, '/api/template/unlink', {
+    method: 'POST',
+    body: { templateId, workspaceId },
+  });
+  if (!r.ok) {
+    throw new Error(`unlinkTemplate failed (${r.status}): ${r.text}`);
+  }
+  return r.data;
+}
+
+/**
+ * Initialize a template's disks. On Proxmox an unlinked template's Initialize makes
+ * its full-clone copy of the parent template vm, and returns once the clone is done.
+ */
+export async function initializeTemplate(token: string, templateId: string): Promise<number> {
+  const r = await tmCall<number>(token, `/api/vm-template/${templateId}`, { method: 'PUT' });
+  if (!r.ok) {
+    throw new Error(`initializeTemplate(${templateId}) failed (${r.status}): ${r.text}`);
+  }
+  return r.data;
+}
+
+export interface TemplateSource {
+  name: string;
+  isGlobal: boolean;
+  workspaceId?: string | null;
+  workspaceName?: string | null;
+  templateName?: string | null;
+  created?: string | null;
+  modified?: string | null;
+}
+
+export interface TemplateSourceReport {
+  /** Template Detail field the names go in: "disks" (vSphere) or "template" (Proxmox). */
+  field: 'disks' | 'template';
+  sources: TemplateSource[];
+}
+
+/** What the admin Disks page lists: disks or template vms a template can deploy from. */
+export async function getTemplateSources(token: string): Promise<TemplateSourceReport> {
+  const r = await tmCall<TemplateSourceReport>(token, '/api/admin/template-sources');
+  if (!r.ok) {
+    throw new Error(`getTemplateSources failed (${r.status}): ${r.text}`);
+  }
+  return r.data;
+}
