@@ -19,7 +19,7 @@ test.describe('Workspace Management', () => {
     await expect(page).toHaveURL(serviceUrlPattern(Services.TopoMojo.UI));
 
     // expect: User is not an admin - no Admin button in nav
-    const adminButton = page.getByRole('button', { name: 'Admin' });
+    const adminButton = page.getByRole('link', { name: 'Admin' });
     await expect(adminButton).not.toBeVisible();
 
     // 2. Verify the TopoMojo API enforces the creator role restriction.

@@ -11,7 +11,7 @@ test.describe('Admin Panel', () => {
 
     // 1. The fixture should have authenticated, but Angular app may need time to initialize
     // Wait for either authenticated state (Admin button) or login prompt
-    const adminButton = page.getByRole('button', { name: 'Admin' });
+    const adminButton = page.getByRole('link', { name: 'Admin' });
     const loginButton = page.getByRole('button', { name: 'identity provider' });
 
     // Race between Admin button appearing (authenticated) or login button appearing (needs auth)

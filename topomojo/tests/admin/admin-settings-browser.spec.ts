@@ -15,7 +15,7 @@ test.describe('Admin Panel', () => {
 
     // Wait for Admin button to confirm authentication (fixture already authenticated)
     // The Admin button only appears after auth state is set - wait generously to avoid race conditions
-    const adminButton = page.getByRole('button', { name: 'Admin' });
+    const adminButton = page.getByRole('link', { name: 'Admin' });
 
     try {
       await adminButton.waitFor({ state: 'visible', timeout: 30000 });
