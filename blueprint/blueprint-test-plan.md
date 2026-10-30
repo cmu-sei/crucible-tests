@@ -1423,7 +1423,7 @@ app's layered settings files as served (`settings.json`, deep-merged with
 **File:** `blueprint/tests/player-applications/blueprint-player-application-templates.spec.ts`
 
 **Steps:**
-  1. In Admin 'Player Application Templates', click 'Add a template Player Application', fill Name, URL, Icon URL, uncheck Embeddable, check Load in Background, Save
+  1. In Admin 'Player Apps', click 'Add a template Player Application', fill Name, URL, Icon URL, uncheck Embeddable, check Load in Background, Save
     - expect: Dialog 'Add a Player Application Template'; the template is listed with its URL and stored with no MSEL
   2. In a MSEL with Player enabled, open Player Apps → Add
     - expect: The template is offered, titled with its URL, and not under the 'From Player' group
@@ -1436,7 +1436,7 @@ app's layered settings files as served (`settings.json`, deep-merged with
 **File:** `blueprint/tests/player-applications/blueprint-player-application-templates.spec.ts`
 
 **Steps:**
-  1. Seed a template; in Admin 'Player Application Templates', edit it and rename it
+  1. Seed a template; in Admin 'Player Apps', edit it and rename it
     - expect: Dialog 'Edit Player Application Template' prefilled; the list and the API show the new name only
   2. Delete it and confirm Yes
     - expect: 'Delete Player Application Template' confirmation names it; the row and the record are gone

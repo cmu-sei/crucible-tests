@@ -29,7 +29,7 @@ import {
   tempBlueprintName,
 } from '../../test-helpers';
 
-const SECTION = 'Player Application Templates';
+const SECTION = 'Player Apps';
 
 /**
  * Open the MSEL's Player Apps section and expand its "Player Applications" panel. The panel
