@@ -20,6 +20,19 @@ const COMPARISON_EVAL_NAME = 'E2E Comparison Test Evaluation';
 const DISPLAY_TEAM_TYPE = 'E2E Display Team Type';
 const DISPLAY_EVAL_NAME = 'E2E Display Test Evaluation';
 
+// Both reports switch views with a User / Team button group ("Displayed responses"
+// on the Submission Review, "Displayed submissions" on the Aggregate Report) and
+// print with a Print button.
+function viewButton(page: import('@playwright/test').Page, name: 'User' | 'Team') {
+  return page
+    .getByRole('group', { name: /^Displayed (responses|submissions)$/ })
+    .getByRole('button', { name, exact: true });
+}
+
+function printButton(page: import('@playwright/test').Page) {
+  return page.getByRole('button', { name: 'Print', exact: true });
+}
+
 async function createActiveEvalWithMoveAndTeam(page: import('@playwright/test').Page, teamTypeName: string, evalName: string, teamName: string, teamShortName: string) {
   // 0. Ensure a scoring model exists so the Add Evaluation dialog's Scoring Model
   //    dropdown is populated (the empty seed.spec.ts stub leaves a clean DB with none).
@@ -245,12 +258,10 @@ for (const theme of CITE_THEMES) {
       await expect(reportHeading).toBeVisible({ timeout: 10000 });
       await expect(reportHeading).toContainText(DISPLAY_EVAL_NAME);
 
-      // Verify the toggle and print buttons are present
-      const toggleButton = page.locator('button[title="Toggle between user and team scores"]');
-      await expect(toggleButton).toBeVisible({ timeout: 5000 });
-
-      const printButton = page.locator('button[title="Print Submission Review"]');
-      await expect(printButton).toBeVisible({ timeout: 5000 });
+      // Verify the User / Team view buttons and the Print button are present
+      await expect(viewButton(page, 'User')).toBeVisible({ timeout: 5000 });
+      await expect(viewButton(page, 'Team')).toBeVisible({ timeout: 5000 });
+      await expect(printButton(page)).toBeVisible({ timeout: 5000 });
 
       // Cleanup
       await deleteEvaluationByName(page, DISPLAY_EVAL_NAME);
@@ -274,16 +285,15 @@ for (const theme of CITE_THEMES) {
       await expect(reportHeading).toBeVisible({ timeout: 10000 });
 
       // Verify the Print button is visible
-      const printButton = page.locator('button[title="Print Submission Review"]');
-      await expect(printButton).toBeVisible({ timeout: 5000 });
-      await expect(printButton).toBeEnabled({ timeout: 5000 });
+      await expect(printButton(page)).toBeVisible({ timeout: 5000 });
+      await expect(printButton(page)).toBeEnabled({ timeout: 5000 });
 
       // Stub window.print to prevent the browser print dialog.
       // The component calls: replace body -> window.print() -> location.reload()
       // After reload the page returns to the home page.
       await page.evaluate(() => { window.print = () => {}; });
 
-      await printButton.click();
+      await printButton(page).click();
 
       // The component triggers location.reload() after print, which navigates back
       await page.waitForLoadState('domcontentloaded', { timeout: 30000 });
@@ -313,26 +323,27 @@ for (const theme of CITE_THEMES) {
       const reportHeading = page.locator('h2').filter({ hasText: /Submissions Report/ });
       await expect(reportHeading).toBeVisible({ timeout: 10000 });
 
-      // Toggle between user and team scores.
+      // Switch between user and team scores.
       // NOTE: the report's initial User/Team state is persisted in localStorage and can
       // carry over from a previous test in the same worker, so do NOT assume it starts on
-      // "User". Instead, read the current state and assert that each toggle FLIPS it.
-      const toggleButton = page.locator('button[title="Toggle between user and team scores"]');
-      await expect(toggleButton).toBeVisible({ timeout: 5000 });
+      // "User". Instead, read the current state, switch to the other view, then back.
+      await expect(viewButton(page, 'User')).toBeVisible({ timeout: 5000 });
+      await expect(viewButton(page, 'Team')).toBeVisible({ timeout: 5000 });
 
-      const isUser = async () => ((await reportHeading.textContent()) ?? '').includes('User');
+      const startUser = ((await reportHeading.textContent()) ?? '').includes('User');
+      const start = startUser ? 'User' : 'Team';
+      const other = startUser ? 'Team' : 'User';
+      await expect(viewButton(page, start)).toHaveAttribute('aria-pressed', 'true');
 
-      const startUser = await isUser();
+      await viewButton(page, other).click();
+      // The heading and the pressed button follow the switch.
+      await expect(reportHeading).toContainText(other, { timeout: 5000 });
+      await expect(viewButton(page, other)).toHaveAttribute('aria-pressed', 'true');
 
-      await toggleButton.click();
-      await page.waitForTimeout(1000);
-      // After one toggle the heading should be the opposite of where it started.
-      await expect(reportHeading).toContainText(startUser ? 'Team' : 'User', { timeout: 5000 });
-
-      await toggleButton.click();
-      await page.waitForTimeout(1000);
-      // A second toggle returns it to the starting state.
-      await expect(reportHeading).toContainText(startUser ? 'User' : 'Team', { timeout: 5000 });
+      await viewButton(page, start).click();
+      // Switching back returns it to the starting state.
+      await expect(reportHeading).toContainText(start, { timeout: 5000 });
+      await expect(viewButton(page, start)).toHaveAttribute('aria-pressed', 'true');
 
       // Cleanup
       await deleteEvaluationByName(page, COMPARISON_EVAL_NAME);
