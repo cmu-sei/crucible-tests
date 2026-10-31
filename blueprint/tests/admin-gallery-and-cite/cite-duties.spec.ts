@@ -99,7 +99,7 @@ for (const theme of BLUEPRINT_THEMES) {
         });
         const name = tempBlueprintName('CiteDutyFanOut');
 
-        await navigateToMselSection(page, msel.id, 'CITE Duties');
+        await navigateToMselSection(page, msel.id, 'Duties');
 
         // 1. One submission for "All Teams".
         await page.getByRole('button', { name: 'Add CITE Duty' }).click();

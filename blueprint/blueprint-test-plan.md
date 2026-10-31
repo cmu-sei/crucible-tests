@@ -367,7 +367,7 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
     - expect: 'Set a Start Time' checkbox with tooltip 'Schedule a specific start date and time for this MSEL'
     - expect: Start Date / Time field shown when Set a Start Time is checked
     - expect: End Date / Time field with duration spinner (days d, hours h, minutes m)
-    - expect: Applications to Integrate section with checkboxes: Player, Gallery, CITE (with Scoring Model display), Steamfitter
+    - expect: Applications to Integrate section with checkboxes: Player, Gallery, CITE (with a 'Scoring Model:' summary and 'Open the Scoring Model tab'), Steamfitter
     - expect: 'Push Integrations' button
     - expect: MSEL Status dropdown
     - expect: Exercise View URL section with copy button and direct link

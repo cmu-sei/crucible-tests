@@ -104,7 +104,7 @@ for (const theme of BLUEPRINT_THEMES) {
         await createMove(token, msel.id, { moveNumber: 2 });
         const description = tempBlueprintName('CiteActionFanOut');
 
-        await navigateToMselSection(page, msel.id, 'CITE Actions');
+        await navigateToMselSection(page, msel.id, 'Actions');
 
         // 1. Create one action for "All Moves" and "All Teams".
         await page.getByRole('button', { name: 'Add CITE Action' }).click();
