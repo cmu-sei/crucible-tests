@@ -335,6 +335,11 @@ export interface CreateScenarioEventOptions {
    * leaving this unset is not an option.
    */
   scenarioEventType?: number;
+  /**
+   * Where the push sends the event, e.g. 'Gallery' or 'Gallery,Steamfitter'. Default none:
+   * the Gallery push, and the Gallery Wall tab that previews it, skip an event without it.
+   */
+  integrationTarget?: string;
 }
 
 /**
@@ -377,6 +382,7 @@ export async function createScenarioEvent(
     groupOrder: opts.groupOrder ?? 0,
     rowMetadata: opts.rowMetadata ?? '',
     scenarioEventType: opts.scenarioEventType ?? ScenarioEventType.Inject,
+    integrationTarget: opts.integrationTarget ?? null,
     // DataValues can be added later if needed; for basic seeding we leave it empty.
     dataValues: [],
   };
@@ -558,7 +564,14 @@ export async function copyMselDataFieldsFrom(
 export async function createMselDataField(
   token: string,
   mselId: string,
-  field: { name: string; dataType: string; displayOrder: number; onScenarioEventList?: boolean }
+  field: {
+    name: string;
+    dataType: string;
+    displayOrder: number;
+    onScenarioEventList?: boolean;
+    /** The Gallery article parameter the field feeds on push, e.g. 'Name' or 'ToOrg'. */
+    galleryArticleParameter?: string;
+  }
 ): Promise<any> {
   const r = await blueprintCall<any>(token, '/api/dataFields', {
     method: 'POST',
@@ -2266,6 +2279,53 @@ export async function createCardTemplate(
  * `citeDuties`, `moves`, `groups`). Swallows 404, so teardown can call it on a record
  * the test already deleted through the UI.
  */
+/** Create a Gallery card on a MSEL; the MSEL delete cascade removes it. */
+export async function createMselCard(
+  token: string,
+  mselId: string,
+  opts: { name: string; description?: string; move?: number }
+): Promise<any> {
+  const r = await blueprintCall<any>(token, '/api/cards', {
+    method: 'POST',
+    body: {
+      id: randomUUID(),
+      mselId,
+      name: opts.name,
+      description: opts.description ?? '',
+      isTemplate: false,
+      move: opts.move ?? 0,
+      inject: 0,
+    },
+  });
+  if (!r.ok) {
+    throw new Error(`createMselCard failed (${r.status}): ${r.text}`);
+  }
+  return r.data;
+}
+
+/**
+ * Put a MSEL team on a card. `isShownOnWall` is what puts the card on that team's Gallery
+ * wall; `canPostArticles` lets the team post its own articles there.
+ */
+export async function createCardTeam(
+  token: string,
+  opts: { cardId: string; teamId: string; isShownOnWall?: boolean; canPostArticles?: boolean }
+): Promise<any> {
+  const r = await blueprintCall<any>(token, '/api/teamcards', {
+    method: 'POST',
+    body: {
+      cardId: opts.cardId,
+      teamId: opts.teamId,
+      isShownOnWall: opts.isShownOnWall ?? true,
+      canPostArticles: opts.canPostArticles ?? false,
+    },
+  });
+  if (!r.ok) {
+    throw new Error(`createCardTeam failed (${r.status}): ${r.text}`);
+  }
+  return r.data;
+}
+
 export async function deleteBlueprintRecord(
   token: string,
   collection: 'cards' | 'citeActions' | 'citeDuties' | 'moves' | 'groups',
