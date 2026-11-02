@@ -39,7 +39,7 @@
  */
 
 import { APIRequestContext, request as playwrightRequest } from '@playwright/test';
-import { Services } from '../shared-fixtures';
+import { Services, requirePrecondition } from '../shared-fixtures';
 import { getClientSecret, getKeycloakAdminToken } from '../keycloak-admin';
 import {
   createTeam,
@@ -796,4 +796,170 @@ export async function subscribeVmToViewEvents(
       }
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Proxmox
+// ---------------------------------------------------------------------------
+
+/** `proxmoxVmInfo` on a VM API record: which Proxmox machine the record stands for. */
+export interface ProxmoxVmInfo {
+  /** The Proxmox vmid. */
+  id: number;
+  /** The node the machine runs on. */
+  node: string;
+  type?: 'QEMU' | 'LXC';
+}
+
+/**
+ * The Proxmox machine the Proxmox console specs drive, from
+ * `PROXMOX_CONSOLE_VMID` and `PROXMOX_CONSOLE_NODE`, or null when either is
+ * unset. Set them in `.env.local`: the vmid is whatever the local Proxmox host
+ * assigned.
+ *
+ * Configuration rather than discovery: picking "some running Proxmox VM" from
+ * the VM API would make every assertion depend on whichever machine came up, and
+ * could land on a machine another session is using. The machine must be a
+ * running QEMU VM. The specs only read its state and send it requests that the
+ * API or Proxmox refuses, so it is never powered off, reverted or snapshotted.
+ */
+export function proxmoxConsoleTarget(): ProxmoxVmInfo | null {
+  const id = Number.parseInt(process.env.PROXMOX_CONSOLE_VMID ?? '', 10);
+  const node = (process.env.PROXMOX_CONSOLE_NODE ?? '').trim();
+  if (!Number.isInteger(id) || id <= 0 || !node) {
+    return null;
+  }
+  return { id, node };
+}
+
+export interface ProxmoxVmRecord {
+  id: string;
+  name: string;
+  powerState: string;
+  type: string;
+  proxmoxVmInfo: ProxmoxVmInfo | null;
+}
+
+/**
+ * The VM API record for a Proxmox machine, or null when there is none.
+ *
+ * Why the specs use the existing record instead of seeding one: the VM API keys
+ * `proxmox_vm_info` on the Proxmox vmid, so a machine can back only one record,
+ * and creating a second record for it fails with a duplicate-key error. The
+ * record is whatever registered the machine (Caster, Alloy, or an admin); the
+ * specs read it and leave it as they found it.
+ *
+ * `GET api/vms` lists every VM for a system admin, which the seeding token's
+ * user is.
+ */
+export async function findProxmoxVmRecord(
+  token: string,
+  target: ProxmoxVmInfo
+): Promise<ProxmoxVmRecord | null> {
+  const r = await vmCall<ProxmoxVmRecord[]>(token, '/api/vms');
+  if (!r.ok) {
+    throw new Error(`Listing VMs failed (${r.status}): ${r.text}`);
+  }
+  return (
+    (r.data ?? []).find(
+      (vm) =>
+        vm.type === 'Proxmox' &&
+        vm.proxmoxVmInfo?.id === target.id &&
+        vm.proxmoxVmInfo?.node === target.node
+    ) ?? null
+  );
+}
+
+/**
+ * `GET api/vms/proxmox/{id}` — the console's view of a Proxmox VM. The four
+ * capability flags come from the machine's Proxmox config, and the console's
+ * options bar enables or disables its items from them.
+ */
+export interface ProxmoxVmState {
+  id: string;
+  name: string;
+  canMountIso: boolean;
+  canAccessNicConfiguration: boolean;
+  /** Send File To VM and Download File From VM need the QEMU guest agent. */
+  guestAgentRunning: boolean;
+  /** Snapshots is enabled only when the machine has one. */
+  hasSnapshot: boolean;
+  currentSnapshot: string | null;
+  /** Copy needs `clipboard=vnc` on the machine's `vga` config. */
+  vncClipboardEnabled: boolean;
+}
+
+/**
+ * Read a Proxmox VM through the VM API. Returns the raw result rather than
+ * throwing, so a spec can turn a failure (no Proxmox configured, the vmid not on
+ * the node) into a precondition with the API's own reason.
+ */
+export async function getProxmoxVm(
+  token: string,
+  vmId: string
+): Promise<{ ok: boolean; status: number; data: ProxmoxVmState; text: string }> {
+  return vmCall<ProxmoxVmState>(token, `/api/vms/proxmox/${vmId}`);
+}
+
+/**
+ * `POST api/vms/proxmox/{id}/actions/{action}` — for the error-path specs, which
+ * assert on the status and the ProblemDetails `title`. Only send a request the
+ * API or Proxmox will refuse: these hit the real machine.
+ */
+export async function postProxmoxAction(
+  token: string,
+  vmId: string,
+  action: string,
+  body?: unknown
+): Promise<{ ok: boolean; status: number; data: any; text: string }> {
+  return vmCall(token, `/api/vms/proxmox/${vmId}/actions/${action}`, {
+    method: 'POST',
+    body: body ?? {},
+  });
+}
+
+export interface ProxmoxConsoleVm {
+  token: string;
+  target: ProxmoxVmInfo;
+  record: ProxmoxVmRecord;
+  /** The console's view of the machine as the spec started. */
+  state: ProxmoxVmState;
+}
+
+/**
+ * Resolve the configured Proxmox machine ({@link proxmoxConsoleTarget}) to its
+ * VM API record and current console state, or skip the calling test with the
+ * reason it can't run (under `CI`/`CRUCIBLE_STRICT`, fail instead).
+ *
+ * Every step is a precondition the deployment owns: the variables being set, a
+ * VM API record existing for the machine, the VM API reaching Proxmox for it,
+ * and the machine running. Call it from inside the test (or a `beforeEach`), so
+ * the skip lands on the test.
+ */
+export async function requireProxmoxConsoleVm(): Promise<ProxmoxConsoleVm> {
+  const target = proxmoxConsoleTarget();
+  requirePrecondition(
+    target,
+    'No Proxmox machine configured for the Proxmox console specs. Set PROXMOX_CONSOLE_VMID and ' +
+      'PROXMOX_CONSOLE_NODE (in .env.local) to a running QEMU VM on the Proxmox host the VM API uses.'
+  );
+  const token = await getPlayerToken();
+  const record = await findProxmoxVmRecord(token, target!);
+  requirePrecondition(
+    record,
+    `No VM API record for Proxmox VM ${target!.id} on node ${target!.node}. Register it with ` +
+      'Player (deploy it through Caster or Alloy, or add it as a VM) before running these specs.'
+  );
+  const state = await getProxmoxVm(token, record!.id);
+  requirePrecondition(
+    state.ok,
+    `The VM API could not read Proxmox VM ${target!.id} on ${target!.node} (${state.status}): ` +
+      `${(state.data as { title?: string } | undefined)?.title ?? state.text}`
+  );
+  requirePrecondition(
+    record!.powerState === 'On',
+    `Proxmox VM ${target!.id} is not running (the VM API reports "${record!.powerState}"). ` +
+      'Start it: these specs read a live console and do not power machines on themselves.'
+  );
+  return { token, target: target!, record: record!, state: state.data };
 }
