@@ -441,3 +441,78 @@ export async function waitForGamespaceReady(
     + `(last seen isActive=${last?.isActive}, vms=${Array.isArray(last?.vms) ? last?.vms.length : 'none'})`
   );
 }
+
+/** The TopoMojo user record behind a token. TopoMojo resolves it from the token's subject. */
+export async function getTopoMojoUser(token: string): Promise<{ id: string; name: string; isAdmin: boolean }> {
+  const r = await tmCall<any>(token, '/api/user');
+  if (!r.ok || !r.data?.id) {
+    throw new Error(`getTopoMojoUser failed (${r.status}): ${r.text}`);
+  }
+  return r.data;
+}
+
+/**
+ * Remove a TopoMojo user record. A record exists once the user has signed in to
+ * the TopoMojo UI. Tolerates a missing record so teardown can call it unconditionally.
+ */
+export async function deleteTopoMojoUser(adminToken: string, userId: string): Promise<void> {
+  const r = await tmCall(adminToken, `/api/user/${userId}`, { method: 'DELETE' });
+  if (!r.ok && r.status !== 404) {
+    console.warn(`deleteTopoMojoUser(${userId}) returned ${r.status}`);
+  }
+}
+
+/** Generate a workspace invitation code. The caller must manage the workspace. */
+export async function generateWorkspaceInvite(token: string, workspaceId: string): Promise<string> {
+  const r = await tmCall<{ code: string }>(token, `/api/workspace/${workspaceId}/invite`, { method: 'PUT' });
+  if (!r.ok || !r.data?.code) {
+    throw new Error(`generateWorkspaceInvite(${workspaceId}) failed (${r.status}): ${r.text}`);
+  }
+  return r.data.code;
+}
+
+/**
+ * Accept a workspace invitation as the token's user. TopoMojo makes the first
+ * worker of a workspace with no workers its manager, and every later one an editor.
+ */
+export async function enlistInWorkspace(token: string, code: string): Promise<void> {
+  const r = await tmCall(token, `/api/worker/${code}`, { method: 'POST' });
+  if (!r.ok) {
+    throw new Error(`enlistInWorkspace failed (${r.status}): ${r.text}`);
+  }
+}
+
+/** Remove a worker from a workspace. Only an admin can remove the last manager. */
+export async function removeWorkspaceWorker(
+  token: string,
+  workspaceId: string,
+  subjectId: string
+): Promise<void> {
+  const r = await tmCall(token, `/api/workspace/${workspaceId}/worker/${subjectId}`, { method: 'DELETE' });
+  if (!r.ok) {
+    throw new Error(`removeWorkspaceWorker(${workspaceId}, ${subjectId}) failed (${r.status}): ${r.text}`);
+  }
+}
+
+/**
+ * Request a workspace export zip. `path` is `/api/workspace/download` (managers)
+ * or `/api/admin/download` (admins only). Returns the status and raw body
+ * rather than throwing, since tests assert on refusals too.
+ */
+export async function requestWorkspaceDownload(
+  token: string,
+  ids: string[],
+  path: '/api/workspace/download' | '/api/admin/download' = '/api/workspace/download'
+): Promise<{ status: number; body: Buffer }> {
+  const base = await resolveTopoApiBase();
+  const ctx = await newContext();
+  try {
+    const res = await ctx.post(`${base}${path}`, {
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      data: JSON.stringify(ids),
+    });
+    return { status: res.status(), body: await res.body() };
+  } finally {
+    await ctx.dispose();
+  }
+}

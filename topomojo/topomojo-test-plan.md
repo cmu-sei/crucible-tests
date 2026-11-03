@@ -546,6 +546,29 @@ This updated test plan covers recent feature additions including: configurable b
     - expect: User is redirected to home page
     - expect: Workspace no longer appears in list
 
+#### 4.15. Workspace Editor - Download Workspace
+
+**File:** `topomojo/tests/workspace-editor/download-workspace.spec.ts`
+
+**Seed:** an admin creates two workspaces, then removes themselves as the only worker of the first. Two temporary non-admin Keycloak users accept its invitation: the first becomes its manager, the second an editor. Teardown deletes both workspaces, both TopoMojo user records, and both Keycloak users.
+
+**Steps:**
+  1. Sign in as the manager and open the workspace's Settings tab
+    - expect: An Export section with a Download button is visible
+  2. Click Download
+    - expect: `POST /api/workspace/download` returns 200
+    - expect: The browser saves a `.zip` that contains `_data.json`
+  3. Sign in as the editor and open the same Settings tab
+    - expect: Settings loads, and no Download button is shown
+  4. Call `POST /api/workspace/download` directly
+    - expect: The manager's own workspace id returns a zip
+    - expect: 403 for the manager when the list also holds a workspace they don't manage
+    - expect: 403 for the manager asking only for that other workspace
+    - expect: 403 for the editor
+    - expect: 403 for the manager sending `["all"]`
+  5. Call `POST /api/admin/download` as the manager
+    - expect: 403, since the admin endpoint stays admin-only
+
 ### 5. Gamespace Management
 
 **Seed:** `seed.spec.ts`
