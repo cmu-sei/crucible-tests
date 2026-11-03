@@ -47,10 +47,38 @@ function getPostgresPassword(): string {
   }
 }
 
+let _port: number | null = null;
+
+/**
+ * Resolves the host port Postgres is published on.
+ *
+ * Aspire assigns the host side of the mapping at startup, so it is not always 5432 and can
+ * change between runs of the AppHost. `docker port` reports whatever it is now.
+ */
+function getPostgresPort(): number {
+  if (_port) return _port;
+
+  if (process.env.CRUCIBLE_POSTGRES_PORT) {
+    _port = Number(process.env.CRUCIBLE_POSTGRES_PORT);
+    return _port;
+  }
+
+  const out = execSync('docker port crucible-postgres 5432/tcp', { encoding: 'utf8' });
+  // One line per published address, e.g. "127.0.0.1:5432".
+  const line = out.split('\n').map(l => l.trim()).find(l => /:\d+$/.test(l));
+  if (!line) {
+    throw new Error(`Could not determine the published Postgres port from: ${out.trim()}`);
+  }
+  _port = Number(line.slice(line.lastIndexOf(':') + 1));
+  return _port;
+}
+
 export async function gbConnect(): Promise<Client> {
   const client = new Client({
-    host: 'localhost',
-    port: 5432,
+    // 127.0.0.1 rather than localhost: the mapping is published on the IPv4 loopback only,
+    // and localhost can resolve to ::1 first.
+    host: process.env.CRUCIBLE_POSTGRES_HOST || '127.0.0.1',
+    port: getPostgresPort(),
     user: 'postgres',
     password: getPostgresPassword(),
     database: 'gameboard',
