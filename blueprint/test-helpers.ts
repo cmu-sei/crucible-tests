@@ -1838,13 +1838,14 @@ export async function purgeAllBlueprintTestData(): Promise<void> {
       }
     }
 
-    // Card / CITE action / CITE duty templates and groups have no MSEL, so the MSEL delete
-    // above does not cascade to them. CITE action templates carry no name — the specs put
-    // the tempBlueprintName() in the description instead.
+    // Card / CITE action / CITE duty / Player application templates and groups have no MSEL,
+    // so the MSEL delete above does not cascade to them. CITE action templates carry no name —
+    // the specs put the tempBlueprintName() in the description instead.
     for (const [listPath, collection, label] of [
       ['/api/cards/templates', 'cards', 'card template'],
       ['/api/citeActions/templates', 'citeActions', 'CITE action template'],
       ['/api/citeDuties/templates', 'citeDuties', 'CITE duty template'],
+      ['/api/playerApplications/templates', 'playerApplications', 'Player application template'],
       ['/api/groups', 'groups', 'group'],
     ] as const) {
       const res = await blueprintCall<any[]>(token, listPath);
@@ -2234,7 +2235,7 @@ export async function listMselRecords(
 /** List the global templates of a template-able collection. */
 export async function listTemplates(
   token: string,
-  collection: 'cards' | 'citeActions' | 'citeDuties'
+  collection: 'cards' | 'citeActions' | 'citeDuties' | 'playerApplications'
 ): Promise<any[]> {
   const r = await blueprintCall<any[]>(token, `/api/${collection}/templates`);
   if (!r.ok) {
@@ -2262,13 +2263,41 @@ export async function createCardTemplate(
 }
 
 /**
+ * Create one of Blueprint's own Player application templates (no MSEL), as opposed to
+ * `createPlayerApplicationTemplate`, which seeds one in Player. Pair with
+ * `deleteBlueprintRecord('playerApplications', id)`.
+ */
+export async function createBlueprintPlayerApplicationTemplate(
+  token: string,
+  opts: { name: string; url: string; icon?: string; embeddable?: boolean; loadInBackground?: boolean }
+): Promise<any> {
+  const r = await blueprintCall<any>(token, '/api/playerApplications', {
+    method: 'POST',
+    body: {
+      id: randomUUID(),
+      mselId: null,
+      isTemplate: true,
+      name: opts.name,
+      url: opts.url,
+      icon: opts.icon ?? '',
+      embeddable: opts.embeddable ?? true,
+      loadInBackground: opts.loadInBackground ?? false,
+    },
+  });
+  if (!r.ok) {
+    throw new Error(`createBlueprintPlayerApplicationTemplate failed (${r.status}): ${r.text}`);
+  }
+  return r.data;
+}
+
+/**
  * Delete one record from a flat Blueprint collection by id (`cards`, `citeActions`,
- * `citeDuties`, `moves`, `groups`). Swallows 404, so teardown can call it on a record
- * the test already deleted through the UI.
+ * `citeDuties`, `playerApplications`, `moves`, `groups`). Swallows 404, so teardown can call
+ * it on a record the test already deleted through the UI.
  */
 export async function deleteBlueprintRecord(
   token: string,
-  collection: 'cards' | 'citeActions' | 'citeDuties' | 'moves' | 'groups',
+  collection: 'cards' | 'citeActions' | 'citeDuties' | 'playerApplications' | 'moves' | 'groups',
   id: string
 ): Promise<void> {
   const r = await blueprintCall(token, `/api/${collection}/${id}`, { method: 'DELETE' });
