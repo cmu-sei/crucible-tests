@@ -20,7 +20,7 @@ for (const theme of CASTER_THEMES) {
         (resp) => resp.url().includes('/api/projects') && resp.request().method() === 'POST' && resp.status() === 201
       );
       await page.locator('button[mattooltip="Add New Project"]').click();
-      await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
+      await expect(page.getByRole('dialog', { name: 'Add Project' })).toBeVisible();
       await page.getByRole('textbox', { name: 'Name' }).fill(projectName);
       await page.getByRole('button', { name: 'Save' }).click();
       const response = await responsePromise;
@@ -29,7 +29,7 @@ for (const theme of CASTER_THEMES) {
       await expectCasterProjectOpen(page, projectName);
 
       await page.getByTitle('Add New Directory').click();
-      await expect(page.getByRole('dialog', { name: 'Create New Directory?' })).toBeVisible();
+      await expect(page.getByRole('dialog', { name: 'Add Directory' })).toBeVisible();
       await page.getByRole('textbox', { name: 'Name' }).fill('TF-Error-Dir');
       await page.getByRole('button', { name: 'Save' }).click();
       await expect(page.getByRole('button', { name: 'TF-Error-Dir' })).toBeVisible({ timeout: 10000 });

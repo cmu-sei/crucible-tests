@@ -17,14 +17,14 @@ for (const theme of CASTER_THEMES) {
 
       // Create two projects
       await page.locator('button[mattooltip="Add New Project"]').click();
-      await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
+      await expect(page.getByRole('dialog', { name: 'Add Project' })).toBeVisible();
       await page.getByRole('textbox', { name: 'Name' }).fill(alphaProjectName);
       await page.getByRole('button', { name: 'Save' }).click();
       cleanupCasterProject(await expectCasterProjectOpen(page, alphaProjectName));
       await page.getByRole('link', { name: 'Caster', exact: true }).click();
 
       await page.locator('button[mattooltip="Add New Project"]').click();
-      await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
+      await expect(page.getByRole('dialog', { name: 'Add Project' })).toBeVisible();
       await page.getByRole('textbox', { name: 'Name' }).fill(betaProjectName);
       await page.getByRole('button', { name: 'Save' }).click();
       cleanupCasterProject(await expectCasterProjectOpen(page, betaProjectName));

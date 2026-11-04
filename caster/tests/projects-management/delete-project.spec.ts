@@ -18,7 +18,7 @@ for (const theme of CASTER_THEMES) {
 
       // Create a project to delete
       await page.locator('button[mattooltip="Add New Project"]').click();
-      await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
+      await expect(page.getByRole('dialog', { name: 'Add Project' })).toBeVisible();
       await page.getByRole('textbox', { name: 'Name' }).fill(projectName);
 
       const createResponsePromise = page.waitForResponse(resp =>
@@ -44,24 +44,27 @@ for (const theme of CASTER_THEMES) {
       await deleteButton.click();
 
       // expect: A confirmation dialog appears asking to confirm deletion
-      await expect(page.getByRole('dialog', { name: 'Delete Project?' })).toBeVisible({ timeout: 5000 });
+      await expect(page.getByRole('dialog', { name: 'Delete Project' })).toBeVisible({ timeout: 5000 });
+      await expect(page.getByRole('dialog', { name: 'Delete Project' })).toContainText(
+        `Are you sure that you want to delete ${projectName}?`
+      );
 
       // 3. Click 'No' in the confirmation dialog to cancel
       await page.getByRole('button', { name: 'No' }).click();
 
       // expect: The dialog closes
       // expect: The project is not deleted
-      await expect(page.getByRole('dialog', { name: 'Delete Project?' })).not.toBeVisible();
+      await expect(page.getByRole('dialog', { name: 'Delete Project' })).not.toBeVisible();
       await expect(page.getByRole('link', { name: projectName })).toBeVisible();
 
       // 4. Click the delete icon again
       await deleteButton.click();
 
       // expect: Confirmation dialog appears again
-      await expect(page.getByRole('dialog', { name: 'Delete Project?' })).toBeVisible({ timeout: 5000 });
+      await expect(page.getByRole('dialog', { name: 'Delete Project' })).toBeVisible({ timeout: 5000 });
 
       // 5. Click 'Delete' button to confirm deletion
-      await page.getByRole('dialog', { name: 'Delete Project?' }).getByRole('button', { name: 'Delete' }).click();
+      await page.getByRole('dialog', { name: 'Delete Project' }).getByRole('button', { name: 'Delete' }).click();
 
       // expect: The project is deleted successfully
       // expect: The project is removed from the list

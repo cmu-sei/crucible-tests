@@ -21,7 +21,7 @@ async function createProject(
   registerCleanup: (projectId: string) => void,
 ): Promise<void> {
   await page.locator('button[mattooltip="Add New Project"]').click();
-  await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Add Project' })).toBeVisible();
   await page.getByRole('textbox', { name: 'Name' }).fill(name);
 
   const createResponsePromise = page.waitForResponse(resp =>

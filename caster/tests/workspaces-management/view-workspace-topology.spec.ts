@@ -60,14 +60,14 @@ async function openNewWorkspace(page: Page, projectName: string, workspaceName: 
   await expect(page.getByText('My Projects')).toBeVisible();
 
   await page.locator('[mattooltip="Add New Project"]').click();
-  const projectDialog = page.getByRole('dialog', { name: 'Create New Project?' });
+  const projectDialog = page.getByRole('dialog', { name: 'Add Project' });
   await expect(projectDialog).toBeVisible();
   await projectDialog.getByRole('textbox', { name: 'Name' }).fill(projectName);
   await projectDialog.getByRole('button', { name: 'Save' }).click();
   await expectCasterProjectOpen(page, projectName);
 
   await page.getByTitle('Add New Directory').click();
-  const dirDialog = page.getByRole('dialog', { name: 'Create New Directory?' });
+  const dirDialog = page.getByRole('dialog', { name: 'Add Directory' });
   await expect(dirDialog).toBeVisible();
   await dirDialog.getByRole('textbox', { name: 'Name' }).fill('Topology_Dir');
   await dirDialog.getByRole('button', { name: 'Save' }).click();
@@ -77,7 +77,7 @@ async function openNewWorkspace(page: Page, projectName: string, workspaceName: 
   await page.getByRole('button', { name: 'WORKSPACES' }).click();
 
   await page.getByText('Add Workspace').click();
-  const wsDialog = page.getByRole('dialog', { name: 'Create New Workspace?' });
+  const wsDialog = page.getByRole('dialog', { name: 'Add Workspace' });
   await expect(wsDialog).toBeVisible();
   await wsDialog.getByRole('textbox', { name: 'Name' }).fill(workspaceName);
   await wsDialog.getByRole('button', { name: 'Save' }).click();
