@@ -330,6 +330,17 @@ what the spec drives:
     - expect: User is navigated back to home page
     - expect: Evaluation list is displayed
 
+#### 3.11. Score Summary
+
+**File:** `tests/cite/evaluation/score-summary.spec.ts`
+
+**Steps:**
+  1. Navigate to the dashboard of an evaluation whose scoring model shows the Score Summary on the right
+    - expect: The "Score Summary" panel names the displayed move ("Move 0")
+    - expect: The six levels are listed highest first, "Level 5 - Emergency" to "Level 0 - Baseline", each with its range and definition
+    - expect: The new submission's score of 0 is listed under "Level 0 - Baseline", and that level is marked as current
+    - expect: Levels with no scores, such as Emergency, list none
+
 ### 4. Scoresheet Interface
 
 **Seed:** `tests/seed.setup.ts`
@@ -999,6 +1010,21 @@ the test waits for the hub message before adding.
   5. Save membership
     - expect: Membership is created successfully
     - expect: User appears in memberships list
+
+#### 8.9. Admin - Severity Levels
+
+**File:** `tests/cite/scoring-models/severity-levels.spec.ts`
+
+**Steps:**
+  1. Open a scoring model without levels of its own in the admin Scoring Models section
+    - expect: The Severity Levels section reads "Using the default CISA levels."
+  2. Click Customize Levels
+    - expect: The six default levels are listed, highest first, as editable rows
+  3. Rename Emergency to Critical and click Save
+    - expect: The scoring model's severity levels are Critical, Severe, High, Medium, Low and Baseline
+  4. Open the dashboard of an evaluation whose scoring model has the levels Calm (from 0) and Storm (from 60)
+    - expect: The Score Summary lists "Level 1 - Storm" and "Level 0 - Calm" with the ranges "60+" and "<60" and their descriptions
+    - expect: The new submission's score of 0 is in Calm, the current level
 
 ### 9. Administration - Submissions
 
