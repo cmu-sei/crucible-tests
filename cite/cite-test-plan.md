@@ -330,6 +330,17 @@ what the spec drives:
     - expect: User is navigated back to home page
     - expect: Evaluation list is displayed
 
+#### 3.11. Score Summary
+
+**File:** `tests/cite/evaluation/score-summary.spec.ts`
+
+**Steps:**
+  1. Navigate to the dashboard of an evaluation whose scoring model shows the Score Summary on the right
+    - expect: The "Score Summary" panel names the displayed move ("Move 0")
+    - expect: The six levels are listed highest first, "Level 5 - Emergency" to "Level 0 - Baseline", each with its range and definition
+    - expect: The new submission's score of 0 is listed under "Level 0 - Baseline", and that level is marked as current
+    - expect: Levels with no scores, such as Emergency, list none
+
 ### 4. Scoresheet Interface
 
 **Seed:** `tests/seed.setup.ts`
