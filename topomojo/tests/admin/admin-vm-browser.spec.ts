@@ -32,7 +32,7 @@ test.describe('Admin Panel', () => {
     }
 
     // Wait for Admin button to be visible (confirms authentication)
-    const adminButton = page.getByRole('button', { name: 'Admin' });
+    const adminButton = page.getByRole('link', { name: 'Admin' });
     await expect(adminButton).toBeVisible({ timeout: 10000 });
 
     // 2. Navigate to admin panel

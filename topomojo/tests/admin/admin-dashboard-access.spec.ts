@@ -15,7 +15,7 @@ test.describe('Admin Panel', () => {
 
     // 2. Wait for Admin button to confirm authentication (fixture already authenticated)
     // The Admin button only appears after auth state is set - wait generously to avoid race conditions
-    const adminButton = page.getByRole('button', { name: 'Admin' });
+    const adminButton = page.getByRole('link', { name: 'Admin' });
 
     try {
       await adminButton.waitFor({ state: 'visible', timeout: 30000 });
@@ -43,7 +43,7 @@ test.describe('Admin Panel', () => {
     const machinesLink = page.getByRole('link', { name: 'Machines' });
     const usersLink = page.getByRole('link', { name: 'Users' });
     const settingsLink = page.getByRole('link', { name: 'Settings' });
-    const logLink = page.getByRole('link', { name: 'Log' });
+    const logLink = page.getByRole('link', { name: 'Log', exact: true });
 
     // Verify all admin navigation links are visible
     await expect(dashboardLink).toBeVisible();

@@ -36,7 +36,7 @@ export async function authenticateTopoMojoWithKeycloak(
     // TopoMojo shows a landing page with a login button - look for it
     // Race condition: check for both login button (unauthenticated) and auth content (authenticated)
     const loginButton = page.getByRole('button', { name: 'identity provider' });
-    const authenticatedButton = page.locator('button:has-text("Admin"), button:has-text("Logout")');
+    const authenticatedButton = page.locator(':is(a, button):has-text("Admin"), :is(a, button):has-text("Logout")');
 
     // Wait for either login button or authenticated content to appear
     try {
@@ -86,7 +86,7 @@ export async function authenticateTopoMojoWithKeycloak(
 
   // Wait for authenticated app content to appear (not the landing page)
   // Look for authenticated elements like Admin/Logout buttons or navigation
-  const authenticatedContent = page.locator('button:has-text("Admin"), button:has-text("Logout"), navigation, searchbox, [role="searchbox"]');
+  const authenticatedContent = page.locator(':is(a, button):has-text("Admin"), :is(a, button):has-text("Logout"), navigation, searchbox, [role="searchbox"]');
   await authenticatedContent.first().waitFor({ state: 'visible', timeout: 30000 });
 
   console.log(`Successfully authenticated and returned to TopoMojo`);

@@ -14,7 +14,7 @@ test.describe('Authentication and Authorization', () => {
     await expect(page).toHaveURL(serviceUrlPattern(Services.TopoMojo.UI));
 
     // 2. Click 'Logout' button in top navigation
-    const logoutButton = page.locator('button:has-text("Logout"), button:has-text("Sign Out"), [class*="logout"], button:has(mat-icon:text("logout"))').first();
+    const logoutButton = page.getByRole('link', { name: 'Logout' });
     await expect(logoutButton).toBeVisible({ timeout: 10000 });
     await logoutButton.click();
 

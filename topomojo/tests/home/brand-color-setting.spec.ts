@@ -53,7 +53,7 @@ test.describe('Home Page and Navigation', () => {
     await page.reload({ waitUntil: 'domcontentloaded' });
 
     // 2. Open Admin > Templates
-    await page.getByRole('button', { name: 'Admin' }).click();
+    await page.getByRole('link', { name: 'Admin' }).click();
     const templatesTab = page.getByRole('link', { name: 'Templates', exact: true });
     await templatesTab.click();
     await expect(page).toHaveURL(/\/admin\/templates/);

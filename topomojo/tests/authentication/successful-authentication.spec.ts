@@ -63,9 +63,9 @@ test.describe('Authentication and Authorization', () => {
     await page.waitForLoadState('domcontentloaded');
 
     // expect: User is authenticated - Admin and Logout buttons are visible
-    const adminButton = page.getByRole('button', { name: 'Admin' });
+    const adminButton = page.getByRole('link', { name: 'Admin' });
     await expect(adminButton).toBeVisible({ timeout: 30000 });
-    const logoutButton = page.getByRole('button', { name: 'Logout' });
+    const logoutButton = page.getByRole('link', { name: 'Logout' });
     await expect(logoutButton).toBeVisible({ timeout: 10000 });
   });
 });
