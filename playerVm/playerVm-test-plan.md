@@ -789,10 +789,12 @@ snapshot it would succeed and roll the machine back.
   `GET api/vms/proxmox/{id}` returns booleans for `guestAgentRunning`,
   `hasSnapshot`, `vncClipboardEnabled` and `canMountIso`, and `currentSnapshot`
   is a name exactly when `hasSnapshot` is true.
-- **A snapshot named "current" is refused before it reaches Proxmox** — 400,
-  `"current" is reserved by Proxmox and cannot be used as a snapshot name.`
-- **A snapshot name outside PVE's naming rule is refused with the rule** —
-  `1e2e` gets 400 with the 2-to-40-characters rule.
+- **A snapshot named "current" returns Proxmox's reason as a 400** —
+  `Create Snapshot failed: ...`. PVE reserves `current`, so it refuses the name.
+- **A snapshot name outside PVE's naming rule returns Proxmox's reason as a
+  400** — `1e2e` gets `Create Snapshot failed: ...`. The API passes PVE's own
+  reason through instead of copying PVE's naming rules, so the tests check only
+  the prefix, not PVE's wording.
 - **Reverting to a snapshot that doesn't exist returns Proxmox's reason** — 400,
   `Revert to Snapshot failed: snapshot '{name}' does not exist`.
 - **Power On on a running VM returns Proxmox's reason as a 400** — `Power On

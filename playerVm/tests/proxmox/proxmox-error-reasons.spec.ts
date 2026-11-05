@@ -21,8 +21,8 @@ import {
  * ("Power On failed: ...") so the console can show it as it is.
  *
  * Every request here is one that the API or Proxmox refuses, so the VM is not
- * changed: a snapshot name the API rejects before calling Proxmox, a revert to a
- * snapshot that doesn't exist, and Power On on a VM that is already running.
+ * changed: snapshot names Proxmox rejects, a revert to a snapshot that doesn't
+ * exist, and Power On on a VM that is already running.
  * There is deliberately no "revert to the current snapshot" case: on a VM that
  * has a snapshot that request would succeed and roll the machine back.
  *
@@ -60,22 +60,21 @@ for (const theme of PLAYERVM_THEMES) {
       }
     });
 
-    test('A snapshot named "current" is refused before it reaches Proxmox', async () => {
-      // "current" is PVE's pseudo-snapshot for the running state. The API rejects
-      // it itself, so no snapshot is taken.
+    test('A snapshot named "current" returns Proxmox\'s reason as a 400', async () => {
+      // "current" is PVE's pseudo-snapshot for the running state, so PVE refuses
+      // the name and no snapshot is taken. The API passes PVE's own reason through
+      // rather than keeping a copy of PVE's naming rules, so only the prefix is fixed.
       const r = await postProxmoxAction(vm.token, vm.record.id, 'snapshots', { snapshotName: 'current' });
       expect(r.status).toBe(400);
-      expect(r.data?.title).toBe('"current" is reserved by Proxmox and cannot be used as a snapshot name.');
+      expect(r.data?.title).toMatch(/^Create Snapshot failed: .+/);
     });
 
-    test("A snapshot name outside PVE's naming rule is refused with the rule", async () => {
-      // PVE wants 2-40 characters starting with a letter; this one starts with a
-      // digit. Checked by the API before calling Proxmox, so nothing is created.
+    test("A snapshot name outside PVE's naming rule returns Proxmox's reason as a 400", async () => {
+      // PVE wants a name starting with a letter; this one starts with a digit, so
+      // PVE refuses it and nothing is created.
       const r = await postProxmoxAction(vm.token, vm.record.id, 'snapshots', { snapshotName: '1e2e' });
       expect(r.status).toBe(400);
-      expect(r.data?.title).toBe(
-        'A snapshot name must be 2 to 40 characters, start with a letter, and contain only letters, digits, hyphens and underscores.'
-      );
+      expect(r.data?.title).toMatch(/^Create Snapshot failed: .+/);
     });
 
     test("Reverting to a snapshot that doesn't exist returns Proxmox's reason", async () => {
