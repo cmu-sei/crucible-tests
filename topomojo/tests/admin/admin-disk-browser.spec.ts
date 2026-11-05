@@ -6,7 +6,13 @@
 import { Page } from '@playwright/test';
 import { test, expect } from '../../fixtures';
 import { requirePrecondition } from '../../../shared-fixtures';
-import { getTopoMojoAdminToken, getTemplateSources, TemplateSourceReport } from '../../../topomojo-helpers';
+import {
+  getAdminFeatures,
+  getTopoMojoAdminToken,
+  getTemplateSources,
+  TEMPLATE_SOURCES_OFF,
+  TemplateSourceReport,
+} from '../../../topomojo-helpers';
 
 async function openDisksTab(page: Page): Promise<void> {
   // A deep link to /admin lands on the home page, so go through the Admin button.
@@ -23,6 +29,7 @@ function rows(page: Page) {
 // so these need at least one global entry to exist.
 async function requireGlobalSources(): Promise<TemplateSourceReport> {
   const report = await getTemplateSources(await getTopoMojoAdminToken());
+  requirePrecondition(report.enabled, TEMPLATE_SOURCES_OFF);
   requirePrecondition(
     report.sources.some(s => s.isGlobal),
     'the hypervisor has no global disks (vSphere) or template VMs (Proxmox) for the Disks page to list'
@@ -31,6 +38,15 @@ async function requireGlobalSources(): Promise<TemplateSourceReport> {
 }
 
 test.describe('Admin - Disks', () => {
+  test('the Disks link shows exactly when the API turns the tab on', async ({ topomojoAuthenticatedPage: page }) => {
+    // Core__EnableTemplateSources is off by default. Either way, the dashboard must follow the API.
+    const features = await getAdminFeatures(await getTopoMojoAdminToken());
+
+    await page.getByRole('button', { name: 'Admin' }).click();
+    await expect(page.getByRole('link', { name: 'Files' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Disks' })).toHaveCount(features.templateSources ? 1 : 0);
+  });
+
   test('lists global template sources with the help for this hypervisor', async ({ topomojoAuthenticatedPage: page }) => {
     const report = await requireGlobalSources();
     const globals = report.sources.filter(s => s.isGlobal);

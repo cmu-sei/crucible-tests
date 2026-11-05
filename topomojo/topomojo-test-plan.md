@@ -1324,7 +1324,11 @@ This updated test plan covers recent feature additions including: configurable b
 
 **File:** `topomojo/tests/admin/admin-disk-browser.spec.ts`
 
+The tab is off unless the API sets `Core__EnableTemplateSources=true` (the default is off). Step 0 runs either way; the rest skip with that reason while it's off.
+
 **Steps:**
+  0. Navigate to admin dashboard
+    - expect: The 'Disks' link is shown exactly when `GET api/admin/features` reports `templateSources: true`
   1. Navigate to admin dashboard and click 'Disks'
     - expect: Heading is 'Disks' on vSphere or 'Template VMs' on Proxmox
     - expect: Help text names the Detail key to paste into (`Disks[].Path` or `Template`)
@@ -1339,6 +1343,8 @@ This updated test plan covers recent feature additions including: configurable b
 #### 8.30. Admin - Disks Workspace Copy
 
 **File:** `topomojo/tests/admin/admin-disk-browser-workspace-copy.spec.ts`
+
+Skips while `Core__EnableTemplateSources` is off.
 
 **Steps:**
   1. Seed a stock template on a global Proxmox template VM, link it into a new workspace, unlink it, and Initialize it

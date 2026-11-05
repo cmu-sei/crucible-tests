@@ -596,10 +596,30 @@ export interface TemplateSource {
 }
 
 export interface TemplateSourceReport {
+  /** False while the API's Core__EnableTemplateSources is off (the default); sources is then empty. */
+  enabled: boolean;
   /** Template Detail field the names go in: "disks" (vSphere) or "template" (Proxmox). */
   field: 'disks' | 'template';
   sources: TemplateSource[];
 }
+
+/** Optional admin features the TopoMojo API has turned on. */
+export interface AdminFeatures {
+  /** Core__EnableTemplateSources: the admin Disks tab. */
+  templateSources: boolean;
+}
+
+export async function getAdminFeatures(token: string): Promise<AdminFeatures> {
+  const r = await tmCall<AdminFeatures>(token, '/api/admin/features');
+  if (!r.ok) {
+    throw new Error(`getAdminFeatures failed (${r.status}): ${r.text}`);
+  }
+  return r.data;
+}
+
+/** The Disks tab is off unless the deployment sets Core__EnableTemplateSources=true. */
+export const TEMPLATE_SOURCES_OFF =
+  'the TopoMojo API has the Disks tab turned off; set Core__EnableTemplateSources=true to run this';
 
 /** What the admin Disks page lists: disks or template vms a template can deploy from. */
 export async function getTemplateSources(token: string): Promise<TemplateSourceReport> {

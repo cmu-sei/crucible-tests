@@ -12,6 +12,7 @@ import {
   deleteWorkspace,
   getTemplateSources,
   getTopoMojoAdminToken,
+  TEMPLATE_SOURCES_OFF,
   initializeTemplate,
   linkTemplate,
   unlinkTemplate,
@@ -36,6 +37,7 @@ test.describe('Admin - Disks', () => {
     token = await getTopoMojoAdminToken();
 
     const before = await getTemplateSources(token);
+    requirePrecondition(before.enabled, TEMPLATE_SOURCES_OFF);
     requirePrecondition(
       before.field === 'template',
       'the hypervisor is not Proxmox; workspace copies are template VMs only on Proxmox'
