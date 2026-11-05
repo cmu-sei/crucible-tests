@@ -725,6 +725,23 @@ export async function requireTestModuleCatalog(
 }
 
 /**
+ * Skip the calling test unless Caster has at least one module source configured.
+ *
+ * With none, Caster answers every module sync with "No module source is configured"
+ * before it looks at the requested source, so specs about how a sync of a particular
+ * source is answered cannot run. The dev stack only configures one when the AppHost
+ * starts with Launch__Gitea=true.
+ */
+export async function requireModuleSource(page: Page): Promise<void> {
+  const res = await casterApi<any[]>(page, 'GET', 'modules/sources');
+  requirePrecondition(
+    res.status === 200 && Array.isArray(res.body) && res.body.length > 0,
+    'Caster has no module source configured (GET /api/modules/sources is empty). ' +
+      'Start the AppHost with Launch__Gitea=true.'
+  );
+}
+
+/**
  * Themes every Caster functional spec is parameterized over. Each spec runs once
  * per entry so every screen is exercised in both light and dark mode.
  */

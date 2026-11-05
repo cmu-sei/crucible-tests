@@ -576,19 +576,20 @@ for (const theme of CITE_THEMES) {
       const scoresheetTable = page.getByRole('table').first();
       await expect(scoresheetTable).toBeVisible({ timeout: 10000 });
 
-      // Look for interactive scoring options (radio buttons, checkboxes, or enabled textboxes)
-      const scoringOptions = page.locator('mat-radio-button, mat-checkbox, input:not([disabled]), textarea:not([disabled])');
-      if (await scoringOptions.first().isVisible({ timeout: 5000 }).catch(() => false)) {
-        // Click or type in the first interactive element
-        const firstOption = scoringOptions.first();
-        const tagName = await firstOption.evaluate(el => el.tagName.toLowerCase());
-        if (tagName === 'input' || tagName === 'textarea') {
-          await firstOption.fill('Test response');
-          await firstOption.blur();
-        } else {
-          await firstOption.click();
-        }
-        await page.waitForTimeout(1000);
+      // The scoring options render disabled until the scoresheet has loaded the user's
+      // submission and permissions (showModifyControls), so wait for an enabled one
+      // rather than clicking the first checkbox on the page. The shared scoring model
+      // always has a category with two options, so one must become enabled.
+      const firstOption = page.getByRole('checkbox', { disabled: false }).first();
+      await expect(firstOption).toBeVisible({ timeout: 15000 });
+      const wasChecked = await firstOption.isChecked();
+      await firstOption.click();
+
+      // expect: the selection is stored and shown
+      if (wasChecked) {
+        await expect(firstOption).not.toBeChecked({ timeout: 10000 });
+      } else {
+        await expect(firstOption).toBeChecked({ timeout: 10000 });
       }
 
       // expect: No error snackbar after interaction
