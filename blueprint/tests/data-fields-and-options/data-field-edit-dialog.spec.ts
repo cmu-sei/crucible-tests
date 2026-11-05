@@ -212,7 +212,7 @@ for (const theme of BLUEPRINT_THEMES) {
       const deleted = page.waitForResponse(
         (r) => /\/api\/datafields\/[^/]+$/i.test(new URL(r.url()).pathname) && r.request().method() === 'DELETE'
       );
-      await confirm.getByRole('button', { name: 'Yes' }).click();
+      await confirm.getByRole('button', { name: 'Delete' }).click();
       expect((await deleted).ok()).toBe(true);
       await expect(renamedRow).toHaveCount(0, { timeout: 10000 });
 

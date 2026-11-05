@@ -68,9 +68,9 @@ for (const theme of BLUEPRINT_THEMES) {
       const confirmMessage = confirmDialog.getByText(/Are you sure that you want to delete/);
       await expect(confirmMessage).toBeVisible({ timeout: 3000 });
 
-      // expect: NO and YES buttons are present
+      // expect: No and Delete buttons are present
       const noButton = confirmDialog.getByRole('button', { name: 'NO' });
-      const yesButton = confirmDialog.getByRole('button', { name: 'YES' });
+      const yesButton = confirmDialog.getByRole('button', { name: 'Delete' });
       await expect(noButton).toBeVisible({ timeout: 3000 });
       await expect(yesButton).toBeVisible({ timeout: 3000 });
 

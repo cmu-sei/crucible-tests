@@ -24,7 +24,7 @@ for (const theme of CITE_THEMES) {
       const addButton = page.locator('button[mattooltip="Add New Group"]');
       await addButton.click();
 
-      const createDialog = page.getByRole('dialog', { name: 'Create New Group?' });
+      const createDialog = page.getByRole('dialog', { name: 'Add Group' });
       await expect(createDialog).toBeVisible({ timeout: 5000 });
 
       const nameField = createDialog.getByRole('textbox', { name: 'Name' });

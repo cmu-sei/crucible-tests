@@ -26,7 +26,7 @@ import { navigateToAdminSection } from '../../test-helpers';
  * Read-only: it navigates and reads computed styles, seeds nothing, and depends on
  * no table rows (it measures the always-present "My Evaluations" title, column
  * headers, the Administration icon button, and an unsaved Admin → Team Types
- * "Add TeamType" dialog), so it needs no cleanup. The theme is a persisted user
+ * "Add Team Type" dialog), so it needs no cleanup. The theme is a persisted user
  * preference, so it is restored in afterEach.
  */
 
@@ -291,13 +291,13 @@ for (const theme of CITE_THEMES) {
 
     // Colors design spec §3b checks 1 and 3 (WCAG 1.4.3): `primary` used as text on
     // the surface (the Cancel label) and `on-primary` on a filled `primary` button
-    // (Save) must each reach 4.5:1. Uses Admin → Team Types "Add TeamType" without
+    // (Save) must each reach 4.5:1. Uses Admin → Team Types "Add Team Type" without
     // submitting.
     test('Primary and on-primary text contrast (WCAG 1.4.3)', async ({ citeAuthenticatedPage: page }) => {
       await navigateToAdminSection(page, 'Team Types');
       await setCiteTheme(page, theme);
 
-      await page.getByRole('button', { name: 'Add TeamType' }).click();
+      await page.getByRole('button', { name: 'Add Team Type' }).click();
       const dialog = page.getByRole('dialog');
       await expect(dialog).toBeVisible({ timeout: 5000 });
 

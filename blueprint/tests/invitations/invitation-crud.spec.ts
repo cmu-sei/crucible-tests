@@ -244,7 +244,7 @@ for (const theme of BLUEPRINT_THEMES) {
 
       await page.getByRole('button', { name: 'Delete @alpha.test invitation' }).click();
       confirm = page.getByRole('dialog').filter({ hasText: 'Delete Invitation' });
-      await confirm.getByRole('button', { name: /YES/i }).click();
+      await confirm.getByRole('button', { name: 'Delete' }).click();
 
       // expect: only the confirmed invitation is removed
       await expect(confirm).toBeHidden();

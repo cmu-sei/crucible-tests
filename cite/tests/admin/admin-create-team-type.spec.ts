@@ -17,7 +17,7 @@ for (const theme of CITE_THEMES) {
 
       await navigateToAdminSection(page, 'Team Types');
 
-      const addButton = page.getByRole('button', { name: 'Add TeamType' });
+      const addButton = page.getByRole('button', { name: 'Add Team Type' });
       await expect(addButton).toBeVisible({ timeout: 10000 });
       await addButton.click();
 

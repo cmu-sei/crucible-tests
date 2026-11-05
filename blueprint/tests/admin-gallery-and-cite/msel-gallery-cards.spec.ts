@@ -136,7 +136,7 @@ for (const theme of BLUEPRINT_THEMES) {
       // 3. Deleting the card, after confirming, removes the row.
       await page.getByRole('button', { name: `Delete ${templateName}` }).click();
       const confirm = page.getByRole('dialog').filter({ hasText: 'Delete Card' });
-      await confirm.getByRole('button', { name: 'Yes' }).click();
+      await confirm.getByRole('button', { name: 'Delete' }).click();
       await expect(row).toHaveCount(0);
 
       // expect: the template itself is untouched by deleting a card built from it.
