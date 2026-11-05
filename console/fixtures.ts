@@ -1,7 +1,7 @@
 // Copyright 2026 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
-import { test as base, Page } from '@playwright/test';
+import { test as base, expect, Locator, Page } from '@playwright/test';
 import { Services, authenticateWithKeycloak } from '../shared-fixtures';
 import {
   THEMES,
@@ -77,12 +77,85 @@ export async function setConsoleTheme(page: Page, theme: ConsoleTheme): Promise<
   await expectBodyTheme(page, theme);
 }
 
+/**
+ * Open the options bar's "Console options" menu and then each submenu in `path`
+ * (for example `openConsoleMenu(page, 'Power')`), and return the innermost open
+ * panel. Waits for every level to be on screen, so the caller can assert on the
+ * returned panel straight away. Close with {@link closeConsoleMenus}.
+ */
+export async function openConsoleMenu(page: Page, ...path: string[]): Promise<Locator> {
+  await page.getByRole('button', { name: 'Console options' }).first().click();
+  const menus = page.getByRole('menu');
+  await expect(menus).toHaveCount(1);
+  for (const [depth, item] of path.entries()) {
+    await menus.nth(depth).getByRole('menuitem', { name: item, exact: true }).click();
+    await expect(menus).toHaveCount(depth + 2);
+  }
+  return menus.last();
+}
+
+/**
+ * Close every open options bar menu, however deeply nested, and wait for the
+ * overlay to tear down so a lingering backdrop can't swallow the next click.
+ *
+ * Clicks the root menu's backdrop, which closes the whole tree at once. Escape
+ * is no good here: it only reaches the menu that has focus, and hovering a
+ * tooltip wrapper inside a submenu leaves focus elsewhere.
+ */
+export async function closeConsoleMenus(page: Page): Promise<void> {
+  const backdrop = page.locator('.cdk-overlay-backdrop').first();
+  if (await backdrop.isVisible()) {
+    await backdrop.click({ position: { x: 5, y: 5 } });
+  }
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await page.locator('.cdk-overlay-backdrop').waitFor({ state: 'detached', timeout: 5000 });
+}
+
+/**
+ * Open a Proxmox VM's console in `theme` and wait until noVNC has drawn the
+ * screen, which is when the options bar has the VM's Proxmox state to gate its
+ * items on.
+ */
+export async function gotoProxmoxConsole(page: Page, vmId: string, theme: ConsoleTheme): Promise<void> {
+  await gotoConsole(page, `/vm/${vmId}/console`, theme);
+  await expect(page.locator('app-options-bar2')).toBeVisible({ timeout: 30000 });
+  await expect(page.locator('app-proxmox-console canvas')).toBeVisible({ timeout: 60000 });
+}
+
+/**
+ * Assert that an options bar control is enabled when the VM supports it, and
+ * otherwise disabled with `reason` as its tooltip.
+ *
+ * The Proxmox bar wraps such a control in an element that carries the tooltip,
+ * because a disabled button gets no pointer events and could not show one
+ * itself; hovering that wrapper is how a user reads the reason.
+ */
+export async function expectGatedControl(
+  page: Page,
+  control: Locator,
+  supported: boolean,
+  reason: string
+): Promise<void> {
+  if (supported) {
+    await expect(control).toBeEnabled();
+    return;
+  }
+  await expect(control).toBeDisabled();
+  await control.locator('..').hover();
+  // The newest tooltip is the hovered control's: the previous control's (which
+  // may carry the same text) can still be fading out.
+  await expect(page.locator('.mat-mdc-tooltip').last()).toHaveText(reason);
+  await expect(page.locator('.mat-mdc-tooltip').last()).toBeVisible();
+}
+
 // Console specs get their VM id from `playerVm/vm-helpers.ts` (`seedViewWithVm`),
 // not from scraping the VM list for whatever machine the environment happens to
 // have. Discovery made the spec skip itself when no VM turned up, which reads as
 // a pass while asserting nothing about the console. A theme-parameterized spec
 // seeds inside each theme's `describe`, so the light and dark runs never share
-// a VM.
+// a VM. The one exception is the Proxmox console specs (`tests/proxmox/`): a
+// Proxmox machine can back only one VM API record, so they use the configured
+// machine's existing record through `requireProxmoxConsoleVm`.
 
 export type ConsoleFixtures = {
   consoleAuthenticatedPage: Page;
