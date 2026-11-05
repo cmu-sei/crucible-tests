@@ -141,7 +141,7 @@ for (const theme of STEAMFITTER_THEMES) {
       await navigateToAdminSection(page, 'Roles');
       // Each tab is checked inside its own panel, once the tab is selected, so the previous
       // panel's buttons are not counted while the switch animates.
-      for (const tab of ['ScenarioTemplate Roles', 'Scenario Roles', 'Roles']) {
+      for (const tab of ['Scenario Template Roles', 'Scenario Roles', 'Roles']) {
         const tabButton = page.getByRole('tab', { name: tab, exact: true });
         await tabButton.click();
         await expect(tabButton).toHaveAttribute('aria-selected', 'true');

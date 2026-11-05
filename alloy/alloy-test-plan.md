@@ -1566,7 +1566,7 @@ not hardcoded.
     - expect: `--crucible-topbar-background` / `--crucible-topbar-text` equal `AppTopBarHexColor` / `AppTopBarHexTextColor` in both themes, and the top bar paints that background
     - expect: In light mode, `--mat-sys-primary` / `--mat-sys-on-primary` equal `AppLightModePrimaryHexColor` / `AppLightModePrimaryHexTextColor`
     - expect: In dark mode, they equal `AppDarkModePrimaryHexColor` / `AppDarkModePrimaryHexTextColor`, falling back to the light-mode keys when absent
-  3. Open the Create New Event Template dialog and fill the required fields without saving
+  3. Open the Add Event Template dialog and fill the required fields without saving
     - expect: The filled Save button paints `--mat-sys-primary`, and its `on-primary` label meets 4.5:1
     - expect: The Cancel button label is painted in `--mat-sys-primary` and meets 4.5:1 against the dialog surface
     - expect: Cancel closes the dialog without creating a template

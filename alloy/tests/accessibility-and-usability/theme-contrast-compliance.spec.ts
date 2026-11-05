@@ -262,7 +262,7 @@ for (const theme of ALLOY_THEMES) {
       await page.goto(`${Services.Alloy.UI}/admin`);
       await expect(page.getByRole('table')).toBeVisible();
 
-      const createDialog = page.getByRole('dialog', { name: 'Create New Event Template' });
+      const createDialog = page.getByRole('dialog', { name: 'Add Event Template' });
       await page.getByRole('button', { name: 'Add Event Template' }).click();
       await expect(createDialog).toBeVisible();
 
