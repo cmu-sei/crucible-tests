@@ -97,13 +97,6 @@ async function nodePosition(page: Page, id: string): Promise<{ x: number; y: num
 
 for (const theme of CASTER_THEMES) {
   test.describe(`${theme} theme › Workspaces Management`, () => {
-    // Pending upstream: the Topology view these tests drive is not on caster.ui or
-    // caster.api main yet. It is in the draft PRs on feature/workspace-topology
-    // (caster.ui #678, "Add a Topology view of a workspace's machines and networks",
-    // and caster.api #118, "Draw a workspace's machines and networks from its latest
-    // plan"). Until both merge, the workspace view has no "topology" toggle and every
-    // test here times out looking for it. Remove this skip once they are on main.
-    test.skip(true, 'Pending upstream: the workspace Topology view (caster.ui #678, caster.api #118) is not merged');
 
     test('View Workspace Topology', async ({ casterAuthenticatedPage: page, cleanupCasterProjectByName }) => {
       await setCasterTheme(page, theme);
@@ -247,9 +240,10 @@ for (const theme of CASTER_THEMES) {
       const view = page.locator('cas-workspace-topology');
       await expect(view.locator('.graph canvas').first()).toBeVisible({ timeout: 10000 });
 
-      // 1. Download the image
-      const downloadPromise = page.waitForEvent('download');
+      // 1. Download the image: the button opens a format menu (PNG or SVG)
       await view.getByRole('button', { name: 'Download image' }).click();
+      const downloadPromise = page.waitForEvent('download');
+      await page.getByRole('menuitem', { name: 'PNG image' }).click();
       const download = await downloadPromise;
 
       // expect: a PNG named for the workspace
