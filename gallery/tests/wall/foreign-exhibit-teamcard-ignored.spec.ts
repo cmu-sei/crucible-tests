@@ -27,10 +27,9 @@ import {
  * Wall View Functionality — a TeamCard belonging to another exhibit's team must not
  * flip a card onto the Wall of the exhibit being viewed.
  *
- * Pending upstream: `isTeamCardInActiveExhibit` must reject a TeamCard whose team belongs to
- * another exhibit, including when the team store holds an authoritative empty load for the
- * active exhibit. This spec asserts the corrected behaviour, so it fails until that change
- * reaches the Gallery UI build under test.
+ * Regression test for `isTeamCardInActiveExhibit`, which rejects a TeamCard whose team
+ * belongs to another exhibit, including when the team store holds an authoritative empty
+ * load for the active exhibit.
  *
  * ## Why a foreign TeamCard reaches this browser at all
  *
@@ -63,7 +62,7 @@ import {
  *      active exhibit.
  *
  * **This spec pins branch 3's reject arm, not branch 2.** That is a deliberate choice
- * forced by what is reachable: branch 3 is the arm the pending change corrects, and
+ * forced by what is reachable: branch 3 is the arm that was corrected, and
  * branch 2 already behaves correctly, so a spec covering branch 2 would pass either way.
  * Branch 2 is also unreachable for a *foreign* team here, because the
  * `TeamCreated`/`TeamUpdated` handlers carry the matching `isTeamInActiveExhibit` filter —
@@ -73,9 +72,9 @@ import {
  * The state branch 3 must reject is an **authoritative empty** team load:
  * `TeamService.GetMineByExhibitAsync` returns `[]` for a user who is not on any team
  * of the requested exhibit, so `loadMine(B)` succeeds, sets the store empty, and
- * records `loadedExhibitId = B`. That is a steady state, not a transient one. The current
- * fallback asks `teamQuery.hasEntity(t => t.exhibitId === B)`, which is false for an empty
- * store, so the negation **accepts every foreign TeamCard** for as long as the user stays
+ * records `loadedExhibitId = B`. That is a steady state, not a transient one. The original
+ * fallback asked `teamQuery.hasEntity(t => t.exhibitId === B)`, which is false for an empty
+ * store, so the negation **accepted every foreign TeamCard** for as long as the user stayed
  * on B. Consulting the `loadedExhibitId` marker instead reads B and rejects the event.
  *
  * ## How the state is reached through the UI

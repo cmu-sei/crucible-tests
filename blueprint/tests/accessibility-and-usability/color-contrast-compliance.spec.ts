@@ -25,6 +25,8 @@ import {
   findScenarioEventRow,
   tempBlueprintName,
   dashboardCard,
+  getCurrentBlueprintUserId,
+  seedJoinableMsel,
 } from '../../test-helpers';
 
 const DASHBOARD_PENDING = ['join-card', 'build-card', 'assess-card'].map(
@@ -66,16 +68,28 @@ async function expectNoContrastViolations(
 test.describe('Accessibility and Usability', () => {
   let token: string;
   let mselId: string | undefined;
+  let liveMselId: string | undefined;
   const eventText = tempBlueprintName('Contrast');
 
   test.beforeEach(async () => {
     token = await getBlueprintToken();
     mselId = (await createMsel(token)).id;
     await createRenderableScenarioEvent(token, mselId, eventText, { deltaSeconds: 300 });
+    // The dashboard's JOIN and ASSESS cards render dimmed (.disabled-card, opacity 0.6) and
+    // without their footer buttons' live colours when the user has nothing to join or assess,
+    // which would make this sweep depend on the database. One deployed MSEL with a Player view
+    // and the admin on a team enables both: it is on my-join-msels (JOIN), and as a deployed
+    // MSEL visible to a system admin it is on the assess list (ASSESS).
+    const userId = await getCurrentBlueprintUserId(token);
+    liveMselId = (await seedJoinableMsel(token, userId, { name: tempBlueprintName('TestBP-ContrastLive') }))
+      .mselId;
   });
 
   test.afterEach(async () => {
     if (mselId) await deleteMsel(token, mselId);
+    mselId = undefined;
+    if (liveMselId) await deleteMsel(token, liveMselId);
+    liveMselId = undefined;
   });
 
   test('Color Contrast Compliance', async ({ blueprintAuthenticatedPage: page }) => {
@@ -83,6 +97,11 @@ test.describe('Accessibility and Usability', () => {
       // 1. Event dashboard.
       await page.goto(Services.Blueprint.UI);
       await expect(dashboardCard(page, 'BUILD')).toBeVisible({ timeout: 30000 });
+      // expect: the seeded MSEL has enabled the JOIN and ASSESS cards
+      for (const card of ['.join-card', '.assess-card']) {
+        await expect(page.locator(card)).toBeVisible({ timeout: 30000 });
+        await expect(page.locator(card)).not.toHaveClass(/disabled-card/, { timeout: 30000 });
+      }
       // Pending upstream: the mission cards' footer buttons (Join Event, Manage Events, Assess
       // Events) are primary text on the cards' --mat-sys-surface-container, short of AA's 4.5:1
       // for normal text in both themes: #0078af on #eeeeee (4.2:1) in light, #00a3ee on
