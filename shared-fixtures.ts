@@ -35,6 +35,8 @@ export const Services = {
   Caster: {
     UI: process.env.CASTER_UI_URL || 'http://localhost:4310',
     API: process.env.CASTER_API_URL || 'http://localhost:4309',
+    // Gitea serving Caster's module source. Empty when the target has none (minikube).
+    ModuleSourceGitea: process.env.GITEA_URL ?? '',
   },
   Alloy: {
     UI: process.env.ALLOY_UI_URL || 'http://localhost:4403',

@@ -710,6 +710,7 @@ export const TEST_MODULES = {
 export async function requireTestModuleCatalog(
   page: Page
 ): Promise<Record<keyof typeof TEST_MODULES, { id: string; name: string; path: string }>> {
+  await requireModuleSourceReachable(page);
   const res = await casterApi<any[]>(page, 'GET', 'modules');
   const modules = res.status === 200 ? res.body : [];
   const found = Object.fromEntries(
@@ -738,6 +739,31 @@ export async function requireModuleSource(page: Page): Promise<void> {
     res.status === 200 && Array.isArray(res.body) && res.body.length > 0,
     'Caster has no module source configured (GET /api/modules/sources is empty). ' +
       'Start the AppHost with Launch__Gitea=true.'
+  );
+  await requireModuleSourceReachable(page);
+}
+
+/**
+ * Skip the calling test unless the Gitea serving Caster's module source answers.
+ *
+ * The AppHost configures caster-api with the Gitea repository whether or not Gitea
+ * is started, so "a source is configured" does not mean a sync can reach it; with
+ * Gitea down every module listing hangs on the git fetch and the spec dies on a 10s
+ * API timeout. Checking Gitea directly turns that into a named precondition. A
+ * target without a Gitea URL (minikube) has its own source and skips this probe.
+ */
+async function requireModuleSourceReachable(page: Page): Promise<void> {
+  const gitea = Services.Caster.ModuleSourceGitea;
+  if (!gitea) return;
+  const up = await page.request
+    .get(`${gitea}/api/healthz`, { timeout: 10_000 })
+    .then((r) => r.ok())
+    .catch(() => false);
+  requirePrecondition(
+    up,
+    `Gitea, Caster's module source, is not reachable at ${gitea}. ` +
+      "Start the AppHost with Launch__Gitea=true (or start the 'gitea' and 'gitea-seed' resources), " +
+      'then run caster/module-catalog/publish.sh.'
   );
 }
 
