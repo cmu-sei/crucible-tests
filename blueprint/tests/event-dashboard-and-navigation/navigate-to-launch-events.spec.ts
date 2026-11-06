@@ -13,7 +13,7 @@
 //
 // The card genuinely cannot appear. Two gates, both traced to source:
 //
-//   dashboard.component.html:23    @if (launchMselList.length > 0) { ...Start an Event... }
+//   dashboard.component.html        @if (launchMselList.length > 0) { ...LAUNCH card... }
 //   dashboard.component.ts          launchMselList <- mselDataService.getMyLaunchMsels()
 //   MselService.cs:2203             GetMyLaunchInvitationMselsAsync returns
 //                                     new List<ViewModels.Msel>()  // unconditionally
@@ -21,14 +21,14 @@
 //                                     //  matching / Users must now use invitation links"
 //
 // Verified live: `GET /api/my-launch-msels` -> `[]` (200). So `launchMselList` is always
-// empty, the "Start an Event" card never renders, and /launch is reachable only by direct URL
-// or an invitation link. Deliberate product behaviour, so no BP-n entry.
+// empty, the LAUNCH card never renders, and /launch is reachable only by direct URL
+// or an invitation link. Deliberate product behaviour, not an app bug.
 //
 // This spec now asserts that contract strictly. If auto-discovery is re-enabled the first
 // assertion fails, prompting a rewrite that covers the real card-click navigation.
 
 import { test, expect, Services, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
-import { getBlueprintToken } from '../../test-helpers';
+import { getBlueprintToken, dashboardCard } from '../../test-helpers';
 
 for (const theme of BLUEPRINT_THEMES) {
     test.describe(`${theme} theme › Event Dashboard and Navigation`, () => {
@@ -36,7 +36,7 @@ for (const theme of BLUEPRINT_THEMES) {
     await applyBlueprintTheme(page, theme);
       const token = await getBlueprintToken();
 
-      // 1. The list that gates the "Start an Event" card is empty by design.
+      // 1. The list that gates the LAUNCH card is empty by design.
       const launchList = await page.request.get(`${Services.Blueprint.API}/api/my-launch-msels`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -49,20 +49,17 @@ for (const theme of BLUEPRINT_THEMES) {
 
       // 2. The dashboard renders, and therefore omits the launch card.
       await page.goto(Services.Blueprint.UI, { waitUntil: 'domcontentloaded' });
-      const cardContainer = page.locator('.card-container');
-      await expect(cardContainer).toBeVisible({ timeout: 20000 });
-
       // The dashboard is genuinely populated first — this is not an empty page that trivially
-      // lacks the card. "Manage an Event" renders for a user who can create MSELs, so its
-      // presence proves the container rendered its cards at all.
-      await expect(
-        cardContainer.locator('mat-card').filter({ hasText: 'Manage an Event' })
-      ).toBeVisible({ timeout: 20000 });
+      // lacks the card. The JOIN card always renders, and BUILD renders for a user who can
+      // create MSELs, so their presence proves the grid rendered its cards at all.
+      await expect(dashboardCard(page, 'JOIN')).toBeVisible({ timeout: 20000 });
+      await expect(dashboardCard(page, 'BUILD')).toBeVisible({ timeout: 20000 });
 
       await expect(
-        cardContainer.locator('mat-card').filter({ hasText: 'Start an Event' }),
-        'the Start an Event card cannot render while launchMselList is empty'
+        dashboardCard(page, 'LAUNCH'),
+        'the LAUNCH card cannot render while launchMselList is empty'
       ).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Start Event' })).toHaveCount(0);
 
       // 3. The /launch route itself still resolves when reached directly.
       await page.goto(`${Services.Blueprint.UI}/launch`, { waitUntil: 'domcontentloaded' });

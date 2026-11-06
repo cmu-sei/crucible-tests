@@ -90,11 +90,12 @@ for (const theme of ALLOY_THEMES) {
       // expect: The dialog reports one imported template, renamed with " - <user>" because the original still has the name
       await expect(importDialog.getByText('Imported Event Templates: 1')).toBeVisible({ timeout: 30000 });
       await expect(importDialog.getByText('Imported with changes:')).toBeVisible();
-      const renamed = importDialog.getByText(
-        new RegExp(`^Renamed to "${templateName} - .+" because an Event Template named "${templateName}" already exists\\.$`),
-      );
+      // The change sits in a list item beside the "Name:" and "Change:" labels, so match without anchoring to its start
+      const renamed = importDialog.getByRole('listitem').filter({
+        hasText: new RegExp(`Renamed to "${templateName} - .+" because an Event Template named "${templateName}" already exists\\.$`),
+      });
       await expect(renamed).toBeVisible();
-      const copyName = /^Renamed to "(.+)" because/.exec((await renamed.textContent()) ?? '')?.[1] ?? '';
+      const copyName = /Renamed to "(.+)" because/.exec((await renamed.textContent()) ?? '')?.[1] ?? '';
       await importDialog.getByRole('button', { name: 'OK' }).click();
       await expect(importDialog).not.toBeVisible();
 

@@ -4,105 +4,84 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, APIRequestContext } from '@playwright/test';
-import { Services, authenticateWithKeycloak } from '../../../shared-fixtures';
-import { CITE_THEMES, setCiteTheme } from '../../fixtures';
-async function getApiToken(request: APIRequestContext): Promise<string> {
-  const resp = await request.post(`${Services.Keycloak}/realms/crucible/protocol/openid-connect/token`, {
-    form: {
-      grant_type: 'password',
-      client_id: 'cite.ui',
-      username: 'admin',
-      password: 'admin',
-      scope: 'openid cite',
-    },
-  });
-  const data = await resp.json();
-  return data.access_token;
-}
+import {
+  test,
+  expect,
+  Services,
+  seedCompleteEvaluation,
+  cleanupCompleteEvaluation,
+  seedTeamMemberUser,
+  cleanupTeamMemberUser,
+  authenticateCiteWithKeycloak,
+  CITE_THEMES,
+  setCiteTheme,
+  citeMoveLabel,
+  type TeamMemberUser,
+} from '../../fixtures';
+import { navigateToAdminSection, findAdminRowByName } from '../../test-helpers';
 
-async function createEvaluation(request: APIRequestContext, token: string): Promise<string> {
-  const modelsResp = await request.get(`${Services.Cite.API}/api/scoringmodels`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  const models = await modelsResp.json();
-  // On a clean database no scoring model exists (the seed.spec.ts stub is empty), so
-  // create one rather than failing — an evaluation requires a scoringModelId.
-  let scoringModelId: string;
-  if (models.length) {
-    scoringModelId = models[0].id;
-  } else {
-    const smResp = await request.post(`${Services.Cite.API}/api/scoringmodels`, {
-      headers: { Authorization: `Bearer ${token}` },
-      data: { description: `E2E Realtime Scoring Model - ${Date.now()}`, status: 'Pending' },
-    });
-    scoringModelId = (await smResp.json()).id;
-  }
-
-  const resp = await request.post(`${Services.Cite.API}/api/evaluations`, {
-    headers: { Authorization: `Bearer ${token}` },
-    data: {
-      description: `E2E Test Evaluation - ${Date.now()}`,
-      scoringModelId,
-      status: 'Active',
-    },
-  });
-  const evaluation = await resp.json();
-  return evaluation.id;
-}
-
-async function deleteEvaluation(request: APIRequestContext, token: string, id: string): Promise<void> {
-  await request.delete(`${Services.Cite.API}/api/evaluations/${id}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-}
-
+/**
+ * A team member sees moves up to the evaluation's current move, and the move list follows
+ * the current move live, in both directions, over SignalR.
+ *
+ * The watching user is a temporary team member with the default Member role, not `admin`:
+ * admin holds every system permission, reads every move, and so would show the future move
+ * from the start. The move counter's "of N" is the highest move the member can see, which
+ * makes the visible move list readable from the toolbar.
+ */
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Real-time Collaboration Features`, () => {
-    test('Real-time Move Advancement', async ({ browser, request }) => {
-      // Setup: Create evaluation via API
-      const apiToken = await getApiToken(request);
-      const evaluationId = await createEvaluation(request, apiToken);
+    let seeded: Awaited<ReturnType<typeof seedCompleteEvaluation>> | null = null;
+    let member: TeamMemberUser | null = null;
 
+    test('Real-time Move Advancement', async ({ citeAuthenticatedPage: adminPage, browser }) => {
+      // Move 1 exists from the start; the evaluation is on move 0.
+      const evalName = `E2E Move Advancement ${theme} ${Date.now()}`;
+      seeded = await seedCompleteEvaluation(evalName, 1);
+      member = await seedTeamMemberUser(seeded.teamId);
+
+      // 1. Open two browser instances: the member on the evaluation, admin on its admin row
+      // An empty storage state: the default for this suite is admin's saved sign-in
+      const memberContext = await browser.newContext({ ignoreHTTPSErrors: true, storageState: { cookies: [], origins: [] } });
       try {
-        // 1. Open two browser instances with users in the same evaluation
-        const context1 = await browser.newContext({ ignoreHTTPSErrors: true });
-        const context2 = await browser.newContext({ ignoreHTTPSErrors: true });
-        const page1 = await context1.newPage();
-        const page2 = await context2.newPage();
+        const memberPage = await memberContext.newPage();
+        await authenticateCiteWithKeycloak(memberPage, member.username, member.password);
+        await setCiteTheme(memberPage, theme);
+        await memberPage.goto(`${Services.Cite.UI}/?evaluation=${seeded.evaluationId}`);
 
-        await authenticateWithKeycloak(page1, Services.Cite.UI);
-        await setCiteTheme(page1, theme);
-        await authenticateWithKeycloak(page2, Services.Cite.UI);
-        await setCiteTheme(page2, theme);
+        // expect: The member sees the current move and not the future move 1
+        await expect(citeMoveLabel(memberPage)).toHaveText('Move 0 of 0', { timeout: 15000 });
 
-        // Both navigate to admin page where the evaluation is visible
-        for (const page of [page1, page2]) {
-          await page.goto(`${Services.Cite.UI}/admin`);
-          await expect(page).toHaveURL(/\/admin/, { timeout: 15000 });
-          const evalRow = page.getByRole('row').filter({ hasText: 'E2E Test Evaluation' }).first();
-          await expect(evalRow).toBeVisible({ timeout: 15000 });
-          await evalRow.click();
-        }
+        await setCiteTheme(adminPage, theme);
+        await navigateToAdminSection(adminPage, 'Evaluations');
+        const evalRow = await findAdminRowByName(adminPage, evalName);
+        await expect(evalRow).toBeVisible({ timeout: 10000 });
 
-        // expect: Both instances show current move number
+        // 2. As admin, advance the evaluation to the next move
+        await evalRow.locator('button[title="Increment Move"]').click();
 
-        // 2. In first instance, advance to next move (if admin controls available)
-        const nextMoveButton = page1.locator('button:has(mat-icon:has-text("chevron_right")), button[aria-label*="next"], [class*="next-move"]').first();
-        if (await nextMoveButton.isVisible({ timeout: 5000 }).catch(() => false)) {
-          await nextMoveButton.click();
-          await page1.waitForTimeout(2000);
-        }
+        // 3. expect: Move 1 reaches the member without a refresh
+        await expect(citeMoveLabel(memberPage)).toHaveText('Move 0 of 1', { timeout: 15000 });
 
-        // 3. Observe second instance
-        // expect: Move number updates automatically in second instance
-        await page2.waitForTimeout(3000);
+        // 4. As admin, set the evaluation back to move 0
+        await evalRow.locator('button[title="Decrement Move"]').click();
 
-        await context1.close();
-        await context2.close();
+        // 5. expect: Move 1 is withdrawn from the member without a refresh
+        await expect(citeMoveLabel(memberPage)).toHaveText('Move 0 of 0', { timeout: 15000 });
       } finally {
-        // Cleanup: Delete evaluation
-        await deleteEvaluation(request, apiToken, evaluationId);
+        await memberContext.close();
+      }
+    });
+
+    test.afterEach(async () => {
+      // The evaluation goes first: its teams hold the member's membership.
+      if (seeded) {
+        await cleanupCompleteEvaluation(seeded);
+        seeded = null;
+      }
+      if (member) {
+        await cleanupTeamMemberUser(member);
+        member = null;
       }
     });
   });

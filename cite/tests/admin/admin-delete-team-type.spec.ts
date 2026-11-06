@@ -5,7 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, seedTeamType, apiDeleteTeamType, CITE_THEMES, setCiteTheme } from '../../fixtures';
-import { navigateToAdminSection, waitForAdminListLoad } from '../../test-helpers';
+import { navigateToAdminSection, waitForAdminListLoad, waitForDialogOpen } from '../../test-helpers';
 
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Administration - Team Types`, () => {
@@ -41,7 +41,7 @@ for (const theme of CITE_THEMES) {
       await deleteButton.click();
 
       const confirmDialog = page.getByRole('dialog');
-      await expect(confirmDialog).toBeVisible({ timeout: 5000 });
+      await waitForDialogOpen(confirmDialog);
 
       const yesButton = confirmDialog.getByRole('button', { name: 'Yes' });
       await yesButton.click();

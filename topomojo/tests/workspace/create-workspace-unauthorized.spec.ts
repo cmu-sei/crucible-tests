@@ -5,7 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect } from '@playwright/test';
-import { authenticateTopoMojoWithKeycloak, Services, serviceUrlPattern } from '../../fixtures';
+import { authenticateTopoMojoWithKeycloak, Services, serviceUrlPattern, topomojoNavLink } from '../../fixtures';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -18,9 +18,9 @@ test.describe('Workspace Management', () => {
     // expect: User is on home page
     await expect(page).toHaveURL(serviceUrlPattern(Services.TopoMojo.UI));
 
-    // expect: User is not an admin - no Admin button in nav
-    const adminButton = page.getByRole('button', { name: 'Admin' });
-    await expect(adminButton).not.toBeVisible();
+    // expect: User is not an admin - no Admin link in nav
+    const adminLink = topomojoNavLink(page, 'Admin');
+    await expect(adminLink).not.toBeVisible();
 
     // 2. Verify the TopoMojo API enforces the creator role restriction.
     // The UI shows the "New Workspace" button to all authenticated users, but the API

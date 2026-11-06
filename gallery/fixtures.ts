@@ -121,6 +121,53 @@ export async function openMatSelect(trigger: Locator): Promise<Locator> {
 }
 
 /**
+ * Click a row action inside a disabled `mat-expansion-panel-header`, once it can really
+ * be clicked.
+ *
+ * The admin Cards and Articles lists render each row as
+ * `<mat-expansion-panel-header disabled>` with Edit and Delete buttons inside. The buttons
+ * are enabled, but the header carries `aria-disabled="true"`, and Playwright treats every
+ * descendant of an aria-disabled element as disabled, so a plain `click()` waits out its
+ * timeout. `force: true` gets past that, but it also skips the two checks that matter
+ * here: that the button has stopped moving, and that it is the element under the
+ * pointer. The Cards and Articles sections animate open, so a forced click sent while the
+ * section is still sliding into place lands on the section itself and opens nothing.
+ * Seen as an "Edit Article"/"Edit Card" dialog that never appears; a probe caught
+ * `document.elementFromPoint` at the button's centre returning the `div.sub-panel` around
+ * it. Firefox loses this race more often than chromium.
+ *
+ * This waits for both conditions itself — the button's box unchanged across two animation
+ * frames, and the button (or its icon) the element at its centre — and only then forces
+ * the click.
+ *
+ * @param button - The Edit or Delete button in the row header
+ */
+export async function clickRowAction(button: Locator): Promise<void> {
+  // Visible and stable are the checks scrollIntoViewIfNeeded makes; enabled is not, so the
+  // aria-disabled ancestor does not stall it.
+  await button.scrollIntoViewIfNeeded();
+  await expect
+    .poll(
+      () =>
+        button.evaluate(async (element) => {
+          const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+          const before = element.getBoundingClientRect();
+          await nextFrame();
+          await nextFrame();
+          const box = element.getBoundingClientRect();
+          if (box.width === 0 || box.x !== before.x || box.y !== before.y) {
+            return false;
+          }
+          const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+          return hit !== null && element.contains(hit);
+        }),
+      { message: 'the row action should stop moving and be the element under the pointer' }
+    )
+    .toBe(true);
+  await button.click({ force: true });
+}
+
+/**
  * A wall or archive card's simulated date/time, e.g. "10/13/26, 8:35 PM EDT".
  *
  * The cards render it with `toLocaleString('en-US', { ..., timeZoneName: 'short' })` in
@@ -1277,8 +1324,19 @@ export async function openGalleryUserMenu(
  * so it only exists once `permissionDataService.load()` has resolved.
  */
 export async function gotoGalleryAdmin(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Administration' }).click();
-  await expect(page).toHaveTitle('Gallery Admin');
+  // AdminContainerComponent sets this title in its constructor, so a title that never
+  // changes means the lazy `/admin` route never loaded. That was seen once under
+  // full-suite load (user-role-assignment.spec.ts): the click landed, and the title was
+  // still "Gallery" ten seconds later. It did not reproduce in isolation or under four
+  // parallel workers, so the cause is not known. Clicking again re-issues the
+  // navigation, which is harmless when the first one is merely slow, as both go to the
+  // same route. `exact` keeps a retried click off "Exit Administration".
+  await expect(async () => {
+    if ((await page.title()) !== 'Gallery Admin') {
+      await page.getByRole('button', { name: 'Administration', exact: true }).click({ timeout: 5000 });
+    }
+    await expect(page).toHaveTitle('Gallery Admin', { timeout: 5000 });
+  }).toPass({ timeout: 20000 });
 }
 
 /**

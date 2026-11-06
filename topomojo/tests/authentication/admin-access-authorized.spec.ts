@@ -4,7 +4,7 @@
 // spec: topomojo/topomojo-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, topomojoNavLink } from '../../fixtures';
 
 test.describe('Authentication and Authorization', () => {
   test('Role-Based Access - Admin Access', async ({ topomojoAuthenticatedPage: page }) => {
@@ -13,10 +13,10 @@ test.describe('Authentication and Authorization', () => {
     // expect: User is authenticated
 
     // 2. Navigate to /admin route
-    // Click the Admin button instead of using goto() since TopoMojo is a SPA
-    const adminButton = page.getByRole('button', { name: 'Admin' });
-    await expect(adminButton).toBeVisible({ timeout: 10000 });
-    await adminButton.click();
+    // Click the Admin link instead of using goto() since TopoMojo is a SPA
+    const adminLink = topomojoNavLink(page, 'Admin');
+    await expect(adminLink).toBeVisible({ timeout: 10000 });
+    await adminLink.click();
 
     // expect: Admin page loads successfully
     await page.waitForURL(/\/admin/, { timeout: 15000 });

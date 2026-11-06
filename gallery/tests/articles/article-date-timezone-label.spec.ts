@@ -9,6 +9,7 @@ import {
   apiCreateCollection,
   apiCreateArticle,
   apiDeleteCollectionById,
+  clickRowAction,
 } from '../../fixtures';
 
 /**
@@ -34,9 +35,8 @@ async function openEditArticleDialog(page: Page, collectionName: string, article
   await page.getByRole('button', { name: 'Articles', exact: true }).click();
   await expect(articlesPanel).toBeVisible();
   await articlesPanel.getByRole('textbox', { name: 'Search' }).fill(articleName);
-  // force: the enclosing disabled expansion-panel header makes Playwright treat
-  // the button as disabled — see edit-article.spec.ts.
-  await articlesPanel.getByRole('button', { name: `Edit ${articleName}` }).click({ force: true });
+  // The row header is a disabled expansion-panel header; see clickRowAction in fixtures.ts.
+  await clickRowAction(articlesPanel.getByRole('button', { name: `Edit ${articleName}` }));
 
   const dialog = page.getByRole('dialog', { name: 'Edit Article' });
   await expect(dialog).toBeVisible();

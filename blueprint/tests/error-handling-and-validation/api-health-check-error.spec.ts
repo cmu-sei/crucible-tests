@@ -29,7 +29,7 @@ import { test, expect, Services, BLUEPRINT_THEMES, applyBlueprintTheme } from '.
  * because the same flag gates lines 23 and 36, the normal content is suppressed. All three are
  * located below by role rather than tag, so the heading level is not what is being asserted.
  *
- * Both halves are asserted here: the error is shown, and the dashboard content is not. The 5s
+ * Both halves are asserted here: the error is shown, and the MSEL list is not. The 5s
  * sleep is gone — each assertion waits on the state it is about.
  *
  * Two measured details shaped the assertions:
@@ -80,9 +80,10 @@ for (const theme of BLUEPRINT_THEMES) {
           page.getByRole('heading', { name: /contact the site administrator/i })
         ).toBeVisible({ timeout: 15000 });
 
-        // expect: the normal dashboard content is suppressed rather than rendered empty — the
-        // same `apiIsSick` flag gates it (home-app.component.html:23, 36).
-        await expect(page.getByRole('button', { name: /Manage an Event/i })).toHaveCount(0);
+        // expect: the normal /build content is suppressed rather than rendered empty — the same
+        // `apiIsSick` flag gates the MSEL list (home-app.component.html).
+        await expect(page.locator('app-msel-list')).toHaveCount(0);
+        await expect(page.getByRole('button', { name: 'Add blank MSEL' })).toHaveCount(0);
       } finally {
         // Always drop the intercept, even if an assertion above fails, so the page is not left
         // routed for anything that reuses this context.

@@ -4,7 +4,14 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, CASTER_THEMES, setCasterTheme } from '../../fixtures';
+import {
+  test,
+  expect,
+  Services,
+  CASTER_THEMES,
+  setCasterTheme,
+  requireModuleSource,
+} from '../../fixtures';
 
 for (const theme of CASTER_THEMES) {
   test.describe(`${theme} theme › Modules Management`, () => {
@@ -48,6 +55,7 @@ for (const theme of CASTER_THEMES) {
     });
 
     test('Update Modules From An Unknown Module ID', async ({ casterAuthenticatedPage: page }) => {
+      await requireModuleSource(page);
       await setCasterTheme(page, theme);
 
       await page.goto(Services.Caster.UI + '/admin?section=Modules');

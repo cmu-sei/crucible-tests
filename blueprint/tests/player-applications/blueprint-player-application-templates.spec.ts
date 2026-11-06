@@ -163,6 +163,10 @@ for (const theme of BLUEPRINT_THEMES) {
         const confirm = page.getByRole('dialog').filter({ hasText: 'Delete Player Application Template' });
         await expect(confirm).toContainText(`Are you sure that you want to delete ${renamed}?`);
         await confirm.getByRole('button', { name: 'Yes' }).click();
+        // While the confirmation is open the page behind it is aria-hidden, so a role
+        // locator already finds no row. The delete is only sent once the dialog closes,
+        // and the row leaves the table once it succeeds, so wait for both.
+        await expect(confirm).toBeHidden();
         await expect(templateRow(page, renamed)).toHaveCount(0);
         expect((await listTemplates(token, 'playerApplications')).map((t) => t.name)).not.toContain(renamed);
       } finally {

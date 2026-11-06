@@ -23,7 +23,8 @@
 //   * The card list comes from `GET /api/my-join-msels`
 //     (`MselService.GetMyJoinInvitationMselsAsync`), which needs Deployed + non-null
 //     PlayerViewId + team membership — `seedJoinableMsel` does all three.
-//   * Clicking Join issues `POST /api/msels/{id}/join?teamId=` and, on success, the
+//   * Clicking Join (a link to `/join?msel=<id>`, which joins when the route loads) issues
+//     `POST /api/msels/{id}/join?teamId=` and, on success, the
 //     component does `location.href = PlayerUrl + 'view/' + playerViewId`
 //     (join.component.ts `join()`), a genuine cross-app navigation.
 //   * Player IS reachable in this stack (settings.json `PlayerUrl` is
@@ -53,6 +54,7 @@ import {
   getMsel,
   deleteMsel,
   tempBlueprintName,
+  joinPageCard,
 } from '../../test-helpers';
 
 for (const theme of BLUEPRINT_THEMES) {
@@ -101,15 +103,14 @@ for (const theme of BLUEPRINT_THEMES) {
 
       // expect: Join page displays with available MSELs to join — identified by the seeded
       // MSEL's unique name, so this cannot pass on some unrelated card.
-      const mselCard = page.locator('.card-container mat-card').filter({ hasText: mselName });
+      const mselCard = joinPageCard(page, mselName);
       await expect(mselCard).toBeVisible({ timeout: 30000 });
       await expect(mselCard).toHaveCount(1);
-      await expect(mselCard.locator('mat-card-title')).toHaveText(mselName);
 
       // expect: Only MSELs with status 'Deployed' are shown.
       //
       // The card markup carries no status text at all (join.component.html renders only name
-      // + description + a Join button), so "Deployed-only" is not observable in the DOM — the
+      // + description + a Join link), so "Deployed-only" is not observable in the DOM — the
       // old spec's `text=Deployed` locator was doomed twice over. It IS observable through the
       // list that populates those cards: every entry `my-join-msels` returns is Deployed.
       // Asserted over the whole list so a non-Deployed leak would fail.
@@ -126,15 +127,15 @@ for (const theme of BLUEPRINT_THEMES) {
 
       // The join affordance, scoped to this MSEL's card.
       //
-      // Located by `title="Join {{ msel.name }}"`, NOT by accessible name: the button has
+      // Located by `title="Join {{ msel.name }}"`, NOT by accessible name: the link has
       // visible text ("Join"), and visible text wins when the accessible name is computed, so
-      // `getByRole('button', { name: 'Join <mselName>' })` matches nothing. Verified live.
+      // `getByRole('link', { name: 'Join <mselName>' })` matches nothing.
       // Scoping to `mselCard` is what ties the click to the seeded MSEL — an unscoped
-      // "Join"-named button would match every card on the page.
-      const joinButton = mselCard.getByTitle(`Join ${mselName}`);
-      await expect(joinButton).toBeVisible();
-      await expect(joinButton).toBeEnabled();
-      await expect(joinButton).toHaveText('Join');
+      // "Join"-named link would match every card on the page.
+      const joinLink = mselCard.getByTitle(`Join ${mselName}`);
+      await expect(joinLink).toBeVisible();
+      await expect(joinLink).toBeEnabled();
+      await expect(joinLink).toHaveText('Join');
 
       // 2. Click Join. Two things must both happen, and both are waited on paired with the
       //    click: the join request succeeds, and the browser leaves Blueprint for Player.
@@ -147,7 +148,7 @@ for (const theme of BLUEPRINT_THEMES) {
         page.waitForURL((url) => url.toString().includes(`/view/${playerViewId}`), {
           timeout: 60000,
         }),
-        joinButton.click(),
+        joinLink.click(),
       ]);
 
       // expect: the join call succeeded and returned this MSEL's Player View id.

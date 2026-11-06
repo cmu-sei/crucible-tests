@@ -43,6 +43,8 @@ for (const theme of STEAMFITTER_THEMES) {
       // 2. Click "Add a Task" to open the task dialog, then fill and Save. The helper
       // waits on the tasks POST so the new task is persisted before we assert.
       await page.locator('button[title="Add a Task"]').click();
+      // a new task's dialog is titled "Add Task"; an existing one's, "Edit Task"
+      await expect(page.getByRole('dialog').getByRole('heading', { name: 'Add Task' })).toBeVisible({ timeout: 5000 });
       await fillTaskDialog(page, {
         name: TASK_NAME,
         description: 'Task added by an automated end-to-end test',

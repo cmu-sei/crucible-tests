@@ -22,9 +22,9 @@ import {
  * Exhibit Management — an expanded exhibit's detail sub-panel survives an exhibit-store
  * emission.
  *
- * Pending upstream: the Admin Exhibits table needs a `trackBy` so a store emission patches
- * rows instead of rebuilding them. This spec asserts the fixed behaviour, so it fails until
- * that change reaches the Gallery UI build under test.
+ * Regression test for the Admin Exhibits table's `trackBy`, which lets a store emission
+ * patch existing rows instead of rebuilding them. If the `trackBy` is removed, the open
+ * sub-panel inside an expanded exhibit's detail row collapses on the next emission.
  *
  * `admin-exhibits.component.ts` subscribes to `exhibitQuery.selectAll()` and, on every
  * emission, runs `setExhibitList` → `applyFilter`, which rebuilds `exhibitList` from
