@@ -12,6 +12,13 @@ import {
   settleForResponse,
 } from '../shared-fixtures';
 import { authStatePath } from '../auth-paths';
+import {
+  getKeycloakAdminToken,
+  createKeycloakUser,
+  deleteKeycloakUser,
+  tempUsername,
+  getUserToken,
+} from '../keycloak-admin';
 
 /**
  * CITE-specific fixtures
@@ -332,7 +339,8 @@ export async function seedMove(
  * Returns the created team type ID.
  */
 export async function seedTeamType(
-  name: string = `Test Team Type ${Date.now()}`
+  name: string = `Test Team Type ${Date.now()}`,
+  options: { isOfficialScoreContributor?: boolean } = {}
 ): Promise<string> {
   const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
   try {
@@ -345,6 +353,7 @@ export async function seedTeamType(
       },
       data: {
         name,
+        isOfficialScoreContributor: options.isOfficialScoreContributor ?? false,
       },
     });
 
@@ -642,6 +651,70 @@ export async function seedCompleteEvaluation(
     teamId,
     userId,
   };
+}
+
+/** A temporary non-admin user on one team, from `seedTeamMemberUser`. */
+export type TeamMemberUser = {
+  username: string;
+  password: string;
+  /** The Keycloak id, which CITE also uses as the user's id. */
+  userId: string;
+};
+
+/**
+ * Create a Keycloak user with no CITE system permissions and put it on `teamId` with the
+ * default Member role.
+ *
+ * For specs about what a team member sees: `admin` holds every system permission, so it
+ * reads every move and every official score, and it can never show what a team limits.
+ * CITE creates its own user row the first time a token is presented, so the user calls
+ * the API once before the membership is added. Pair every call with
+ * `cleanupTeamMemberUser`, after the evaluation is deleted.
+ */
+export async function seedTeamMemberUser(teamId: string, prefix: string = 'citemember'): Promise<TeamMemberUser> {
+  const kcAdminToken = await getKeycloakAdminToken();
+  const username = tempUsername(prefix);
+  const password = 'TestPassword123!';
+  const kcUser = await createKeycloakUser(kcAdminToken, { username, password, realmRoles: [] });
+  const member: TeamMemberUser = { username, password, userId: kcUser.id };
+
+  try {
+    const userToken = await getUserToken(username, password, 'cite.ui', 'openid profile cite');
+    const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
+    try {
+      const provision = await apiContext.get(`${Services.Cite.API}/api/my-evaluations`, {
+        headers: { Authorization: `Bearer ${userToken}` },
+      });
+      if (!provision.ok()) {
+        throw new Error(`Failed to provision CITE user ${username}: ${provision.status()} ${await provision.text()}`);
+      }
+    } finally {
+      await apiContext.dispose();
+    }
+
+    await seedTeamMembership(teamId, member.userId);
+    return member;
+  } catch (error) {
+    await cleanupTeamMemberUser(member);
+    throw error;
+  }
+}
+
+/** Delete the CITE user row and the Keycloak user `seedTeamMemberUser` created. */
+export async function cleanupTeamMemberUser(member: TeamMemberUser): Promise<void> {
+  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
+  try {
+    const token = await getCiteApiToken(apiContext);
+    const response = await apiContext.delete(`${Services.Cite.API}/api/users/${member.userId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok() && response.status() !== 404) {
+      console.warn(`API cleanup: Failed to delete CITE user ${member.username}: ${response.status()}`);
+    }
+  } finally {
+    await apiContext.dispose();
+  }
+  await deleteKeycloakUser(await getKeycloakAdminToken(), member.userId);
 }
 
 /**

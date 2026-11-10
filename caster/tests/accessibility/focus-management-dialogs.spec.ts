@@ -17,7 +17,7 @@ for (const theme of CASTER_THEMES) {
       const addProjectButton = page.getByText('My Projects').locator('..').getByRole('button');
       await addProjectButton.click();
 
-      const dialog = page.getByRole('dialog', { name: 'Create New Project?' });
+      const dialog = page.getByRole('dialog', { name: 'Add Project' });
       await expect(dialog).toBeVisible();
 
       // expect: Focus is moved to the dialog when it opens
@@ -30,10 +30,10 @@ for (const theme of CASTER_THEMES) {
 
       // Reopen dialog and verify focus management is consistent
       await addProjectButton.click();
-      await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
+      await expect(page.getByRole('dialog', { name: 'Add Project' })).toBeVisible();
       await expect(page.getByRole('textbox', { name: 'Name' })).toBeFocused();
       await page.getByRole('button', { name: 'Cancel' }).click();
-      await expect(page.getByRole('dialog', { name: 'Create New Project?' })).not.toBeVisible();
+      await expect(page.getByRole('dialog', { name: 'Add Project' })).not.toBeVisible();
     });
   });
 }

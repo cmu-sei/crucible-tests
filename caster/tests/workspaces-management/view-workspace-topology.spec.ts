@@ -60,14 +60,14 @@ async function openNewWorkspace(page: Page, projectName: string, workspaceName: 
   await expect(page.getByText('My Projects')).toBeVisible();
 
   await page.locator('[mattooltip="Add New Project"]').click();
-  const projectDialog = page.getByRole('dialog', { name: 'Create New Project?' });
+  const projectDialog = page.getByRole('dialog', { name: 'Add Project' });
   await expect(projectDialog).toBeVisible();
   await projectDialog.getByRole('textbox', { name: 'Name' }).fill(projectName);
   await projectDialog.getByRole('button', { name: 'Save' }).click();
   await expectCasterProjectOpen(page, projectName);
 
   await page.getByTitle('Add New Directory').click();
-  const dirDialog = page.getByRole('dialog', { name: 'Create New Directory?' });
+  const dirDialog = page.getByRole('dialog', { name: 'Add Directory' });
   await expect(dirDialog).toBeVisible();
   await dirDialog.getByRole('textbox', { name: 'Name' }).fill('Topology_Dir');
   await dirDialog.getByRole('button', { name: 'Save' }).click();
@@ -77,7 +77,7 @@ async function openNewWorkspace(page: Page, projectName: string, workspaceName: 
   await page.getByRole('button', { name: 'WORKSPACES' }).click();
 
   await page.getByText('Add Workspace').click();
-  const wsDialog = page.getByRole('dialog', { name: 'Create New Workspace?' });
+  const wsDialog = page.getByRole('dialog', { name: 'Add Workspace' });
   await expect(wsDialog).toBeVisible();
   await wsDialog.getByRole('textbox', { name: 'Name' }).fill(workspaceName);
   await wsDialog.getByRole('button', { name: 'Save' }).click();
@@ -97,13 +97,6 @@ async function nodePosition(page: Page, id: string): Promise<{ x: number; y: num
 
 for (const theme of CASTER_THEMES) {
   test.describe(`${theme} theme › Workspaces Management`, () => {
-    // Pending upstream: the Topology view these tests drive is not on caster.ui or
-    // caster.api main yet. It is in the draft PRs on feature/workspace-topology
-    // (caster.ui #678, "Add a Topology view of a workspace's machines and networks",
-    // and caster.api #118, "Draw a workspace's machines and networks from its latest
-    // plan"). Until both merge, the workspace view has no "topology" toggle and every
-    // test here times out looking for it. Remove this skip once they are on main.
-    test.skip(true, 'Pending upstream: the workspace Topology view (caster.ui #678, caster.api #118) is not merged');
 
     test('View Workspace Topology', async ({ casterAuthenticatedPage: page, cleanupCasterProjectByName }) => {
       await setCasterTheme(page, theme);
@@ -247,9 +240,10 @@ for (const theme of CASTER_THEMES) {
       const view = page.locator('cas-workspace-topology');
       await expect(view.locator('.graph canvas').first()).toBeVisible({ timeout: 10000 });
 
-      // 1. Download the image
-      const downloadPromise = page.waitForEvent('download');
+      // 1. Download the image: the button opens a format menu (PNG or SVG)
       await view.getByRole('button', { name: 'Download image' }).click();
+      const downloadPromise = page.waitForEvent('download');
+      await page.getByRole('menuitem', { name: 'PNG image' }).click();
       const download = await downloadPromise;
 
       // expect: a PNG named for the workspace

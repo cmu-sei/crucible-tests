@@ -84,7 +84,7 @@ for (const theme of STEAMFITTER_THEMES) {
           response.ok(),
         { timeout: 15000 }
       );
-      await respondToConfirmDialog(page, true);
+      await respondToConfirmDialog(page, true, 'Start');
       await startResponse.catch(() => {});
 
       // expect: The row reflects the active status.
@@ -101,7 +101,7 @@ for (const theme of STEAMFITTER_THEMES) {
           response.ok(),
         { timeout: 15000 }
       );
-      await respondToConfirmDialog(page, true);
+      await respondToConfirmDialog(page, true, 'End');
       await endResponse.catch(() => {});
 
       // expect: The scenario is now ended. The Scenarios list defaults to a Status

@@ -6,7 +6,7 @@
 
 import type { Page } from '@playwright/test';
 import { test, expect, gotoPlayerVm, setPlayerVmTheme, PLAYERVM_THEMES, PlayerVmTheme } from '../../fixtures';
-import { luminance, contrastRatio, sample, assertReadable, effectiveColorSettings, cssVar, hexToRgb } from '../../../theme-helpers';
+import { luminance, contrastRatio, sample, assertReadable, effectiveColorSettings, cssVar, hexToRgb, expectFaviconInTopBarColor } from '../../../theme-helpers';
 import { seedView } from '../../vm-helpers';
 
 /**
@@ -167,6 +167,9 @@ for (const theme of PLAYERVM_THEMES) {
       const toolbar = page.locator('app-topbar mat-toolbar.toolbar');
       await expect(toolbar).toHaveCSS('background-color', hexToRgb(settings.AppTopBarHexColor!));
       await expect(toolbar).toHaveCSS('color', hexToRgb(settings.AppTopBarHexTextColor!));
+
+      // The favicon is recolored to the top-bar color too.
+      await expectFaviconInTopBarColor(page, settings.AppTopBarHexColor!);
 
       // The home logo keeps the top-bar pair too: the monitor glyph in the top-bar
       // color on a disc of the top-bar text color.

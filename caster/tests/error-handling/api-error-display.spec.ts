@@ -14,7 +14,7 @@ for (const theme of CASTER_THEMES) {
       await expect(page.getByText('My Projects')).toBeVisible();
 
       await page.locator('button[mattooltip="Add New Project"]').click();
-      await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
+      await expect(page.getByRole('dialog', { name: 'Add Project' })).toBeVisible();
 
       await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
 

@@ -5,7 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, serviceUrlPattern, oidcStorageKey, ensureScoringModelExists, ensureTeamTypeExists, purgeStaleEvaluations, settleForResponse, CITE_THEMES, setCiteTheme } from '../../fixtures';
-import { deleteEvaluationByName, navigateToAdminSection } from '../../test-helpers';
+import { deleteEvaluationByName, navigateToAdminSection, waitForDialogOpen } from '../../test-helpers';
 import {
   getKeycloakToken,
   createGalleryCollection,
@@ -108,7 +108,7 @@ async function setupGalleryAndCiteEvaluation(
   await addButton.click();
 
   const dialog = page.getByRole('dialog', { name: 'Add Evaluation' });
-  await expect(dialog).toBeVisible({ timeout: 5000 });
+  await waitForDialogOpen(dialog);
 
   await page.getByRole('textbox', { name: 'Evaluation Description' }).fill(opts.evalName);
 
@@ -183,7 +183,7 @@ async function setupGalleryAndCiteEvaluation(
   await addTeamButton.click();
 
   const teamDialog = page.getByRole('dialog');
-  await expect(teamDialog).toBeVisible({ timeout: 5000 });
+  await waitForDialogOpen(teamDialog);
   await teamDialog.getByRole('textbox').first().fill(opts.teamName);
   await teamDialog.getByRole('textbox').nth(1).fill(opts.teamShort);
 

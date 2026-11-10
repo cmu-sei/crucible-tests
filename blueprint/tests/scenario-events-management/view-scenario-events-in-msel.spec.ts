@@ -54,10 +54,9 @@ for (const theme of BLUEPRINT_THEMES) {
 
     test('View Scenario Events in MSEL', async ({ blueprintAuthenticatedPage: page }) => {
     await applyBlueprintTheme(page, theme);
-      // Pending upstream: `GET /api/msels/{mselId}/scenarioEvents` does not return `dataValues`,
-      // so the Scenario Events grid cells render blank. Deliberately left un-skipped so the gap
-      // is reported on every run; the assertions below are correct as written and will pass once
-      // the list endpoint returns dataValues.
+      // Note: `GET /api/msels/{mselId}/scenarioEvents` still omits `dataValues`; the grid
+      // fills its cells from the MSEL load (which includes each event's data values), so
+      // this test does not depend on the list endpoint.
 
       // Navigate to the MSEL Scenario Events section
       await navigateToMselSection(page, mselId, 'Scenario Events');
@@ -70,10 +69,9 @@ for (const theme of BLUEPRINT_THEMES) {
       const eventRow = page.locator('table tbody tr').last();
       await expect(eventRow).toBeVisible({ timeout: 5000 });
 
-      // BLOCKED by the missing dataValues: expect cell content to be visible.
-      // Once the list endpoint returns dataValues, add:
-      // const descriptionCell = page.getByText('Test scenario event for viewing');
-      // await expect(descriptionCell).toBeVisible();
+      // expect: The seeded event's data values render in the grid
+      const descriptionCell = page.getByText('Test scenario event for viewing');
+      await expect(descriptionCell).toBeVisible();
     });
     });
 }

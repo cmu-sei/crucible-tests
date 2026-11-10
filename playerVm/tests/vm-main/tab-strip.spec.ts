@@ -60,13 +60,13 @@ for (const theme of PLAYERVM_THEMES) {
       await expect(vmListTab).toBeVisible({ timeout: 30000 });
       // Every tab the seeding user's permissions allow. `admin` holds the Keycloak
       // Administrator realm role, which maps to every Player system permission, so
-      // the three permission-gated tabs (Usage Logging, Networks, Files) all render.
+      // the three permission-gated tabs (Usage Logging, Networks, ISOs) all render.
       // A deployment where they did not would be a permissions regression, not an
       // environment difference — hence a plain assertion and not a precondition.
       await expect(page.getByRole('tab', { name: 'User Follow' })).toBeVisible();
       await expect(page.getByRole('tab', { name: 'Usage Logging' })).toBeVisible();
       await expect(page.getByRole('tab', { name: 'Networks' })).toBeVisible();
-      await expect(page.getByRole('tab', { name: 'Files' })).toBeVisible();
+      await expect(page.getByRole('tab', { name: 'ISOs' })).toBeVisible();
 
       // `selectedTab` defaults to 0 and the VM list is not lazy, so this is the tab
       // the page lands on with no persisted session.
@@ -135,9 +135,9 @@ for (const theme of PLAYERVM_THEMES) {
       await expect(networks.getByRole('combobox', { name: 'Provider Type' })).toBeVisible();
     });
 
-    test('Files tab mounts the ISO list', async ({ playerVmAuthenticatedPage: page }) => {
+    test('ISOs tab mounts the ISO list', async ({ playerVmAuthenticatedPage: page }) => {
       await gotoPlayerVm(page, `/views/${seeded.viewId}`, theme);
-      await page.getByRole('tab', { name: 'Files' }).click();
+      await page.getByRole('tab', { name: 'ISOs' }).click();
 
       const isoList = page.locator('app-iso-list');
       await expect(isoList).toBeVisible({ timeout: 30000 });
@@ -152,9 +152,9 @@ for (const theme of PLAYERVM_THEMES) {
     test('Selected tab survives a reload', async ({ playerVmAuthenticatedPage: page }) => {
       await gotoPlayerVm(page, `/views/${seeded.viewId}`, theme);
 
-      const filesTab = page.getByRole('tab', { name: 'Files' });
-      await expect(filesTab).toBeVisible({ timeout: 30000 });
-      await filesTab.click();
+      const isosTab = page.getByRole('tab', { name: 'ISOs' });
+      await expect(isosTab).toBeVisible({ timeout: 30000 });
+      await isosTab.click();
       await expect(page.locator('app-iso-list')).toBeVisible();
 
       await page.reload();
@@ -162,7 +162,7 @@ for (const theme of PLAYERVM_THEMES) {
       // `ngOnInit` restores `selectedTab` from the persisted session, and the
       // restored index has to re-mount the lazy content — a restore that selected
       // the tab without instantiating the component would look right and be empty.
-      await expect(page.getByRole('tab', { name: 'Files' })).toHaveAttribute(
+      await expect(page.getByRole('tab', { name: 'ISOs' })).toHaveAttribute(
         'aria-selected',
         'true',
         { timeout: 30000 }
@@ -224,7 +224,7 @@ for (const theme of PLAYERVM_THEMES) {
         timeout: 30000,
       });
       await expect(embedded.locator('app-vm-list').getByRole('link', { name: seeded.vmName })).toBeVisible();
-      await expect(embedded.getByRole('tab', { name: 'Files' })).toBeVisible();
+      await expect(embedded.getByRole('tab', { name: 'ISOs' })).toBeVisible();
 
       // ...and the frame booted into the theme its host asked for.
       if (theme === 'dark') {

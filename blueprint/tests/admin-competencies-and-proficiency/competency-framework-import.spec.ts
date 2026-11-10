@@ -4,7 +4,7 @@
 // spec: specs/blueprint-test-plan.md
 // seed: tests/seed.spec.ts
 //
-// The Import Competency Framework dialog and the per-row JSON download. The dialog is where
+// The Import Competency Framework dialog and the header JSON download. The dialog is where
 // the UI owns real behaviour: it picks a parser by file extension, renders the API's preview,
 // and polls GET /api/competencyframeworks/imports/{importId} on a timer to drive its progress
 // bar while the import request is still in flight. (Progress is polled, not pushed over
@@ -25,7 +25,7 @@ import {
 } from '../../test-helpers';
 
 /**
- * A framework in Blueprint's own export shape (what the row's Download button produces):
+ * A framework in Blueprint's own export shape (what the header Download button produces):
  * a work role related to one task and one knowledge item, so the preview has two
  * relationships to count.
  */
@@ -54,7 +54,7 @@ function uniqueIdNumber(): string {
 }
 
 async function openImportDialog(page: Page) {
-  await page.getByTitle('Import framework from JSON').click();
+  await page.getByTitle('Upload Competency Frameworks').click();
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByText('Import Competency Framework')).toBeVisible();
   return dialog;
@@ -228,9 +228,21 @@ for (const theme of BLUEPRINT_THEMES) {
       const row = page.locator('mat-row.element-row').filter({ hasText: frameworkName });
       await expect(row).toHaveCount(1);
 
+      // The header Download button opens a picker over the table's current (filtered) rows,
+      // all preselected; each chosen framework is saved as its own file. With the search
+      // narrowed to the seeded framework, the picker offers exactly that one.
+      await page.getByTitle('Download Competency Frameworks as JSON').click();
+      const picker = page.getByRole('dialog');
+      await expect(picker.getByText('Select Competency Frameworks to download')).toBeVisible();
+      const options = picker.locator('.item-list mat-checkbox');
+      await expect(options).toHaveCount(1);
+      await expect(options).toHaveText(`${frameworkName} (4.1)`);
+      await expect(picker.getByText('Select all (1/1)')).toBeVisible();
+
       const downloadEvent = page.waitForEvent('download');
-      await row.getByTitle(`Download ${frameworkName} as JSON`).click();
+      await picker.getByRole('button', { name: 'Download' }).click();
       const download = await downloadEvent;
+      await expect(picker).toBeHidden();
 
       // The file is named "<name>-<version>.json" with anything outside [A-Za-z0-9.-] replaced.
       expect(download.suggestedFilename()).toBe(

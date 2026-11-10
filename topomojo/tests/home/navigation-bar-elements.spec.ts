@@ -4,7 +4,7 @@
 // spec: topomojo/topomojo-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, topomojoNavLink } from '../../fixtures';
 
 test.describe('Home Page and Navigation', () => {
   test('Navigation Bar Elements', async ({ topomojoAuthenticatedPage: page }) => {
@@ -28,15 +28,12 @@ test.describe('Home Page and Navigation', () => {
       await expect(aboutButton).toBeVisible();
     }
 
-    // expect: Admin button is visible for admin users
-    const adminButton = page.locator('button:has-text("Admin"), a:has-text("Admin"), a[href*="admin"]').first();
-    const hasAdmin = await adminButton.isVisible({ timeout: 5000 }).catch(() => false);
-    if (hasAdmin) {
-      await expect(adminButton).toBeVisible();
-    }
+    // expect: Admin link is visible for admin users
+    // (the fixture signs in as admin, so it must be there)
+    await expect(topomojoNavLink(page, 'Admin')).toBeVisible({ timeout: 10000 });
 
-    // expect: Logout button is visible
-    const logoutButton = page.locator('button:has-text("Logout"), button:has-text("Sign Out"), button:has(mat-icon:text("logout"))').first();
-    await expect(logoutButton).toBeVisible({ timeout: 10000 });
+    // expect: Logout link is visible
+    const logoutLink = topomojoNavLink(page, 'Logout');
+    await expect(logoutLink).toBeVisible({ timeout: 10000 });
   });
 });

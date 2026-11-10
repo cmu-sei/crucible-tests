@@ -10,7 +10,7 @@ import { navigateToAdminSection } from '../../test-helpers';
 
 /**
  * A custom (mutable) system role can be deleted from its column header via the "Delete
- * Role" button, which raises a confirm dialog ("Delete Role?"). Built-in roles are
+ * Role" button, which raises a confirm dialog ("Delete Role"). Built-in roles are
  * immutable and expose no such button. This spec seeds a custom role, deletes it through
  * the UI, and confirms its column header is gone. API-prefix cleanup is a backstop.
  */
@@ -51,9 +51,10 @@ for (const theme of STEAMFITTER_THEMES) {
         .getByRole('button', { name: `Delete role ${ROLE_NAME}`, exact: true })
         .click();
 
-      const confirmDialog = page.getByRole('dialog', { name: 'Delete Role?' });
+      const confirmDialog = page.getByRole('dialog', { name: 'Delete Role' });
       await expect(confirmDialog).toBeVisible({ timeout: 5000 });
-      await confirmDialog.getByRole('button', { name: 'Delete' }).click();
+      await expect(confirmDialog).toContainText(`Are you sure that you want to delete ${ROLE_NAME}?`);
+      await confirmDialog.getByRole('button', { name: 'Delete', exact: true }).click();
       await deleteResponse;
 
       // The role's column header should no longer be present.

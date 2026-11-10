@@ -5,7 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, ensureScoringModelExists, ensureTeamTypeExists, CITE_THEMES, setCiteTheme } from '../../fixtures';
-import { navigateToAdminSection, createEvaluation, deleteEvaluationByName, findAdminRowByName } from '../../test-helpers';
+import { navigateToAdminSection, createEvaluation, deleteEvaluationByName, findAdminRowByName, waitForDialogOpen } from '../../test-helpers';
 
 // These tests share backend state (admin user memberships, team types) with
 // other aggregate tests. Running them serially avoids SignalR/session races
@@ -69,7 +69,7 @@ for (const theme of CITE_THEMES) {
 
       // 5. Fill in team dialog
       const dialog = page.getByRole('dialog');
-      await expect(dialog).toBeVisible({ timeout: 5000 });
+      await waitForDialogOpen(dialog);
 
       const nameField = dialog.getByPlaceholder('Name (required)', { exact: true });
       await nameField.fill(TEST_TEAM_NAME);

@@ -19,7 +19,7 @@ for (const theme of CASTER_THEMES) {
 
       // Create a project first if none exist
       await page.locator('button[mattooltip="Add New Project"]').click();
-      await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
+      await expect(page.getByRole('dialog', { name: 'Add Project' })).toBeVisible();
       await page.getByRole('textbox', { name: 'Name' }).fill(projectName);
 
       const createResponsePromise = page.waitForResponse(resp =>

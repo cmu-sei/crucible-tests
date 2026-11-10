@@ -16,7 +16,7 @@ for (const theme of CASTER_THEMES) {
       await expect(page.getByText('My Projects')).toBeVisible();
 
       await page.locator('button[mattooltip="Add New Project"]').click();
-      await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
+      await expect(page.getByRole('dialog', { name: 'Add Project' })).toBeVisible();
       await page.getByRole('textbox', { name: 'Name' }).fill(projectName);
       await page.getByRole('button', { name: 'Save' }).click();
       await expectCasterProjectOpen(page, projectName);
@@ -45,7 +45,7 @@ for (const theme of CASTER_THEMES) {
         }
       });
 
-      await expect(page.getByRole('dialog', { name: 'Create New Directory?' })).toBeVisible({ timeout: 5000 });
+      await expect(page.getByRole('dialog', { name: 'Add Directory' })).toBeVisible({ timeout: 5000 });
       await page.getByRole('textbox', { name: 'Name' }).fill(directoryName);
       await page.getByRole('button', { name: 'Save' }).click();
       await expect(page.getByRole('button', { name: directoryName }).first()).toBeVisible({ timeout: 10000 });
@@ -54,7 +54,7 @@ for (const theme of CASTER_THEMES) {
       await page.getByRole('button', { name: 'WORKSPACES' }).click();
 
       await page.getByText('Add Workspace').first().click();
-      await expect(page.getByRole('dialog', { name: 'Create New Workspace?' })).toBeVisible();
+      await expect(page.getByRole('dialog', { name: 'Add Workspace' })).toBeVisible();
       const wsNameInput = page.getByRole('textbox', { name: 'Name' });
       await wsNameInput.click();
       await wsNameInput.fill('Var View WS');

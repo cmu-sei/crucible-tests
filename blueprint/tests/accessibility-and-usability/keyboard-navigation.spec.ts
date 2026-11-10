@@ -10,6 +10,7 @@
 
 import type { Page } from '@playwright/test';
 import { test, expect, Services, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
+import { dashboardCard } from '../../test-helpers';
 
 /**
  * Tag the focused element with the step number and describe it. The tag gives each stop an
@@ -92,27 +93,29 @@ for (const theme of BLUEPRINT_THEMES) {
       await applyBlueprintTheme(page, theme);
       // 1. Open the event dashboard.
       await page.goto(Services.Blueprint.UI);
-      const manageCard = page.getByRole('button', { name: /Manage an Event/ });
-      await expect(manageCard).toBeVisible({ timeout: 30000 });
+      const buildCard = dashboardCard(page, 'BUILD');
+      await expect(buildCard).toBeVisible({ timeout: 30000 });
 
       // 2. Tab from the top of the page.
-      //    expect: the card is reached (its positive tabindex puts it before the topbar).
+      //    expect: the card is reached (the mission cards' positive tabindexes, JOIN 1 to
+      //    ASSESS 4, put them before the topbar).
       let reached = false;
       for (let step = 0; step < 5 && !reached; step++) {
         await page.keyboard.press('Tab');
-        reached = await manageCard.evaluate((el) => el === document.activeElement);
+        reached = await buildCard.evaluate((el) => el === document.activeElement);
       }
-      expect(reached, 'Tab should reach the Manage an Event card').toBe(true);
+      expect(reached, 'Tab should reach the BUILD card').toBe(true);
 
       // 3. Press Enter, then Space, on the focused card.
-      // Pending upstream: the dashboard cards are `<mat-card role="button" tabindex="…">` with
-      // only a `(click)` binding, so neither Enter nor Space activates them (WCAG 2.1.1) —
-      // a keyboard user can focus "Manage an Event" but cannot open it. The listener below
+      // Pending upstream: the dashboard's mission cards are `<div class="mission-card"
+      // role="button" tabindex="…">` with only a `(click)` binding, so neither Enter nor Space
+      // activates them (WCAG 2.1.1) — a keyboard user can focus BUILD but cannot open it. (The
+      // capability cards above them do handle Enter.) The listener below
       // records any click the key presses synthesise; a native button dispatches that click
       // before `keyboard.press` resolves, so no wait is needed. When the cards get a
       // `(keydown.enter)`/`(keydown.space)` handler (or become real buttons), flip this to
       // expect the press to navigate to /build.
-      await manageCard.evaluate((el) => {
+      await buildCard.evaluate((el) => {
         (window as unknown as { cardClicks: number }).cardClicks = 0;
         el.addEventListener('click', () => (window as unknown as { cardClicks: number }).cardClicks++);
       });

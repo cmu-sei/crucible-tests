@@ -526,7 +526,7 @@ export async function gotoCasterGroupsAdmin(page: Page): Promise<void> {
  */
 export async function openCreateGroupDialog(page: Page): Promise<Locator> {
   const addButton = page.getByRole('table').getByRole('button').first();
-  const dialog = page.getByRole('dialog', { name: 'Create New Group?' });
+  const dialog = page.getByRole('dialog', { name: 'Add Group' });
 
   for (let attempt = 0; attempt < 3; attempt++) {
     await addButton.click();
@@ -576,7 +576,7 @@ export async function deleteCasterGroup(page: Page, name: string): Promise<void>
     .first()
     .click();
 
-  const dialog = page.getByRole('dialog', { name: 'Delete Group?' });
+  const dialog = page.getByRole('dialog', { name: 'Delete Group' });
   await dialog.waitFor({ state: 'visible', timeout: 10000 });
   await dialog.getByRole('button', { name: 'Delete' }).click();
 
@@ -710,6 +710,7 @@ export const TEST_MODULES = {
 export async function requireTestModuleCatalog(
   page: Page
 ): Promise<Record<keyof typeof TEST_MODULES, { id: string; name: string; path: string }>> {
+  await requireModuleSourceReachable(page);
   const res = await casterApi<any[]>(page, 'GET', 'modules');
   const modules = res.status === 200 ? res.body : [];
   const found = Object.fromEntries(
@@ -722,6 +723,48 @@ export async function requireTestModuleCatalog(
       'Start the AppHost with Launch__Gitea=true and run caster/module-catalog/publish.sh.'
   );
   return found;
+}
+
+/**
+ * Skip the calling test unless Caster has at least one module source configured.
+ *
+ * With none, Caster answers every module sync with "No module source is configured"
+ * before it looks at the requested source, so specs about how a sync of a particular
+ * source is answered cannot run. The dev stack only configures one when the AppHost
+ * starts with Launch__Gitea=true.
+ */
+export async function requireModuleSource(page: Page): Promise<void> {
+  const res = await casterApi<any[]>(page, 'GET', 'modules/sources');
+  requirePrecondition(
+    res.status === 200 && Array.isArray(res.body) && res.body.length > 0,
+    'Caster has no module source configured (GET /api/modules/sources is empty). ' +
+      'Start the AppHost with Launch__Gitea=true.'
+  );
+  await requireModuleSourceReachable(page);
+}
+
+/**
+ * Skip the calling test unless the Gitea serving Caster's module source answers.
+ *
+ * The AppHost configures caster-api with the Gitea repository whether or not Gitea
+ * is started, so "a source is configured" does not mean a sync can reach it; with
+ * Gitea down every module listing hangs on the git fetch and the spec dies on a 10s
+ * API timeout. Checking Gitea directly turns that into a named precondition. A
+ * target without a Gitea URL (minikube) has its own source and skips this probe.
+ */
+async function requireModuleSourceReachable(page: Page): Promise<void> {
+  const gitea = Services.Caster.ModuleSourceGitea;
+  if (!gitea) return;
+  const up = await page.request
+    .get(`${gitea}/api/healthz`, { timeout: 10_000 })
+    .then((r) => r.ok())
+    .catch(() => false);
+  requirePrecondition(
+    up,
+    `Gitea, Caster's module source, is not reachable at ${gitea}. ` +
+      "Start the AppHost with Launch__Gitea=true (or start the 'gitea' and 'gitea-seed' resources), " +
+      'then run caster/module-catalog/publish.sh.'
+  );
 }
 
 /**
