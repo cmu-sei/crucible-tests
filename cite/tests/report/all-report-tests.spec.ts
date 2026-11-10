@@ -28,7 +28,7 @@ async function createActiveEvalWithMoveAndTeam(page: import('@playwright/test').
   // 1. Create a team type
   await navigateToAdminSection(page, 'Team Types');
 
-  const addTeamTypeButton = page.getByRole('button', { name: 'Add TeamType' });
+  const addTeamTypeButton = page.getByRole('button', { name: 'Add Team Type' });
   await expect(addTeamTypeButton).toBeVisible({ timeout: 10000 });
   await addTeamTypeButton.click();
 
@@ -234,8 +234,8 @@ for (const theme of CITE_THEMES) {
       await createActiveEvalWithMoveAndTeam(page, DISPLAY_TEAM_TYPE, DISPLAY_EVAL_NAME, 'Display Test Team', 'DTT');
       await navigateToEvaluation(page, DISPLAY_EVAL_NAME, 'E2E Display');
 
-      // Click the SubmissionReview (Report) button
-      const reportButton = page.locator('button[title="SubmissionReview"]');
+      // Click the Submission Review (Report) button
+      const reportButton = page.locator('button[title="Submission Review"]');
       await expect(reportButton).toBeVisible({ timeout: 10000 });
       await reportButton.click();
       await page.waitForTimeout(2000);

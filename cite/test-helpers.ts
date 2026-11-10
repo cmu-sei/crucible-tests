@@ -269,10 +269,10 @@ export async function deleteEvaluationByName(page: Page, evaluationName: string)
 
       await deleteButton.click();
 
-      const confirmDialog = page.getByRole('dialog', { name: 'Delete this evaluation?' });
+      const confirmDialog = page.getByRole('dialog', { name: 'Delete Evaluation' });
       await waitForDialogOpen(confirmDialog);
 
-      const yesButton = confirmDialog.getByRole('button', { name: 'Yes' });
+      const yesButton = confirmDialog.getByRole('button', { name: 'Delete' });
       await yesButton.click();
 
       await expect(confirmDialog).not.toBeVisible({ timeout: 5000 });

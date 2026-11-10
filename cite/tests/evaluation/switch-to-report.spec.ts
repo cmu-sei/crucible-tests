@@ -26,8 +26,8 @@ for (const theme of CITE_THEMES) {
       await page.waitForLoadState('domcontentloaded');
       await expect(page).toHaveURL(new RegExp(seededData.evaluationId), { timeout: 15000 });
 
-      // 2. Click on 'SubmissionReview' button to switch to report/submission review view
-      const submissionReviewButton = page.getByRole('button', { name: 'SubmissionReview' });
+      // 2. Click on 'Submission Review' button to switch to report/submission review view
+      const submissionReviewButton = page.getByRole('button', { name: 'Submission Review' });
       await expect(submissionReviewButton).toBeVisible({ timeout: 10000 });
       await submissionReviewButton.click();
       await page.waitForTimeout(1000);

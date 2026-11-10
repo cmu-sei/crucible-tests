@@ -202,7 +202,7 @@ for (const theme of BLUEPRINT_THEMES) {
       await renamedRow.getByRole('button', { name: `Delete ${renamed}` }).click();
       let confirm = page.getByRole('dialog', { name: 'Delete Data Field' });
       await expect(confirm).toContainText(`Are you sure that you want to delete ${renamed}?`);
-      await confirm.getByRole('button', { name: 'No' }).click();
+      await confirm.getByRole('button', { name: 'Cancel' }).click();
       await expect(confirm).toBeHidden();
       await expect(renamedRow).toBeVisible();
 
@@ -212,7 +212,7 @@ for (const theme of BLUEPRINT_THEMES) {
       const deleted = page.waitForResponse(
         (r) => /\/api\/datafields\/[^/]+$/i.test(new URL(r.url()).pathname) && r.request().method() === 'DELETE'
       );
-      await confirm.getByRole('button', { name: 'Yes' }).click();
+      await confirm.getByRole('button', { name: 'Delete' }).click();
       expect((await deleted).ok()).toBe(true);
       await expect(renamedRow).toHaveCount(0, { timeout: 10000 });
 

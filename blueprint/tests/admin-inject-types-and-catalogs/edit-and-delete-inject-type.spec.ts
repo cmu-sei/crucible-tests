@@ -109,8 +109,8 @@ for (const theme of BLUEPRINT_THEMES) {
       // ── Step 2: Edit the inject type ────────────────────────────────────────
 
       // 6. Click the Edit button for the inject type we just created
-      // Button name format: "Edit <name> injectType"
-      const editButton = page.getByRole('button', { name: new RegExp(`^Edit ${INJECT_TYPE_NAME} injectType`) }).first();
+      // Button name format: "Edit <name>"
+      const editButton = page.getByRole('button', { name: new RegExp(`^Edit ${INJECT_TYPE_NAME}$`) }).first();
       await expect(editButton).toBeVisible({ timeout: 5000 });
       await editButton.click();
 
@@ -143,8 +143,8 @@ for (const theme of BLUEPRINT_THEMES) {
       // ── Step 3: Delete the edited inject type ───────────────────────────────
 
       // 10. Click the Delete button for the edited inject type
-      // Button name format: "Delete <name> injectType"
-      const deleteButton = page.getByRole('button', { name: new RegExp(`^Delete ${editedNameEscaped} injectType`) }).first();
+      // Button name format: "Delete <name>"
+      const deleteButton = page.getByRole('button', { name: new RegExp(`^Delete ${editedNameEscaped}$`) }).first();
       await expect(deleteButton).toBeVisible({ timeout: 5000 });
       await deleteButton.click();
 

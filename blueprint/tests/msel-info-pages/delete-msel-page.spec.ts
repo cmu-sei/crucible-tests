@@ -67,7 +67,7 @@ for (const theme of BLUEPRINT_THEMES) {
       await expect(confirmDialog).toBeVisible({ timeout: 5000 });
 
       // 2. Confirm deletion
-      const yesButton = confirmDialog.getByRole('button', { name: /YES/i });
+      const yesButton = confirmDialog.getByRole('button', { name: 'Delete' });
       await expect(yesButton).toBeVisible({ timeout: 5000 });
       await yesButton.click();
 

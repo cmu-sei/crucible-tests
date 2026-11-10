@@ -37,9 +37,9 @@ for (const theme of GALLERY_THEMES) {
       // expect: A group creation dialog or form opens
       const dialog = page.getByRole('dialog');
       await expect(dialog).toBeVisible();
-      // NameDialogComponent is opened with the title 'Create New Group?' — asserting it
+      // NameDialogComponent is opened with the title 'Add Group' — asserting it
       // proves this is the create dialog and not some other overlay.
-      await expect(dialog).toContainText('Create New Group?');
+      await expect(dialog).toContainText('Add Group');
 
       // 2. Enter a group name and save.
       // Register the name for cleanup *before* the POST so teardown covers the row even

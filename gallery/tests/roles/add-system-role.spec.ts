@@ -35,7 +35,7 @@ for (const theme of GALLERY_THEMES) {
       const addRoleButton = page.getByRole('columnheader', { name: 'Permissions' }).getByRole('button').first();
       await addRoleButton.click();
 
-      // expect: The "Create New Role?" name dialog opens
+      // expect: The "Add Role" name dialog opens
       const dialog = page.getByRole('dialog');
       await expect(dialog).toBeVisible();
 
