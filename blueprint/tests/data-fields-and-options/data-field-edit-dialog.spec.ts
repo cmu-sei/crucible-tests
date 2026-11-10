@@ -202,7 +202,7 @@ for (const theme of BLUEPRINT_THEMES) {
       await renamedRow.getByRole('button', { name: `Delete ${renamed}` }).click();
       let confirm = page.getByRole('dialog', { name: 'Delete Data Field' });
       await expect(confirm).toContainText(`Are you sure that you want to delete ${renamed}?`);
-      await confirm.getByRole('button', { name: 'No' }).click();
+      await confirm.getByRole('button', { name: 'Cancel' }).click();
       await expect(confirm).toBeHidden();
       await expect(renamedRow).toBeVisible();
 

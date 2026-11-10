@@ -130,11 +130,11 @@ for (const theme of BLUEPRINT_THEMES) {
       await expect(detail.locator('tr.mat-mdc-row')).toHaveCount(1);
       await expect(row.locator('mat-cell.sub-col-levels')).toHaveText('1');
 
-      // 7. Deleting the scale asks first; answering No keeps it.
+      // 7. Deleting the scale asks first; answering Cancel keeps it.
       await row.getByTitle(`Delete ${scaleName}`).click();
       const confirm = page.getByRole('dialog').filter({ hasText: 'Delete Proficiency Scale' });
       await expect(confirm).toContainText(`Are you sure that you want to delete ${scaleName}?`);
-      await confirm.getByRole('button', { name: 'No' }).click();
+      await confirm.getByRole('button', { name: 'Cancel' }).click();
       await expect(confirm).toBeHidden();
       await expect(row).toBeVisible();
 

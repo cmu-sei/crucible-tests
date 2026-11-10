@@ -78,7 +78,7 @@ for (const theme of BLUEPRINT_THEMES) {
         await page.getByRole('button', { name: `Delete ${name}` }).click();
         const confirm = page.getByRole('dialog').filter({ hasText: 'Delete Card' });
         await expect(confirm).toContainText(`Are you sure that you want to delete ${name}?`);
-        await confirm.getByRole('button', { name: 'No' }).click();
+        await confirm.getByRole('button', { name: 'Cancel' }).click();
         await expect(confirm).toBeHidden();
         await expect(row).toHaveCount(1);
 

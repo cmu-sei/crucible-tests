@@ -116,7 +116,7 @@ for (const theme of BLUEPRINT_THEMES) {
       const confirm = page.getByRole('dialog');
       //    expect: the confirmation names the unit.
       await expect(confirm).toContainText(`delete ${renamed}?`);
-      await confirm.getByRole('button', { name: 'No', exact: true }).click();
+      await confirm.getByRole('button', { name: 'Cancel', exact: true }).click();
       await expect(confirm).toBeHidden();
       await expect(renamedRow).toHaveCount(1);
 

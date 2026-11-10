@@ -238,7 +238,7 @@ for (const theme of BLUEPRINT_THEMES) {
       await expect(confirm).toContainText(
         'Are you sure that you want to delete the invitation for @alpha.test?'
       );
-      await confirm.getByRole('button', { name: 'No', exact: true }).click();
+      await confirm.getByRole('button', { name: 'Cancel', exact: true }).click();
       await expect(confirm).toBeHidden();
       await expect(invitationRow(page, '@alpha.test')).toBeVisible();
 

@@ -101,7 +101,7 @@ for (const theme of BLUEPRINT_THEMES) {
         await expect(confirm).toContainText(
           `Are you sure that you want to delete ${firstDescription}?`
         );
-        await confirm.getByRole('button', { name: 'No' }).click();
+        await confirm.getByRole('button', { name: 'Cancel' }).click();
         await expect(confirm).toBeHidden();
         await expect(rowFor(firstDescription)).toHaveCount(1);
 

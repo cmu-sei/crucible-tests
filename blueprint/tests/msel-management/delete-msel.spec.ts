@@ -98,7 +98,7 @@ for (const theme of BLUEPRINT_THEMES) {
       await expect(confirmDialog).toBeVisible({ timeout: 10000 });
       await expect(confirmDialog.getByText(new RegExp(`delete ${mselName}`))).toBeVisible();
 
-      await confirmDialog.getByRole('button', { name: /^NO$/i }).click();
+      await confirmDialog.getByRole('button', { name: 'Cancel' }).click();
       await expect(confirmDialog).not.toBeVisible({ timeout: 10000 });
 
       // Still present in the UI...

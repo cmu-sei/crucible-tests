@@ -190,11 +190,11 @@ for (const theme of BLUEPRINT_THEMES) {
       await expect(competenciesHeader).toContainText('Competencies (1)');
       await expect(competenciesPanel.locator('mat-row.comp-row').filter({ hasText: 'WRL-901' })).toHaveCount(0);
 
-      // 8. Delete the competency. The confirm names it; No keeps it, Delete removes it.
+      // 8. Delete the competency. The confirm names it; Cancel keeps it, Delete removes it.
       const confirm = page.getByRole('dialog').filter({ hasText: 'Delete Competency' });
       await knowledgeRow.getByTitle('Delete K0901').click();
       await expect(confirm).toContainText('Are you sure that you want to delete K0901?');
-      await confirm.getByRole('button', { name: 'No' }).click();
+      await confirm.getByRole('button', { name: 'Cancel' }).click();
       await expect(confirm).toBeHidden();
       await expect(knowledgeRow).toHaveCount(1);
 
