@@ -4,30 +4,33 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, typeIntoSearch, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
+import { test, expect, typeIntoSearch, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
+import { createView, deleteView, getPlayerToken } from '../../../player-helpers';
 
 for (const theme of PLAYER_THEMES) {
   test.describe(`${theme} theme › Administration - Views`, () => {
+    let viewId = '';
+
+    // Deleting the view is the subject, but a failure before the confirm leaves it
+    // behind; deleteView tolerates the 404 when the test already removed it.
+    test.afterEach(async () => {
+      if (viewId) await deleteView(await getPlayerToken(), viewId);
+      viewId = '';
+    });
+
     test('Delete View', async ({ playerAuthenticatedPage: page }) => {
       await setPlayerTheme(page, theme);
       const viewName = `Delete Test View ${Date.now()}`;
 
-      // Setup: Create a temporary view for deletion
+      // Setup: Create a temporary view for deletion. Seeded through the API before
+      // opening Administration, so the admin list loads with it.
+      viewId = (await createView(await getPlayerToken(), viewName, 'View to be deleted')).id;
+
       await page.getByRole('button', { name: 'Menu' }).click();
       await page.getByRole('menuitem', { name: 'Administration' }).click();
       await expect(page).toHaveURL(/\/admin/, { timeout: 10000 });
+      await expect(page.getByRole('heading', { name: 'Views' })).toBeVisible();
 
-      // Create a test view first
-      const createButton = page
-        .locator('app-admin-view-search')
-        .locator('button:has(mat-icon[fonticon="mdi-plus-circle"])');
-      await createButton.click();
-      const nameField = page.getByRole('textbox', { name: 'Name (required)' });
-      await expect(nameField).toBeVisible({ timeout: 5000 });
-      await nameField.fill(viewName);
-      const descField = page.getByRole('textbox', { name: 'Description (required)' });
-      await descField.fill('View to be deleted');
-      await page.getByRole('button', { name: 'Done' }).click();
       const searchField = page.getByRole('textbox', { name: 'Search' });
       await typeIntoSearch(searchField, viewName);
       await expect(searchField).toHaveValue(viewName);

@@ -4,8 +4,8 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, CITE_THEMES, setCiteTheme } from '../../fixtures';
-import { navigateToAdminSection, deleteScoringModelByName, findAdminRowByName, waitForDialogOpen } from '../../test-helpers';
+import { test, expect, apiDeleteScoringModelsByName, Services, CITE_THEMES, setCiteTheme } from '../../fixtures';
+import { navigateToAdminSection, findAdminRowByName, waitForDialogOpen } from '../../test-helpers';
 
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Administration - Scoring Models`, () => {
@@ -31,7 +31,6 @@ for (const theme of CITE_THEMES) {
       await expect(saveButton).toBeEnabled({ timeout: 5000 });
       await saveButton.click();
       await expect(dialog).not.toBeVisible({ timeout: 15000 });
-      await page.waitForTimeout(2000);
 
       // 2. Re-navigate and expand the scoring model
       await navigateToAdminSection(page, 'Scoring Models');
@@ -39,13 +38,12 @@ for (const theme of CITE_THEMES) {
       const modelRow = await findAdminRowByName(page, TEST_MODEL_NAME);
       await expect(modelRow).toBeVisible({ timeout: 10000 });
       await modelRow.click();
-      await page.waitForTimeout(2000);
 
       // 3. Find and expand the Memberships panel
       const membershipsPanel = page.locator('mat-expansion-panel').filter({ hasText: 'Memberships' }).first();
       await expect(membershipsPanel).toBeVisible({ timeout: 10000 });
       await membershipsPanel.locator('mat-expansion-panel-header').click();
-      await page.waitForTimeout(1000);
+      // Rule C: panel content wait below
 
       // 4. Verify the two-panel membership layout is visible (Users/Groups and Scoring Model Members)
       const membershipContent = membershipsPanel.locator('.mat-expansion-panel-body, mat-expansion-panel-body').first();
@@ -59,8 +57,8 @@ for (const theme of CITE_THEMES) {
       await expect(membersToolbar).toBeVisible({ timeout: 10000 });
     });
 
-    test.afterEach(async ({ citeAuthenticatedPage: page }) => {
-      await deleteScoringModelByName(page, TEST_MODEL_NAME);
+    test.afterEach(async () => {
+      await apiDeleteScoringModelsByName(TEST_MODEL_NAME);
     });
   });
 }

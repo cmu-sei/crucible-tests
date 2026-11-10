@@ -8,7 +8,6 @@ import {
   test,
   expect,
   Services,
-  seededPrimaryViewName,
   findPlayerHomeViewLink,
   typeIntoSearch,
   clickWithoutOverlayInterference,
@@ -18,9 +17,9 @@ import {
 
 for (const theme of PLAYER_THEMES) {
   test.describe(`${theme} theme › View Details`, () => {
-    test('Search Users', async ({ playerAuthenticatedPage: page }) => {
+    test('Search Users', async ({ playerAuthenticatedPage: page, seededViews }) => {
       await setPlayerTheme(page, theme);
-      const primaryViewName = seededPrimaryViewName();
+      const primaryViewName = seededViews.primary.name;
 
       // 1. Log in and navigate to a view, then open the Users dialog
       await (await findPlayerHomeViewLink(page, primaryViewName)).click();

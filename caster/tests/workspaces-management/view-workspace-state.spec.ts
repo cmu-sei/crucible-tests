@@ -4,51 +4,51 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen, CASTER_THEMES, setCasterTheme } from '../../fixtures';
+import {
+  test,
+  expect,
+  openCasterDirectory,
+  seedCasterProjectPageFree,
+  seedCasterDirectoryPageFree,
+  seedCasterWorkspacePageFree,
+  deleteCasterProjectPageFree,
+  CASTER_THEMES,
+  setCasterTheme,
+} from '../../fixtures';
 
-for (const theme of CASTER_THEMES) {
-  test.describe(`${theme} theme › Workspaces Management`, () => {
-    test('View Workspace State', async ({ casterAuthenticatedPage: page, cleanupCasterProjectByName }) => {
+test.describe('Workspaces Management › View Workspace State', () => {
+  let projectId: string;
+  let directoryId: string;
+  const directoryName = 'State-WS-Dir';
+  const workspaceName = 'State_Workspace';
+
+  test.beforeAll(async () => {
+    projectId = await seedCasterProjectPageFree('E2E Shared Project [view-workspace-state]');
+    directoryId = await seedCasterDirectoryPageFree(projectId, directoryName);
+    await seedCasterWorkspacePageFree(directoryId, workspaceName);
+  });
+
+  test.afterAll(async () => {
+    await deleteCasterProjectPageFree(projectId);
+  });
+
+  for (const theme of CASTER_THEMES) {
+    test(`View Workspace State - ${theme}`, async ({ casterAuthenticatedPage: page }) => {
       await setCasterTheme(page, theme);
 
-      const projectName = 'State WS Project';
-      await cleanupCasterProjectByName(projectName);
-
-      await expect(page.getByText('My Projects')).toBeVisible();
-      await page.reload();
-
-      await page.locator('[mattooltip="Add New Project"]').click();
-      const projectDialog = page.getByRole('dialog', { name: 'Add Project' });
-      await expect(projectDialog).toBeVisible();
-      await projectDialog.getByRole('textbox', { name: 'Name' }).fill(projectName);
-      await projectDialog.getByRole('button', { name: 'Save' }).click();
-      await expectCasterProjectOpen(page, projectName);
-
-      await page.getByTitle('Add New Directory').click();
-      const dirDialog = page.getByRole('dialog', { name: 'Add Directory' });
-      await expect(dirDialog).toBeVisible();
-      await dirDialog.getByRole('textbox', { name: 'Name' }).fill('State-WS-Dir');
-      await dirDialog.getByRole('button', { name: 'Save' }).click();
-      await expect(page.getByRole('button', { name: 'State-WS-Dir' })).toBeVisible({ timeout: 10000 });
-
-      await page.getByRole('button', { name: 'State-WS-Dir' }).click();
+      // Navigate to the seeded directory
+      await openCasterDirectory(page, projectId, directoryName);
       await page.getByRole('button', { name: 'WORKSPACES' }).click();
 
-      await page.getByText('Add Workspace').click();
-      const wsDialog = page.getByRole('dialog', { name: 'Add Workspace' });
-      await expect(wsDialog).toBeVisible();
-      // Workspace names must match pattern: ^[a-zA-Z0-9-_.]+$ (no spaces allowed)
-      await wsDialog.getByRole('textbox', { name: 'Name' }).fill('State_Workspace');
-      await wsDialog.getByRole('button', { name: 'Save' }).click();
+      // Click the workspace
+      const wsItem = page.getByText(workspaceName, { exact: true });
+      await expect(wsItem).toBeVisible({ timeout: 5000 });
+      await wsItem.click();
 
-      const wsItem = page.getByText('State_Workspace');
-      if (await wsItem.isVisible({ timeout: 5000 }).catch(() => false)) {
-        await wsItem.click();
-        const stateTab = page.getByRole('tab', { name: 'State' });
-        if (await stateTab.isVisible({ timeout: 3000 }).catch(() => false)) {
-          await stateTab.click();
-        }
-      }
+      // Navigate to State tab
+      const stateTab = page.getByRole('tab', { name: 'State' });
+      await expect(stateTab).toBeVisible({ timeout: 3000 });
+      await stateTab.click();
     });
-  });
-}
+  }
+});

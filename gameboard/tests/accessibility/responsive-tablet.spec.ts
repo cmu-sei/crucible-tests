@@ -10,7 +10,6 @@ test.describe('Accessibility', () => {
   test('Responsive Design - Tablet View', async ({ gameboardAuthenticatedPage: page }) => {
     await page.setViewportSize({ width: 768, height: 1024 });
     await page.goto(Services.Gameboard.UI + '/home', { waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(1500);
 
     // The home heading remains visible on tablet layouts.
     await expect(page.getByRole('heading', { name: 'Upcoming Games' })).toBeVisible({ timeout: 10000 });

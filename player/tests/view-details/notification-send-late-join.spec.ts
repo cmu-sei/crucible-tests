@@ -8,7 +8,6 @@ import type { WebSocketRoute } from '@playwright/test';
 import {
   test,
   expect,
-  seededPrimaryViewName,
   findPlayerHomeViewLink,
   clickWithoutOverlayInterference,
   Services,
@@ -20,6 +19,7 @@ const RECORD_SEPARATOR = '\u001e';
 test.describe('View Details', () => {
   test('Send field appears when the join reply arrives after the panel opens', async ({
     playerAuthenticatedPage: page,
+    seededViews,
   }) => {
     // Whether the viewer may post comes only from the hubs' System "Reply" to Join.
     // Hold those replies so they land after the panel is already open, the order
@@ -42,7 +42,7 @@ test.describe('View Details', () => {
     await page.reload();
 
     // 1. Open a view and wait until every hub has answered its Join
-    await (await findPlayerHomeViewLink(page, seededPrimaryViewName())).click();
+    await (await findPlayerHomeViewLink(page, seededViews.primary.name)).click();
     await expect(page).toHaveURL(/\/view\//, { timeout: 10000 });
     await expect.poll(() => held.length, { timeout: 15000 }).toBeGreaterThanOrEqual(3);
 

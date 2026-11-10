@@ -9,12 +9,14 @@ import os from 'os';
 import path from 'path';
 import {
   getBlueprintToken,
-  createMsel,
   deleteMsel,
   createRenderableScenarioEvent,
-  tempBlueprintName,
   findMselRowByName,
   downloadMselFile,
+  createSharedRenderableMsel,
+  resetSharedRenderableMsel,
+  type CreatedMsel,
+  sharedChildName,
 } from '../../test-helpers';
 
 /**
@@ -31,46 +33,55 @@ import {
  * the seeded name exists. The source and every imported copy are deleted through the API in
  * teardown, so nothing leaks even if the body fails midway.
  */
+// One MSEL with the standard DataFields (13 POSTs) is seeded per file and shared by both
+// theme runs. Safe to share: the test downloads the source and imports into a new MSEL of its own.
+// Each test seeds its own uniquely named events, and `resetSharedRenderableMsel` removes
+// them (and any extra DataField) in afterEach.
+let shared: CreatedMsel;
+
+test.beforeAll(async ({}, workerInfo) => {
+  shared = await createSharedRenderableMsel(await getBlueprintToken(), 'Roundtrip', workerInfo.parallelIndex);
+});
+
+test.afterAll(async () => {
+  if (shared) await deleteMsel(await getBlueprintToken(), shared.id);
+});
+
 for (const theme of BLUEPRINT_THEMES) {
     test.describe(`${theme} theme › Export and Import`, () => {
+    // Per-test names for this test's own records on the shared MSEL.
+    let child: (base: string) => string;
     let token: string;
     let sourceMselId: string;
     let sourceMselName: string;
     let downloadPath: string | undefined;
 
-    test.beforeEach(async () => {
+    test.beforeEach(async ({}, testInfo) => {
+      child = (base: string) => sharedChildName(base, testInfo, theme);
       token = await getBlueprintToken();
-      sourceMselName = tempBlueprintName('TestBP-Roundtrip');
-      const msel = await createMsel(token, {
-        name: sourceMselName,
-        description: 'Seeded as import fixture',
-      });
-      sourceMselId = msel.id;
+      sourceMselId = shared.id;
+      sourceMselName = shared.name;
 
-      await createRenderableScenarioEvent(token, sourceMselId, 'Round-trip event', {
+      await createRenderableScenarioEvent(token, sourceMselId, child('TestBP-RoundtripEvent'), {
         deltaSeconds: 300,
       });
       downloadPath = undefined;
     });
 
     test.afterEach(async () => {
-      // Remove the source MSEL and anything the import created. Imported copies carry a name
-      // derived from the source, so matching on the seeded name catches them all.
-      try {
-        const res = await fetch(`${Services.Blueprint.API}/api/msels`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.ok) {
-          const msels = (await res.json()) as Array<{ id: string; name: string }>;
-          for (const msel of msels.filter((m) => m.name?.includes(sourceMselName))) {
-            await deleteMsel(token, msel.id);
-          }
+      // Remove anything the import created — imported copies carry a name derived from the
+      // source, so matching on it catches them all — but not the shared source itself, which
+      // goes back to "standard DataFields, no events".
+      const res = await fetch(`${Services.Blueprint.API}/api/msels`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const msels = (await res.json()) as Array<{ id: string; name: string }>;
+        for (const msel of msels.filter((m) => m.id !== sourceMselId && m.name?.includes(sourceMselName))) {
+          await deleteMsel(token, msel.id);
         }
-        if (sourceMselId) await deleteMsel(token, sourceMselId);
-      } catch (err) {
-        console.warn(`Cleanup failed for round-trip MSELs of "${sourceMselName}": ${err}`);
       }
-
+      await resetSharedRenderableMsel(token, sourceMselId);
       if (downloadPath && fs.existsSync(downloadPath)) {
         fs.unlinkSync(downloadPath);
       }
@@ -109,7 +120,7 @@ for (const theme of BLUEPRINT_THEMES) {
       const fileChooserPromise = page.waitForEvent('filechooser');
       const importResponse = page.waitForResponse(
         (r) => /\/api\/msels/i.test(r.url()) && r.request().method() === 'POST',
-        { timeout: 60000 }
+        { timeout: 30000 }
       );
       await uploadXlsxMenuItem.click();
       (await fileChooserPromise).setFiles(downloadPath);

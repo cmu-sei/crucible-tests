@@ -69,7 +69,7 @@ test.describe('Admin - Sponsors', () => {
       await ctx.dispose();
     }
 
-    await page.goto(Services.Gameboard.UI + '/admin/registrar/sponsors', { waitUntil: 'networkidle' });
+    await page.goto(Services.Gameboard.UI + '/admin/registrar/sponsors', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
   });
 });

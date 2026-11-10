@@ -5,80 +5,23 @@ import { chromium, FullConfig } from '@playwright/test';
 import fs from 'fs';
 import path from 'path';
 import { loadCrucibleEnv } from './load-env';
-import { Services, authenticateWithKeycloak } from './shared-fixtures';
 import { authSessionStatePath, authStatePath } from './auth-paths';
 import { pathFiltersIncludeApp } from './playwright-run-filters';
+import { isFresh, refreshAppAuthState, savedAccessToken } from './auth-state';
+import { provisionTargets } from './provision-targets';
+import { writeCiteSeed } from './cite/fixtures';
+import { gameboardSeedPath, writeGameboardSeed } from './gameboard/fixtures';
+import { ensureCasterTemplate } from './blueprint/caster-helpers';
+import { createUserPool, POOL_CONSUMER_APPS, POOL_SIZE, userPoolPath } from './user-pool';
+
+// Provisioning skips any app whose saved `.auth/<app>.json` token still has more than
+// 5 minutes left, so back-to-back targeted runs do not log in again. Set
+// CRUCIBLE_SKIP_AUTH_PROVISION=1 to provision nothing at all — the supported switch
+// for expiry drills (fake-expire a saved state, then let auth-state.ts refresh it).
 
 // Load environment based on CRUCIBLE_TARGET (aspire | minikube) before reading Services.
 loadCrucibleEnv();
 
-/**
- * One app to provision authenticated browser state for. `appShellSelector` is a
- * DOM signal that only renders once the Angular app has bootstrapped AND the OIDC
- * client has resolved a user — i.e. "authenticated and ready", not merely "page
- * exists". Waiting on it (rather than a fixed delay) means setup is as fast as the
- * app allows and never saves state before the token is in place.
- */
-interface ProvisionTarget {
-  app: string;
-  homeUrl: string;
-  appShellSelector: string;
-  /** Other apps whose tests call this app's API with its token, so need it provisioned too. */
-  neededBy?: string[];
-}
-
-/**
- * Apps to pre-authenticate. Each entry gets its token captured once here and
- * reused by every test in that app's suite via `storageState`.
- *
- * EXTENSION POINT: other apps (player, gameboard, topomojo, ...) should adopt this
- * by (a) adding an entry here and (b) pointing their own `fixtures.ts` at
- * `authStatePath('<app>')`, mirroring how cite/fixtures.ts consumes it.
- */
-const PROVISION: ProvisionTarget[] = [
-  {
-    app: 'caster',
-    homeUrl: Services.Caster.UI,
-    appShellSelector: 'app-root',
-    // Blueprint's Caster integration tests seed Caster templates with this token.
-    neededBy: ['blueprint'],
-  },
-  {
-    app: 'player',
-    homeUrl: Services.Player.UI,
-    // The Menu control renders only once Player has resolved the OIDC user.
-    appShellSelector: 'app-root button[aria-label="Menu"]',
-  },
-  {
-    app: 'cite',
-    homeUrl: Services.Cite.UI,
-    // mat-toolbar renders only after the OIDC client resolves a user, so it is a
-    // reliable "authenticated shell is up" marker for CITE.
-    appShellSelector: 'app-root mat-toolbar',
-  },
-  {
-    app: 'gallery',
-    homeUrl: Services.Gallery.UI,
-    // The topbar's `.options-text` block is guarded by `@if (currentUser$ | async)`,
-    // so it renders only once the OIDC client has resolved a user. The surrounding
-    // mat-toolbar renders before that and would snapshot state without a token.
-    appShellSelector: 'app-topbar .options-text button',
-  },
-  {
-    app: 'steamfitter',
-    homeUrl: Services.Steamfitter.UI,
-    // app-topbar's mat-toolbar renders only after the OIDC client resolves a user,
-    // so it is a reliable "authenticated shell is up" marker for Steamfitter.
-    appShellSelector: 'app-root app-topbar mat-toolbar',
-  },
-  {
-    app: 'blueprint',
-    homeUrl: Services.Blueprint.UI,
-    // mat-toolbar renders only after the OIDC client resolves a user, so it is a
-    // reliable "authenticated shell is up" marker for Blueprint.
-    appShellSelector: 'app-root mat-toolbar',
-  },
-];
 
 /**
  * Authenticate each provisioned app once and persist its browser state to
@@ -89,48 +32,141 @@ const PROVISION: ProvisionTarget[] = [
  * per-app fixture falls back to a full interactive login when the state file is
  * missing or expired, so the suite still works — just without the speed-up.
  */
-async function globalSetup(_config: FullConfig): Promise<void> {
+async function globalSetup(config: FullConfig): Promise<void> {
+  const totalStart = Date.now();
   // Ensure the .auth directory exists (gitignored; regenerated each run).
   const authDir = path.resolve(__dirname, '.auth');
   fs.mkdirSync(authDir, { recursive: true });
 
-  const selected = PROVISION.filter(
+  await provisionAuthStates();
+
+  // The run-level seeds run concurrently with each other, after auth provisioning (the
+  // Blueprint Caster templates read Caster's saved state; the others use password or
+  // admin grants). Each is best-effort and logs its own failure.
+  const seedTasks: Promise<void>[] = [];
+
+  // The run's non-admin Keycloak users (see user-pool.ts), two per worker slot. Only
+  // when the run can include an app whose specs lease them.
+  if (POOL_CONSUMER_APPS.some(app => pathFiltersIncludeApp(app))) {
+    seedTasks.push(
+      (async () => {
+        const start = Date.now();
+        try {
+          const users = await createUserPool(Math.max(POOL_SIZE, 2 * config.workers));
+          console.log(`[global-setup] Ensured ${users.length} pool users in ${userPoolPath()} (${Date.now() - start} ms)`);
+        } catch (error) {
+          console.warn(`[global-setup] User pool creation failed; specs that lease pool users will fail. Error: ${error}`);
+        }
+      })()
+    );
+  }
+
+  // CITE's run-level read-only records (shared evaluations, scoring model, team type),
+  // ensured by fixed name and written to `.auth/cite-seed.json`. Independent of auth
+  // provisioning: it uses an API password grant, not a saved browser state.
+  if (pathFiltersIncludeApp('cite')) {
+    seedTasks.push(
+      (async () => {
+        const start = Date.now();
+        try {
+          await writeCiteSeed();
+          console.log(`[global-setup] Wrote CITE run-level seed to .auth/cite-seed.json (${Date.now() - start} ms)`);
+        } catch (error) {
+          console.warn(`[global-setup] CITE run-level seed failed; workers will ensure it themselves. Error: ${error}`);
+        }
+      })()
+    );
+  }
+
+  // Gameboard's run-level TopoMojo workspaces (one visible to Gameboard, one with no
+  // audience), written to `.auth/gameboard-seed.json`. writeGameboardSeed removes any
+  // stale file first, so a failure leaves none and each worker creates its own pair.
+  if (pathFiltersIncludeApp('gameboard')) {
+    seedTasks.push(
+      (async () => {
+        const start = Date.now();
+        try {
+          await writeGameboardSeed();
+          console.log(`[global-setup] Wrote Gameboard run-level seed to ${gameboardSeedPath()} (${Date.now() - start} ms)`);
+        } catch (error) {
+          fs.rmSync(gameboardSeedPath(), { force: true });
+          console.warn(`[global-setup] Gameboard run-level seed failed; workers will create their own workspaces. Error: ${error}`);
+        }
+      })()
+    );
+  }
+
+  // Blueprint's run-level Caster templates (read-only for the caster-integration specs),
+  // written to `.auth/blueprint-seed.json`. Uses the Caster auth state provisioned above
+  // (Caster is `neededBy` Blueprint in provision-targets.ts).
+  if (pathFiltersIncludeApp('blueprint')) {
+    seedTasks.push(
+      (async () => {
+        const start = Date.now();
+        try {
+          await ensureCasterTemplate();
+          console.log(`[global-setup] Wrote Blueprint run-level seed to .auth/blueprint-seed.json (${Date.now() - start} ms)`);
+        } catch (error) {
+          console.warn(`[global-setup] Blueprint Caster template seed failed; consumers will seed their own. Error: ${error}`);
+        }
+      })()
+    );
+  }
+
+  await Promise.all(seedTasks);
+  console.log(`[global-setup] Total setup time: ${Date.now() - totalStart} ms`);
+}
+
+async function provisionAuthStates(): Promise<void> {
+  if (process.env.CRUCIBLE_SKIP_AUTH_PROVISION === '1') {
+    console.log('[global-setup] Skipping auth provisioning (CRUCIBLE_SKIP_AUTH_PROVISION)');
+    return;
+  }
+
+  const setupStart = Date.now();
+  const selected = provisionTargets().filter(
     target => [target.app, ...(target.neededBy ?? [])].some(app => pathFiltersIncludeApp(app))
   );
-  for (const target of selected) {
-    const statePath = authStatePath(target.app);
-    const browser = await chromium.launch();
-    try {
-      const context = await browser.newContext({ ignoreHTTPSErrors: true });
-      const page = await context.newPage();
 
-      console.log(`[global-setup] Authenticating ${target.app} at ${target.homeUrl}...`);
-      await authenticateWithKeycloak(page, target.homeUrl);
+  // Launch one browser shared by all provisioning calls.
+  const browser = await chromium.launch();
+  try {
+    // Provision all selected apps concurrently. Each creates its own context.
+    const results = await Promise.allSettled(
+      selected.map(async target => {
+        const appStart = Date.now();
+        const statePath = authStatePath(target.app);
+        const haveBothFiles = fs.existsSync(statePath) && fs.existsSync(authSessionStatePath(target.app));
+        if (haveBothFiles && isFresh(savedAccessToken(target.app)?.exp)) {
+          console.log(`[global-setup] Reusing fresh auth state for ${target.app}`);
+          return { app: target.app, elapsed: Date.now() - appStart };
+        }
+        try {
+          // refreshAppAuthState logs in (target.authenticate or authenticateWithKeycloak),
+          // waits for appShellSelector so the token is persisted, and writes both state
+          // files — the same single writer the fixtures use for mid-run refreshes.
+          console.log(`[global-setup] Authenticating ${target.app} at ${target.homeUrl}...`);
+          await refreshAppAuthState(target.app, browser, { reason: 'setup' });
+          console.log(`[global-setup] Saved ${target.app} auth state to ${statePath} (${Date.now() - appStart} ms)`);
+          return { app: target.app, elapsed: Date.now() - appStart };
+        } catch (error) {
+          // Remove any stale/partial state so the fixture's fresh-login fallback kicks
+          // in rather than loading a broken state file.
+          fs.rmSync(statePath, { force: true });
+          fs.rmSync(authSessionStatePath(target.app), { force: true });
+          console.warn(
+            `[global-setup] Failed to provision auth for ${target.app}; tests will fall back to interactive login. Error: ${error}`,
+          );
+          throw error;
+        }
+      })
+    );
 
-      // Wait for the authenticated app shell so the OIDC token is fully persisted
-      // to localStorage before we snapshot the state.
-      await page.locator(target.appShellSelector).first().waitFor({
-        state: 'visible',
-        timeout: 60000,
-      });
-
-      await context.storageState({ path: statePath });
-      const sessionState = await page.evaluate(() => Object.entries(sessionStorage));
-      fs.writeFileSync(authSessionStatePath(target.app), JSON.stringify(sessionState));
-      console.log(`[global-setup] Saved ${target.app} auth state to ${statePath}`);
-
-      await context.close();
-    } catch (error) {
-      // Remove any stale/partial state so the fixture's fresh-login fallback kicks
-      // in rather than loading a broken state file.
-      fs.rmSync(statePath, { force: true });
-      fs.rmSync(authSessionStatePath(target.app), { force: true });
-      console.warn(
-        `[global-setup] Failed to provision auth for ${target.app}; tests will fall back to interactive login. Error: ${error}`,
-      );
-    } finally {
-      await browser.close();
-    }
+    const succeeded = results.filter(r => r.status === 'fulfilled').map(r => (r as PromiseFulfilledResult<any>).value.app);
+    const failed = results.filter(r => r.status === 'rejected').length;
+    console.log(`[global-setup] Auth provisioning complete: ${succeeded.length} succeeded, ${failed} failed (${Date.now() - setupStart} ms)`);
+  } finally {
+    await browser.close();
   }
 }
 

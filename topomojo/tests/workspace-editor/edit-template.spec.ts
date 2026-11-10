@@ -11,38 +11,40 @@ test.describe('Workspace Editor', () => {
 
     // 1. Navigate to workspace editor templates tab with existing templates
     const sidebarToggle = page.locator('button[aria-label="Toggle sidebar"], button:has(mat-icon:text("menu"))').first();
+    const sidebar = page.locator('mat-sidenav, mat-drawer, [class*="sidebar"], [class*="side-panel"]').first();
     const hasSidebarToggle = await sidebarToggle.isVisible({ timeout: 10000 }).catch(() => false);
     if (hasSidebarToggle) {
       await sidebarToggle.click();
-      await page.waitForTimeout(500);
+      await expect(sidebar).toBeVisible();
     }
 
     const workspaceItems = page.locator('[class*="workspace-card"], [class*="item-card"], mat-list-item, [class*="list-item"]');
+
     const itemCount = await workspaceItems.count();
 
     if (itemCount > 0) {
-      await workspaceItems.first().click();
-      await page.waitForTimeout(2000);
-
       const templatesTab = page.locator('mat-tab:has-text("Template"), a:has-text("Template"), button:has-text("Template")').first();
+      const templateItems = page.locator('mat-expansion-panel, [class*="template-item"], [class*="vm-item"]');
+      await workspaceItems.first().click();
+      await expect(page).toHaveURL(/\/topo\//);
+
       const hasTab = await templatesTab.isVisible({ timeout: 5000 }).catch(() => false);
       if (hasTab) {
         await templatesTab.click();
-        await page.waitForTimeout(1000);
+        await expect(templateItems.first()).toBeVisible();
       }
 
       // expect: Templates list displays
-      const templateItems = page.locator('mat-expansion-panel, [class*="template-item"], [class*="vm-item"]');
       const templateCount = await templateItems.count();
 
       if (templateCount > 0) {
         // 2. Click edit button on a template
+        const templateForm = page.locator('input, select, mat-select, textarea').first();
         await templateItems.first().click();
-        await page.waitForTimeout(500);
+        await expect(templateForm).toBeVisible({ timeout: 5000 });
 
         // expect: Template editor opens
         // expect: Template configuration form is displayed with current settings
-        const templateForm = page.locator('input, select, mat-select, textarea').first();
         await expect(templateForm).toBeVisible({ timeout: 5000 });
       }
     }

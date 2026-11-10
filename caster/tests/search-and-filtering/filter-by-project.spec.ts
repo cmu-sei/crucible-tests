@@ -4,31 +4,33 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen, CASTER_THEMES, setCasterTheme } from '../../fixtures';
+import { test, expect, seedCasterProjectPageFree, deleteCasterProjectPageFree, CASTER_THEMES, setCasterTheme, Services } from '../../fixtures';
 
-for (const theme of CASTER_THEMES) {
-  test.describe(`${theme} theme › Search and Filtering`, () => {
-    test('Filter by Project', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+test.describe('Search and Filtering', () => {
+  let alphaProjectId: string;
+  let betaProjectId: string;
+  let alphaProjectName: string;
+  let betaProjectName: string;
+
+  test.beforeAll(async () => {
+    alphaProjectName = 'E2E Shared Project [filter-by-project-alpha]';
+    betaProjectName = 'E2E Shared Project [filter-by-project-beta]';
+    alphaProjectId = await seedCasterProjectPageFree(alphaProjectName);
+    betaProjectId = await seedCasterProjectPageFree(betaProjectName);
+  });
+
+  test.afterAll(async () => {
+    if (alphaProjectId) await deleteCasterProjectPageFree(alphaProjectId);
+    if (betaProjectId) await deleteCasterProjectPageFree(betaProjectId);
+  });
+
+  for (const theme of CASTER_THEMES) {
+    test(`${theme} theme › Filter by Project`, async ({ casterAuthenticatedPage: page }) => {
       await setCasterTheme(page, theme);
-      const alphaProjectName = `Filter Alpha Project ${Date.now()}`;
-      const betaProjectName = `Filter Beta Project ${Date.now()}`;
 
+      // Navigate to home to test filtering
+      await page.goto(Services.Caster.UI);
       await expect(page.getByText('My Projects')).toBeVisible();
-
-      // Create two projects
-      await page.locator('button[mattooltip="Add New Project"]').click();
-      await expect(page.getByRole('dialog', { name: 'Add Project' })).toBeVisible();
-      await page.getByRole('textbox', { name: 'Name' }).fill(alphaProjectName);
-      await page.getByRole('button', { name: 'Save' }).click();
-      cleanupCasterProject(await expectCasterProjectOpen(page, alphaProjectName));
-      await page.getByRole('link', { name: 'Caster', exact: true }).click();
-
-      await page.locator('button[mattooltip="Add New Project"]').click();
-      await expect(page.getByRole('dialog', { name: 'Add Project' })).toBeVisible();
-      await page.getByRole('textbox', { name: 'Name' }).fill(betaProjectName);
-      await page.getByRole('button', { name: 'Save' }).click();
-      cleanupCasterProject(await expectCasterProjectOpen(page, betaProjectName));
-      await page.getByRole('link', { name: 'Caster', exact: true }).click();
 
       const searchBar = page.getByRole('textbox', { name: 'Search' });
       await expect(searchBar).toBeVisible();
@@ -42,5 +44,5 @@ for (const theme of CASTER_THEMES) {
       await expect(searchBar).toHaveValue('');
       await expect(page.getByText(/No data matching the filter/)).not.toBeVisible();
     });
-  });
-}
+  }
+});

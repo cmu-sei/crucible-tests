@@ -79,7 +79,7 @@ for (const theme of GALLERY_THEMES) {
       const uploadResponsePromise = page.waitForResponse(
         (response) =>
           response.url().includes('/api/exhibits/json') && response.request().method() === 'POST',
-        { timeout: 60000 }
+        { timeout: 30000 }
       );
       const fileChooser = await fileChooserPromise;
       await fileChooser.setFiles(tempPath);

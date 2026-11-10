@@ -44,7 +44,7 @@ test.describe('Launch and Join Event Workflows', () => {
         const removed = await blueprintCall(token, `/api/msels/${launchedId}/integrations`, { method: 'DELETE' });
         if (removed.ok) {
           await expect
-            .poll(async () => (await getMsel(token, launchedId!)).playerViewId ?? null, { timeout: 60_000 })
+            .poll(async () => (await getMsel(token, launchedId!)).playerViewId ?? null, { timeout: 30000 })
             .toBeNull();
         }
         await deleteMsel(token, launchedId);
@@ -73,7 +73,7 @@ test.describe('Launch and Join Event Workflows', () => {
 
     // expect: the launched MSEL deploys and stores the view ID it returned
     await expect
-      .poll(async () => (await getMsel(token, launchedId!)).status, { timeout: 120_000 })
+      .poll(async () => (await getMsel(token, launchedId!)).status, { timeout: 30000 })
       .toBe('Deployed');
     expect((await getMsel(token, launchedId!)).playerViewId).toBe(viewId);
 

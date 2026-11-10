@@ -11,22 +11,23 @@ test.describe('Workspace Editor', () => {
 
     // 1. Navigate to workspace editor settings tab
     const sidebarToggle = page.locator('button[aria-label="Toggle sidebar"], button:has(mat-icon:text("menu"))').first();
+    const sidebar = page.locator('mat-sidenav, mat-drawer, [class*="sidebar"], [class*="side-panel"]').first();
     const hasSidebarToggle = await sidebarToggle.isVisible({ timeout: 10000 }).catch(() => false);
     if (hasSidebarToggle) {
       await sidebarToggle.click();
-      await page.waitForTimeout(500);
+      await expect(sidebar).toBeVisible();
     }
 
     const workspaceItems = page.locator('[class*="workspace-card"], [class*="item-card"], mat-list-item, [class*="list-item"]');
+
     const itemCount = await workspaceItems.count();
 
     if (itemCount > 0) {
+      const nameField = page.locator('input[placeholder*="ame"], input[formcontrolname*="name"], input[name="name"]').first();
       await workspaceItems.first().click();
-      await page.waitForTimeout(2000);
       await expect(page).toHaveURL(/\/topo\//, { timeout: 10000 });
 
       // expect: Settings form is displayed
-      const nameField = page.locator('input[placeholder*="ame"], input[formcontrolname*="name"], input[name="name"]').first();
       const hasNameField = await nameField.isVisible({ timeout: 10000 }).catch(() => false);
 
       if (hasNameField) {
@@ -50,7 +51,7 @@ test.describe('Workspace Editor', () => {
         const hasSave = await saveButton.isVisible({ timeout: 3000 }).catch(() => false);
         if (hasSave) {
           await saveButton.click();
-          await page.waitForTimeout(1000);
+          await expect(nameField).toHaveValue('Updated Lab Name');
         }
 
         // Restore original name
@@ -58,7 +59,7 @@ test.describe('Workspace Editor', () => {
         await nameField.fill(originalName);
         if (hasSave) {
           await saveButton.click();
-          await page.waitForTimeout(1000);
+          await expect(nameField).toHaveValue(originalName);
         }
       }
     }

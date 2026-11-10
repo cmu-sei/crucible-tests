@@ -17,11 +17,11 @@ test.describe('Admin Panel', () => {
     const hasLink = await settingsLink.isVisible({ timeout: 10000 }).catch(() => false);
     if (hasLink) {
       await settingsLink.click();
-      await page.waitForTimeout(1000);
     }
 
     // expect: Settings form is displayed
     const settingsInputs = page.locator('input, textarea, mat-select, mat-slide-toggle');
+    await expect(settingsInputs.first()).toBeVisible();
     const inputCount = await settingsInputs.count();
 
     if (inputCount > 0) {

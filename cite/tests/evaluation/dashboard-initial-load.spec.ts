@@ -4,22 +4,16 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, seedCompleteEvaluation, cleanupCompleteEvaluation, CITE_THEMES, setCiteTheme, citeMoveLabel } from '../../fixtures';
+import { test, expect, Services, loadCiteSeedIds, CITE_THEMES, setCiteTheme, citeMoveLabel } from '../../fixtures';
 
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Evaluation Dashboard Interface`, () => {
-    let evaluationIds: { evaluationId: string; scoringModelId: string; teamTypeId: string; } | null = null;
-
     test('Dashboard Initial Load', async ({ citeAuthenticatedPage: page }) => {
       await setCiteTheme(page, theme);
 
-      // Create evaluation with team membership via API
-      const seededData = await seedCompleteEvaluation(`Dashboard Test Evaluation ${Date.now()}`);
-      evaluationIds = {
-        evaluationId: seededData.evaluationId,
-        scoringModelId: seededData.scoringModelId,
-        teamTypeId: seededData.teamTypeId,
-      };
+      // The run-level shared evaluation (global-setup): Active, only the default move 0,
+      // Admin User on its one team. This test only reads it.
+      const seededData = { evaluationId: (await loadCiteSeedIds()).readOnlyEvaluationId };
 
       // 1. Navigate to evaluation dashboard using query parameter
       await page.goto(`${Services.Cite.UI}/?evaluation=${seededData.evaluationId}`);
@@ -39,13 +33,6 @@ for (const theme of CITE_THEMES) {
       // expect: Score Summary is displayed
       const scoreSummary = page.getByRole('heading', { name: 'Score Summary' });
       await expect(scoreSummary).toBeVisible({ timeout: 10000 });
-    });
-
-    test.afterEach(async () => {
-      if (evaluationIds) {
-        await cleanupCompleteEvaluation(evaluationIds);
-        evaluationIds = null;
-      }
     });
   });
 }

@@ -8,7 +8,6 @@ import {
   test,
   expect,
   Services,
-  seededPrimaryViewName,
   findPlayerHomeViewLink,
   clickWithoutOverlayInterference,
   PLAYER_THEMES,
@@ -17,9 +16,9 @@ import {
 
 for (const theme of PLAYER_THEMES) {
   test.describe(`${theme} theme › View Details`, () => {
-    test('Switch Teams', async ({ playerAuthenticatedPage: page }) => {
+    test('Switch Teams', async ({ freshView, playerAuthenticatedPage: page }) => {
       await setPlayerTheme(page, theme);
-      const primaryViewName = seededPrimaryViewName();
+      const primaryViewName = freshView.name;
 
       // 1. Log in and navigate to a view that has multiple teams
       await (await findPlayerHomeViewLink(page, primaryViewName)).click();

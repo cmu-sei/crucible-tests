@@ -4,13 +4,13 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
+import { test, expect, Services, findPlayerHomeViewLink, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
 
 for (const theme of PLAYER_THEMES) {
   test.describe(`${theme} theme › Performance`, () => {
-    test('API Response Time - View List', async ({ playerAuthenticatedPage: page }) => {
+    test('API Response Time - View List', async ({ playerAuthenticatedPage: page, seededViews }) => {
       await setPlayerTheme(page, theme);
-      const primaryViewName = seededPrimaryViewName();
+      const primaryViewName = seededViews.primary.name;
 
       // 1. Monitor network requests when loading view list
       const apiRequests: { url: string; duration: number }[] = [];

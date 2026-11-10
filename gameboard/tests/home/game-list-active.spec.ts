@@ -5,32 +5,16 @@
 // seed: seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
-import { getAdminToken, createGame, deleteGame, CreatedGame } from '../../api-helpers';
 
 // Gameboard's home groups published games into three sections: "Live!",
 // "Upcoming Games", and "Completed Games". A currently-in-window game appears
 // under "Live!". Each game renders as an <app-game-card> inside a card-wrapper
-// that shows the game's cardText fields (not the game name itself).
+// that shows the game's cardText fields (not the game name itself). The
+// worker's read-only game is published and in its window, so it guarantees the
+// section; requesting the fixture is what ensures it exists.
 test.describe('Home Page and Game Discovery', () => {
-  let token: string;
-  let game: CreatedGame;
-  const cardText = `LIVE-${Date.now()}`;
-
-  test.beforeEach(async () => {
-    token = await getAdminToken();
-    game = await createGame(token, {
-      name: `ListActive-${Date.now()}`,
-      startOffsetDays: -1,
-      endOffsetDays: 30,
-    });
-  });
-
-  test.afterEach(async () => {
-    if (game) await deleteGame(token, game.id);
-  });
-
-  test('Game List Display - Active Games', async ({ gameboardAuthenticatedPage: page }) => {
-    await page.goto(Services.Gameboard.UI + '/home', { waitUntil: 'networkidle' });
+  test('Game List Display - Active Games', async ({ gameboardAuthenticatedPage: page, readOnlyGame: _liveGame }) => {
+    await page.goto(Services.Gameboard.UI + '/home', { waitUntil: 'domcontentloaded' });
 
     // The "Live!" section heading appears when at least one in-window game exists.
     await expect(page.getByRole('heading', { name: 'Live!' })).toBeVisible({ timeout: 15000 });

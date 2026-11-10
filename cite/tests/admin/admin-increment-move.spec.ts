@@ -29,7 +29,7 @@ for (const theme of CITE_THEMES) {
       await expect(searchBox).toBeVisible({ timeout: 5000 });
       await searchBox.clear();
       await searchBox.fill(evalName);
-      await page.waitForTimeout(1000);
+      // Rule applied: removed fixed sleep
 
       const evalRow = page.locator('tbody tr').filter({ hasText: evalName }).first();
       await expect(evalRow).toBeVisible({ timeout: 10000 });
@@ -44,10 +44,10 @@ for (const theme of CITE_THEMES) {
 
       // 4. Click increment
       await incrementButton.click();
-      await page.waitForTimeout(1500);
 
-      // 5. Verify the move number increased
+      // 5. Verify the move number increased - wait for text to change first
       const updatedMoveDisplay = evalRow.locator('td').filter({ hasText: /^\d+$/ }).first();
+      await expect(updatedMoveDisplay).not.toHaveText(initialMove!);
       const updatedMove = await updatedMoveDisplay.textContent();
       expect(Number(updatedMove?.trim())).toBeGreaterThan(Number(initialMove?.trim()));
     });

@@ -5,7 +5,7 @@
 // seed: seed.spec.ts
 
 import type { Locator, Page } from '@playwright/test';
-import { test, expect, gotoGalleryAdmin, setGalleryTheme, GALLERY_THEMES } from '../../fixtures';
+import { test, expect, gotoGalleryAdmin, toggleGalleryThemeViaMenu, GALLERY_THEMES } from '../../fixtures';
 
 /**
  * Responsive Design and Accessibility — real WCAG contrast on the Gallery home page
@@ -167,7 +167,7 @@ for (const theme of GALLERY_THEMES) {
   test.describe(`${theme} theme › Responsive Design and Accessibility`, () => {
     // WCAG 1.4.3 — text contrast on the page surface.
     test('Theme Contrast Compliance (WCAG 1.4.3 text)', async ({ galleryAuthenticatedPage: page }) => {
-      await setGalleryTheme(page, theme);
+      await toggleGalleryThemeViaMenu(page, theme);
       await waitForHome(page);
 
       // 1. The My Exhibits title against the list surface.
@@ -206,7 +206,7 @@ for (const theme of GALLERY_THEMES) {
     // it >= 3:1 against the surface it sits on. Threshold stays generic: `primary`
     // comes from each mode's configured setting, so don't hardcode a specific hex.
     test('Primary action icon contrast (WCAG 1.4.11)', async ({ galleryAuthenticatedPage: page }) => {
-      await setGalleryTheme(page, theme);
+      await toggleGalleryThemeViaMenu(page, theme);
       await waitForHome(page);
 
       // Permission-gated, so it renders once permissions load; the title attribute
@@ -233,7 +233,7 @@ for (const theme of GALLERY_THEMES) {
     // and `primary` / `on-primary` take the active mode's settings verbatim (dark
     // falls back to light when its key is absent). Nothing is derived or corrected.
     test('Color settings applied per theme (design spec)', async ({ galleryAuthenticatedPage: page }) => {
-      await setGalleryTheme(page, theme);
+      await toggleGalleryThemeViaMenu(page, theme);
       await waitForHome(page);
 
       const settings = await effectiveColorSettings(page);
@@ -285,7 +285,7 @@ for (const theme of GALLERY_THEMES) {
     // only reaches 4.5:1 on white) and uses a dark-mode primary measured against its
     // own `#313131` dark surface. The expected colors come from the served settings.
     test('Primary and on-primary text contrast (WCAG 1.4.3)', async ({ galleryAuthenticatedPage: page }) => {
-      await setGalleryTheme(page, theme);
+      await toggleGalleryThemeViaMenu(page, theme);
       await gotoGalleryAdmin(page);
       await page.getByRole('button', { name: 'Add Collection' }).click();
       const dialog = page.getByRole('dialog', { name: 'Add Collection' });

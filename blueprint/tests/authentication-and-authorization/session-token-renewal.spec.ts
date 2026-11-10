@@ -39,7 +39,7 @@ test.describe('Authentication and Authorization', () => {
   test('Session Token Renewal', async ({ blueprintAuthenticatedPage: page }) => {
     // expect: authenticated and on the app (the fixture performed a real Keycloak login,
     // since this spec opted out of the saved storageState).
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 70000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 30000 });
 
     // 1. The OIDC client stores a token of its own accord after login.
     //    Wait for the entry, then read it with evaluate(): on Firefox the waitForFunction

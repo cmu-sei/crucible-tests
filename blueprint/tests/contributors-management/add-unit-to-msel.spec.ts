@@ -11,80 +11,11 @@ import {
   deleteMsel,
   tempBlueprintName,
   navigateToMselSection,
+  createUnit,
+  deleteUnit,
+  addUnitToMsel,
+  removeUnitFromMsel,
 } from '../../test-helpers';
-import { APIRequestContext, request as playwrightRequest } from '@playwright/test';
-import { Services } from '../../fixtures';
-
-// Local helper functions for Unit and MselUnit management
-async function newContext(): Promise<APIRequestContext> {
-  return playwrightRequest.newContext({ ignoreHTTPSErrors: true });
-}
-
-async function blueprintCall<T = any>(
-  token: string,
-  path: string,
-  method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET',
-  body?: any
-): Promise<{ ok: boolean; status: number; data: T; text: string }> {
-  const base = Services.Blueprint.API.replace(/\/$/, '');
-  const url = `${base}${path}`;
-  const ctx = await newContext();
-  try {
-    const res = await ctx.fetch(url, {
-      method,
-      headers: { Authorization: `Bearer ${token}` },
-      data: body,
-    });
-    const text = await res.text();
-    let data: any;
-    try {
-      data = text ? JSON.parse(text) : undefined;
-    } catch {
-      /* non-JSON */
-    }
-    return { ok: res.ok(), status: res.status(), data, text };
-  } finally {
-    await ctx.dispose();
-  }
-}
-
-async function createUnit(
-  token: string,
-  name: string,
-  shortName: string
-): Promise<{ id: string; name: string; shortName: string }> {
-  const r = await blueprintCall(token, '/api/units', 'POST', { name, shortName });
-  if (!r.ok) {
-    throw new Error(`createUnit failed (${r.status}): ${r.text}`);
-  }
-  return { id: r.data.id, name: r.data.name, shortName: r.data.shortName };
-}
-
-async function deleteUnit(token: string, unitId: string): Promise<void> {
-  const r = await blueprintCall(token, `/api/units/${unitId}`, 'DELETE');
-  if (!r.ok && r.status !== 404) {
-    console.warn(`deleteUnit(${unitId}) returned ${r.status}: ${r.text}`);
-  }
-}
-
-async function addUnitToMsel(
-  token: string,
-  mselId: string,
-  unitId: string
-): Promise<{ id: string }> {
-  const r = await blueprintCall(token, '/api/mselunits', 'POST', { mselId, unitId });
-  if (!r.ok) {
-    throw new Error(`addUnitToMsel failed (${r.status}): ${r.text}`);
-  }
-  return { id: r.data.id };
-}
-
-async function removeMselUnit(token: string, mselUnitId: string): Promise<void> {
-  const r = await blueprintCall(token, `/api/mselunits/${mselUnitId}`, 'DELETE');
-  if (!r.ok && r.status !== 404) {
-    console.warn(`removeMselUnit(${mselUnitId}) returned ${r.status}: ${r.text}`);
-  }
-}
 
 for (const theme of BLUEPRINT_THEMES) {
     test.describe(`${theme} theme › Contributors Management`, () => {
@@ -101,7 +32,7 @@ for (const theme of BLUEPRINT_THEMES) {
         description: 'Test MSEL for unit addition',
       });
 
-      const createdUnit = await createUnit(token, unitName, unitShortName);
+      const createdUnit = await createUnit(token, { name: unitName, shortName: unitShortName });
 
       let mselUnitId: string | null = null;
 
@@ -123,7 +54,7 @@ for (const theme of BLUEPRINT_THEMES) {
       } finally {
         // 5. Clean up: delete the mselUnit, MSEL, and unit
         if (mselUnitId) {
-          await removeMselUnit(token, mselUnitId);
+          await removeUnitFromMsel(token, mselUnitId);
         }
         await deleteMsel(token, createdMsel.id);
         await deleteUnit(token, createdUnit.id);

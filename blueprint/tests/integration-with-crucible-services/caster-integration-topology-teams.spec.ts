@@ -16,6 +16,7 @@ import {
   getCasterToken,
   createCasterTemplate,
   deleteCasterTemplate,
+  sharedCasterTemplate,
   getCasterTeamVariables,
   tryUpdateTeam,
   CasterTemplate,
@@ -26,19 +27,29 @@ test.describe('Caster Integration', () => {
   let token: string;
   let casterToken: string;
   let template: CasterTemplate | undefined;
+  let ownTemplate: CasterTemplate | undefined;
   let mselId: string | undefined;
+
+  // The run's shared template, which global-setup seeds and no test changes: a push writes
+  // into a workspace of its own MSEL and Remove deletes it. Only when setup could not seed
+  // it does this file create (and delete) its own.
+  test.beforeAll(async () => {
+    template = sharedCasterTemplate('variablesOnly') ?? undefined;
+    if (!template) template = ownTemplate = await createCasterTemplate(await getCasterToken());
+  });
+
+  test.afterAll(async () => {
+    if (ownTemplate) await deleteCasterTemplate(await getCasterToken(), ownTemplate);
+  });
 
   test.beforeEach(async () => {
     token = await getBlueprintToken();
     casterToken = await getCasterToken();
-    template = await createCasterTemplate(casterToken);
   });
 
   test.afterEach(async () => {
     if (mselId) await deleteMsel(token, mselId);
-    await deleteCasterTemplate(casterToken, template);
     mselId = undefined;
-    template = undefined;
   });
 
   test('Topology Teams are the template variables a team ID can go in', async () => {

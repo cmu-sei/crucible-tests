@@ -50,8 +50,8 @@ async function setCurrentMove(evaluationId: string, moveNumber: number): Promise
  *
  * The scoresheet offers the Official toggle only when the official submission for the
  * displayed move is among the submissions the API returned, so the toggle shows what the
- * member was allowed to read. The member is a temporary user, because `admin` holds every
- * system permission.
+ * member was allowed to read. The member is one of the worker's pool users (no CITE system
+ * permissions), because `admin` holds every system permission.
  */
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Scoresheet Interface`, () => {
@@ -59,7 +59,7 @@ for (const theme of CITE_THEMES) {
     let teamTypeId = '';
     let member: TeamMemberUser | null = null;
 
-    test('View Official Submission by Team Role', async ({ browser }) => {
+    test('View Official Submission by Team Role', async ({ browser, nonAdminUser }) => {
       // The shared model uses official scores and has a scoring category; the evaluation
       // gets its own copy, so the shared model is left in place.
       const scoringModelId = await ensureScoringModelExists();
@@ -68,7 +68,7 @@ for (const theme of CITE_THEMES) {
       await setCurrentMove(evaluationId, 1);
       teamTypeId = await seedTeamType(`Test Team Type Official ${theme} ${Date.now()}`, { isOfficialScoreContributor: true });
       const teamId = await seedTeam(evaluationId, teamTypeId, `Official Team ${theme}`);
-      member = await seedTeamMemberUser(teamId);
+      member = await seedTeamMemberUser(teamId, nonAdminUser);
 
       // An empty storage state: the default for this suite is admin's saved sign-in
       const memberContext = await browser.newContext({ ignoreHTTPSErrors: true, storageState: { cookies: [], origins: [] } });

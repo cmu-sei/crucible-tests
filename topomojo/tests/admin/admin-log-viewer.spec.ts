@@ -18,12 +18,12 @@ test.describe('Admin Panel', () => {
     const hasLink = await logsLink.isVisible({ timeout: 10000 }).catch(() => false);
     if (hasLink) {
       await logsLink.click();
-      await page.waitForTimeout(1000);
     }
 
     // expect: Log viewer page loads
     // expect: System logs are displayed
     const logContent = page.locator('[class*="log"], pre, code, [class*="console"], textarea[readonly]').first();
+    await expect(logContent).toBeVisible();
     const hasLogs = await logContent.isVisible({ timeout: 10000 }).catch(() => false);
     if (hasLogs) {
       await expect(logContent).toBeVisible();

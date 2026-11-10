@@ -4,15 +4,31 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, seedCasterProject, CASTER_THEMES, setCasterTheme } from '../../fixtures';
+import {
+  test,
+  expect,
+  Services,
+  CASTER_THEMES,
+  setCasterTheme,
+  seedCasterProjectPageFree,
+  deleteCasterProjectPageFree,
+} from '../../fixtures';
+
+let projectId: string;
+const projectName = 'E2E Shared Project [return-to-project-from-manage-project]';
+
+test.beforeAll(async () => {
+  projectId = await seedCasterProjectPageFree(projectName);
+});
+
+test.afterAll(async () => {
+  await deleteCasterProjectPageFree(projectId);
+});
 
 for (const theme of CASTER_THEMES) {
   test.describe(`${theme} theme › Projects Management`, () => {
-    test('Return To The Project From Manage Project', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+    test('Return To The Project From Manage Project', async ({ casterAuthenticatedPage: page }) => {
       await setCasterTheme(page, theme);
-      const projectName = `Return Project ${Date.now()}`;
-      const projectId = await seedCasterProject(page, projectName);
-      cleanupCasterProject(projectId);
 
       // 1. Open the project, then Manage Project from the user menu
       await page.goto(`${Services.Caster.UI}/projects/${projectId}`);
@@ -38,10 +54,8 @@ for (const theme of CASTER_THEMES) {
       await expect(page.getByText('Add Directory').filter({ visible: true })).toBeVisible();
     });
 
-    test('Return From Project Memberships In Administration', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+    test('Return From Project Memberships In Administration', async ({ casterAuthenticatedPage: page }) => {
       await setCasterTheme(page, theme);
-      const projectName = `Admin Return Project ${Date.now()}`;
-      cleanupCasterProject(await seedCasterProject(page, projectName));
 
       // 1. Find the project in Administration → Projects
       await page.goto(`${Services.Caster.UI}/admin?section=Projects`);

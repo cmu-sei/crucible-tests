@@ -17,10 +17,12 @@ test.describe('Admin Panel', () => {
     const hasLink = await settingsLink.isVisible({ timeout: 10000 }).catch(() => false);
     if (hasLink) {
       await settingsLink.click();
-      await page.waitForTimeout(1000);
+
+      // expect: Background image upload interface is visible
+      const fileInput = page.locator('input[type="file"][accept*="image"], input[type="file"]').first();
+      await expect(fileInput).toBeAttached();
     }
 
-    // expect: Background image upload interface is visible
     const fileInput = page.locator('input[type="file"][accept*="image"], input[type="file"]').first();
     const hasFileInput = await fileInput.count() > 0;
 

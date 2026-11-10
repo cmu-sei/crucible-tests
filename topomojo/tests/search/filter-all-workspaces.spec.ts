@@ -11,10 +11,11 @@ test.describe('Search and Filtering', () => {
 
     // 1. Navigate to workspace browser as admin
     const sidebarToggle = page.locator('button[aria-label="Toggle sidebar"], button:has(mat-icon:text("menu"))').first();
+    const sidebar = page.locator('mat-sidenav, mat-drawer, [class*="sidebar"]').first();
     const hasSidebarToggle = await sidebarToggle.isVisible({ timeout: 10000 }).catch(() => false);
     if (hasSidebarToggle) {
       await sidebarToggle.click();
-      await page.waitForTimeout(500);
+      await expect(sidebar).toBeVisible({ timeout: 5000 });
     }
 
     // expect: Filter options are visible
@@ -24,7 +25,7 @@ test.describe('Search and Filtering', () => {
     if (hasFilter) {
       // 2. Select 'All Workspaces' filter
       await allWorkspacesFilter.click();
-      await page.waitForTimeout(500);
+      await expect(allWorkspacesFilter).toBeVisible();
 
       // expect: All workspaces in system are displayed
       // expect: Workspaces from all users are shown

@@ -6,6 +6,9 @@
 
 import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
+// Override global storageState so this test starts from a fresh unauthenticated state.
+test.use({ storageState: { cookies: [], origins: [] } });
+
 test.describe('Authentication and Authorization', () => {
   test('Session Persistence After Refresh', async ({ topomojoAuthenticatedPage: page }) => {
 

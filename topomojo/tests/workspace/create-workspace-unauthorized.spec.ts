@@ -7,6 +7,7 @@
 import { test, expect } from '@playwright/test';
 import { authenticateTopoMojoWithKeycloak, Services, serviceUrlPattern, topomojoNavLink } from '../../fixtures';
 
+// Override global storageState so this test starts from a fresh unauthenticated state.
 test.use({ storageState: { cookies: [], origins: [] } });
 
 test.describe('Workspace Management', () => {

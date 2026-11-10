@@ -5,34 +5,30 @@
 // seed: seed.spec.ts
 
 import type { Page } from '@playwright/test';
-import { test, expect, expectCasterProjectOpen, CASTER_THEMES, setCasterTheme } from '../../fixtures';
+import {
+  test,
+  expect,
+  CASTER_THEMES,
+  setCasterTheme,
+  seedCasterProjectPageFree,
+  deleteCasterProjectPageFree,
+} from '../../fixtures';
 
-/**
- * Create a project from the home page and return to the home page.
- *
- * Saving navigates into the new project, so callers that want to keep working
- * with the project list have to come back — this keeps that round trip in one
- * place. The new ID is registered for cleanup as soon as the POST returns, so a
- * failure later in the round trip cannot leak the project.
- */
-async function createProject(
-  page: Page,
-  name: string,
-  registerCleanup: (projectId: string) => void,
-): Promise<void> {
-  await page.locator('button[mattooltip="Add New Project"]').click();
-  await expect(page.getByRole('dialog', { name: 'Add Project' })).toBeVisible();
-  await page.getByRole('textbox', { name: 'Name' }).fill(name);
+let matchingProjectId: string;
+let otherProjectId: string;
+const stamp = 'search-and-filter-projects';
+const matchingName = `E2E Searchable Project [${stamp}]`;
+const otherName = `E2E Unrelated Project [${stamp}]`;
 
-  const createResponsePromise = page.waitForResponse(resp =>
-    resp.url().includes('/api/projects') && resp.request().method() === 'POST' && resp.ok()
-  );
-  await page.getByRole('button', { name: 'Save' }).click();
-  registerCleanup((await (await createResponsePromise).json()).id);
+test.beforeAll(async () => {
+  matchingProjectId = await seedCasterProjectPageFree(matchingName);
+  otherProjectId = await seedCasterProjectPageFree(otherName);
+});
 
-  await expectCasterProjectOpen(page, name);
-  await page.getByRole('link', { name: 'Caster', exact: true }).click();
-}
+test.afterAll(async () => {
+  await deleteCasterProjectPageFree(matchingProjectId);
+  await deleteCasterProjectPageFree(otherProjectId);
+});
 
 /**
  * Type into the project search box. The list filters on keyup, so `fill()`
@@ -47,22 +43,11 @@ async function search(page: Page, term: string): Promise<void> {
 
 for (const theme of CASTER_THEMES) {
   test.describe(`${theme} theme › Projects Management`, () => {
-    test('Search and Filter Projects', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+    test('Search and Filter Projects', async ({ casterAuthenticatedPage: page }) => {
       await setCasterTheme(page, theme);
-      // Two projects, because filtering can only be proven by what it *excludes*.
-      // Both are seeded by this test rather than assumed to exist. "My Projects" is
-      // paginated and sorted by name, and other projects may already be listed, so
-      // every assertion about a specific row runs against a filtered list — never
-      // against whatever happens to land on page 1.
-      const stamp = Date.now();
-      const matchingName = `Searchable Project ${stamp}`;
-      const otherName = `Unrelated Project ${stamp}`;
 
       // 1. Navigate to Projects section
       await expect(page.getByText('My Projects')).toBeVisible();
-
-      await createProject(page, matchingName, cleanupCasterProject);
-      await createProject(page, otherName, cleanupCasterProject);
 
       const searchBox = page.getByRole('textbox', { name: 'Search' });
       const matchingRow = page.getByRole('link', { name: matchingName, exact: true });
@@ -75,7 +60,7 @@ for (const theme of CASTER_THEMES) {
 
       // expect: Projects list is visible with multiple projects. The shared stamp
       // narrows the list to exactly this test's two projects.
-      await search(page, String(stamp));
+      await search(page, stamp);
       await expect(matchingRow).toBeVisible();
       await expect(otherRow).toBeVisible();
       await expect(page.getByRole('row')).toHaveCount(3); // header + 2 projects

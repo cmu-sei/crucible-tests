@@ -4,48 +4,43 @@
 // spec: gameboard/gameboard-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, type SharedWorkspace } from '../../fixtures';
 import {
   getAdminToken, createGame, deleteGame, createSponsor, deleteSponsor,
   setAdminSponsor, enrollAdmin, deletePlayer,
   addChallengeSpecToGame, deleteChallengeSpec,
   CreatedGame, CreatedSponsor,
 } from '../../api-helpers';
-import { getTopoMojoAdminToken, createWorkspace, deleteWorkspace, CreatedWorkspace } from '../../../topomojo-helpers';
-import { gbConnect, seedChallenge } from '../../db-helpers';
+import { seedChallenge } from '../../db-helpers';
 import { APIRequestContext, request as playwrightRequest } from '@playwright/test';
 
 // Gameboard does not have an explicit difficulty field, but point values are
 // a reasonable proxy (higher points = harder). We seed specs with differing
 // point values and verify listing sorts/filters by point value.
+// Gameboard keys a game's specs on (externalId, gameId), so the two specs use the
+// shared workspace pair's two ids; the second has no audience, which only hides it
+// from Gameboard's TopoMojo sync — the seeded rows below are what the list reads.
 test.describe('Challenges', () => {
-  let gbToken: string, tmToken: string;
+  let gbToken: string;
   let sponsor: CreatedSponsor, game: CreatedGame;
-  let ws1: CreatedWorkspace, ws2: CreatedWorkspace;
+  let workspace: SharedWorkspace;
   let spec1: string, spec2: string, playerId: string, teamId: string;
   let previousSponsorId = 'other';
 
-  test.beforeEach(async () => {
+  test.beforeEach(async ({ sharedWorkspace, gbDb: client }) => {
     gbToken = await getAdminToken();
-    tmToken = await getTopoMojoAdminToken();
+    workspace = sharedWorkspace;
     sponsor = await createSponsor(gbToken, `Diff-${Date.now()}`);
     ({ previousSponsorId } = await setAdminSponsor(gbToken, sponsor.id));
-    ws1 = await createWorkspace(tmToken, { name: `Diff-E-${Date.now()}`, audience: 'gameboard' });
-    ws2 = await createWorkspace(tmToken, { name: `Diff-H-${Date.now()}`, audience: 'gameboard' });
     game = await createGame(gbToken, { name: `Diff-${Date.now()}`, startOffsetDays: -1, endOffsetDays: 30 });
-    const s1 = await addChallengeSpecToGame(gbToken, game.id, { externalId: ws1.id, name: 'Easy', points: 100 });
-    const s2 = await addChallengeSpecToGame(gbToken, game.id, { externalId: ws2.id, name: 'Hard', points: 500 });
+    const s1 = await addChallengeSpecToGame(gbToken, game.id, { externalId: workspace.id, name: 'Easy', points: 100 });
+    const s2 = await addChallengeSpecToGame(gbToken, game.id, { externalId: workspace.noAudienceId, name: 'Hard', points: 500 });
     spec1 = s1.id; spec2 = s2.id;
     const player = await enrollAdmin(gbToken, game.id);
     playerId = player.id; teamId = player.teamId;
 
-    const client = await gbConnect();
-    try {
-      await seedChallenge(client, { gameId: game.id, specId: spec1, playerId, teamId, externalId: ws1.id, name: 'Easy', points: 100 });
-      await seedChallenge(client, { gameId: game.id, specId: spec2, playerId, teamId, externalId: ws2.id, name: 'Hard', points: 500 });
-    } finally {
-      await client.end();
-    }
+    await seedChallenge(client, { gameId: game.id, specId: spec1, playerId, teamId, externalId: workspace.id, name: 'Easy', points: 100 });
+    await seedChallenge(client, { gameId: game.id, specId: spec2, playerId, teamId, externalId: workspace.noAudienceId, name: 'Hard', points: 500 });
   });
 
   test.afterEach(async () => {
@@ -53,8 +48,6 @@ test.describe('Challenges', () => {
     if (spec1) await deleteChallengeSpec(gbToken, spec1).catch(() => {});
     if (spec2) await deleteChallengeSpec(gbToken, spec2).catch(() => {});
     if (game) await deleteGame(gbToken, game.id);
-    if (ws1) await deleteWorkspace(tmToken, ws1.id);
-    if (ws2) await deleteWorkspace(tmToken, ws2.id);
     if (previousSponsorId) await setAdminSponsor(gbToken, previousSponsorId).catch(() => {});
     if (sponsor) await deleteSponsor(gbToken, sponsor.id);
   });
@@ -77,7 +70,7 @@ test.describe('Challenges', () => {
       await ctx.dispose();
     }
 
-    await page.goto(Services.Gameboard.UI + '/admin/dashboard', { waitUntil: 'networkidle' });
+    await page.goto(Services.Gameboard.UI + '/admin/dashboard', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
   });
 });

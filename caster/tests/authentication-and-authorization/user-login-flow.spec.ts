@@ -17,7 +17,7 @@ test.describe('Authentication and Authorization', () => {
     await page.goto(Services.Caster.UI);
 
     // expect: The application redirects to the Keycloak authentication page at https://localhost:8443/realms/crucible
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 70000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 30000 });
     await expect(page.getByText('Sign in to your account')).toBeVisible();
 
     // 2. Enter username 'admin' in the username field

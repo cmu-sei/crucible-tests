@@ -4,7 +4,8 @@
 // spec: alloy/alloy-test-plan.md
 
 import { readFile, writeFile } from 'node:fs/promises';
-import { test, expect, Page } from '@playwright/test';
+import { Page } from '@playwright/test';
+import { test, expect } from '../../fixtures';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
 import {
   ALLOY_THEMES,

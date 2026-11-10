@@ -15,7 +15,7 @@ import {
   getTopoMojoAdminToken, createWorkspace, deleteWorkspace, setWorkspaceChallenge,
   CreatedWorkspace,
 } from '../../../topomojo-helpers';
-import { gbConnect, seedChallenge } from '../../db-helpers';
+import { seedChallenge } from '../../db-helpers';
 import { APIRequestContext, request as playwrightRequest } from '@playwright/test';
 
 // TopoMojo stores challenge hints inside the workspace's challenge spec YAML.
@@ -29,7 +29,7 @@ test.describe('Challenges', () => {
   let previousSponsorId = 'other';
   const hintText = 'Look carefully at the HTTP headers.';
 
-  test.beforeEach(async () => {
+  test.beforeEach(async ({ gbDb: client }) => {
     gbToken = await getAdminToken();
     tmToken = await getTopoMojoAdminToken();
     sponsor = await createSponsor(gbToken, `Hints-${Date.now()}`);
@@ -61,42 +61,37 @@ test.describe('Challenges', () => {
     const player = await enrollAdmin(gbToken, game.id);
     playerId = player.id; teamId = player.teamId;
 
-    const client = await gbConnect();
-    try {
-      // Seed a challenge whose State includes the hint so Gameboard surfaces it.
-      const stateJson = JSON.stringify({
-        id: 'seed', name: 'Hinted',
-        challenge: {
-          text: 'Find the flag.',
-          maxAttempts: 3,
-          maxPoints: 100,
-          attempts: 0,
-          score: 0,
-          sectionCount: 1,
-          sectionIndex: 0,
-          questions: [{
-            text: 'What is the secret?',
-            hint: hintText,
-            answer: '',
-            example: '',
-            weight: 1.0,
-            penalty: 10,
-            isCorrect: false,
-            isGraded: false,
-          }],
-        },
-        vms: [],
-        isActive: true,
-      });
-      const ch = await seedChallenge(client, {
-        gameId: game.id, specId, playerId, teamId,
-        externalId: workspace.id, name: 'Hinted', points: 100,
-        stateJson,
-      });
-      challengeId = ch.challengeId;
-    } finally {
-      await client.end();
-    }
+    // Seed a challenge whose State includes the hint so Gameboard surfaces it.
+    const stateJson = JSON.stringify({
+      id: 'seed', name: 'Hinted',
+      challenge: {
+        text: 'Find the flag.',
+        maxAttempts: 3,
+        maxPoints: 100,
+        attempts: 0,
+        score: 0,
+        sectionCount: 1,
+        sectionIndex: 0,
+        questions: [{
+          text: 'What is the secret?',
+          hint: hintText,
+          answer: '',
+          example: '',
+          weight: 1.0,
+          penalty: 10,
+          isCorrect: false,
+          isGraded: false,
+        }],
+      },
+      vms: [],
+      isActive: true,
+    });
+    const ch = await seedChallenge(client, {
+      gameId: game.id, specId, playerId, teamId,
+      externalId: workspace.id, name: 'Hinted', points: 100,
+      stateJson,
+    });
+    challengeId = ch.challengeId;
   });
 
   test.afterEach(async () => {
@@ -124,7 +119,7 @@ test.describe('Challenges', () => {
       await ctx.dispose();
     }
 
-    await page.goto(Services.Gameboard.UI + '/admin/dashboard', { waitUntil: 'networkidle' });
+    await page.goto(Services.Gameboard.UI + '/admin/dashboard', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
   });
 });

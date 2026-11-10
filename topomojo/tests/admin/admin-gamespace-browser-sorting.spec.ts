@@ -13,21 +13,31 @@ test.describe('Admin Panel', () => {
     await page.goto(Services.TopoMojo.UI + '/admin');
     await page.waitForLoadState('domcontentloaded');
 
+    // The admin browsers sort client-side in the same handler that moves the sort-up/sort-down
+    // icon: only the active .sort-header button carries one, so an applied sort always changes
+    // which button has the icon or its direction - even with 0 or 1 rows, where the row order
+    // cannot change. Rows were already visible before the click, so they prove nothing.
+    const sortState = () => page.locator('.sort-header').evaluateAll((buttons) =>
+      buttons.map((b) => b.querySelector('svg[data-icon]')?.getAttribute('data-icon') ?? '').join('|'));
+
     const gamespaceLink = page.locator('a:has-text("Gamespace"), button:has-text("Gamespace"), mat-tab:has-text("Gamespace")').first();
     const hasLink = await gamespaceLink.isVisible({ timeout: 10000 }).catch(() => false);
     if (hasLink) {
       await gamespaceLink.click();
-      await page.waitForTimeout(1000);
+
+      // expect: Gamespace list displays with table headers
+      // 2. Click on column headers to sort gamespaces
+      const sortableHeaders = page.locator('th, [class*="header"], mat-sort-header');
+      await expect(sortableHeaders.first()).toBeVisible();
     }
 
-    // expect: Gamespace list displays with table headers
-    // 2. Click on column headers to sort gamespaces
     const sortableHeaders = page.locator('th, [class*="header"], mat-sort-header');
     const headerCount = await sortableHeaders.count();
 
     if (headerCount > 0) {
+      const sortBefore = await sortState();
       await sortableHeaders.first().click();
-      await page.waitForTimeout(500);
+      await expect.poll(sortState).not.toBe(sortBefore);
 
       // expect: Gamespaces are sorted based on selected column
       // expect: Sort indicators (up/down arrows) appear on active column

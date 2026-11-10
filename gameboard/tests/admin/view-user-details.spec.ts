@@ -6,36 +6,22 @@
 
 import { test, expect, Services } from '../../fixtures';
 import { getAdminToken } from '../../api-helpers';
-import {
-  getKeycloakAdminToken,
-  createKeycloakUser,
-  deleteKeycloakUser,
-  tempUsername,
-  getUserToken,
-} from '../../../keycloak-admin';
+import { getUserToken } from '../../../keycloak-admin';
 import { APIRequestContext, request as playwrightRequest } from '@playwright/test';
 
-// Creates a temporary Keycloak user, provisions them in Gameboard, then
-// verifies GET /api/user/{id} returns the expected details.
+// Takes one of this worker's pool users, registers them in Gameboard, then verifies
+// GET /api/user/{id} returns the expected details.
 test.describe('Admin - Users', () => {
   let gbToken: string;
-  let kcAdmin: string;
-  let kcUserId: string | null = null;
 
   test.beforeEach(async () => {
     gbToken = await getAdminToken();
-    kcAdmin = await getKeycloakAdminToken();
   });
 
-  test.afterEach(async () => {
-    if (kcUserId) await deleteKeycloakUser(kcAdmin, kcUserId);
-  });
-
-  test('View User Details and Activity', async ({ gameboardAuthenticatedPage: page }) => {
-    const username = tempUsername('viewUser');
-    const u = await createKeycloakUser(kcAdmin, { username, password: 'pw' });
-    kcUserId = u.id;
-    const userToken = await getUserToken(username, 'pw');
+  // Nothing to reset: the POST below is the idempotent first-login registration, and
+  // the pool user's Gameboard row belongs to the worker fixture.
+  test('View User Details and Activity', async ({ gameboardAuthenticatedPage: page, nonAdminUser: u }) => {
+    const userToken = await getUserToken(u.username, u.password);
 
     const ctx: APIRequestContext = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
     try {
@@ -43,21 +29,21 @@ test.describe('Admin - Users', () => {
       await ctx.fetch(`${Services.Gameboard.API}/api/user`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${userToken}`, 'Content-Type': 'application/json' },
-        data: { id: u.id },
+        data: { id: u.userId },
       });
 
       // Admin fetches details.
-      const res = await ctx.fetch(`${Services.Gameboard.API}/api/user/${u.id}`, {
+      const res = await ctx.fetch(`${Services.Gameboard.API}/api/user/${u.userId}`, {
         headers: { Authorization: `Bearer ${gbToken}` },
       });
       expect(res.ok()).toBe(true);
       const detail = await res.json();
-      expect(detail.id).toBe(u.id);
+      expect(detail.id).toBe(u.userId);
     } finally {
       await ctx.dispose();
     }
 
-    await page.goto(Services.Gameboard.UI + '/admin/registrar/users', { waitUntil: 'networkidle' });
+    await page.goto(Services.Gameboard.UI + '/admin/registrar/users', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Users' })).toBeVisible();
   });
 });

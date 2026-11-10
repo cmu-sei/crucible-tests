@@ -13,6 +13,7 @@ test.use({ storageState: { cookies: [], origins: [] } });
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Authentication and Authorization`, () => {
     test('Successful Authentication Flow', async ({ page }) => {
+      test.slow(); // Auth redirect can take extended time on cold services
 
       // 1. Navigate to CITE UI at http://localhost:4721
       // The Keycloak screens aren't CITE's, so the theme is requested on the entry URL
@@ -20,7 +21,7 @@ for (const theme of CITE_THEMES) {
       await page.goto(citeThemeUrl(Services.Cite.UI, theme));
 
       // expect: User is redirected to Keycloak login page at https://localhost:8443
-      await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 70000 });
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 30000 });
 
       // 2. Enter valid username 'admin' in the username field
       const usernameField = page.locator('#username');

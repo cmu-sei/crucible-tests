@@ -14,11 +14,11 @@ test.describe('Workspace Management', () => {
     const hasSidebarToggle = await sidebarToggle.isVisible({ timeout: 10000 }).catch(() => false);
     if (hasSidebarToggle) {
       await sidebarToggle.click();
-      await page.waitForTimeout(500);
     }
 
     // expect: Filter toggle or tabs are visible (e.g., 'My Workspaces', 'All Workspaces')
     const filterOptions = page.locator('mat-button-toggle-group, [class*="filter"], mat-tab-group, [class*="toggle"]').first();
+    await expect(filterOptions).toBeVisible();
     const hasFilters = await filterOptions.isVisible({ timeout: 5000 }).catch(() => false);
 
     if (hasFilters) {
@@ -27,16 +27,17 @@ test.describe('Workspace Management', () => {
       const filterCount = await filterButtons.count();
 
       if (filterCount > 1) {
+        const workspaceItems = page.locator('[class*="workspace-card"], [class*="item-card"], mat-list-item');
         // Click second filter option
         await filterButtons.nth(1).click();
-        await page.waitForTimeout(500);
+        await expect(workspaceItems.first()).toBeVisible();
 
         // expect: Workspace list updates based on selected filter
         // expect: Filter selection is highlighted
 
         // Click first filter option back
         await filterButtons.nth(0).click();
-        await page.waitForTimeout(500);
+        await expect(workspaceItems.first()).toBeVisible();
       }
     }
   });

@@ -4,7 +4,7 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern, seedCompleteEvaluation, cleanupCompleteEvaluation, CITE_THEMES, setCiteTheme } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, loadCiteSeedIds, CITE_THEMES, setCiteTheme } from '../../fixtures';
 
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Home Page and Evaluation List`, () => {
@@ -12,10 +12,9 @@ for (const theme of CITE_THEMES) {
     test('Navigate to Evaluation from List', async ({ citeAuthenticatedPage: page }) => {
       await setCiteTheme(page, theme);
 
-      // 1. Seed a complete evaluation via API with admin as member
-      const timestamp = Date.now();
-      const evalName = `E2E Navigate Test ${timestamp}`;
-      const seededData = await seedCompleteEvaluation(evalName, 0);
+      // 1. The run-level shared evaluations (global-setup) put Admin User on at least one
+      //    evaluation's team, so My Evaluations has a row; this test only opens it.
+      await loadCiteSeedIds();
 
       // 2. Navigate to home page
       await page.goto(Services.Cite.UI);
@@ -33,15 +32,9 @@ for (const theme of CITE_THEMES) {
       await rows.first().click();
 
       // 5. Verify navigation to evaluation dashboard
-      await page.waitForLoadState('domcontentloaded');
-      await page.waitForTimeout(2000);
-
       // Evaluation interface loads with dashboard content
       const evaluationContent = page.locator('[class*="evaluation"], [class*="dashboard"], mat-tab-group, [class*="move"]').first();
       await expect(evaluationContent).toBeVisible({ timeout: 10000 });
-
-      // Cleanup
-      await cleanupCompleteEvaluation(seededData);
     });
   });
 }

@@ -5,13 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, STEAMFITTER_THEMES, setSteamfitterTheme } from '../../fixtures';
-import {
-  seedScenario,
-  deleteScenariosByPrefix,
-  isPlayerApiAvailable,
-  createPlayerView,
-  deletePlayerView,
-} from '../../fixtures';
+import { seedScenario, deleteScenariosByPrefix } from '../../fixtures';
 import { requirePrecondition } from '../../../shared-fixtures';
 import {
   navigateToHomeSection,
@@ -26,46 +20,33 @@ import {
  * The scenario start/end lifecycle requires a Player view: Start is only offered when
  * the scenario is `ready` AND has a `viewId`. The Player API is optional, so this
  * whole spec is skipped when it isn't reachable (there is no meaningful view-less
- * fallback for "start the scenario"). The seeded view is removed in afterAll.
+ * fallback for "start the scenario"). The view is shared per worker via the
+ * steamfitterPlayerView fixture.
  */
 for (const theme of STEAMFITTER_THEMES) {
   test.describe(`${theme} theme › Scenarios Management`, () => {
     const SCENARIO_NAME = `E2E Lifecycle Scenario ${Date.now()}`;
 
-    let playerAvailable = false;
-    let viewId: string | null = null;
-
-    test.beforeAll(async () => {
-      playerAvailable = await isPlayerApiAvailable();
-      if (playerAvailable) {
-        viewId = await createPlayerView(`E2E Lifecycle View ${Date.now()}`);
-      }
-    });
-
-    test.afterAll(async () => {
-      if (viewId) {
-        await deletePlayerView(viewId);
-        viewId = null;
-      }
-    });
-
     test.afterEach(async () => {
       await deleteScenariosByPrefix(['E2E Lifecycle Scenario']);
     });
 
-    test('Start then end a scenario', async ({ steamfitterAuthenticatedPage: page }) => {
+    test('Start then end a scenario', async ({
+      steamfitterAuthenticatedPage: page,
+      steamfitterPlayerView,
+    }) => {
       await setSteamfitterTheme(page, theme);
       // Skips locally (Player is optional in a partial stack) but fails under CI,
       // where the whole stack is expected up: a Player outage there is a real
       // failure, not a reason to report this scenario as passing.
       requirePrecondition(
-        playerAvailable,
+        steamfitterPlayerView !== null,
         'Player API unavailable — scenario start/end requires a view.'
       );
 
       // Seed a ready, view-bound scenario so Start is available.
       await seedScenario(SCENARIO_NAME, 'Scenario exercised through start/end', {
-        viewId: viewId ?? undefined,
+        viewId: steamfitterPlayerView.viewId,
       });
 
       // 1. Open the Scenarios section and locate the row.

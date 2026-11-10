@@ -4,7 +4,7 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, seedCompleteEvaluation, cleanupCompleteEvaluation, CITE_THEMES, setCiteTheme } from '../../fixtures';
+import { test, expect, Services, loadCiteSeedIds, CITE_THEMES, setCiteTheme } from '../../fixtures';
 
 const LEVELS = [
   'Level 5 - Emergency',
@@ -17,18 +17,13 @@ const LEVELS = [
 
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Score Summary`, () => {
-    let evaluationIds: { evaluationId: string; scoringModelId: string; teamTypeId: string; } | null = null;
-
     test('Score Summary lists the levels and places the displayed score', async ({ citeAuthenticatedPage: page }) => {
       await setCiteTheme(page, theme);
 
-      // The seeded scoring model's right side display is the Score Summary
-      const seededData = await seedCompleteEvaluation(`Score Summary Test Evaluation ${Date.now()}`);
-      evaluationIds = {
-        evaluationId: seededData.evaluationId,
-        scoringModelId: seededData.scoringModelId,
-        teamTypeId: seededData.teamTypeId,
-      };
+      // The run-level shared evaluation (global-setup): Active, only the default move 0,
+      // Admin User on its one team. This test only reads it.
+      // Its scoring model is the shared one, whose right side display is the Score Summary.
+      const seededData = { evaluationId: (await loadCiteSeedIds()).readOnlyEvaluationId };
 
       await page.goto(`${Services.Cite.UI}/?evaluation=${seededData.evaluationId}`);
       await page.waitForLoadState('domcontentloaded');
@@ -48,13 +43,6 @@ for (const theme of CITE_THEMES) {
       await expect(baseline).toHaveClass(/current/);
       await expect(baseline.getByRole('list', { name: 'Scores in Baseline' }).getByRole('listitem').first()).toHaveText(/0$/);
       await expect(summary.getByRole('list', { name: 'Scores in Emergency' })).toHaveCount(0);
-    });
-
-    test.afterEach(async () => {
-      if (evaluationIds) {
-        await cleanupCompleteEvaluation(evaluationIds);
-        evaluationIds = null;
-      }
     });
   });
 }

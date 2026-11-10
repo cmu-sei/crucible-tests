@@ -4,34 +4,34 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen, CASTER_THEMES, setCasterTheme } from '../../fixtures';
+import {
+  test,
+  expect,
+  CASTER_THEMES,
+  setCasterTheme,
+  seedCasterProjectPageFree,
+  deleteCasterProjectPageFree,
+  Services,
+} from '../../fixtures';
+
+let projectId: string;
+const projectName = 'E2E Shared Project [view-project-details]';
+
+test.beforeAll(async () => {
+  projectId = await seedCasterProjectPageFree(projectName);
+});
+
+test.afterAll(async () => {
+  await deleteCasterProjectPageFree(projectId);
+});
 
 for (const theme of CASTER_THEMES) {
   test.describe(`${theme} theme › Projects Management`, () => {
-    test('View Project Details', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+    test('View Project Details', async ({ casterAuthenticatedPage: page }) => {
       await setCasterTheme(page, theme);
-      const projectName = `Project For Details ${Date.now()}`;
 
-      // 1. Navigate to Projects section
-      await expect(page.getByText('My Projects')).toBeVisible();
-
-      // Create a project if needed
-      await page.locator('button[mattooltip="Add New Project"]').click();
-      await expect(page.getByRole('dialog', { name: 'Add Project' })).toBeVisible();
-      await page.getByRole('textbox', { name: 'Name' }).fill(projectName);
-
-      const createResponsePromise = page.waitForResponse(resp =>
-        resp.url().includes('/api/projects') && resp.request().method() === 'POST' && resp.ok()
-      );
-      await page.getByRole('button', { name: 'Save' }).click();
-
-      // Capture project ID for cleanup
-      const createResponse = await createResponsePromise;
-      const projectData = await createResponse.json();
-      cleanupCasterProject(projectData.id);
-
-      // expect: The project detail view is displayed after creation.
-      await expectCasterProjectOpen(page, projectName);
+      // Navigate to the project
+      await page.goto(`${Services.Caster.UI}/projects/${projectId}`);
 
       // expect: Project name is shown in the topbar
       await expect(page.getByText(projectName, { exact: true })).toBeVisible();

@@ -4,7 +4,7 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern, CITE_THEMES, setCiteTheme } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, CITE_THEMES, setCiteTheme, citeMoveLabel } from '../../fixtures';
 
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Performance`, () => {
@@ -26,16 +26,19 @@ for (const theme of CITE_THEMES) {
       for (let i = 0; i < 5; i++) {
         // Go to evaluation
         const rows = page.locator('mat-row, tbody tr, [class*="evaluation-row"]');
-        if (await rows.first().isVisible({ timeout: 5000 }).catch(() => false)) {
-          await rows.first().click();
+        const rowVisible = await rows.first().waitFor({ state: 'visible', timeout: 5000 }).then(() => true, () => false);
+        if (rowVisible) {
+          await rows.first().getByRole('link').click();
           await page.waitForLoadState('domcontentloaded');
-          await page.waitForTimeout(500);
+          // Wait for evaluation detail page to load (anchor on evaluation-specific content)
+          await expect(citeMoveLabel(page)).toBeVisible({ timeout: 5000 });
         }
 
         // Go back home
         await page.goto(Services.Cite.UI);
         await page.waitForLoadState('domcontentloaded');
-        await page.waitForTimeout(500);
+        // Wait for home page to load
+        await expect(page.getByText('My Evaluations')).toBeVisible({ timeout: 5000 });
       }
 
       // Get final memory usage

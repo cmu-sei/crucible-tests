@@ -26,7 +26,7 @@ test.describe('Error Handling', () => {
     await expect(requested).toHaveValue(payload);
     // Click Request to submit (status becomes pending; approval is manual).
     await page.getByRole('button', { name: /^Request$/ }).click();
-    await page.waitForTimeout(2000);
+    await expect(page).toHaveURL(/\/user\/profile/);
 
     // No dialog should have fired — the payload must be treated as data, not HTML.
     expect(dialogFired).toBe(false);

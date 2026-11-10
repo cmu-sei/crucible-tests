@@ -11,13 +11,15 @@ import path from 'path';
 import zlib from 'zlib';
 import {
   getBlueprintToken,
-  createMsel,
   deleteMsel,
   createRenderableScenarioEvent,
   setScenarioEventFieldValue,
-  tempBlueprintName,
   findMselRowByName,
   downloadMselFile,
+  createSharedRenderableMsel,
+  resetSharedRenderableMsel,
+  type CreatedMsel,
+  sharedChildName,
 } from '../../test-helpers';
 
 /**
@@ -102,8 +104,24 @@ function extractRowXml(sheetXml: string, rowNumber: number): string {
  *     export; only DataField columns are asserted on here, since those are the ones guaranteed
  *     present once seeded.
  */
+// One MSEL with the standard DataFields (13 POSTs) is seeded per file and shared by both
+// theme runs. Safe to share: the test only downloads the MSEL.
+// Each test seeds its own uniquely named events, and `resetSharedRenderableMsel` removes
+// them (and any extra DataField) in afterEach.
+let shared: CreatedMsel;
+
+test.beforeAll(async ({}, workerInfo) => {
+  shared = await createSharedRenderableMsel(await getBlueprintToken(), 'EventExport', workerInfo.parallelIndex);
+});
+
+test.afterAll(async () => {
+  if (shared) await deleteMsel(await getBlueprintToken(), shared.id);
+});
+
 for (const theme of BLUEPRINT_THEMES) {
     test.describe(`${theme} theme › Scenario Events Management`, () => {
+    // Per-test names for this test's own records on the shared MSEL.
+    let child: (base: string) => string;
     let token: string;
     let mselId: string;
     let mselName: string;
@@ -111,35 +129,28 @@ for (const theme of BLUEPRINT_THEMES) {
     let controlNumberMarker: string;
     let downloadPath: string | undefined;
 
-    test.beforeEach(async () => {
+    test.beforeEach(async ({}, testInfo) => {
+      child = (base: string) => sharedChildName(base, testInfo, theme);
       token = await getBlueprintToken();
-      mselName = tempBlueprintName('TestBP-EventExport');
-      const msel = await createMsel(token, {
-        name: mselName,
-        description: 'Seeded for scenario event export',
-      });
-      mselId = msel.id;
+      mselId = shared.id;
+      mselName = shared.name;
 
-      descriptionMarker = tempBlueprintName('ExportedDescription');
+      descriptionMarker = child('TestBP-ExportedDescription');
       const event = await createRenderableScenarioEvent(token, mselId, descriptionMarker, {
         deltaSeconds: 300,
       });
 
       // A second DataField value on the same event, so the export is proven to carry more than
       // one column's worth of event data — the plan explicitly calls out "all ... data fields".
-      controlNumberMarker = tempBlueprintName('ExportedControl');
+      controlNumberMarker = child('TestBP-ExportedControl');
       await setScenarioEventFieldValue(token, event.id, 'Control Number', controlNumberMarker);
 
       downloadPath = undefined;
     });
 
     test.afterEach(async () => {
-      // Deleting the MSEL cascades to its scenario events and data fields.
-      try {
-        if (mselId) await deleteMsel(token, mselId);
-      } catch (err) {
-        console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
-      }
+      // Back to "standard DataFields, no events": the export asserts its one event is row 2.
+      await resetSharedRenderableMsel(token, mselId);
       if (downloadPath && fs.existsSync(downloadPath)) {
         fs.unlinkSync(downloadPath);
       }

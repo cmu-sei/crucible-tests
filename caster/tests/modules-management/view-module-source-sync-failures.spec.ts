@@ -69,8 +69,6 @@ for (const theme of CASTER_THEMES) {
       await expect(page.locator('mat-snack-bar-container')).toContainText(
         "'no-such-source' does not name any configured module source."
       );
-      // The error sheet opens a second after an error, so give it the chance.
-      await page.waitForTimeout(1500);
       await expect(page.locator('mat-bottom-sheet-container')).toHaveCount(0);
     });
 
@@ -92,9 +90,8 @@ for (const theme of CASTER_THEMES) {
 
       // expect: the list reloads to show what was synced, and no error
       await reload;
-      await page.waitForTimeout(1500);
-      await expect(page.locator('mat-bottom-sheet-container')).toHaveCount(0);
       await expect(page.getByRole('button', { name: 'Add/Update the Modules from this source' })).toBeEnabled();
+      await expect(page.locator('mat-bottom-sheet-container')).toHaveCount(0);
     });
 
     test('Update Modules From A Module ID That Fails To Sync', async ({ casterAuthenticatedPage: page }) => {
@@ -119,7 +116,6 @@ for (const theme of CASTER_THEMES) {
       await expect(page.locator('mat-snack-bar-container')).toContainText(
         'Failed to sync Modules: fatal: repository not found'
       );
-      await page.waitForTimeout(1500);
       await expect(page.locator('mat-bottom-sheet-container')).toHaveCount(0);
     });
 

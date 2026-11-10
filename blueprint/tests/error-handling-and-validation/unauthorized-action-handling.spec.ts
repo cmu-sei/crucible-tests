@@ -7,16 +7,11 @@
 // What a signed-in user with no Blueprint permissions *sees*. That the API refuses them
 // (401/403 per route) is Blueprint.Api.Tests' job — RouteAuthorizationTests tables every route —
 // so this spec asserts only the UI's gating: the controls a permission-less user is shown, and
-// the ones withheld. A fresh Keycloak user with no realm roles has an empty
-// `/api/me/systempermissions`, so every permission-gated control must be absent or disabled.
+// the ones withheld. The signed-in user is one of the worker's pool users (`user-pool.ts`):
+// no realm roles and a role-less Blueprint row, so `/api/me/systempermissions` is empty and
+// every permission-gated control must be absent or disabled.
 
 import { test, expect, Services } from '../../fixtures';
-import {
-  getKeycloakAdminToken,
-  createKeycloakUser,
-  deleteKeycloakUser,
-  tempUsername,
-} from '../../../keycloak-admin';
 import { dashboardCard } from '../../test-helpers';
 
 test.describe('Error Handling and Validation', () => {
@@ -24,40 +19,20 @@ test.describe('Error Handling and Validation', () => {
     // Unauthorized-access specs own their browser context — the shared storage state is admin.
     test.use({ storageState: { cookies: [], origins: [] } });
 
-    let adminToken: string;
-    let userId: string | undefined;
-    let username: string;
-    const password = 'TestPassword123!';
-
-    test.beforeEach(async () => {
-      adminToken = await getKeycloakAdminToken();
-      username = tempUsername('blueprinttest');
-      const user = await createKeycloakUser(adminToken, {
-        username,
-        password,
-        email: `${username}@test.local`,
-        realmRoles: [],
-      });
-      userId = user.id;
-    });
-
-    test.afterEach(async () => {
-      if (userId) await deleteKeycloakUser(adminToken, userId);
-    });
-
-    test('User without permissions is shown no privileged controls', async ({ page }) => {
+    // Nothing to reset: the test only reads.
+    test('User without permissions is shown no privileged controls', async ({ page, nonAdminUser }) => {
       // 1. Sign in as the permission-less user.
       await page.goto(Services.Blueprint.UI);
       const usernameField = page.getByRole('textbox', { name: /username/i });
       await expect(usernameField).toBeVisible({ timeout: 20000 });
-      await usernameField.fill(username);
-      await page.getByRole('textbox', { name: /password/i }).fill(password);
+      await usernameField.fill(nonAdminUser.username);
+      await page.getByRole('textbox', { name: /password/i }).fill(nonAdminUser.password);
 
       // The topbar's Administration item is decided by this response, so it is awaited before
       // the menu is opened: an absent item is then a gating decision, not a load still pending.
       const permissionsLoaded = page.waitForResponse(
         (r) => r.url().includes('/api/me/systempermissions') && r.ok(),
-        { timeout: 60000 }
+        { timeout: 30000 }
       );
       await page.getByRole('button', { name: /sign in/i }).click();
       await expect(page.locator('app-root mat-toolbar').first()).toBeVisible({ timeout: 30000 });

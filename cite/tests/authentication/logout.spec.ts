@@ -6,9 +6,14 @@
 
 import { test, expect, Services, serviceUrlPattern, CITE_THEMES, setCiteTheme } from '../../fixtures';
 
+// Logging out ends the Keycloak session behind the saved admin login, which the
+// other CITE specs keep reusing. Sign in with a session of this spec's own instead.
+test.use({ storageState: { cookies: [], origins: [] } });
+
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Authentication and Authorization`, () => {
     test('Logout Functionality', async ({ citeAuthenticatedPage: page }) => {
+      test.slow(); // Auth redirect can take extended time on cold services
       await setCiteTheme(page, theme);
 
       // 1. Log in with valid credentials (admin/admin)
@@ -40,7 +45,7 @@ for (const theme of CITE_THEMES) {
       await page.goto(Services.Cite.UI);
 
       // expect: User is redirected to Keycloak login page
-      await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 70000 });
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 30000 });
 
       // expect: User must authenticate again
       const usernameField = page.locator('#username');

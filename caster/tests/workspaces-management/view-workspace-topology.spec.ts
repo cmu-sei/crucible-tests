@@ -7,7 +7,18 @@
 import fs from 'fs';
 import path from 'path';
 import { Page } from '@playwright/test';
-import { test, expect, expectCasterProjectOpen, CASTER_THEMES, setCasterTheme } from '../../fixtures';
+import {
+  test,
+  expect,
+  CASTER_THEMES,
+  setCasterTheme,
+  openCasterDirectory,
+  seedCasterProjectPageFree,
+  seedCasterDirectoryPageFree,
+  seedCasterWorkspacePageFree,
+  deleteCasterProjectPageFree,
+  deleteCasterWorkspacePageFree,
+} from '../../fixtures';
 
 // The topology Caster reads from a plan of the Proxmox network, router and
 // machine modules: 9 VMs on 4 vnets. Served in place of the API's answer so
@@ -56,35 +67,6 @@ async function routePlanRun(page: Page, status: string) {
   });
 }
 
-async function openNewWorkspace(page: Page, projectName: string, workspaceName: string) {
-  await expect(page.getByText('My Projects')).toBeVisible();
-
-  await page.locator('[mattooltip="Add New Project"]').click();
-  const projectDialog = page.getByRole('dialog', { name: 'Add Project' });
-  await expect(projectDialog).toBeVisible();
-  await projectDialog.getByRole('textbox', { name: 'Name' }).fill(projectName);
-  await projectDialog.getByRole('button', { name: 'Save' }).click();
-  await expectCasterProjectOpen(page, projectName);
-
-  await page.getByTitle('Add New Directory').click();
-  const dirDialog = page.getByRole('dialog', { name: 'Add Directory' });
-  await expect(dirDialog).toBeVisible();
-  await dirDialog.getByRole('textbox', { name: 'Name' }).fill('Topology_Dir');
-  await dirDialog.getByRole('button', { name: 'Save' }).click();
-  await expect(page.getByRole('button', { name: 'Topology_Dir' })).toBeVisible({ timeout: 10000 });
-
-  await page.getByRole('button', { name: 'Topology_Dir' }).click();
-  await page.getByRole('button', { name: 'WORKSPACES' }).click();
-
-  await page.getByText('Add Workspace').click();
-  const wsDialog = page.getByRole('dialog', { name: 'Add Workspace' });
-  await expect(wsDialog).toBeVisible();
-  await wsDialog.getByRole('textbox', { name: 'Name' }).fill(workspaceName);
-  await wsDialog.getByRole('button', { name: 'Save' }).click();
-
-  await page.getByText(workspaceName, { exact: true }).click();
-}
-
 /** Where a node is drawn, in page coordinates, read from the cytoscape instance on the container. */
 async function nodePosition(page: Page, id: string): Promise<{ x: number; y: number }> {
   return page.locator('cas-workspace-topology .graph').evaluate((container: any, nodeId) => {
@@ -95,81 +77,110 @@ async function nodePosition(page: Page, id: string): Promise<{ x: number; y: num
   }, id);
 }
 
-for (const theme of CASTER_THEMES) {
-  test.describe(`${theme} theme › Workspaces Management`, () => {
+test.describe('Workspaces Management › View Workspace Topology', () => {
+  let projectId: string;
+  let directoryId: string;
+  const directoryName = 'Topology_Dir';
+  let workspaceId: string | null = null;
 
-    test('View Workspace Topology', async ({ casterAuthenticatedPage: page, cleanupCasterProjectByName }) => {
-      await setCasterTheme(page, theme);
+  test.beforeAll(async () => {
+    projectId = await seedCasterProjectPageFree('E2E Shared Project [view-workspace-topology]');
+    directoryId = await seedCasterDirectoryPageFree(projectId, directoryName);
+  });
 
-      const projectName = 'Topology WS Project';
-      await cleanupCasterProjectByName(projectName);
+  test.beforeEach(() => {
+    workspaceId = null;
+  });
 
-      await page.route('**/api/workspaces/*/topology', (route) => route.fulfill({ json: proxmoxTopology }));
+  test.afterEach(async () => {
+    if (workspaceId) {
+      await deleteCasterWorkspacePageFree(workspaceId);
+    }
+  });
 
-      await openNewWorkspace(page, projectName, 'Topology_Workspace');
+  test.afterAll(async () => {
+    await deleteCasterProjectPageFree(projectId);
+  });
 
-      // 1. Switch to the Topology View
-      await page.getByRole('radio', { name: 'topology' }).click();
-      const view = page.locator('cas-workspace-topology');
+  for (const theme of CASTER_THEMES) {
+    test.describe(`${theme} theme`, () => {
 
-      // expect: the plan the topology came from, a legend, and a drawn graph
-      await expect(view.getByText('Plan from 2026-10-13')).toBeVisible({ timeout: 10000 });
-      await expect(view.locator('.legend')).toContainText('create');
-      await expect(view.locator('.graph canvas').first()).toBeVisible();
+      test('View Workspace Topology', async ({ casterAuthenticatedPage: page }, testInfo) => {
+        await setCasterTheme(page, theme);
 
-      // expect: the legend explains itself
-      await view.locator('.legend-item', { hasText: 'replace' }).hover();
-      await expect(page.locator('mat-tooltip-component')).toHaveText('Applying this plan destroys it and builds it again');
+        const workspaceName = `Topology_WS_${theme}_${testInfo.repeatEachIndex}`;
+        workspaceId = await seedCasterWorkspacePageFree(directoryId, workspaceName);
 
-      // 2. Click the router
-      const router = 'module.fw_edge.proxmox_virtual_environment_vm.vm';
-      await expect
-        .poll(() => view.locator('.graph').evaluate((c: any) => c._cyreg?.cy?.nodes().length ?? 0))
-        .toBeGreaterThan(0);
-      const { x, y } = await nodePosition(page, router);
-      await page.mouse.click(x, y);
+        await page.route('**/api/workspaces/*/topology', (route) => route.fulfill({ json: proxmoxTopology }));
 
-      // expect: its address, size and one row per NIC, in order
-      const details = view.locator('.details');
-      await expect(details.locator('.details-title')).toHaveText('fw-edge-demo');
-      await expect(details.locator('.details-address')).toHaveText(router);
-      await expect(details).toContainText('memory_mb');
-      await expect(details.locator('tr', { hasText: 'nic0' })).toContainText('demo-outside');
-      await expect(details.locator('tr', { hasText: 'nic3' })).toContainText('demo-mgmt');
+        await openCasterDirectory(page, projectId, directoryName);
+        await page.getByRole('button', { name: 'WORKSPACES' }).click();
+        await page.getByText(workspaceName, { exact: true }).click();
 
-      // expect: the graph fits the tab, so the tab has nothing to scroll
-      const tabBody = page.locator('.mat-mdc-tab-body-active .mat-mdc-tab-body-content');
-      expect(await tabBody.evaluate((el) => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
+        // 1. Switch to the Topology View
+        await page.getByRole('radio', { name: 'topology' }).click();
+        const view = page.locator('cas-workspace-topology');
 
-      // 3. Go full screen
-      // Away from the view toggle, whose tooltip covers the button.
-      await page.mouse.move(x, y + 100);
-      await view.getByRole('button', { name: 'Full screen' }).click();
+        // expect: the plan the topology came from, a legend, and a drawn graph
+        await expect(view.getByText('Plan from 2026-10-13')).toBeVisible({ timeout: 10000 });
+        await expect(view.locator('.legend')).toContainText('create');
+        await expect(view.locator('.graph canvas').first()).toBeVisible();
 
-      // expect: the topology fills the screen, and its tooltips still show
-      await expect.poll(() => page.evaluate(() => document.fullscreenElement?.className)).toBe('topology');
-      await view.locator('.legend-item', { hasText: 'external' }).hover();
-      await expect(page.locator('mat-tooltip-component')).toHaveText(
-        'A network this workspace connects machines to but does not create'
-      );
+        // expect: the legend explains itself
+        await view.locator('.legend-item', { hasText: 'replace' }).hover();
+        await expect(page.locator('mat-tooltip-component')).toHaveText('Applying this plan destroys it and builds it again');
 
-      // 4. Leave full screen
-      await view.getByRole('button', { name: 'Exit full screen' }).click();
-      await expect.poll(() => page.evaluate(() => document.fullscreenElement)).toBeNull();
-      await expect(view.getByRole('button', { name: 'Full screen' })).toBeVisible();
+        // 2. Click the router
+        const router = 'module.fw_edge.proxmox_virtual_environment_vm.vm';
+        await expect
+          .poll(() => view.locator('.graph').evaluate((c: any) => c._cyreg?.cy?.nodes().length ?? 0))
+          .toBeGreaterThan(0);
+        const { x, y } = await nodePosition(page, router);
+        await page.mouse.click(x, y);
+
+        // expect: its address, size and one row per NIC, in order
+        const details = view.locator('.details');
+        await expect(details.locator('.details-title')).toHaveText('fw-edge-demo');
+        await expect(details.locator('.details-address')).toHaveText(router);
+        await expect(details).toContainText('memory_mb');
+        await expect(details.locator('tr', { hasText: 'nic0' })).toContainText('demo-outside');
+        await expect(details.locator('tr', { hasText: 'nic3' })).toContainText('demo-mgmt');
+
+        // expect: the graph fits the tab, so the tab has nothing to scroll
+        const tabBody = page.locator('.mat-mdc-tab-body-active .mat-mdc-tab-body-content');
+        expect(await tabBody.evaluate((el) => el.scrollHeight - el.clientHeight)).toBeLessThanOrEqual(1);
+
+        // 3. Go full screen
+        // Away from the view toggle, whose tooltip covers the button.
+        await page.mouse.move(x, y + 100);
+        await view.getByRole('button', { name: 'Full screen' }).click();
+
+        // expect: the topology fills the screen, and its tooltips still show
+        await expect.poll(() => page.evaluate(() => document.fullscreenElement?.className)).toBe('topology');
+        await view.locator('.legend-item', { hasText: 'external' }).hover();
+        await expect(page.locator('mat-tooltip-component')).toHaveText(
+          'A network this workspace connects machines to but does not create'
+        );
+
+        // 4. Leave full screen
+        await view.getByRole('button', { name: 'Exit full screen' }).click();
+        await expect.poll(() => page.evaluate(() => document.fullscreenElement)).toBeNull();
+        await expect(view.getByRole('button', { name: 'Full screen' })).toBeVisible();
     });
 
-    test('View Workspace Topology After Apply', async ({ casterAuthenticatedPage: page, cleanupCasterProjectByName }) => {
+    test('View Workspace Topology After Apply', async ({ casterAuthenticatedPage: page }, testInfo) => {
       await setCasterTheme(page, theme);
 
-      const projectName = 'Applied Topology WS Project';
-      await cleanupCasterProjectByName(projectName);
+      const workspaceName = `Applied_Topology_WS_${theme}_${testInfo.repeatEachIndex}`;
+      workspaceId = await seedCasterWorkspacePageFree(directoryId, workspaceName);
 
       // The plan's run, already applied: its "create" outlines no longer describe anything.
       await routePlanRun(page, 'Applied');
       await page.route('**/api/workspaces/*/topology', (route) => route.fulfill({ json: appliedTopology() }));
 
-      await openNewWorkspace(page, projectName, 'Applied_Topology_Workspace');
+      await openCasterDirectory(page, projectId, directoryName);
+      await page.getByRole('button', { name: 'WORKSPACES' }).click();
+      await page.getByText(workspaceName, { exact: true }).click();
       await page.getByRole('radio', { name: 'topology' }).click();
       const view = page.locator('cas-workspace-topology');
 
@@ -183,14 +194,11 @@ for (const theme of CASTER_THEMES) {
         .toBe(0);
     });
 
-    test('View Workspace Topology After Failed Apply', async ({
-      casterAuthenticatedPage: page,
-      cleanupCasterProjectByName,
-    }) => {
+    test('View Workspace Topology After Failed Apply', async ({ casterAuthenticatedPage: page }, testInfo) => {
       await setCasterTheme(page, theme);
 
-      const projectName = 'Failed Topology WS Project';
-      await cleanupCasterProjectByName(projectName);
+      const workspaceName = `Failed_Topology_WS_${theme}_${testInfo.repeatEachIndex}`;
+      workspaceId = await seedCasterWorkspacePageFree(directoryId, workspaceName);
 
       // The apply failed before building the router and the web server.
       const router = 'module.fw_edge.proxmox_virtual_environment_vm.vm';
@@ -200,7 +208,9 @@ for (const theme of CASTER_THEMES) {
         route.fulfill({ json: appliedTopology([router, web]) })
       );
 
-      await openNewWorkspace(page, projectName, 'Failed_Topology_Workspace');
+      await openCasterDirectory(page, projectId, directoryName);
+      await page.getByRole('button', { name: 'WORKSPACES' }).click();
+      await page.getByText(workspaceName, { exact: true }).click();
       await page.getByRole('radio', { name: 'topology' }).click();
       const view = page.locator('cas-workspace-topology');
 
@@ -227,15 +237,17 @@ for (const theme of CASTER_THEMES) {
       );
     });
 
-    test('Export Workspace Topology', async ({ casterAuthenticatedPage: page, cleanupCasterProjectByName }, testInfo) => {
+    test('Export Workspace Topology', async ({ casterAuthenticatedPage: page }, testInfo) => {
       await setCasterTheme(page, theme);
 
-      const projectName = 'Export Topology WS Project';
-      await cleanupCasterProjectByName(projectName);
+      const workspaceName = `Export_Topology_WS_${theme}_${testInfo.repeatEachIndex}`;
+      workspaceId = await seedCasterWorkspacePageFree(directoryId, workspaceName);
 
       await page.route('**/api/workspaces/*/topology', (route) => route.fulfill({ json: proxmoxTopology }));
 
-      await openNewWorkspace(page, projectName, 'Export_Topology_Workspace');
+      await openCasterDirectory(page, projectId, directoryName);
+      await page.getByRole('button', { name: 'WORKSPACES' }).click();
+      await page.getByText(workspaceName, { exact: true }).click();
       await page.getByRole('radio', { name: 'topology' }).click();
       const view = page.locator('cas-workspace-topology');
       await expect(view.locator('.graph canvas').first()).toBeVisible({ timeout: 10000 });
@@ -247,7 +259,7 @@ for (const theme of CASTER_THEMES) {
       const download = await downloadPromise;
 
       // expect: a PNG named for the workspace
-      expect(download.suggestedFilename()).toBe('Export_Topology_Workspace-topology.png');
+      expect(download.suggestedFilename()).toBe(`${workspaceName}-topology.png`);
       const png = fs.readFileSync(await download.path());
       expect(png.subarray(1, 4).toString()).toBe('PNG');
 
@@ -281,25 +293,24 @@ for (const theme of CASTER_THEMES) {
       await expect.poll(() => page.evaluate(() => (window as any).printed?.src?.slice(0, 22))).toBe(
         'data:image/png;base64,'
       );
-      expect(await page.evaluate(() => (window as any).printed.title)).toBe('Export_Topology_Workspace-topology');
+      expect(await page.evaluate(() => (window as any).printed.title)).toBe(`${workspaceName}-topology`);
 
       // expect: the page put back afterwards
       await expect(page.locator('img.cas-topology-print')).toHaveCount(0);
-      await expect(page).not.toHaveTitle('Export_Topology_Workspace-topology');
+      await expect(page).not.toHaveTitle(`${workspaceName}-topology`);
     });
 
-    test('View Workspace Topology Before Any Plan', async ({
-      casterAuthenticatedPage: page,
-      cleanupCasterProjectByName,
-    }) => {
+    test('View Workspace Topology Before Any Plan', async ({ casterAuthenticatedPage: page }, testInfo) => {
       await setCasterTheme(page, theme);
 
-      const projectName = 'Empty Topology WS Project';
-      await cleanupCasterProjectByName(projectName);
+      const workspaceName = `Empty_Topology_WS_${theme}_${testInfo.repeatEachIndex}`;
+      workspaceId = await seedCasterWorkspacePageFree(directoryId, workspaceName);
 
       await page.route('**/api/workspaces/*/topology', (route) => route.fulfill({ json: emptyTopology }));
 
-      await openNewWorkspace(page, projectName, 'Empty_Topology_Workspace');
+      await openCasterDirectory(page, projectId, directoryName);
+      await page.getByRole('button', { name: 'WORKSPACES' }).click();
+      await page.getByText(workspaceName, { exact: true }).click();
 
       await page.getByRole('radio', { name: 'topology' }).click();
 
@@ -307,4 +318,5 @@ for (const theme of CASTER_THEMES) {
       await expect(page.locator('cas-workspace-topology .legend')).toHaveCount(0);
     });
   });
-}
+  }
+});

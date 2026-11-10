@@ -16,6 +16,7 @@ import {
   getCasterToken,
   createCasterTemplate,
   deleteCasterTemplate,
+  sharedCasterTemplate,
   getCasterWorkspace,
   getBlueprintVarsFile,
   getCasterRun,
@@ -40,19 +41,28 @@ async function getPlayerViewTeams(token: string, viewId: string): Promise<any[]>
   }
 }
 
-// A push plans and applies a real Caster run, so leave room for a cold terraform job.
-test.describe.configure({ timeout: 600_000 });
-
 test.describe('Caster Integration', () => {
   let token: string;
   let casterToken: string;
   let template: CasterTemplate | undefined;
+  let ownTemplate: CasterTemplate | undefined;
   let mselId: string | undefined;
+
+  // The run's shared template, which global-setup seeds and no test changes: a push writes
+  // into a workspace of its own MSEL and Remove deletes it. Only when setup could not seed
+  // it does this file create (and delete) its own.
+  test.beforeAll(async () => {
+    template = sharedCasterTemplate('applyable') ?? undefined;
+    if (!template) template = ownTemplate = await createCasterTemplate(await getCasterToken(), APPLYABLE_TEMPLATE);
+  });
+
+  test.afterAll(async () => {
+    if (ownTemplate) await deleteCasterTemplate(await getCasterToken(), ownTemplate);
+  });
 
   test.beforeEach(async () => {
     token = await getBlueprintToken();
     casterToken = await getCasterToken();
-    template = await createCasterTemplate(casterToken, APPLYABLE_TEMPLATE);
   });
 
   test.afterEach(async () => {
@@ -60,19 +70,21 @@ test.describe('Caster Integration', () => {
       if (mselId) {
         const r = await removeIntegrations(token, mselId);
         if (r.ok) {
-          await waitForMsel(token, mselId, m => !m.playerViewId && !m.casterWorkspaceId && m.status !== 'Pulling');
+          // Only the slow (deploying) tests leave something to destroy; deploy (180 s) plus
+          // this destroy wait (150 s) stays inside their 360 s budget.
+          await waitForMsel(token, mselId, m => !m.playerViewId && !m.casterWorkspaceId && m.status !== 'Pulling', 150_000);
         }
         await deleteMsel(token, mselId);
       }
     } catch (err) {
       console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
     }
-    await deleteCasterTemplate(casterToken, template);
     mselId = undefined;
-    template = undefined;
   });
 
   test('Push deploys a Caster workspace with each team on its variable, and Remove destroys it', async () => {
+    // Caster push plans and applies a real Terraform run
+    test.slow();
     const msel = await createMsel(token);
     mselId = msel.id;
     await updateMsel(token, msel.id, {
@@ -92,7 +104,7 @@ test.describe('Caster Integration', () => {
     expect(push.ok, push.text).toBe(true);
 
     // expect: the MSEL reaches Deployed with a Player view, a workspace and a run
-    const deployed = await waitForMsel(token, msel.id, m => m.status === 'Deployed', 480_000);
+    const deployed = await waitForMsel(token, msel.id, m => m.status === 'Deployed', 180_000);
     expect(deployed.playerViewId).toBeTruthy();
     expect(deployed.casterWorkspaceId).toBeTruthy();
     expect(deployed.casterRunId).toBeTruthy();
@@ -122,7 +134,7 @@ test.describe('Caster Integration', () => {
       token,
       msel.id,
       m => !m.playerViewId && !m.casterWorkspaceId && m.status !== 'Pulling',
-      480_000
+      150_000
     );
     expect(removed.casterRunId).toBeFalsy();
     expect(await getCasterWorkspace(casterToken, deployed.casterWorkspaceId)).toBeNull();
@@ -160,6 +172,8 @@ test.describe('Caster Integration', () => {
   });
 
   test('A MSEL team named Admin takes the place of Player\'s Admin team', async () => {
+    // Caster push plans and applies a real Terraform run
+    test.slow();
     const msel = await createMsel(token);
     mselId = msel.id;
     await updateMsel(token, msel.id, {
@@ -176,7 +190,7 @@ test.describe('Caster Integration', () => {
     // 1. Push
     const push = await pushIntegrations(token, msel.id);
     expect(push.ok, push.text).toBe(true);
-    const deployed = await waitForMsel(token, msel.id, m => m.status === 'Deployed', 480_000);
+    const deployed = await waitForMsel(token, msel.id, m => m.status === 'Deployed', 180_000);
 
     // expect: the view has one Admin team, the MSEL's, with the role Player gives its own
     const teams = await getPlayerViewTeams(token, deployed.playerViewId);

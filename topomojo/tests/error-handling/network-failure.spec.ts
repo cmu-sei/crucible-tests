@@ -20,19 +20,19 @@ test.describe('Error Handling and Edge Cases', () => {
 
     // 3. Attempt to perform action requiring API call
     const sidebarToggle = page.locator('button[aria-label="Toggle sidebar"], button:has(mat-icon:text("menu"))').first();
+    const sidebar = page.locator('mat-sidenav, mat-drawer, [class*="sidebar"]').first();
+
     const hasSidebarToggle = await sidebarToggle.isVisible({ timeout: 5000 }).catch(() => false);
     if (hasSidebarToggle) {
       await sidebarToggle.click();
-      await page.waitForTimeout(500);
+      await expect(sidebar).toBeVisible({ timeout: 5000 });
     }
 
     // expect: Application remains stable
     // expect: Error message may be displayed
-    await page.waitForTimeout(3000);
-
     // Verify page is still responsive
     const appRoot = page.locator('app-root').first();
-    const isStable = await appRoot.isVisible({ timeout: 5000 }).catch(() => false);
+    const isStable = await appRoot.waitFor({ state: 'visible', timeout: 5000 }).then(() => true, () => false);
     expect(isStable).toBe(true);
 
     // Restore network

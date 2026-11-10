@@ -159,7 +159,7 @@ for (const theme of BLUEPRINT_THEMES) {
           await newDataFieldMenuItem.click({ timeout: 3000 });
           await expect(addDataFieldDialog).toBeVisible({ timeout: 3000 });
         }
-      }).toPass({ timeout: 45000 });
+      }).toPass({ timeout: 30000 });
 
       // Fill in the Name field (required) — second text input in the dialog (first is Display Order)
       const dataFieldNameInput = addDataFieldDialog.getByLabel('Name');

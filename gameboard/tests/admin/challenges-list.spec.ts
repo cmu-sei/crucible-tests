@@ -4,7 +4,7 @@
 // spec: gameboard/gameboard-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, type SharedWorkspace } from '../../fixtures';
 import {
   getAdminToken,
   createGame,
@@ -15,29 +15,18 @@ import {
   CreatedGame,
   CreatedChallengeSpec,
 } from '../../api-helpers';
-import {
-  getTopoMojoAdminToken,
-  createWorkspace,
-  deleteWorkspace,
-  CreatedWorkspace,
-} from '../../../topomojo-helpers';
 
 // Exercises the Gameboard admin challenges listing path. We seed a game with
 // one TopoMojo-backed challenge so the listing is non-empty.
 test.describe('Admin - Challenges', () => {
   let gbToken: string;
-  let tmToken: string;
   let game: CreatedGame;
-  let workspace: CreatedWorkspace;
+  let workspace: SharedWorkspace;
   let spec: CreatedChallengeSpec;
 
-  test.beforeEach(async () => {
+  test.beforeEach(async ({ sharedWorkspace }) => {
     gbToken = await getAdminToken();
-    tmToken = await getTopoMojoAdminToken();
-    workspace = await createWorkspace(tmToken, {
-      name: `ListChal-WS-${Date.now()}`,
-      audience: 'gameboard',
-    });
+    workspace = sharedWorkspace;
     game = await createGame(gbToken, { name: `ListChal-Game-${Date.now()}` });
     spec = await addChallengeSpecToGame(gbToken, game.id, {
       externalId: workspace.id,
@@ -48,7 +37,6 @@ test.describe('Admin - Challenges', () => {
   test.afterEach(async () => {
     if (spec) await deleteChallengeSpec(gbToken, spec.id).catch(() => {});
     if (game) await deleteGame(gbToken, game.id);
-    if (workspace) await deleteWorkspace(tmToken, workspace.id);
   });
 
   test('View Challenge List', async ({ gameboardAuthenticatedPage: page }) => {

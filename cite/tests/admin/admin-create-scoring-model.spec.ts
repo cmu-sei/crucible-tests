@@ -4,8 +4,8 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, CITE_THEMES, setCiteTheme } from '../../fixtures';
-import { navigateToAdminSection, deleteScoringModelByName, waitForDialogOpen } from '../../test-helpers';
+import { test, expect, apiDeleteScoringModelsByName, Services, CITE_THEMES, setCiteTheme } from '../../fixtures';
+import { navigateToAdminSection, waitForDialogOpen } from '../../test-helpers';
 
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Administration - Scoring Models`, () => {
@@ -31,12 +31,12 @@ for (const theme of CITE_THEMES) {
       await expect(saveButton).toBeEnabled({ timeout: 5000 });
       await saveButton.click();
 
+      // Rule D: wait for dialog to close (cleanup will wait for row to exist)
       await expect(dialog).not.toBeVisible({ timeout: 15000 });
-      await page.waitForTimeout(2000);
     });
 
-    test.afterEach(async ({ citeAuthenticatedPage: page }) => {
-      await deleteScoringModelByName(page, TEST_MODEL_NAME);
+    test.afterEach(async () => {
+      await apiDeleteScoringModelsByName(TEST_MODEL_NAME);
     });
   });
 }

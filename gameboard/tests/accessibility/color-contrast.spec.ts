@@ -12,8 +12,8 @@ import { test, expect, Services } from '../../fixtures';
 // failed; the intent is to catch blocking WCAG AA violations.
 test.describe('Accessibility', () => {
   test('Color Contrast Compliance', async ({ gameboardAuthenticatedPage: page }) => {
-    await page.goto(Services.Gameboard.UI + '/home', { waitUntil: 'networkidle' });
-    await page.waitForTimeout(1000);
+    await page.goto(Services.Gameboard.UI + '/home', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('app-game-card').first()).toBeVisible();
 
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2aa', 'wcag21aa'])

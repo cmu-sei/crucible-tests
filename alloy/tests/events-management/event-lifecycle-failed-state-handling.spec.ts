@@ -4,17 +4,16 @@
 // spec: alloy/alloy-test-plan.md
 // seed: seed.spec.ts
 
-import { APIRequestContext, request as pwRequest, test, expect } from '@playwright/test';
+import { APIRequestContext, request as pwRequest } from '@playwright/test';
+import { test, expect } from '../../fixtures';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
-import {
-  createKeycloakUser,
-  deleteKeycloakUser,
-  getKeycloakAdminToken,
-  getUserToken,
-  tempUsername,
-  KeycloakUser,
-} from '../../../keycloak-admin';
+import { getUserToken } from '../../../keycloak-admin';
 import { ALLOY_THEMES, applyAlloyTheme } from '../../test-helpers';
+
+// Override storageState to start with a fresh context: the user-facing test drives the
+// default `page` as one of this worker's pool users (a non-admin), and a context that
+// inherited admin's saved login would sign in as admin instead.
+test.use({ storageState: { cookies: [], origins: [] } });
 
 /** The launch step the seeded failure always fails on. */
 const EXPECTED_STAGE = 'CreatingView';
@@ -187,14 +186,24 @@ async function waitForFailedEvent(
   token: string,
   eventId: string
 ): Promise<AlloyEvent> {
-  await expect
-    .poll(async () => (await getEvent(api, token, eventId)).status, {
-      timeout: 120000,
-      intervals: [2000],
-      message: `Event ${eventId} never reached the Failed status`,
-    })
-    .toBe('Failed');
-
+  // Wait for Failed status with bounded 30s polls (up to 4 attempts = 120s total)
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    try {
+      await expect
+        .poll(async () => (await getEvent(api, token, eventId)).status, {
+          timeout: 30000,
+          intervals: [2000],
+          message: `Event ${eventId} status check attempt ${attempt}/4`,
+        })
+        .toBe('Failed');
+      return getEvent(api, token, eventId);
+    } catch (error) {
+      if (attempt === 4) {
+        throw new Error(`Event ${eventId} never reached the Failed status after 120s`);
+      }
+      // Continue to next attempt
+    }
+  }
   return getEvent(api, token, eventId);
 }
 
@@ -240,7 +249,6 @@ for (const theme of ALLOY_THEMES) {
     let playerAdminToken: string;
     const seededTemplateIds: string[] = [];
     const seededViewIds: string[] = [];
-    let seededUser: KeycloakUser | null = null;
 
     /** Seed a published Event Template that always fails on its first launch attempt. */
     async function seedFailingEventTemplate(name: string): Promise<string> {
@@ -265,6 +273,8 @@ for (const theme of ALLOY_THEMES) {
     test.afterEach(async () => {
       for (const templateId of seededTemplateIds.splice(0)) {
         // Events first: an Event Template cannot be deleted while its Events still exist.
+      // This is also the pool user's reset: the Event the user launched, and the
+      // membership launching gave them, go with it.
         for (const event of await getTemplateEvents(api, adminToken, templateId)) {
           await deleteEvent(api, adminToken, event.id);
         }
@@ -272,10 +282,6 @@ for (const theme of ALLOY_THEMES) {
       }
       for (const viewId of seededViewIds.splice(0)) {
         await deletePlayerView(api, playerAdminToken, viewId);
-      }
-      if (seededUser) {
-        await deleteKeycloakUser(await getKeycloakAdminToken(), seededUser.id, seededUser.realm);
-        seededUser = null;
       }
     });
 
@@ -285,7 +291,7 @@ for (const theme of ALLOY_THEMES) {
 
     test('Event Lifecycle - Failed State Handling', async ({ page }) => {
       // A failing launch is routed through teardown before it settles on Failed.
-      test.setTimeout(300000);
+      test.slow();
 
       const templateName = `ZZ Failed Launch ${Date.now()}`;
 
@@ -383,15 +389,14 @@ for (const theme of ALLOY_THEMES) {
     // endpoint and the admin Events panel.
     test('Failed Launch - User Is Told It Failed But Not The Infrastructure Output', async ({
       page,
+      nonAdminUser,
     }) => {
-      test.setTimeout(300000);
+      test.slow();
 
       const templateName = `ZZ Failed Launch User ${Date.now()}`;
       const templateId = await seedFailingEventTemplate(templateName);
 
-      const username = tempUsername('alloy-failuser');
-      const password = 'Cr4ucible!Test';
-      seededUser = await createKeycloakUser(await getKeycloakAdminToken(), { username, password });
+      const { username, password } = nonAdminUser;
 
       // Every authenticated user picks up ViewEventTemplate on a published Event Template, so
       // this user needs no role or membership to launch it.
@@ -416,7 +421,7 @@ for (const theme of ALLOY_THEMES) {
 
       // expect: the user is told the launch failed, in an assertive live region
       const failureAlert = page.getByRole('alert').filter({ hasText: /failed to launch/i });
-      await expect(failureAlert).toBeVisible({ timeout: 120000 });
+      await expect(failureAlert).toBeVisible({ timeout: 30000 });
       await expect(
         failureAlert.getByText('Please try again. Contact an administrator if it continues to fail.')
       ).toBeVisible();

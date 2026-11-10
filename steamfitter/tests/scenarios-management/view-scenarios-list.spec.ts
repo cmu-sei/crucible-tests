@@ -13,11 +13,11 @@ for (const theme of STEAMFITTER_THEMES) {
     const SCENARIO_NAME = `E2E View Scenario ${Date.now()}`;
     const SCENARIO_DESCRIPTION = 'Seeded so the scenarios list has a known row.';
 
-    test.beforeEach(async () => {
+    test.beforeAll(async () => {
       await seedScenario(SCENARIO_NAME, SCENARIO_DESCRIPTION);
     });
 
-    test.afterEach(async () => {
+    test.afterAll(async () => {
       await deleteScenariosByPrefix(['E2E View Scenario']);
     });
 

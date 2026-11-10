@@ -4,9 +4,9 @@
 // spec: alloy/alloy-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../fixtures';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
-import { ALLOY_THEMES, applyAlloyTheme, createTestEventTemplate, deleteEventTemplateByName } from '../../test-helpers';
+import { ALLOY_THEMES, applyAlloyTheme, createTestEventTemplate, deleteEventTemplateByName, findEventTemplateEditButton } from '../../test-helpers';
 
 for (const theme of ALLOY_THEMES) {
   test.describe(`${theme} theme › Error Handling and Validation`, () => {
@@ -34,13 +34,14 @@ for (const theme of ALLOY_THEMES) {
       await createTestEventTemplate(page, seededTemplateName);
 
       // Open the seeded template's edit dialog
-      await page.getByRole('button', { name: `Edit: ${seededTemplateName}` }).click();
+      await (await findEventTemplateEditButton(page, seededTemplateName)).click();
 
       // expect: Form is displayed
-      await expect(page.getByRole('dialog', { name: 'Edit Event Template' })).toBeVisible();
+      const editDialog = page.getByRole('dialog', { name: 'Edit Event Template' });
+      await expect(editDialog).toBeVisible();
 
       // 2. The Duration Hours field is a spinbutton (number input)
-      const durationField = page.getByRole('spinbutton', { name: 'Duration Hours' });
+      const durationField = editDialog.getByRole('spinbutton', { name: 'Duration Hours' });
       await expect(durationField).toBeVisible();
 
       // 3. Enter valid numeric data
@@ -50,7 +51,8 @@ for (const theme of ALLOY_THEMES) {
       // expect: Validation passes for valid numeric input
 
       // Cancel without saving
-      await page.getByRole('button', { name: 'Cancel' }).first().click();
+      await editDialog.getByRole('button', { name: 'Cancel' }).click();
+      await expect(editDialog).toBeHidden();
     });
   });
 }

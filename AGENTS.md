@@ -4,27 +4,36 @@ This file provides guidance to coding agents when working with code in this repo
 
 ## Repository purpose
 
-End-to-end Playwright tests for the **Crucible** platform — a suite of apps (`alloy`, `blueprint`, `caster`, `cite`, `gallery`, `gameboard`, `keycloak`, `moodle`, `player`, `steamfitter`, `topomojo`) that all sit behind Keycloak SSO. Tests drive real browsers against a locally-running Crucible stack; there are no mocks. The stack is started outside this repo (via the `crucible-development` dev container running Aspire — F5 in VS Code or `aspire run` from `Crucible.AppHost`).
+End-to-end Playwright tests for the **Crucible** platform — a suite of apps (`alloy`, `blueprint`, `caster`, `cite`, `gallery`, `gameboard`, `keycloak`, `moodle`, `player`, `steamfitter`, `topomojo`) that all sit behind Keycloak SSO. Tests drive real browsers against a locally-running Crucible stack; there are no mocks.
+
+**Running the stack for tests:** The suite expects the Aspire stack with UIs in production mode. Each `Launch__Prod__N=<App>` entry is passed as an environment variable when launching `aspire run` from `/workspaces/crucible-development/Crucible.AppHost`. Do NOT use `Launch__<App>=true` (which forces the ~1.5 GB dev mode), and do NOT rely on `appsettings.Development.json` alone — its `AddAllApplications: true` only registers every app as manual-start, so nothing comes up without the `Launch__Prod__N=<App>` env vars. `aspire run` does not read the `.env/*.env` files tracked in this repository. Exactly one stack runs per machine; an agent that finds it down should report that rather than starting its own. See `/workspaces/crucible-development/README.md` "UI Development vs Production Mode" for details. Caster's module specs also require Gitea seeded (`aspire resource gitea start`, then the dev-container's `seed-gitea.sh`, then `caster/module-catalog/publish.sh`); the `run-tests.sh` pre-flight reports when Gitea is not ready.
 
 ## Running tests
 
 ```bash
-./run-tests.sh <app>                     # all tests for one app
-./run-tests.sh all                       # everything
-./run-tests.sh all --app cite            # same as `./run-tests.sh cite`
-./run-tests.sh quick [--app <app>]       # smoke tests (grep "login|home")
-./run-tests.sh ui | headed | debug [app] # interactive modes
-./run-tests.sh <app> --filter <pattern>  # --grep wrapper
-./run-tests.sh <cmd> --workers <n>       # parallel workers (count or %, e.g. 4 or 50%); overrides config default
-./run-tests.sh <cmd> --theme light|dark  # one theme variant only (untheme'd tests still run)
-./run-tests.sh <cmd> --no-check          # skip the Keycloak/app health check
-./run-tests.sh report                    # open last HTML report
+./run-tests.sh <app>                              # all tests for one app
+./run-tests.sh all                                # everything
+./run-tests.sh all --app cite                     # same as `./run-tests.sh cite`
+./run-tests.sh quick [--app <app>]                # smoke tests (grep "login|home")
+./run-tests.sh ui | headed | debug [app]          # interactive modes
+./run-tests.sh <app> --filter <pattern>           # --grep wrapper
+./run-tests.sh <cmd> --browser chromium|firefox|all  # default chromium
+./run-tests.sh <cmd> --exclude <app>              # exclude an app (repeatable)
+./run-tests.sh <cmd> --workers <n>                # parallel workers (count or %, e.g. 4 or 50%); overrides config default
+./run-tests.sh <cmd> --theme light|dark           # one theme variant only (untheme'd tests still run)
+./run-tests.sh <cmd> --no-check                   # skip the Keycloak/app health check
+./run-tests.sh report                             # open last HTML report
 
 # Direct Playwright (when the wrapper is in the way):
 npx playwright test <app>/tests/                      # app subset
 npx playwright test <path/to/file.spec.ts>            # single file
 npx playwright test -g "test title fragment"          # single test
-npx playwright test --project=chromium                # pick a browser project
+CRUCIBLE_BROWSERS=firefox npx playwright test --project=firefox  # pick a browser project (requires CRUCIBLE_BROWSERS)
+CRUCIBLE_SKIP_AUTH_PROVISION=1 npx playwright test <spec>       # global-setup provisions no auth state (expiry drills); fresh saved state is reused regardless
+
+# Verify shared-data changes (file/worker/run-level seeding):
+npx playwright test <edited files> --project=chromium --repeat-each 2  # catches silent dependency on fresh state
+npx playwright test <two consumer files> --project=chromium --workers 2  # catches cross-worker interference (run/worker-level only)
 ```
 
 `run-tests.sh` pre-flight-checks Keycloak and the target app's URL; `--no-check` skips this when the stack is known-good. Reports land in `playwright-report/`; artifacts (traces, video on failure, screenshots) in `test-results/`.
@@ -33,7 +42,7 @@ npx playwright test --project=chromium                # pick a browser project
 
 ### Test discovery
 
-`playwright.config.ts` sets `testMatch: '**/tests/**/*.spec.ts'` — **only files under a `tests/` subdirectory are discovered**. Top-level helpers (`seed.spec.ts`, `*-helpers.ts`) are intentionally excluded. `fullyParallel: false`; local runs retry once, CI retries twice with `workers: 1`. Per-test timeout is 5 minutes (auth redirects can legitimately take that long on cold services).
+`playwright.config.ts` sets `testMatch: '**/tests/**/*.spec.ts'` — **only files under a `tests/` subdirectory are discovered**. Top-level helpers (`seed.spec.ts`, `*-helpers.ts`) are intentionally excluded. `fullyParallel: false`; local runs have no retries (flakiness must surface immediately), CI retries twice with `workers: 2`. Local default is `workers: 4`. Per-test timeout is 2 minutes (the slowest passing test took ~43 s at baseline); `test.slow()` triples it for the specs that deploy VMs.
 
 ### Service URLs — single source of truth
 
@@ -71,22 +80,21 @@ Each app has a thin `{app}/fixtures.ts` that wraps this helper in an `{app}Authe
 For an app with many authenticated tests, opt into the repository's
 pre-authenticated storage-state infrastructure:
 
-1. Add the app's URL and authenticated shell signal to `PROVISION` in
-   `global-setup.ts`.
-2. In the app fixture, load `authStatePath('<app>')` when it exists, navigate
-   directly to the app, and use `waitForFirstVisible` to distinguish the
-   authenticated shell from a Keycloak login form.
-3. Fall back to `authenticateWithKeycloak` when the state is missing or
-   expired. Authentication, logout, and unauthorized-access specs must override
+1. Add the app's URL and authenticated shell signal to `provisionTargets()` in
+   `provision-targets.ts`.
+2. In the app fixture, set `storageState: async ({ browser }, use) => use(await
+   freshAuthStatePath('<app>', browser))` (refreshes a state that is about to expire),
+   then open the app through `ensureAuthenticatedShell`, which uses `waitForFirstVisible`
+   to tell the authenticated shell from a Keycloak login form.
+3. `ensureAuthenticatedShell` falls back to `authenticateWithKeycloak` when the state is
+   missing or expired. Authentication, logout, and unauthorized-access specs must override
    `storageState` with an empty context.
 
-Do not use `Promise.race` over `locator.waitFor()` calls: losing waits continue
-to run and can consume their whole timeout. Use `waitForFirstVisible` for
-alternative visible states. Do not add fixed sleeps or swallowed long
-`waitForResponse` calls when a route, response, dialog close, or visible DOM
-state can prove the action completed. Use `settleForResponse` only for
-best-effort passive load settling; retain an action-paired response wait when
-the response itself is the behavior under test.
+**`authenticateWithKeycloak` only short-circuits when a registered signal exists.** When a page already holds a valid session but the app has no registered signal, the helper waits up to 15 s for a Keycloak redirect that never comes. Any page that holds a restored session and may reach `authenticateWithKeycloak` (directly from a spec, or through a fixture that does not use `ensureAuthenticatedShell`) must first have `setAuthenticatedSignal(page, <shell locator>)` registered (see `alloy/fixtures.ts`) so the helper can detect the authenticated shell and return early.
+
+**Saved login state leaks into all contexts created from the same browser.** App fixtures set `storageState` to the admin's saved login, and Playwright applies this to every `browser.newContext()`, `browser.newPage()`, `chromium.launch()`-created context, and `request.newContext()` that doesn't override it. A context meant for another user (temp user, pool user) or for no user MUST pass `storageState: { cookies: [], origins: [] }`, or it silently starts authenticated as admin. See "Test data hygiene" below for temp-user cleanup rules.
+
+The `waitForFirstVisible` helper (in `shared-fixtures.ts`) waits for the first of several locators to become visible — use it when a page can legitimately land in more than one state. `settleForResponse` waits passively for a best-effort load signal; use it only for settling, not when the response itself is what the test asserts. See "Waiting rules" below for comprehensive guidance; `npm run check:waits` enforces these patterns and runs on every PR.
 
 ### Per-app layout
 
@@ -134,7 +142,8 @@ These live at the root (not inside any app dir) because multiple apps use them. 
 - Import `test`/`expect` from the app's `fixtures.ts`, not from `@playwright/test`.
 - Use `Services.X.UI`/`Services.X.API` for URLs — never hardcode ports.
 - Tests must be independent; the config runs serially but depends on no ordering.
-- **Every test must clean up the data it seeds** — see "Test data hygiene" below.
+- **Every test must clean up the data it seeds, at the level it was created** — see "Test data hygiene" below.
+- **Setting a theme reloads the page.** Each app's `set<App>Theme` helper writes the persisted preference and reloads, so call it before building any in-page state. Tests whose subject IS the theme toggle use `toggle<App>ThemeViaMenu` instead.
 - Long-running waits should use the fixture-level timeouts already configured — don't override `actionTimeout`/`navigationTimeout` per call without a reason.
 - When re-enabling a `test.skip(...)`, read the comment above it first — some skips are waiting on a service-side fix and should stay skipped until it lands.
 - A conditional `test.skip(...)` fails `npm run check:skips` — a skip that a runtime condition decides is how a broken scenario reports green. The two ways to gate a test anyway: `requirePrecondition`/`requireAppSources` for something the deployment owns, or, to hold a spec that drives real VMs to a single browser project, `test.skip(({ browserName }) => browserName !== 'chromium', '<why one project>')`. The project gate is allowed only when the condition mentions `browserName` and string literals and nothing else — the moment an env var or a probe result joins it, it is a precondition and the check says so.
@@ -143,6 +152,48 @@ These live at the root (not inside any app dir) because multiple apps use them. 
   reporting" below — and either assert the actual (buggy) behavior with a comment
   explaining why, or `test.skip(...)` with a `Pending upstream:` comment. Do not silently
   loosen an assertion, add a retry, or change a selector to mask a real product bug.
+
+### Waiting rules (REQUIRED)
+
+**Wait for the specific thing the next step needs** — an element, a URL, a response paired with the action that triggers it, a dialog detaching, a row count. Never for time.
+
+**Forbidden patterns:**
+- `page.waitForTimeout` — sleeping for fixed time is not acceptable.
+- `networkidle` — Angular apps with SignalR/polling never go idle; this waits out the full navigation timeout.
+- `Promise.race` over `waitFor`/`waitForURL`/`waitForSelector`/`waitForResponse` — losing waits continue to run and consume their whole timeout. Use `waitForFirstVisible` (in `shared-fixtures.ts`) when a page can legitimately land in more than one state.
+
+**Assertion-based waiting:**
+- Web-first `expect(...)` assertions (`toBeVisible`, `toHaveText`, `toHaveCount`, `toHaveURL`) already retry up to `expect.timeout` (10 s by default) — do not precede them with a sleep.
+- Negative assertions ("nothing happened", "still on page", "no admin link") must be anchored on a **positive** completion signal first. Wait for the page's heading, the toast, the redirect target URL, or the unaffected list's row count, *then* assert the negative. If no positive signal exists, use an escape (see below) and cap the wait at 1000 ms.
+- `locator.isVisible({ timeout })` ignores `timeout` and returns immediately. Use `locator.waitFor({ state: 'visible', timeout }).then(() => true, () => false)` or `waitForFirstVisible` for a "does this appear" probe.
+
+**Timeouts:**
+- Per-call `timeout` in a spec may not exceed 30000 ms. Do not call `test.setTimeout`.
+- If a step legitimately takes longer (VM deploys), the wait must be on a state change (`expect.poll` or `toHaveText` with explicit `timeout` ≤ 30000 per poll) and the spec gets `test.slow()` with a comment naming the slow operation.
+
+**Enforcement:**
+`npm run check:waits` runs in `npm run validate` and in CI on every PR. To escape a check (only when the app genuinely lacks a completion signal), add `// allow-wait-antipattern: <why>` on the line immediately above, where `<why>` names what the app lacks — not "flaky" or "timing".
+
+#### Replacement catalogue
+
+Every `waitForTimeout` / `networkidle` falls into one of these. Apply the matching rule; if none fits, keep the call with an escape comment and list it in the commit message.
+
+| Rule | Pattern found | Replace with |
+|---|---|---|
+| **A** | `sleep` immediately followed by an `expect(...).toBeVisible()` / `toHaveText` / `toHaveCount` / `toHaveURL` | Delete the sleep. The web-first assertion already retries up to `expect.timeout` (10 s). |
+| **B** | `searchBox.fill(x); sleep` | `await expect(rows.filter({ hasText: x })).toHaveCount(1)` (or `.first()).toBeVisible()`), i.e. wait for the filtered row the test is about to use. |
+| **C** | `link/button.click(); sleep` before interacting with a newly shown panel/page | `await expect(<first element the next step uses>).toBeVisible()`; for navigation, `await expect(page).toHaveURL(/pattern/)`. |
+| **D** | `expect(dialog).not.toBeVisible(); sleep` before checking a list refreshed | `await expect(<row/item being created or deleted>).toHaveCount(n)` — the list state is the completion signal. If the row is only visible after a search, apply **B** first. |
+| **E** | `sleep` before a *negative* check ("nothing happened", "still on page", "no admin link") | First wait for a **positive** completion signal (the page's heading, the toast, the redirect target URL, the row count of the unaffected list), *then* assert the negative. If no positive signal exists, keep the sleep with `// allow-wait-antipattern:` and cap it at 1000 ms. |
+| **F** | `for (...) { if (cond) break; sleep }` polling loop | `await expect.poll(async () => <cond value>, { timeout: <old loop total> }).toBe(...)`, or `await expect(locator.first()).toBeVisible({ timeout })` when the condition is "at least one". |
+| **G** | `hover(); sleep` (animation / tooltip) | `await expect(<tooltip or revealed control>).toBeVisible()`. |
+| **H** | `page.waitForLoadState('load'); sleep(3000)` in `beforeEach` | Wait for that section's anchor: its heading (`getByRole('heading', { name })`) or table (`expect(table.locator('tbody tr').first()).toBeVisible()`); if the list may legitimately be empty, use the heading. |
+| **I** | `page.goto(url, { waitUntil: 'networkidle' })` | `page.goto(url, { waitUntil: 'domcontentloaded' })` + `await expect(<page-specific element the test asserts next>).toBeVisible()`. If the test asserts nothing specific, use the app's `appShellSelector` from `provisionTargets()` in `provision-targets.ts`. |
+| **J** | `page.waitForLoadState('networkidle')` | Same anchor as **I**; delete the call. |
+| **K** | `sleep` after `fill()` on a debounced search input (300–500 ms) | Apply **B**; if the app filters on `keyup` (alloy — see memory `alloy-ui-test-gotchas`), use `pressSequentially` and then **B**. |
+| **L** | `sleep` waiting for a SignalR/real-time update | `await expect(<updated element>).toHaveText(...)` with `{ timeout: 15000 }` at most; the assertion is the wait. |
+
+Do **not** introduce: `waitForSelector` (use locators), `waitForLoadState('networkidle')`, per-call `timeout` above 30000 in specs, `test.setTimeout`, new `Promise.race` over waits.
 
 ### App bug reporting (REQUIRED)
 
@@ -182,12 +233,22 @@ bug inferred from a test failure alone. Each entry should include what's wrong, 
 
 ### Test data hygiene (REQUIRED)
 
-**Every test must create or explicitly ensure every record it needs, and that
-same test must delete the data it created.** Never depend on an existing row,
-the order of another test, or the current database shape. Leaving seeded rows
-behind is not acceptable.
+The suite now permits **reduced test isolation** for speed: shared test data at file, worker, or run level. Three sharing levels are allowed, in order of preference:
 
-Rules (apply to every app's suite):
+| Level | Mechanism | Lifetime | Use when |
+|---|---|---|---|
+| **file** | `test.beforeAll`/`afterAll` inside the describe (hoisted *above* a `for (const theme of THEMES)` loop when the record is theme-agnostic) | one spec file, one worker | all tests in the file only read the record, or mutators restore it |
+| **worker** | fixture with `{ scope: 'worker' }` (precedent: `gallery/fixtures.ts` `seededCollection`) | one worker process | many files read the same shape of record; name must embed `parallelIndex` |
+| **run** | created in `global-setup.ts`, ids written to `.auth/<app>-seed.json`, deleted in `global-teardown.ts` | whole run | the record is never mutated by any consumer (a TopoMojo workspace id, a read-only evaluation, a Keycloak user pool) |
+
+Rules:
+- A **mutator** (any test that edits, deletes, advances, submits, reorders, or asserts a count on the shared record's children) gets its own per-test record, or restores the exact prior state in `afterEach`. The implementer's report must list, per file, which tests were classified as readers vs mutators and why.
+- Shared records have **deterministic names** (`E2E Shared <thing> [w<parallelIndex>]`) covered by the app's global-teardown purge prefix; add the prefix if missing. Never `Date.now()` in a shared name. Name worker-scoped records by `testInfo.parallelIndex` (stable worker slot, `0..workers-1`), not `workerIndex` (increments when a worker restarts). Worker-scoped fixtures go in the SECOND type parameter: `base.extend<TestFixtures, WorkerFixtures>`.
+- No consumer deletes a shared record. Cleanup belongs to the level that created it.
+- **Shared records currently seeded at run level**: `.auth/cite-seed.json` (CITE shared evaluations), `.auth/gameboard-seed.json` (Gameboard shared TopoMojo workspaces), `.auth/blueprint-seed.json` (Blueprint's shared Caster project and templates), `.auth/user-pool.json` (Keycloak pool users `e2e-pool-<checkout-hash>-<n>`, one pool per checkout so concurrent worktree runs never share users, leased two per worker slot via `poolUsers(slot, n)` in `user-pool.ts`).
+- **Verification for every sharing change**: `npx playwright test <edited files> --project=chromium --repeat-each 2` (catches a test that silently depended on fresh state), and for run/worker-level records `npx playwright test <two consumer files> --project=chromium --workers 2` (catches cross-worker interference).
+
+**Per-test seeding is still the default for anything a test mutates.** The following rules apply to all test data (per-test, file-level, worker-level, or run-level):
 
 - **Clean up in `afterEach`/`afterAll`** (or a `try/finally` for API-only setup). The
   cleanup must run even when the test body throws — never put it inline at the end of
@@ -211,3 +272,4 @@ Rules (apply to every app's suite):
   up (CITE's `global-teardown.ts` deletes leftovers by name prefix after the suite), it
   only covers the crash-before-cleanup case. Tests must still clean up themselves, and if
   you seed data under a new name, make sure the app's purge prefixes cover it.
+- **Global-teardown purges run at the end of EVERY run whose path filters include that app.** Two Playwright runs that include the same app must never run concurrently against the same stack — one run's teardown deletes the other's records mid-test. A run filtered only by `-g`/`--grep` (or a bare file-name fragment) counts as including every app, so it provisions and purges all apps. Playwright matches every positional filter as a regex against the full file path, so only a path *into* an app directory (`cite/tests/...`, `player/`) is confined to that app — a bare `player` also runs `playerVm/` specs and counts as every app. Always include an app path when running a subset. `run-tests.sh --exclude <app>` sets `CRUCIBLE_EXCLUDE_APPS` (comma-separated), which `pathFiltersIncludeApp` honours, so an excluded app is neither provisioned nor purged; set it yourself when running Playwright directly with an equivalent `--grep-invert`.

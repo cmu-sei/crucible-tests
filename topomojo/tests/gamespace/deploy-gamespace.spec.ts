@@ -4,53 +4,68 @@
 // spec: topomojo/topomojo-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, Services } from '../../fixtures';
+import {
+  createWorkspace,
+  deleteGamespace,
+  deleteWorkspace,
+  getTopoMojoAdminToken,
+  setWorkspaceChallenge,
+} from '../../../topomojo-helpers';
 
 test.describe('Gamespace Management', () => {
+  let workspaceId: string | undefined;
+  let gamespaceId: string | undefined;
+
+  test.beforeEach(async () => {
+    // A published workspace of its own. It has no VM templates, so the deploy is a
+    // gamespace registration with nothing to boot — no real VM is started. TopoMojo
+    // clones the workspace's challenge into the gamespace and needs one variant to
+    // pick, so the challenge gets a minimal one.
+    const token = await getTopoMojoAdminToken();
+    workspaceId = (await createWorkspace(token, {
+      name: `E2E Deploy Gamespace ${Date.now()}`,
+      audience: 'everyone',
+    })).id;
+    await setWorkspaceChallenge(token, workspaceId, {
+      text: 'Deploy check.',
+      variants: [{
+        text: 'Variant 1',
+        sections: [{ name: 'Main', text: '', questions: [{ text: 'Ready?', answer: 'yes', penalty: 0 }] }],
+      }],
+    });
+  });
+
+  test.afterEach(async () => {
+    const token = await getTopoMojoAdminToken();
+    if (gamespaceId) await deleteGamespace(token, gamespaceId);
+    if (workspaceId) await deleteWorkspace(token, workspaceId);
+    gamespaceId = undefined;
+    workspaceId = undefined;
+  });
+
   test('Deploy Gamespace', async ({ topomojoAuthenticatedPage: page }) => {
+    // 1. Navigate to the gamespace preview for the published workspace
+    // expect: Preview page displays with the Start (deploy) option
+    await page.goto(`${Services.TopoMojo.UI}/mojo/${workspaceId}`, { waitUntil: 'domcontentloaded' });
+    const startButton = page.getByRole('button', { name: 'Start', exact: true });
+    await expect(startButton).toBeVisible();
 
-    // 1. Navigate to gamespace preview for a published workspace
-    const sidebarToggle = page.locator('button[aria-label="Toggle sidebar"], button:has(mat-icon:text("menu"))').first();
-    const hasSidebarToggle = await sidebarToggle.isVisible({ timeout: 10000 }).catch(() => false);
-    if (hasSidebarToggle) {
-      await sidebarToggle.click();
-      await page.waitForTimeout(500);
-    }
+    // 2. Click 'Start', then confirm. The UI registers (and deploys) the gamespace
+    // with POST /api/gamespace.
+    await startButton.click();
+    const registered = page.waitForResponse(
+      (r) => r.request().method() === 'POST' && /\/api\/gamespace$/.test(new URL(r.url()).pathname),
+    );
+    await page.getByRole('button', { name: 'Confirm', exact: true }).click();
+    const response = await registered;
+    expect(response.ok()).toBe(true);
+    const state: { id?: string; isActive?: boolean } = await response.json();
+    gamespaceId = state.id;
+    expect(state.isActive).toBe(true);
 
-    const gamespaceTab = page.locator('mat-button-toggle:has-text("Gamespace"), button:has-text("Gamespace")').first();
-    const hasTab = await gamespaceTab.isVisible({ timeout: 5000 }).catch(() => false);
-    if (hasTab) {
-      await gamespaceTab.click();
-      await page.waitForTimeout(500);
-    }
-
-    const playableItems = page.locator('[class*="gamespace-card"], [class*="item-card"], mat-list-item');
-    const itemCount = await playableItems.count();
-
-    if (itemCount > 0) {
-      await playableItems.first().click();
-      await page.waitForTimeout(2000);
-
-      // expect: Preview page displays with deploy option
-      // 2. Click 'Deploy' or 'Start' button
-      const deployButton = page.locator('button:has-text("Deploy"), button:has-text("Start"), button:has-text("Launch")').first();
-      const hasDeploy = await deployButton.isVisible({ timeout: 5000 }).catch(() => false);
-
-      if (hasDeploy) {
-        await deployButton.click();
-
-        // expect: Gamespace deployment begins
-        // expect: Loading indicator shows deployment progress
-        await page.waitForTimeout(5000);
-
-        // expect: Deployment may take time depending on VMs
-        // expect: User is navigated to active gamespace page
-        const gamespaceContent = page.locator('[class*="gamespace"], [class*="vm-list"], [class*="active"]').first();
-        const hasContent = await gamespaceContent.isVisible({ timeout: 60000 }).catch(() => false);
-        if (hasContent) {
-          await expect(gamespaceContent).toBeVisible();
-        }
-      }
-    }
+    // expect: The page shows the active gamespace — its End control and countdown
+    await expect(page.getByRole('button', { name: 'End', exact: true }).first()).toBeVisible();
+    await expect(startButton).toHaveCount(0);
   });
 });

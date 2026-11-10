@@ -6,6 +6,9 @@
 
 import { test, expect, Services, serviceUrlPattern, topomojoNavLink } from '../../fixtures';
 
+// Override global storageState so this test starts from a fresh unauthenticated state.
+test.use({ storageState: { cookies: [], origins: [] } });
+
 test.describe('Authentication and Authorization', () => {
   test('Logout Functionality', async ({ topomojoAuthenticatedPage: page }) => {
 
@@ -18,9 +21,7 @@ test.describe('Authentication and Authorization', () => {
     await expect(logoutLink).toBeVisible({ timeout: 10000 });
     await logoutLink.click();
 
-    // expect: User is logged out
-    // expect: User is redirected to login or home page
-    await page.waitForTimeout(3000);
+    // expect: User is logged out and redirected
 
     // 3. Attempt to navigate to TopoMojo UI again
     await page.goto(Services.TopoMojo.UI);

@@ -4,34 +4,28 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen, CASTER_THEMES, setCasterTheme } from '../../fixtures';
+import { test, expect, seedCasterProjectPageFree, seedCasterDirectoryPageFree, deleteCasterProjectPageFree, setCasterTheme, CASTER_THEMES, Services } from '../../fixtures';
 
-for (const theme of CASTER_THEMES) {
-  test.describe(`${theme} theme › Error Handling and Validation`, () => {
-    test('Terraform Syntax Error Handling', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+test.describe('Error Handling and Validation', () => {
+  let projectId: string;
+  let directoryId: string;
+
+  test.beforeAll(async () => {
+    const projectName = 'E2E Shared Project [terraform-syntax-error-handling]';
+    projectId = await seedCasterProjectPageFree(projectName);
+    directoryId = await seedCasterDirectoryPageFree(projectId, 'TF-Error-Dir');
+  });
+
+  test.afterAll(async () => {
+    if (projectId) await deleteCasterProjectPageFree(projectId);
+  });
+
+  for (const theme of CASTER_THEMES) {
+    test(`${theme} theme › Terraform Syntax Error Handling`, async ({ casterAuthenticatedPage: page }) => {
       await setCasterTheme(page, theme);
 
-      await expect(page.getByText('My Projects')).toBeVisible();
-
-      const projectName = `TF Error ${Date.now()}`;
-
-      // Intercept the project-creation API response to capture the project ID for cleanup
-      const responsePromise = page.waitForResponse(
-        (resp) => resp.url().includes('/api/projects') && resp.request().method() === 'POST' && resp.status() === 201
-      );
-      await page.locator('button[mattooltip="Add New Project"]').click();
-      await expect(page.getByRole('dialog', { name: 'Add Project' })).toBeVisible();
-      await page.getByRole('textbox', { name: 'Name' }).fill(projectName);
-      await page.getByRole('button', { name: 'Save' }).click();
-      const response = await responsePromise;
-      const body = await response.json();
-      cleanupCasterProject(body.id);
-      await expectCasterProjectOpen(page, projectName);
-
-      await page.getByTitle('Add New Directory').click();
-      await expect(page.getByRole('dialog', { name: 'Add Directory' })).toBeVisible();
-      await page.getByRole('textbox', { name: 'Name' }).fill('TF-Error-Dir');
-      await page.getByRole('button', { name: 'Save' }).click();
+      // Navigate directly to the project
+      await page.goto(`${Services.Caster.UI}/projects/${projectId}`);
       await expect(page.getByRole('button', { name: 'TF-Error-Dir' })).toBeVisible({ timeout: 10000 });
 
       await page.getByRole('button', { name: 'TF-Error-Dir' }).click();
@@ -44,5 +38,5 @@ for (const theme of CASTER_THEMES) {
       await expect(fileNameInput).toBeVisible({ timeout: 10000 });
       await fileNameInput.fill('bad.tf');
     });
-  });
-}
+  }
+});

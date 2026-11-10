@@ -17,10 +17,12 @@ test.describe('Admin Panel', () => {
     const hasLink = await apiKeysLink.isVisible({ timeout: 10000 }).catch(() => false);
     if (hasLink) {
       await apiKeysLink.click();
-      await page.waitForTimeout(1000);
+
+      // expect: API keys list displays
+      const keyRows = page.locator('tr, mat-row, [class*="key-row"]');
+      await expect(keyRows.first()).toBeVisible();
     }
 
-    // expect: API keys list displays
     const keyRows = page.locator('tr, mat-row, [class*="key-row"]');
     const keyCount = await keyRows.count();
 
@@ -31,10 +33,10 @@ test.describe('Admin Panel', () => {
 
       if (hasRevoke) {
         await revokeButton.click();
-        await page.waitForTimeout(500);
 
         // expect: Confirmation dialog appears
         const confirmDialog = page.locator('mat-dialog-container, [role="dialog"]').first();
+        await expect(confirmDialog).toBeVisible();
         const hasDialog = await confirmDialog.isVisible({ timeout: 3000 }).catch(() => false);
 
         if (hasDialog) {

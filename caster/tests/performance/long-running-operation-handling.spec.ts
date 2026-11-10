@@ -4,27 +4,29 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, expectCasterProjectOpen, CASTER_THEMES, setCasterTheme } from '../../fixtures';
+import { test, expect, Services, seedCasterProjectPageFree, deleteCasterProjectPageFree, CASTER_THEMES, setCasterTheme } from '../../fixtures';
 
-for (const theme of CASTER_THEMES) {
-  test.describe(`${theme} theme › Performance and Optimization`, () => {
-    test('Long Running Operation Handling', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+test.describe('Performance and Optimization', () => {
+  let projectId: string;
+  let projectName: string;
+
+  test.beforeAll(async () => {
+    projectName = 'E2E Shared Project [long-running-operation-handling]';
+    projectId = await seedCasterProjectPageFree(projectName);
+  });
+
+  test.afterAll(async () => {
+    if (projectId) await deleteCasterProjectPageFree(projectId);
+  });
+
+  for (const theme of CASTER_THEMES) {
+    test(`${theme} theme › Long Running Operation Handling`, async ({ casterAuthenticatedPage: page }) => {
       await setCasterTheme(page, theme);
 
-      await expect(page.getByText('My Projects')).toBeVisible();
-
-      await page.locator('button[mattooltip="Add New Project"]').click();
-      await expect(page.getByRole('dialog', { name: 'Add Project' })).toBeVisible();
-      await page.getByRole('textbox', { name: 'Name' }).fill('Long Running Test');
-      await page.getByRole('button', { name: 'Save' }).click();
-      await expectCasterProjectOpen(page, 'Long Running Test');
+      // Navigate to project
+      await page.goto(`${Services.Caster.UI}/projects/${projectId}`);
+      await expect(page.getByText(projectName, { exact: true })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Admin User', exact: true })).toBeVisible();
-
-      // Extract the project ID from the URL and register it for cleanup
-      const projectId = page.url().match(/\/projects\/([a-f0-9-]+)/)?.[1];
-      if (projectId) {
-        cleanupCasterProject(projectId);
-      }
 
       await page.goto(Services.Caster.UI + '/admin');
       await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible({ timeout: 10000 });
@@ -32,5 +34,5 @@ for (const theme of CASTER_THEMES) {
       await page.goBack();
       await expect(page).toHaveURL(/\/projects\//, { timeout: 10000 });
     });
-  });
-}
+  }
+});

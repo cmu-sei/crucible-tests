@@ -10,14 +10,15 @@ import os from 'os';
 import path from 'path';
 import {
   getBlueprintToken,
-  createMsel,
   deleteMsel,
-  seedMselDataFields,
   createRenderableScenarioEvent,
-  tempBlueprintName,
   listScenarioEvents,
   getScenarioEvent,
   downloadMselFile,
+  createSharedRenderableMsel,
+  resetSharedRenderableMsel,
+  type CreatedMsel,
+  sharedChildName,
 } from '../../test-helpers';
 
 /**
@@ -55,28 +56,40 @@ import {
  * notification at all. This is verified below (rather than skipped) so a regression that adds
  * an incorrect/misleading notification would also be caught.
  */
+// One MSEL with the standard DataFields (13 POSTs) is seeded per file and shared by both
+// theme runs. Safe to share: the test downloads the source and imports into a new MSEL of its own.
+// Each test seeds its own uniquely named events, and `resetSharedRenderableMsel` removes
+// them (and any extra DataField) in afterEach.
+let shared: CreatedMsel;
+
+test.beforeAll(async ({}, workerInfo) => {
+  shared = await createSharedRenderableMsel(await getBlueprintToken(), 'BulkImportSrc', workerInfo.parallelIndex);
+});
+
+test.afterAll(async () => {
+  if (shared) await deleteMsel(await getBlueprintToken(), shared.id);
+});
+
 for (const theme of BLUEPRINT_THEMES) {
     test.describe(`${theme} theme › Scenario Events Management`, () => {
+    // Per-test names for this test's own records on the shared MSEL.
+    let child: (base: string) => string;
     let token: string;
     let sourceMselId: string;
     let sourceMselName: string;
     let importedMselId: string | undefined;
     let downloadPath: string | undefined;
 
-    test.beforeEach(async () => {
+    test.beforeEach(async ({}, testInfo) => {
+      child = (base: string) => sharedChildName(base, testInfo, theme);
       token = await getBlueprintToken();
-      sourceMselName = tempBlueprintName('TestBP-BulkImportSrc');
-      const msel = await createMsel(token, {
-        name: sourceMselName,
-        description: 'Seeded as bulk-import fixture',
-      });
-      sourceMselId = msel.id;
-      await seedMselDataFields(token, sourceMselId);
+      sourceMselId = shared.id;
+      sourceMselName = shared.name;
 
-      await createRenderableScenarioEvent(token, sourceMselId, 'Bulk import first event', {
+      await createRenderableScenarioEvent(token, sourceMselId, child('TestBP-BulkImportFirst'), {
         deltaSeconds: 300,
       });
-      await createRenderableScenarioEvent(token, sourceMselId, 'Bulk import second event', {
+      await createRenderableScenarioEvent(token, sourceMselId, child('TestBP-BulkImportSecond'), {
         deltaSeconds: 900,
       });
 
@@ -85,16 +98,10 @@ for (const theme of BLUEPRINT_THEMES) {
     });
 
     test.afterEach(async () => {
-      try {
-        if (importedMselId) await deleteMsel(token, importedMselId);
-      } catch (err) {
-        console.warn(`Cleanup failed for imported MSEL ${importedMselId}: ${err}`);
-      }
-      try {
-        if (sourceMselId) await deleteMsel(token, sourceMselId);
-      } catch (err) {
-        console.warn(`Cleanup failed for source MSEL ${sourceMselId}: ${err}`);
-      }
+      // The imported MSEL is this test's own; then the shared source goes back to
+      // "standard DataFields, no events" — the import asserts exactly two events.
+      if (importedMselId) await deleteMsel(token, importedMselId);
+      await resetSharedRenderableMsel(token, sourceMselId);
       if (downloadPath && fs.existsSync(downloadPath)) {
         fs.unlinkSync(downloadPath);
       }
@@ -156,7 +163,7 @@ for (const theme of BLUEPRINT_THEMES) {
         (se.dataValues ?? []).map((dv: any) => dv.value).filter(Boolean)
       );
       expect(importedTexts).toEqual(
-        expect.arrayContaining(['Bulk import first event', 'Bulk import second event'])
+        expect.arrayContaining([child('TestBP-BulkImportFirst'), child('TestBP-BulkImportSecond')])
       );
 
       // The delivery offsets came through the file too, so the imported MSEL is actually runnable
@@ -177,7 +184,7 @@ for (const theme of BLUEPRINT_THEMES) {
         persistedTexts.push(...(full.dataValues ?? []).map((dv: any) => dv.value).filter(Boolean));
       }
       expect(persistedTexts).toEqual(
-        expect.arrayContaining(['Bulk import first event', 'Bulk import second event'])
+        expect.arrayContaining([child('TestBP-BulkImportFirst'), child('TestBP-BulkImportSecond')])
       );
 
       // expect: no error is surfaced for this successful import (see file-level Notification

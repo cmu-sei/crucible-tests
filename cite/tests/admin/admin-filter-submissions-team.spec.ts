@@ -21,7 +21,7 @@ for (const theme of CITE_THEMES) {
 
       // 3. Open the Types filter and select an option
       await typesFilter.click();
-      await page.waitForTimeout(500);
+      // Rule applied: removed fixed sleep
 
       const options = page.locator('mat-option');
       await expect(options.first()).toBeVisible({ timeout: 5000 });
@@ -32,7 +32,7 @@ for (const theme of CITE_THEMES) {
       // Select the first type option
       const firstOptionText = await options.first().textContent();
       await options.first().click();
-      await page.waitForTimeout(1000);
+      // Rule applied: removed fixed sleep
 
       // 4. Verify the filter is applied (the dropdown shows the selected value)
       await expect(typesFilter).toContainText(firstOptionText?.trim() || '', { timeout: 5000 });

@@ -4,7 +4,7 @@
 // spec: gameboard/gameboard-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, type SharedWorkspace } from '../../fixtures';
 import {
   getAdminToken,
   createGame,
@@ -14,12 +14,6 @@ import {
   CreatedGame,
   CreatedChallengeSpec,
 } from '../../api-helpers';
-import {
-  getTopoMojoAdminToken,
-  createWorkspace,
-  deleteWorkspace,
-  CreatedWorkspace,
-} from '../../../topomojo-helpers';
 import { APIRequestContext, request as playwrightRequest } from '@playwright/test';
 
 // Challenge-spec editing in Gameboard = update the per-game fields (points,
@@ -27,18 +21,13 @@ import { APIRequestContext, request as playwrightRequest } from '@playwright/tes
 // content itself is authored in TopoMojo. We verify the Gameboard-side PUT.
 test.describe('Admin - Challenges', () => {
   let gbToken: string;
-  let tmToken: string;
   let game: CreatedGame;
-  let workspace: CreatedWorkspace;
+  let workspace: SharedWorkspace;
   let spec: CreatedChallengeSpec;
 
-  test.beforeEach(async () => {
+  test.beforeEach(async ({ sharedWorkspace }) => {
     gbToken = await getAdminToken();
-    tmToken = await getTopoMojoAdminToken();
-    workspace = await createWorkspace(tmToken, {
-      name: `EditChal-WS-${Date.now()}`,
-      audience: 'gameboard',
-    });
+    workspace = sharedWorkspace;
     game = await createGame(gbToken, { name: `EditChal-Game-${Date.now()}` });
     spec = await addChallengeSpecToGame(gbToken, game.id, {
       externalId: workspace.id,
@@ -50,7 +39,6 @@ test.describe('Admin - Challenges', () => {
   test.afterEach(async () => {
     if (spec) await deleteChallengeSpec(gbToken, spec.id).catch(() => {});
     if (game) await deleteGame(gbToken, game.id);
-    if (workspace) await deleteWorkspace(tmToken, workspace.id);
   });
 
   test('Edit Challenge Details - Update Points', async ({ gameboardAuthenticatedPage: page }) => {
@@ -95,7 +83,7 @@ test.describe('Admin - Challenges', () => {
       await ctx.dispose();
     }
 
-    await page.goto(Services.Gameboard.UI + '/admin/dashboard', { waitUntil: 'networkidle' });
+    await page.goto(Services.Gameboard.UI + '/admin/dashboard', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
   });
 });

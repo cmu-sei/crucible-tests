@@ -73,6 +73,11 @@ function getPostgresPort(): number {
   return _port;
 }
 
+/**
+ * Open a connection to the Gameboard database. Specs do not call this: they take the
+ * `gbDb` worker fixture (gameboard/fixtures.ts), one client per worker that the
+ * fixture closes when the worker ends.
+ */
 export async function gbConnect(): Promise<Client> {
   const client = new Client({
     // 127.0.0.1 rather than localhost: the mapping is published on the IPv4 loopback only,

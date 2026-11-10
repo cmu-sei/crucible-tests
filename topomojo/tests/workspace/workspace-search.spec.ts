@@ -18,7 +18,7 @@ test.describe('Workspace Management', () => {
       const isAlreadyOpen = await workspaceBrowserContent.isVisible().catch(() => false);
       if (!isAlreadyOpen) {
         await sidebarToggle.click();
-        await page.waitForTimeout(500);
+        await expect(workspaceBrowserContent).toBeVisible();
       }
     }
 
@@ -26,18 +26,29 @@ test.describe('Workspace Management', () => {
     const searchInput = page.locator('input[type="search"], input[placeholder*="earch"], input[class*="search"], [class*="search"] input').first();
     await expect(searchInput).toBeVisible({ timeout: 10000 });
 
+    // Each input event re-queries GET /api/workspaces (150 ms debounce; an empty term is
+    // omitted from the query string). The filtered list may legitimately be empty, so the
+    // completion signal is the list response for that term rather than a row.
+    const workspaceListFor = (term: string | null) =>
+      page.waitForResponse((r) => {
+        const url = new URL(r.url());
+        return url.pathname.endsWith('/workspaces') && url.searchParams.get('term') === term;
+      });
+
     // 2. Enter search term in search field
+    const filtered = workspaceListFor('test');
     await searchInput.fill('test');
 
     // expect: Workspace list filters to show matching workspaces only
-    await page.waitForTimeout(1000);
+    await filtered;
 
     // expect: Search results update in real-time
 
     // 3. Clear search field
+    const unfiltered = workspaceListFor(null);
     await searchInput.clear();
 
     // expect: All workspaces are displayed again
-    await page.waitForTimeout(500);
+    await unfiltered;
   });
 });

@@ -30,18 +30,26 @@ for (const theme of CASTER_THEMES) {
 
       // Simulate network interruption
       await page.context().setOffline(true);
-      await page.waitForTimeout(2000);
+      // Caster shows no connection state: its SignalR client registers onreconnected but no
+      // onreconnecting/onclose handler and renders no offline indicator, so there is no
+      // signal that the drop was observed. Hold the offline state for a bounded 1 s.
+      // allow-wait-antipattern: Caster UI exposes no disconnected/reconnecting signal to wait for
+      await page.waitForTimeout(1000);
       await page.context().setOffline(false);
-      await page.waitForTimeout(3000);
 
-      const hasReconnectLog = consoleLogs.some(log =>
-        log.includes('reconnect') ||
-        log.includes('Reconnect') ||
-        log.includes('WebSocket connected') ||
-        log.includes('signalr') ||
-        log.includes('SignalR')
-      );
-      expect(hasReconnectLog || consoleLogs.length > 0).toBeTruthy();
+      // Wait for SignalR to reconnect and log activity
+      await expect
+        .poll(
+          () => consoleLogs.some(log =>
+            log.includes('reconnect') ||
+            log.includes('Reconnect') ||
+            log.includes('WebSocket connected') ||
+            log.includes('signalr') ||
+            log.includes('SignalR')
+          ) || consoleLogs.length > 0,
+          { timeout: 5000, intervals: [500, 1000] }
+        )
+        .toBeTruthy();
     });
   });
 }

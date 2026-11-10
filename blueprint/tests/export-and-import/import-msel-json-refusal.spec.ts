@@ -54,7 +54,7 @@ test.describe('MSEL JSON import refusal', () => {
     const fileChooserPromise = page.waitForEvent('filechooser');
     const importResponse = page.waitForResponse(
       (r) => r.url().endsWith('/api/msels/json/import') && r.request().method() === 'POST',
-      { timeout: 60000 }
+      { timeout: 30000 }
     );
     await uploadJson.click();
     (await fileChooserPromise).setFiles(filePath);

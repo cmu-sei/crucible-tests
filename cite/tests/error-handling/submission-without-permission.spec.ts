@@ -13,13 +13,7 @@ import {
   CITE_THEMES,
 } from '../../fixtures';
 import { request as pwRequest } from '@playwright/test';
-import {
-  getKeycloakAdminToken,
-  createKeycloakUser,
-  deleteKeycloakUser,
-  tempUsername,
-  getUserToken,
-} from '../../../keycloak-admin';
+import { getUserToken } from '../../../keycloak-admin';
 
 /**
  * A user who is not a member of an evaluation must not be able to reach — let alone
@@ -28,7 +22,8 @@ import {
  * without CanSubmit Permission"), and hiding a control proves nothing about whether
  * the server would have accepted the write.
  *
- * The probe runs as a freshly created role-less Keycloak user rather than as `admin`,
+ * The probe runs as one of the worker's pool users (role-less in Keycloak, and never a
+ * member of this test's freshly seeded evaluation) rather than as `admin`,
  * because `admin` holds every CITE system permission and therefore can never produce
  * a 403.
  *
@@ -38,21 +33,12 @@ import {
  */
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Error Handling and Edge Cases`, () => {
-    test('Submission Without Required Permissions', async () => {
-      const kcAdminToken = await getKeycloakAdminToken();
-      const username = tempUsername('citenoperm');
-      const password = 'TestPassword123!';
-
+    // Nothing to reset: the pool user only reads, and the 403'd write saves nothing.
+    test('Submission Without Required Permissions', async ({ nonAdminUser: user }) => {
       const seeded = await seedCompleteEvaluation(`E2E NoPerm Evaluation ${theme} ${Date.now()}`, 1);
-      const user = await createKeycloakUser(kcAdminToken, {
-        username,
-        password,
-        email: `${username}@test.local`,
-        realmRoles: [], // no CITE system permissions at all
-      });
 
       try {
-        const token = await getUserToken(username, password, 'cite.ui', 'openid profile cite');
+        const token = await getUserToken(user.username, user.password, 'cite.ui', 'openid profile cite');
         const ctx = await pwRequest.newContext({
           baseURL: Services.Cite.API,
           extraHTTPHeaders: { Authorization: `Bearer ${token}` },
@@ -94,7 +80,6 @@ for (const theme of CITE_THEMES) {
           await ctx.dispose();
         }
       } finally {
-        await deleteKeycloakUser(kcAdminToken, user.id);
         await cleanupCompleteEvaluation(seeded);
       }
     });

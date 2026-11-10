@@ -9,12 +9,14 @@ import fs from 'fs';
 import { authStatePath, authSessionStatePath } from '../../../auth-paths';
 import {
   getBlueprintToken,
-  createMsel,
   deleteMsel,
   createRenderableScenarioEvent,
   assertJoinedMselGroup,
-  tempBlueprintName,
   navigateToMselSection,
+  createSharedRenderableMsel,
+  resetSharedRenderableMsel,
+  type CreatedMsel,
+  sharedChildName,
 } from '../../test-helpers';
 
 /**
@@ -38,32 +40,40 @@ import {
  * through window 1's UI (paired with its POST), and poll window 2 with `expect.poll`.
  * Window 2 is never reloaded, so only a pushed update can satisfy the assertion.
  */
+// One MSEL with the standard DataFields (13 POSTs) is seeded per file and shared by both
+// theme runs. Safe to share: the UI-created event is removed again by the afterEach reset.
+// Each test seeds its own uniquely named events, and `resetSharedRenderableMsel` removes
+// them (and any extra DataField) in afterEach.
+let shared: CreatedMsel;
+
+test.beforeAll(async ({}, workerInfo) => {
+  shared = await createSharedRenderableMsel(await getBlueprintToken(), 'RealtimeMsel', workerInfo.parallelIndex);
+});
+
+test.afterAll(async () => {
+  if (shared) await deleteMsel(await getBlueprintToken(), shared.id);
+});
+
 for (const theme of BLUEPRINT_THEMES) {
     test.describe(`${theme} theme › Real-time Collaboration and SignalR`, () => {
+    // Per-test names for this test's own records on the shared MSEL.
+    let child: (base: string) => string;
     let token: string;
     let mselId: string;
 
-    test.beforeEach(async () => {
+    test.beforeEach(async ({}, testInfo) => {
+      child = (base: string) => sharedChildName(base, testInfo, theme);
       token = await getBlueprintToken();
-      const msel = await createMsel(token, {
-        name: tempBlueprintName('TestBP-Realtime'),
-        description: 'Seeded to verify SignalR scenario-event propagation.',
-      });
-      mselId = msel.id;
+      mselId = shared.id;
 
       // One baseline event, so the grid is rendered and its DataFields exist before the
       // window-1 UI creates the second one.
-      await createRenderableScenarioEvent(token, mselId, 'Baseline event', { deltaSeconds: 60 });
+      await createRenderableScenarioEvent(token, mselId, child('TestBP-RealtimeBaseline'), { deltaSeconds: 60 });
     });
 
     test.afterEach(async () => {
-      if (mselId) {
-        try {
-          await deleteMsel(token, mselId);
-        } catch (err) {
-          console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
-        }
-      }
+      // Back to "standard DataFields, no events" for the next test on the shared MSEL.
+      await resetSharedRenderableMsel(token, mselId);
     });
 
     test('Real-time MSEL Updates', async ({ blueprintAuthenticatedPage: page }) => {

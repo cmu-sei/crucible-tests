@@ -6,6 +6,11 @@
 
 import { test, expect, Services, serviceUrlPattern, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
 
+// Logging out ends the Keycloak session behind the saved admin login, which the
+// other Player specs and the playerVm and console specs keep reusing. Sign in
+// with a session of this spec's own instead.
+test.use({ storageState: { cookies: [], origins: [] } });
+
 for (const theme of PLAYER_THEMES) {
   test.describe(`${theme} theme › Authentication`, () => {
     test('User Logout', async ({ playerAuthenticatedPage: page }) => {
@@ -25,10 +30,11 @@ for (const theme of PLAYER_THEMES) {
       // 3. Click the 'Logout' option
       await page.getByRole('menuitem', { name: 'Logout' }).click();
 
-      // Keycloak SSO immediately establishes a fresh Player session after the
-      // application logout completes, returning the user to the home page.
-      await expect(page).toHaveURL(serviceUrlPattern(Services.Player.UI), { timeout: 30000 });
-      await expect(page.getByText('My Views')).toBeVisible();
+      // expect: User is logged out and redirected to the Keycloak login page. Logout is
+      // `signoutRedirect`, which ends this spec's own Keycloak session, so Player's
+      // post-logout landing sends the browser back to the sign-in form.
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 30000 });
+      await expect(page.getByRole('textbox', { name: 'Username or email' })).toBeVisible();
     });
   });
 }

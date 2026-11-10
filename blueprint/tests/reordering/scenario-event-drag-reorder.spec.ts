@@ -15,14 +15,16 @@ import { Page } from '@playwright/test';
 import { test, expect, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import {
   getBlueprintToken,
-  createMsel,
   deleteMsel,
   createRenderableScenarioEvent,
   getScenarioEvent,
   navigateToMselSection,
   findScenarioEventRow,
-  tempBlueprintName,
   cdkDragTo,
+  createSharedRenderableMsel,
+  resetSharedRenderableMsel,
+  type CreatedMsel,
+  sharedChildName,
 } from '../../test-helpers';
 
 /**
@@ -39,20 +41,36 @@ async function renderedOrder(page: Page, texts: string[]): Promise<string[]> {
     .filter((t): t is string => !!t);
 }
 
+// One MSEL with the standard DataFields (13 POSTs) is seeded per file and shared by both
+// theme runs. Safe to share: the drag moves only the test's own events.
+// Each test seeds its own uniquely named events, and `resetSharedRenderableMsel` removes
+// them (and any extra DataField) in afterEach.
+let shared: CreatedMsel;
+
+test.beforeAll(async ({}, workerInfo) => {
+  shared = await createSharedRenderableMsel(await getBlueprintToken(), 'DragReorder', workerInfo.parallelIndex);
+});
+
+test.afterAll(async () => {
+  if (shared) await deleteMsel(await getBlueprintToken(), shared.id);
+});
+
 for (const theme of BLUEPRINT_THEMES) {
   test.describe(`${theme} theme › Scenario Events Drag and Drop Reordering`, () => {
+    // Per-test names for this test's own records on the shared MSEL.
+    let child: (base: string) => string;
     let token: string;
     let mselId: string;
     const ids: Record<'first' | 'second' | 'third', string> = { first: '', second: '', third: '' };
-    const text = {
-      first: tempBlueprintName('TestBP-DragFirst'),
-      second: tempBlueprintName('TestBP-DragSecond'),
-      third: tempBlueprintName('TestBP-DragThird'),
-    };
+    const text: Record<'first' | 'second' | 'third', string> = { first: '', second: '', third: '' };
 
-    test.beforeEach(async () => {
+    test.beforeEach(async ({}, testInfo) => {
+      child = (base: string) => sharedChildName(base, testInfo, theme);
       token = await getBlueprintToken();
-      mselId = (await createMsel(token)).id;
+      mselId = shared.id;
+      text.first = child('TestBP-DragFirst');
+      text.second = child('TestBP-DragSecond');
+      text.third = child('TestBP-DragThird');
       // Hours apart, and well clear of the 0-offset events other specs seed, so the midpoint the
       // UI computes for a dropped row is unambiguous.
       ids.first = (await createRenderableScenarioEvent(token, mselId, text.first, { deltaSeconds: 7200 })).id;
@@ -61,8 +79,8 @@ for (const theme of BLUEPRINT_THEMES) {
     });
 
     test.afterEach(async () => {
-      // The MSEL delete cascades to its scenario events.
-      if (mselId) await deleteMsel(token, mselId);
+      // Back to "standard DataFields, no events" for the next test on the shared MSEL.
+      await resetSharedRenderableMsel(token, mselId);
     });
 
     test('Dragging an event to a new position reorders the grid and persists', async ({

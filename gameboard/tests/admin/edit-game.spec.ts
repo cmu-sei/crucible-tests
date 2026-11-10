@@ -27,7 +27,7 @@ test.describe('Admin - Games', () => {
   });
 
   test('Edit Game Details - Game Appears in Admin List', async ({ gameboardAuthenticatedPage: page }) => {
-    await page.goto(Services.Gameboard.UI + '/admin/dashboard', { waitUntil: 'networkidle' });
+    await page.goto(Services.Gameboard.UI + '/admin/dashboard', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
     // The seeded game should be visible as a card or row in the admin listing.
     // Game card text fields appear in the admin card view. Because admin filters

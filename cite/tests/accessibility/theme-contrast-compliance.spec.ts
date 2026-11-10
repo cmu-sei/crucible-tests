@@ -5,7 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import type { Locator, Page } from '@playwright/test';
-import { test, expect, Services, setCiteTheme, CITE_THEMES } from '../../fixtures';
+import { test, expect, Services, toggleCiteThemeViaMenu, CITE_THEMES } from '../../fixtures';
 import { navigateToAdminSection, waitForDialogOpen } from '../../test-helpers';
 
 /**
@@ -172,13 +172,13 @@ for (const theme of CITE_THEMES) {
       // into every later spec. Restore it even when the test above failed. Reload
       // first: a failed dialog test leaves its CDK backdrop over the user menu.
       await gotoHome(page);
-      await setCiteTheme(page, 'light');
+      await toggleCiteThemeViaMenu(page, 'light');
     });
 
     // WCAG 1.4.3 — text contrast on the page surface.
     test('Theme Contrast Compliance (WCAG 1.4.3 text)', async ({ citeAuthenticatedPage: page }) => {
       await gotoHome(page);
-      await setCiteTheme(page, theme);
+      await toggleCiteThemeViaMenu(page, theme);
 
       // 1. The evaluation list title against the page surface.
       const title = page.locator('.evaluation-title');
@@ -217,7 +217,7 @@ for (const theme of CITE_THEMES) {
     // comes from each mode's configured setting, so don't hardcode a specific hex.
     test('Primary action icon contrast (WCAG 1.4.11)', async ({ citeAuthenticatedPage: page }) => {
       await gotoHome(page);
-      await setCiteTheme(page, theme);
+      await toggleCiteThemeViaMenu(page, theme);
 
       const adminButton = page.getByRole('button', { name: 'Show Administration Page' });
       await expect(adminButton).toBeVisible({ timeout: 10000 });
@@ -242,7 +242,7 @@ for (const theme of CITE_THEMES) {
     // falls back to light when its key is absent). Nothing is derived or corrected.
     test('Color settings applied per theme (design spec)', async ({ citeAuthenticatedPage: page }) => {
       await gotoHome(page);
-      await setCiteTheme(page, theme);
+      await toggleCiteThemeViaMenu(page, theme);
 
       const settings = await effectiveColorSettings(page);
       for (const key of [
@@ -295,7 +295,7 @@ for (const theme of CITE_THEMES) {
     // submitting.
     test('Primary and on-primary text contrast (WCAG 1.4.3)', async ({ citeAuthenticatedPage: page }) => {
       await navigateToAdminSection(page, 'Team Types');
-      await setCiteTheme(page, theme);
+      await toggleCiteThemeViaMenu(page, theme);
 
       await page.getByRole('button', { name: 'Add Team Type' }).click();
       const dialog = page.getByRole('dialog');

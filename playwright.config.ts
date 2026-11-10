@@ -20,24 +20,31 @@ export default defineConfig({
   // Those checkouts carry their own `node_modules`, so a spec found there imports a
   // second copy of @playwright/test — which throws at config load and drops
   // discovery to 0 tests for the entire suite, not just the worktree.
-  testIgnore: ['**/.claude/**', '**/node_modules/**'],
+  // The lint fixtures in `scripts/__fixtures__/wait-antipatterns/tests/` are deliberate bad examples
+  // (fixed sleeps, networkidle, test.setTimeout) used by check-wait-antipatterns.mjs and must not run as tests.
+  testIgnore: ['**/.claude/**', '**/node_modules/**', '**/scripts/**'],
 
-  // Authenticate provisioned apps (currently cite, caster, player) once before the suite and
-  // save their browser storageState to .auth/<app>.json. Consuming apps load that state
-  // via their fixtures so per-test runs skip the full Keycloak redirect. See
+  // Authenticate every app in provision-targets.ts (those the run's path
+  // filters include) once before the suite, concurrently, and save their browser
+  // storageState to .auth/<app>.json; it also seeds the run-level records (CITE
+  // evaluations, Blueprint's Caster templates, Gameboard workspaces, the Keycloak user
+  // pool). Consuming apps load that state via their fixtures so per-test runs skip the
+  // full Keycloak redirect. See
   // global-setup.ts. Note: no global `use.storageState` here on purpose — that would
   // leak one app's auth into every other app's tests; consumption is opted into
   // per-app in each app's fixtures.ts.
   globalSetup: require.resolve('./global-setup'),
 
-  // After the whole suite, purge any CITE test data left behind (by name prefix) as a
-  // safety net. This does NOT replace per-test cleanup — every test must delete what it
-  // seeds (see CLAUDE.md "Test data hygiene"); this only catches crashed-before-cleanup
-  // cases so the database never accumulates leftovers across runs.
+  // After the whole suite, run each included app's purge (CITE, Steamfitter, Blueprint,
+  // Player, Gallery, Gameboard, Caster) concurrently, deleting test data left behind by
+  // name prefix, then delete the user pool — a safety net. This does NOT replace
+  // per-test cleanup — every test must delete what it seeds (see CLAUDE.md "Test data
+  // hygiene"); this only catches crashed-before-cleanup cases.
   globalTeardown: require.resolve('./global-teardown'),
 
-  // Maximum time one test can run for (includes auth redirect which can take up to 3 min)
-  timeout: 300000,
+  // Maximum time one test can run for. Auth is restored from saved state, so a test no
+  // longer pays a cold login; the slowest passing test took ~43 s at baseline.
+  timeout: 120000,
 
   // Test timeout for each assertion
   expect: {
@@ -50,11 +57,12 @@ export default defineConfig({
   // Fail the build on CI if you accidentally left test.only in the source code
   forbidOnly: !!process.env.CI,
 
-  // Retry on CI (2x) and locally (1x) to handle transient auth/timing issues
-  retries: process.env.CI ? 2 : 1,
+  // Retry on CI only; local retries are off so sleep-removal flakiness shows up immediately
+  retries: process.env.CI ? 2 : 0,
 
-  // Opt out of parallel tests on CI; cap local workers to reduce resource pressure
-  workers: process.env.CI ? 1 : 2,
+  // CI runs with 2 workers; local default is 4 (the baseline achieved 1.96× on 2 workers,
+  // so the stack is not the bottleneck). Override with --workers.
+  workers: process.env.CI ? 2 : 4,
 
   // Reporter to use
   reporter: [
@@ -95,53 +103,24 @@ export default defineConfig({
     navigationTimeout: 30000,
   },
 
-  // Configure projects for major browsers
-  projects: [
-    {
-      name: 'chromium',
-      use: {
-        ...devices['Desktop Chrome'],
-        // Accept downloads
-        acceptDownloads: true,
-      },
-    },
-
-    {
-      name: 'firefox',
-      use: {
-        ...devices['Desktop Firefox'],
-        acceptDownloads: true,
-      },
-    },
-
-    // {
-    //   name: 'webkit',
-    //   use: {
-    //     ...devices['Desktop Safari'],
-    //     acceptDownloads: true,
-    //   },
-    // },
-
-    // Test against mobile viewports
-    // {
-    //   name: 'Mobile Chrome',
-    //   use: { ...devices['Pixel 5'] },
-    // },
-    // {
-    //   name: 'Mobile Safari',
-    //   use: { ...devices['iPhone 12'] },
-    // },
-
-    // Test against branded browsers
-    // {
-    //   name: 'Microsoft Edge',
-    //   use: { ...devices['Desktop Edge'], channel: 'msedge' },
-    // },
-    // {
-    //   name: 'Google Chrome',
-    //   use: { ...devices['Desktop Chrome'], channel: 'chrome' },
-    // },
-  ],
+  // Configure projects for major browsers (env-driven via CRUCIBLE_BROWSERS)
+  projects: (() => {
+    const BROWSERS = (process.env.CRUCIBLE_BROWSERS ?? 'chromium').split(',').map(s => s.trim());
+    const ALL_PROJECTS = [
+      { name: 'chromium', use: { ...devices['Desktop Chrome'], acceptDownloads: true } },
+      { name: 'firefox', use: { ...devices['Desktop Firefox'], acceptDownloads: true } },
+    ];
+    const validNames = ALL_PROJECTS.map(p => p.name);
+    for (const name of BROWSERS) {
+      if (!validNames.includes(name)) {
+        throw new Error(
+          `CRUCIBLE_BROWSERS="${process.env.CRUCIBLE_BROWSERS}" names an unknown project "${name}". ` +
+          `Valid projects: ${validNames.join(', ')}`
+        );
+      }
+    }
+    return ALL_PROJECTS.filter(p => BROWSERS.includes(p.name));
+  })(),
 
   // Run your local dev server before starting the tests
   // webServer: {

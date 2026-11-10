@@ -13,11 +13,17 @@ test.describe('Admin Panel', () => {
     await page.goto(Services.TopoMojo.UI + '/admin');
     await page.waitForLoadState('domcontentloaded');
 
+    // The admin browsers sort client-side in the same handler that moves the sort-up/sort-down
+    // icon: only the active .sort-header button carries one, so an applied sort always changes
+    // which button has the icon or its direction - even with 0 or 1 rows, where the row order
+    // cannot change. Rows were already visible before the click, so they prove nothing.
+    const sortState = () => page.locator('.sort-header').evaluateAll((buttons) =>
+      buttons.map((b) => b.querySelector('svg[data-icon]')?.getAttribute('data-icon') ?? '').join('|'));
+
     const vmLink = page.locator('a:has-text("VM"), button:has-text("VM"), mat-tab:has-text("VM")').first();
     const hasLink = await vmLink.isVisible({ timeout: 10000 }).catch(() => false);
     if (hasLink) {
       await vmLink.click();
-      await page.waitForTimeout(1000);
     }
 
     // expect: VM list displays with table headers
@@ -26,8 +32,9 @@ test.describe('Admin Panel', () => {
 
     if (headerCount > 0) {
       // 2. Click on column headers to sort VMs
+      const sortBefore = await sortState();
       await sortableHeaders.first().click();
-      await page.waitForTimeout(500);
+      await expect.poll(sortState).not.toBe(sortBefore);
 
       // expect: VMs are sorted based on selected column
       // expect: Sort indicators appear on active column

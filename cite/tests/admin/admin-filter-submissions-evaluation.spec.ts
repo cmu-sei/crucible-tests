@@ -22,22 +22,20 @@ for (const theme of CITE_THEMES) {
       const moveFilter = page.getByRole('combobox', { name: 'Move' });
       await expect(moveFilter).toBeVisible({ timeout: 5000 });
 
-      // 3. Click the evaluation filter to verify it opens with options
+      // 3. Click the evaluation filter to verify it's interactive
+      // Note: No evaluations exist in a fresh test run, so the panel won't open.
+      // The test only verifies the control exists and can be clicked (Rule A: no wait needed before count check).
       await evaluationFilter.click();
-      await page.waitForTimeout(500);
-
       const evalOptions = page.locator('mat-option');
       const evalOptionCount = await evalOptions.count();
       expect(evalOptionCount).toBeGreaterThanOrEqual(0);
 
-      // Close the dropdown
+      // Close any potential dropdown
       await page.keyboard.press('Escape');
-      await page.waitForTimeout(500);
 
-      // 4. Click the move filter to verify it opens
+      // 4. Click the move filter to verify it's interactive
+      // Note: Move filter always has "All Moves" as a default option.
       await moveFilter.click();
-      await page.waitForTimeout(500);
-
       const moveOptions = page.locator('mat-option');
       const moveOptionCount = await moveOptions.count();
       expect(moveOptionCount).toBeGreaterThanOrEqual(0);

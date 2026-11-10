@@ -4,21 +4,10 @@
 // spec: playerVm/playerVm-test-plan.md
 // seed: seed.spec.ts
 
-import type { BrowserContext, Page } from '@playwright/test';
+import type { Browser, BrowserContext, Page } from '@playwright/test';
 import { test, expect, Services, gotoPlayerVm, PLAYERVM_THEMES } from '../../fixtures';
 import { authenticateConsoleWithKeycloak, gotoConsole } from '../../../console/fixtures';
-import {
-  addUserToTeam,
-  deletePlayerUser,
-  getPlayerToken,
-  provisionPlayerUser,
-} from '../../../player-helpers';
-import {
-  createKeycloakUser,
-  deleteKeycloakUser,
-  getKeycloakAdminToken,
-  tempUsername,
-} from '../../../keycloak-admin';
+import { addUserToTeam } from '../../../player-helpers';
 import { seedViewWithVm, SeededViewWithVm } from '../../vm-helpers';
 
 /**
@@ -45,7 +34,8 @@ import { seedViewWithVm, SeededViewWithVm } from '../../vm-helpers';
  * Four things that shape the setup, all of them load-bearing:
  *
  *   - **The other user has to be a real Keycloak account.** Presence is keyed by
- *     `sub`, so two browser sessions as `admin` are one user to the hub.
+ *     `sub`, so two browser sessions as `admin` are one user to the hub. It is one of
+ *     the worker's pool users (`user-pool.ts`), labelled `E2E Pool <n>` on screen.
  *   - **They have to be in a team in the view, and it has to be their first.** The
  *     Player API makes a user's first team in a view their *primary* team, and
  *     `SetActiveVirtualMachine` scopes both broadcasts to the primary team and the
@@ -53,7 +43,7 @@ import { seedViewWithVm, SeededViewWithVm } from '../../vm-helpers';
  *     nothing on either screen says so.
  *   - **They have to exist in Player.** There is no endpoint that creates a user for
  *     someone else; the row appears when a token is first presented
- *     (`provisionPlayerUser`), and until it does the user is not in the list
+ *     (`provisionPlayerUser`, which the pool fixture does), and until it does the user is not in the list
  *     `JoinViewUsers` builds, which means no row to move.
  *   - **The seeded VM needs a real url.** The Last VM cell renders
  *     `getVmUrl(vm.url)` → `new URL(url)`, which *throws* on the empty string the API
@@ -62,9 +52,10 @@ import { seedViewWithVm, SeededViewWithVm } from '../../vm-helpers';
  *
  * One leak is accepted here, as it already is in `usage-reporting.spec.ts`:
  * `VmHub.UpdateVmUser` writes a `VmUsers` row per (user, team) that no endpoint can
- * delete and nothing cascades. Deleting the Keycloak user, the Player user and the
- * view — which this file does — leaves that row orphaned in the VM API's database,
- * keyed on ids that no longer resolve. It is invisible to every list in the estate.
+ * delete and nothing cascades. Deleting the view — which this file does — and, at the
+ * end of the worker and the run, the pool user's Player row and Keycloak account leaves
+ * that row orphaned in the VM API's database, keyed on ids that no longer resolve. It is
+ * invisible to every list in the estate.
  */
 for (const theme of PLAYERVM_THEMES) {
   test.describe(`${theme} theme › Console presence across two sessions`, () => {
@@ -82,35 +73,23 @@ for (const theme of PLAYERVM_THEMES) {
     /** Teardown for one test's browser context, drained in `afterEach`. */
     const testCleanups: Array<() => Promise<void>> = [];
 
-    test.beforeAll(async () => {
-      const stamp = Date.now();
+    test.beforeAll(async ({ nonAdminUser: member }) => {
       seeded = await seedViewWithVm(`E2E Vm Presence ${theme}`, { vmUrl });
       setupCleanups.push(() => seeded.cleanup());
 
-      const keycloakAdminToken = await getKeycloakAdminToken();
-      memberUsername = tempUsername(`e2e-presence-${theme}`);
-      memberPassword = `Presence-${stamp}!`;
+      memberUsername = member.username;
+      memberPassword = member.password;
       // The row is found by display name, which Player takes from the token's `name`
-      // claim — i.e. from these two fields. Stamping the surname keeps it unique
-      // against a leftover from a crashed run, and the theme keeps the light and
-      // dark runs' members apart.
-      memberName = `E2E Presence ${theme} ${stamp}`;
-      const member = await createKeycloakUser(keycloakAdminToken, {
-        username: memberUsername,
-        password: memberPassword,
-        firstName: 'E2E',
-        lastName: `Presence ${theme} ${stamp}`,
-      });
-      setupCleanups.push(() => deleteKeycloakUser(keycloakAdminToken, member.id));
-
-      const memberToken = await getPlayerToken(memberUsername, memberPassword);
-      const playerUser = await provisionPlayerUser(memberToken, member.id);
-      setupCleanups.push(() => deletePlayerUser(seeded.token, member.id));
+      // claim. Pool users are `E2E Pool <n>`, unique to this worker's slot, and the
+      // seeded view is this theme's own, so the light and dark runs never share a row.
+      memberName = member.displayName;
       // If this ever fails, the realm has stopped issuing `name` and every screen in
       // Player is labelling users by something else too.
-      expect(playerUser.name).toBe(memberName);
+      expect(member.player.name).toBe(memberName);
 
-      await addUserToTeam(seeded.token, seeded.teamId, member.id);
+      // The pool user's reset: `seeded.cleanup()` deletes the view, and its teams and
+      // their memberships with it — this team was the user's only one.
+      await addUserToTeam(seeded.token, seeded.teamId, member.userId);
     });
 
     test.afterEach(async () => {
@@ -126,12 +105,23 @@ for (const theme of PLAYERVM_THEMES) {
     });
 
     /**
+     * A browser context for the second user, empty of anyone's session.
+     *
+     * Inside a test, Playwright merges the fixture's context options into
+     * `browser.newContext` for any key the call leaves unset — including `storageState`,
+     * which the playerVm fixture points at the admin's saved Player state. Left to inherit
+     * it, this context would carry the admin's Keycloak cookies, the member login would
+     * short-circuit as admin, and the hub (keyed by `sub`) would see one user. Hence the
+     * explicit empty state; `ignoreHTTPSErrors` is for the self-signed Keycloak certificate.
+     */
+    const newMemberContext = (browser: Browser): Promise<BrowserContext> =>
+      browser.newContext({ ignoreHTTPSErrors: true, storageState: { cookies: [], origins: [] } });
+
+    /**
      * Open the seeded VM's console as the second user, in a browser context of its own.
      *
      * The context is the point: Keycloak's session cookie is per-context, so this is
-     * what makes the two sessions two users rather than two tabs. `use.ignoreHTTPSErrors`
-     * from the config does not reach `browser.newContext`, hence passing it here — the
-     * Keycloak certificate is self-signed.
+     * what makes the two sessions two users rather than two tabs (see `newMemberContext`).
      *
      * Returns the page, still open. Closing it is what ends the session: the hub's
      * `OnDisconnectedAsync` is the only thing that clears presence.
@@ -142,7 +132,7 @@ for (const theme of PLAYERVM_THEMES) {
       await gotoConsole(consolePage, `/vm/${seeded.vmId}/console`, theme);
       // A seeded VM is `Type=Unknown`, which mounts the same console components as
       // vSphere; they never reach a screen, which nothing here depends on.
-      await expect(consolePage.locator('app-console')).toBeVisible({ timeout: 60000 });
+      await expect(consolePage.locator('app-console')).toBeVisible({ timeout: 30000 });
       await consolePage.bringToFront();
       return consolePage;
     };
@@ -170,7 +160,7 @@ for (const theme of PLAYERVM_THEMES) {
             await consolePage.evaluate(() => window.dispatchEvent(new Event('focus')));
             return read();
           },
-          { timeout: 90000, intervals: [1000, 2000, 3000] }
+          { timeout: 30000, intervals: [1000, 2000, 3000] }
         )
         .toContain(expected);
     };
@@ -179,6 +169,7 @@ for (const theme of PLAYERVM_THEMES) {
       playerVmAuthenticatedPage: page,
       browser,
     }) => {
+      test.slow(); // SignalR broadcast propagation with focus event retry
       // The VM List tab first, and not just for the sake of it: the Virtual Machine cell
       // renders `vmsQuery.selectEntity(activeVmId)`, so a VM the store has never heard of
       // draws as "None" — indistinguishable from nobody being on a console. Loading the
@@ -208,7 +199,7 @@ for (const theme of PLAYERVM_THEMES) {
       await expect(activeVm).toHaveText('None');
       await expect(lastVm).toHaveText('None');
 
-      const memberContext = await browser.newContext({ ignoreHTTPSErrors: true });
+      const memberContext = await newMemberContext(browser);
       testCleanups.push(() => memberContext.close());
       const consolePage = await openMemberConsole(memberContext);
 
@@ -230,7 +221,7 @@ for (const theme of PLAYERVM_THEMES) {
       // timestamp — the same message and the same groups, which is why the row can go
       // back on its own. Nothing polls this; a client that ignored the null would leave
       // the console showing as occupied forever.
-      await expect(activeVm).toHaveText('None', { timeout: 60000 });
+      await expect(activeVm).toHaveText('None', { timeout: 30000 });
       // And Last VM keeps it: the departure clears where they are, not where they were.
       await expect(lastVm).toHaveText(seeded.vmName);
     });
@@ -239,12 +230,13 @@ for (const theme of PLAYERVM_THEMES) {
       playerVmAuthenticatedPage: page,
       browser,
     }) => {
+      test.slow(); // SignalR broadcast propagation with focus event retry
       // The watcher is a console of its own this time, on the same VM. `JoinVm` is what
       // subscribes it to the per-VM presence channel, and `ngOnInit` invokes it for
       // whatever VM the route names.
       await authenticateConsoleWithKeycloak(page);
       await gotoConsole(page, `/vm/${seeded.vmId}/console`, theme);
-      await expect(page.locator('app-console')).toBeVisible({ timeout: 60000 });
+      await expect(page.locator('app-console')).toBeVisible({ timeout: 30000 });
 
       // Only the vSphere/Unknown options bar has this readout; `app-options-bar2`
       // (Proxmox) renders no connected-users list at all. A seeded VM is `Type=Unknown`,
@@ -254,7 +246,7 @@ for (const theme of PLAYERVM_THEMES) {
       const connectedUsers = page.locator('.connected-users');
       await expect(connectedUsers).not.toContainText(memberName);
 
-      const memberContext = await browser.newContext({ ignoreHTTPSErrors: true });
+      const memberContext = await newMemberContext(browser);
       testCleanups.push(() => memberContext.close());
       const consolePage = await openMemberConsole(memberContext);
 
@@ -272,7 +264,7 @@ for (const theme of PLAYERVM_THEMES) {
 
       // The disconnect re-sends the list with the departing user left out, which is the
       // half that a client keeping its own tally would get wrong.
-      await expect(connectedUsers).not.toContainText(memberName, { timeout: 60000 });
+      await expect(connectedUsers).not.toContainText(memberName, { timeout: 30000 });
     });
   });
 }

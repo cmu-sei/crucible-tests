@@ -4,8 +4,8 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, CITE_THEMES, setCiteTheme } from '../../fixtures';
-import { navigateToAdminSection, deleteScoringModelByName, findAdminRowByName, waitForDialogOpen } from '../../test-helpers';
+import { test, expect, apiDeleteScoringModelsByName, Services, CITE_THEMES, setCiteTheme } from '../../fixtures';
+import { navigateToAdminSection, findAdminRowByName, waitForDialogOpen } from '../../test-helpers';
 
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Administration - Scoring Models`, () => {
@@ -30,46 +30,49 @@ for (const theme of CITE_THEMES) {
       const saveButton = dialog.getByRole('button', { name: 'Save' });
       await expect(saveButton).toBeEnabled({ timeout: 5000 });
       await saveButton.click();
+      // Rule D: wait for dialog to close, then wait for new row to appear
       await expect(dialog).not.toBeVisible({ timeout: 15000 });
-      await page.waitForTimeout(2000);
 
       // 2. Re-navigate and expand the scoring model
       await navigateToAdminSection(page, 'Scoring Models');
 
+      // Wait for the new model row to be visible (serves as completion signal for the create)
       const modelRow = await findAdminRowByName(page, TEST_MODEL_NAME);
       await expect(modelRow).toBeVisible({ timeout: 10000 });
+      // Rule C: click row to expand, wait for panels to appear
       await modelRow.click();
-      await page.waitForTimeout(2000);
 
       // 3. Expand Scoring Categories panel and add a category first
       const categoriesPanel = page.locator('mat-expansion-panel').filter({ hasText: 'Scoring Categories' }).first();
       await expect(categoriesPanel).toBeVisible({ timeout: 10000 });
+      // Rule C: click panel header to expand, wait for add button to appear
       await categoriesPanel.locator('mat-expansion-panel-header').click();
-      await page.waitForTimeout(1000);
 
       const addCategoryButton = categoriesPanel.locator('button[title="Add Scoring Category"]');
+      await expect(addCategoryButton).toBeVisible({ timeout: 5000 });
       await addCategoryButton.click();
 
       const categoryDialog = page.getByRole('dialog');
       await waitForDialogOpen(categoryDialog);
       await categoryDialog.locator('textarea').first().fill('Category For Options Test');
       await categoryDialog.getByRole('button', { name: 'Save' }).click();
+      // Rule D: wait for dialog to close, then wait for category row to appear
       await expect(categoryDialog).not.toBeVisible({ timeout: 10000 });
-      await page.waitForTimeout(1000);
 
       // 4. Re-expand the categories panel if collapsed, then expand the new category
       const catPanelHeader = categoriesPanel.locator('mat-expansion-panel-header').first();
       const isCatExpanded = await catPanelHeader.getAttribute('aria-expanded');
-      if (isCatExpanded !== 'true') {
-        await catPanelHeader.click();
-        await page.waitForTimeout(1000);
-      }
 
       const categoryRow = categoriesPanel.locator('text=Category For Options Test').first();
+      if (isCatExpanded !== 'true') {
+        // Rule C: click to expand panel, wait for category row to appear
+        await catPanelHeader.click();
+        await expect(categoryRow).toBeVisible({ timeout: 5000 });
+      }
       await categoryRow.scrollIntoViewIfNeeded();
       await expect(categoryRow).toBeVisible({ timeout: 10000 });
+      // Rule C: click category row, wait for option button to appear
       await categoryRow.click();
-      await page.waitForTimeout(1000);
 
       // 5. Add a scoring option
       const addOptionButton = page.locator('button[title="Add Scoring Option"]');
@@ -85,16 +88,16 @@ for (const theme of CITE_THEMES) {
       const optionSaveButton = optionDialog.getByRole('button', { name: 'Save' });
       await expect(optionSaveButton).toBeEnabled({ timeout: 5000 });
       await optionSaveButton.click();
+      // Rule D: wait for dialog to close, then verify option appears
       await expect(optionDialog).not.toBeVisible({ timeout: 10000 });
-      await page.waitForTimeout(1000);
 
       // 6. Verify the scoring option appears
       const optionItem = page.locator('text=Test Scoring Option');
       await expect(optionItem).toBeVisible({ timeout: 10000 });
     });
 
-    test.afterEach(async ({ citeAuthenticatedPage: page }) => {
-      await deleteScoringModelByName(page, TEST_MODEL_NAME);
+    test.afterEach(async () => {
+      await apiDeleteScoringModelsByName(TEST_MODEL_NAME);
     });
   });
 }

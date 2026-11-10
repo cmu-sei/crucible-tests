@@ -4,65 +4,69 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen, CASTER_THEMES, setCasterTheme } from '../../fixtures';
+import {
+  test,
+  expect,
+  openCasterDirectory,
+  seedCasterProjectPageFree,
+  seedCasterDirectoryPageFree,
+  deleteCasterProjectPageFree,
+  casterApi,
+  CASTER_THEMES,
+  setCasterTheme,
+} from '../../fixtures';
 
-for (const theme of CASTER_THEMES) {
-  test.describe(`${theme} theme › Variables Management`, () => {
-    test('Environment Variables vs Terraform Variables', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+test.describe('Variables Management › Environment Variables vs Terraform Variables', () => {
+  let projectId: string;
+  let directoryId: string;
+  const directoryName = 'Var-Types-Dir';
+  let workspaceId: string | null;
+
+  test.beforeAll(async () => {
+    projectId = await seedCasterProjectPageFree('E2E Shared Project [environment-vs-terraform-variables]');
+    directoryId = await seedCasterDirectoryPageFree(projectId, directoryName);
+  });
+
+  test.afterAll(async () => {
+    await deleteCasterProjectPageFree(projectId);
+  });
+
+  test.beforeEach(() => {
+    workspaceId = null;
+  });
+
+  test.afterEach(async ({ casterAuthenticatedPage: page }) => {
+    if (workspaceId) {
+      await casterApi(page, 'DELETE', `workspaces/${workspaceId}`);
+    }
+  });
+
+  for (const theme of CASTER_THEMES) {
+    test(`Environment Variables vs Terraform Variables - ${theme}`, async ({ casterAuthenticatedPage: page }, testInfo) => {
       await setCasterTheme(page, theme);
-      const projectName = 'Var Types Project';
-      const directoryName = 'Var-Types-Dir';
 
-      await expect(page.getByText('My Projects')).toBeVisible();
+      const workspaceName = `VarTypes-${theme}-${testInfo.repeatEachIndex}`;
 
-      await page.locator('button[mattooltip="Add New Project"]').click();
-      await expect(page.getByRole('dialog', { name: 'Add Project' })).toBeVisible();
-      await page.getByRole('textbox', { name: 'Name' }).fill(projectName);
-      await page.getByRole('button', { name: 'Save' }).click();
-      await expectCasterProjectOpen(page, projectName);
+      // Navigate to the seeded directory
+      await openCasterDirectory(page, projectId, directoryName);
+      await page.getByRole('button', { name: 'WORKSPACES', exact: true }).click();
 
-      // Extract the project ID from the URL and register it for cleanup
-      const projectId = page.url().match(/\/projects\/([^/]+)/)?.[1];
-      if (projectId) cleanupCasterProject(projectId);
-
-      // Wait for the project page to load and close any error dialogs
-      const errorDialog = page.getByRole('dialog').filter({ hasText: 'Project not found' });
-      if (await errorDialog.isVisible({ timeout: 2000 }).catch(() => false)) {
-        await page.keyboard.press('Escape');
-        await errorDialog.waitFor({ state: 'hidden', timeout: 5000 });
-      }
-
-      // Wait for project name to be visible in header to ensure page is loaded
-      await expect(page.getByText(projectName).first()).toBeVisible({ timeout: 5000 });
-      await page.waitForTimeout(1000);
-
-      // Use JavaScript to click the Add Directory link directly
-      await page.evaluate(() => {
-        const links = Array.from(document.querySelectorAll('a'));
-        const addDirLink = links.find(link => link.textContent?.trim() === 'Add Directory');
-        if (addDirLink) {
-          (addDirLink as HTMLElement).click();
-        }
-      });
-
-      await expect(page.getByRole('dialog', { name: 'Add Directory' })).toBeVisible({ timeout: 5000 });
-      await page.getByRole('textbox', { name: 'Name' }).fill(directoryName);
-      await page.getByRole('button', { name: 'Save' }).click();
-      await expect(page.getByRole('button', { name: directoryName }).first()).toBeVisible({ timeout: 10000 });
-
-      await page.getByRole('button', { name: directoryName }).first().click();
-      await page.getByRole('button', { name: 'WORKSPACES' }).click();
-
+      // Create workspace through UI and capture ID from POST response
+      const createResponse = page.waitForResponse((r) => r.url().includes('/api/workspaces') && r.request().method() === 'POST');
       await page.getByText('Add Workspace').first().click();
       await expect(page.getByRole('dialog', { name: 'Add Workspace' })).toBeVisible();
       const wsNameInput = page.getByRole('textbox', { name: 'Name' });
       await wsNameInput.click();
-      await wsNameInput.fill('Var Types WS');
+      await wsNameInput.fill(workspaceName);
       await wsNameInput.blur();
-      await page.waitForTimeout(500); // Wait for Angular validation
       await page.getByRole('button', { name: 'Save' }).click({ force: true });
 
-      const wsItem = page.getByText('Var Types WS');
+      const response = await createResponse;
+      const body = await response.json();
+      workspaceId = body.id;
+
+      // Click the workspace to open it
+      const wsItem = page.getByText(workspaceName);
       if (await wsItem.isVisible({ timeout: 5000 }).catch(() => false)) {
         await wsItem.click();
         const varsTab = page.getByRole('tab', { name: 'Variables' });
@@ -71,5 +75,5 @@ for (const theme of CASTER_THEMES) {
         }
       }
     });
-  });
-}
+  }
+});

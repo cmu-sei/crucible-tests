@@ -50,7 +50,7 @@ test.describe('Team Management', () => {
   });
 
   test('View Team Details', async ({ gameboardAuthenticatedPage: page }) => {
-    await page.goto(`${Services.Gameboard.UI}/game/${game.id}`, { waitUntil: 'networkidle' });
+    await page.goto(`${Services.Gameboard.UI}/game/${game.id}`, { waitUntil: 'domcontentloaded' });
     // The enrolled game page shows the game name and an Unenroll button,
     // confirming the team record exists for this user.
     await expect(page.locator(`text=${game.name}`).first()).toBeVisible({ timeout: 15000 });

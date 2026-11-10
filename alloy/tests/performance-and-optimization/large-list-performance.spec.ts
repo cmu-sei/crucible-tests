@@ -4,7 +4,7 @@
 // spec: alloy/alloy-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../fixtures';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
 import { ALLOY_THEMES, applyAlloyTheme } from '../../test-helpers';
 
@@ -26,11 +26,11 @@ for (const theme of ALLOY_THEMES) {
       // 3. Test search/filter responsiveness
       const searchBox = page.getByRole('textbox', { name: 'Search' });
       const filterStart = Date.now();
-      await searchBox.fill('Scenario');
+      await searchBox.pressSequentially('Scenario');
 
       // Wait for the search to be processed (filter is applied)
       // Check for either matching results or empty state (0 of 0)
-      await page.waitForTimeout(500); // Allow search to process
+      await expect(page.getByRole('status')).toBeVisible();
       const filterTime = Date.now() - filterStart;
 
       // expect: Filtering is responsive (search completes quickly)

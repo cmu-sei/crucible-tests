@@ -38,8 +38,8 @@
  * `cleanup()` that removes the view (which cascades its teams) and the VM.
  */
 
-import { APIRequestContext, request as playwrightRequest } from '@playwright/test';
 import { Services } from '../shared-fixtures';
+import { sharedRequestContext } from '../api-cache';
 import { getClientSecret, getKeycloakAdminToken } from '../keycloak-admin';
 import {
   createTeam,
@@ -52,10 +52,6 @@ import {
   getWebhookSubscriptions,
   PlayerTeam,
 } from '../player-helpers';
-
-async function newContext(): Promise<APIRequestContext> {
-  return playwrightRequest.newContext({ ignoreHTTPSErrors: true });
-}
 
 async function vmCall<T = any>(
   token: string,
@@ -72,8 +68,8 @@ async function vmCall<T = any>(
   } = {}
 ): Promise<{ ok: boolean; status: number; data: T; text: string }> {
   const base = Services.PlayerVM.API.replace(/\/$/, '');
-  const ctx = await newContext();
-  try {
+  const ctx = await sharedRequestContext();
+  {
     const res = await ctx.fetch(`${base}${path}`, {
       method: opts.method ?? 'GET',
       headers: {
@@ -91,8 +87,6 @@ async function vmCall<T = any>(
       /* non-JSON body — callers get `text` instead */
     }
     return { ok: res.ok(), status: res.status(), data, text };
-  } finally {
-    await ctx.dispose();
   }
 }
 

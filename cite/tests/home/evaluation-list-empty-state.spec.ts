@@ -4,51 +4,35 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern, CITE_THEMES, setCiteTheme } from '../../fixtures';
+import { randomUUID } from 'node:crypto';
+import { test, expect, Services, serviceUrlPattern, loadCiteSeedIds, SHARED_READ_ONLY_EVALUATION, CITE_THEMES, setCiteTheme } from '../../fixtures';
 
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Home Page and Evaluation List`, () => {
     test('Evaluation List Display - Empty State', async ({ citeAuthenticatedPage: page }) => {
+      // The run-level shared evaluations (global-setup) guarantee the list starts
+      // non-empty, so the empty state below is produced by the filter, not by chance.
+      // Only read.
+      await loadCiteSeedIds();
       await setCiteTheme(page, theme);
 
-      // 1. Navigate to home page
-      await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
+      // 1. Home page with the "My Evaluations" list loaded.
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI));
+      const list = page.locator('.evaluation-list-container');
+      await expect(list.getByText('My Evaluations', { exact: true })).toBeVisible();
+      const rows = list.locator('mat-row');
+      await expect(rows.filter({ hasText: SHARED_READ_ONLY_EVALUATION })).toHaveCount(1);
 
-      // 2. Verify the "My Evaluations" section is visible
-      const myEvalsHeading = page.locator('text=My Evaluations');
-      await expect(myEvalsHeading).toBeVisible({ timeout: 10000 });
+      // 2. Filter on a term no evaluation can contain. The home page filters the table's
+      //    data source on keyup (home-app.component.html), so type rather than fill.
+      const searchField = list.getByPlaceholder('Search');
+      await expect(searchField).toBeVisible();
+      await searchField.pressSequentially(`zzz-no-such-evaluation-${randomUUID()}`);
 
-      // 3. Check if a search/filter field exists on the home page
-      const searchField = page.locator('input[type="text"], input[placeholder*="search"], input[placeholder*="filter"], mat-form-field input').first();
-
-      if (await searchField.isVisible({ timeout: 2000 }).catch(() => false)) {
-        // If search exists, test filtering for nonexistent evaluation
-        await searchField.fill('zzz_nonexistent_evaluation_xyz_12345');
-        await page.waitForTimeout(1000);
-
-        // Check if rows are filtered out or if a "no results" message appears
-        const noResults = page.locator('text=No results, text=No evaluations, text=no data, td:has-text("No")').first();
-        const rows = page.locator('tbody tr, mat-row').filter({ hasNot: page.locator('th') });
-
-        const hasNoResultsMessage = await noResults.isVisible({ timeout: 3000 }).catch(() => false);
-        const rowCount = await rows.count();
-
-        // Either no results message appears or rows are filtered to 0
-        // Note: CITE home page search may not filter client-side, so this checks both scenarios
-        if (hasNoResultsMessage) {
-          console.log('Empty state: "No results" message displayed');
-        } else if (rowCount === 0) {
-          console.log('Empty state: Row count is 0 after filter');
-        } else {
-          console.log(`Empty state test: Search field exists but filtering shows ${rowCount} rows - home page search may not filter`);
-        }
-      } else {
-        // No search field on home page — that's fine, test verifies the list exists
-        console.log('No search field found on home page — this test verifies the home page loads correctly');
-        const rows = page.locator('tbody tr, mat-row').filter({ hasNot: page.locator('th') });
-        // Just verify the table structure exists (empty or with rows)
-        await expect(rows.first().or(page.locator('text=No evaluations, text=No results'))).toBeVisible({ timeout: 5000 });
-      }
+      // expect: the "No results found" message (rendered when filteredData is empty) —
+      // the positive signal — and then no evaluation rows.
+      await expect(list.locator('.no-results')).toHaveText('No results found');
+      await expect(rows).toHaveCount(0);
     });
   });
 }

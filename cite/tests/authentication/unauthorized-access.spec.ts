@@ -13,6 +13,7 @@ test.use({ storageState: { cookies: [], origins: [] } });
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Authentication and Authorization`, () => {
     test('Unauthorized Access Protection', async ({ page }) => {
+      test.slow(); // Auth redirect can take extended time on cold services
 
       // 1. Start from an unauthenticated state
       // The empty storageState above already gives the context no cookies and no storage
@@ -29,7 +30,7 @@ for (const theme of CITE_THEMES) {
       await page.goto(citeThemeUrl(`${Services.Cite.UI}/admin`, theme));
 
       // expect: User is redirected to Keycloak login page
-      await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 70000 });
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 30000 });
 
       // expect: Protected route is not accessible without authentication
       const usernameField = page.locator('#username');

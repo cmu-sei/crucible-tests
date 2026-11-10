@@ -4,29 +4,28 @@
 // spec: topomojo/topomojo-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, topomojoNavLink } from '../../fixtures';
 
 test.describe('Admin Panel', () => {
   test('Admin - API Keys Management', async ({ topomojoAuthenticatedPage: page }) => {
 
-    // 1. Navigate to admin dashboard
-    await page.goto(Services.TopoMojo.UI + '/admin');
-    await page.waitForLoadState('domcontentloaded');
+    // 1. Navigate to the admin Users section. TopoMojo has no separate API-keys page:
+    // each user's keys are managed in that user's expanded detail.
+    // A deep link into /admin lands on the home page before the admin guard has the
+    // user's role, so navigate in-app through the Admin link as the other admin specs do.
+    await topomojoNavLink(page, 'Admin').click();
+    await expect(page.getByRole('heading', { name: 'Admin Dashboard' })).toBeVisible();
+    await page.getByRole('link', { name: 'Users' }).click();
+    await expect(page).toHaveURL(/\/admin\/users/);
+    await expect(page.getByRole('heading', { name: 'Users', level: 4 })).toBeVisible();
 
-    // 2. Click on 'API Keys' section
-    const apiKeysLink = page.locator('a:has-text("API"), button:has-text("API"), mat-tab:has-text("API"), a:has-text("Key")').first();
-    const hasLink = await apiKeysLink.isVisible({ timeout: 10000 }).catch(() => false);
-    if (hasLink) {
-      await apiKeysLink.click();
-      await page.waitForTimeout(1000);
-    }
+    // 2. Expand a user (the list always holds at least the signed-in admin)
+    const viewButtons = page.getByRole('button', { name: 'Expand to view user details and role settings.' });
+    await expect(viewButtons.first()).toBeVisible();
+    await viewButtons.first().click();
 
-    // expect: API keys page loads
-    // expect: List of API keys is displayed
-    const apiContent = page.locator('[class*="api"], [class*="key"], table, mat-table, [class*="browser"]').first();
-    const hasContent = await apiContent.isVisible({ timeout: 10000 }).catch(() => false);
-    if (hasContent) {
-      await expect(apiContent).toBeVisible();
-    }
+    // expect: The user's API keys section loads with its Generate control
+    await expect(page.getByText('ApiKeys', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Generate' })).toBeVisible();
   });
 });

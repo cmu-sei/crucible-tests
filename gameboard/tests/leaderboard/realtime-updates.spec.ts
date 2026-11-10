@@ -4,52 +4,31 @@
 // spec: gameboard/gameboard-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
-import {
-  getAdminToken,
-  createGame,
-  deleteGame,
-  createSponsor,
-  deleteSponsor,
-  CreatedGame,
-  CreatedSponsor,
-} from '../../api-helpers';
-import { gbConnect, seedScoreboardPlayers, cleanupSeededScoreboard } from '../../db-helpers';
+import { test, expect, Services, type ReadOnlyGame } from '../../fixtures';
+import { getAdminToken } from '../../api-helpers';
+import { seedScoreboardPlayers, cleanupSeededScoreboard } from '../../db-helpers';
 import { APIRequestContext, request as playwrightRequest } from '@playwright/test';
 
 // Simulates a scoreboard update by fetching the scoreboard, inserting another
 // seeded row mid-session, then fetching again — the new row should appear.
 test.describe('Leaderboard', () => {
   let token: string;
-  let game: CreatedGame;
-  let sponsor: CreatedSponsor;
+  let game: ReadOnlyGame;
 
-  test.beforeEach(async () => {
+  test.beforeEach(async ({ readOnlyGame }) => {
     token = await getAdminToken();
-    sponsor = await createSponsor(token, `LB-RT-${Date.now()}`);
-    game = await createGame(token, {
-      name: `LB-RT-${Date.now()}`,
-      startOffsetDays: -1,
-      endOffsetDays: 30,
-    });
+    game = readOnlyGame;
   });
 
-  test.afterEach(async () => {
-    const client = await gbConnect();
-    try {
-      await cleanupSeededScoreboard(client, game.id);
-    } finally {
-      await client.end();
-    }
-    if (game) await deleteGame(token, game.id);
-    if (sponsor) await deleteSponsor(token, sponsor.id);
+  test.afterEach(async ({ gbDb: client }) => {
+    // The game is the worker's; delete exactly the players this test seeded.
+    await cleanupSeededScoreboard(client, game.id);
   });
 
-  test('Leaderboard Real-time Updates', async ({ gameboardAuthenticatedPage: page }) => {
+  test('Leaderboard Real-time Updates', async ({ gameboardAuthenticatedPage: page, gbDb: client }) => {
     const ctx: APIRequestContext = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
-    const client = await gbConnect();
     try {
-      await seedScoreboardPlayers(client, game.id, sponsor.id, 3);
+      await seedScoreboardPlayers(client, game.id, game.sponsorId, 3);
 
       const before = await ctx.fetch(`${Services.Gameboard.API}/api/game/${game.id}/score`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -59,7 +38,7 @@ test.describe('Leaderboard', () => {
       const countBefore = teamsBefore.length;
 
       // Add two more players mid-game.
-      await seedScoreboardPlayers(client, game.id, sponsor.id, 2);
+      await seedScoreboardPlayers(client, game.id, game.sponsorId, 2);
 
       const after = await ctx.fetch(`${Services.Gameboard.API}/api/game/${game.id}/score`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -68,11 +47,10 @@ test.describe('Leaderboard', () => {
       const teamsAfter = Array.isArray(boardAfter) ? boardAfter : (boardAfter.teams ?? []);
       expect(teamsAfter.length).toBeGreaterThanOrEqual(countBefore + 2);
     } finally {
-      await client.end();
       await ctx.dispose();
     }
 
-    await page.goto(Services.Gameboard.UI + '/admin/dashboard', { waitUntil: 'networkidle' });
+    await page.goto(Services.Gameboard.UI + '/admin/dashboard', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
   });
 });

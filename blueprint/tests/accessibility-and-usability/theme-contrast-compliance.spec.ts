@@ -4,7 +4,7 @@
 // spec: blueprint/blueprint-test-plan.md
 
 import type { Locator, Page } from '@playwright/test';
-import { test, expect, Services, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
+import { test, expect, Services, BLUEPRINT_THEMES, toggleBlueprintThemeViaMenu } from '../../fixtures';
 
 /**
  * Accessibility and Usability — real WCAG contrast on the Blueprint Build page and admin dialogs, in
@@ -169,7 +169,7 @@ for (const theme of BLUEPRINT_THEMES) {
   test.describe(`${theme} theme › Accessibility and Usability`, () => {
     // WCAG 1.4.3 — text contrast on the page surface.
     test('Theme Contrast Compliance (WCAG 1.4.3 text)', async ({ blueprintAuthenticatedPage: page }) => {
-      await applyBlueprintTheme(page, theme);
+      await toggleBlueprintThemeViaMenu(page, theme);
 
       // Sanity: we are actually measuring the theme we asked for.
       const isDark = await page.evaluate(() => document.body.classList.contains('darkMode'));
@@ -215,7 +215,7 @@ for (const theme of BLUEPRINT_THEMES) {
     // it >= 3:1 against the surface it sits on. Threshold stays generic: `primary`
     // comes from each mode's configured setting, so don't hardcode a specific hex.
     test('Primary action icon contrast (WCAG 1.4.11)', async ({ blueprintAuthenticatedPage: page }) => {
-      await applyBlueprintTheme(page, theme);
+      await toggleBlueprintThemeViaMenu(page, theme);
       await gotoBuild(page);
 
       const addButton = page.getByRole('button', { name: 'Add blank MSEL' });
@@ -242,7 +242,7 @@ for (const theme of BLUEPRINT_THEMES) {
     // and `primary` / `on-primary` take the active mode's settings verbatim (dark
     // falls back to light when its key is absent). Nothing is derived or corrected.
     test('Color settings applied per theme (design spec)', async ({ blueprintAuthenticatedPage: page }) => {
-      await applyBlueprintTheme(page, theme);
+      await toggleBlueprintThemeViaMenu(page, theme);
       await gotoBuild(page);
 
       const settings = await effectiveColorSettings(page);
@@ -288,7 +288,7 @@ for (const theme of BLUEPRINT_THEMES) {
     // the surface (the outlined Cancel label) and `on-primary` on a filled `primary`
     // button (Save) must each reach 4.5:1. Uses Admin → Units "Add Unit" without saving.
     test('Primary and on-primary text contrast (WCAG 1.4.3)', async ({ blueprintAuthenticatedPage: page }) => {
-      await applyBlueprintTheme(page, theme);
+      await toggleBlueprintThemeViaMenu(page, theme);
       await page.goto(`${Services.Blueprint.UI}/admin`, { waitUntil: 'domcontentloaded' });
 
       const unitsNav = page.getByText('Units', { exact: true }).first();

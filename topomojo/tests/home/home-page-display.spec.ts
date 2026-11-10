@@ -21,12 +21,13 @@ test.describe('Home Page and Navigation', () => {
     const sidebarToggle = page.locator('button[aria-label="Toggle sidebar"], button:has(mat-icon:text("menu")), [class*="hamburger"]').first();
     const hasSidebarToggle = await sidebarToggle.isVisible({ timeout: 5000 }).catch(() => false);
 
+    const workspaceBrowser = page.locator('[class*="workspace"], [class*="sidebar"], mat-sidenav, mat-drawer, [class*="browser"]').first();
+
     if (hasSidebarToggle) {
       await sidebarToggle.click();
-      await page.waitForTimeout(500);
+      await expect(workspaceBrowser).toBeVisible({ timeout: 10000 });
+    } else {
+      await expect(workspaceBrowser).toBeVisible({ timeout: 10000 });
     }
-
-    const workspaceBrowser = page.locator('[class*="workspace"], [class*="sidebar"], mat-sidenav, mat-drawer, [class*="browser"]').first();
-    await expect(workspaceBrowser).toBeVisible({ timeout: 10000 });
   });
 });
