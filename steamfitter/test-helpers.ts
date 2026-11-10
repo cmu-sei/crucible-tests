@@ -234,10 +234,10 @@ export async function clickContextMenuItem(page: Page, name: string): Promise<vo
 /**
  * Confirm or cancel the CrucibleDialogService confirmation dialog (delete/copy/
  * create-scenario/start/end/execute prompts). The dialog renders as a
- * `role="dialog"` whose confirm button is labelled with the action's verb
- * ("Delete", "Copy", "Create", "Start", "End", "Execute", "Stop") and whose
- * cancel button is "Cancel"; Confirm/Yes and No are still accepted so a prompt
- * that keeps the crucible-common defaults also works.
+ * `role="dialog"`. Delete prompts label their buttons "Delete" and "Cancel";
+ * the other prompts keep the crucible-common defaults, "Yes" and "No". The
+ * other verbs ("Confirm", "Copy", "Create", "Start", "End", "Execute", "Stop")
+ * are still accepted, so a prompt labelled with its action's verb also works.
  *
  * @param page - Playwright Page object
  * @param confirm - true to accept (submit), false to dismiss (cancel)
