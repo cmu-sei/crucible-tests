@@ -16,13 +16,13 @@
     "validate": "npm run typecheck && npm run check:skips && npm run check:discovery"
   },
   "devDependencies": {
-    "@axe-core/playwright": "^4.11.2",
-    "@playwright/test": "^1.63.0",
+    "@axe-core/playwright": "^4.14.0",
+    "@playwright/test": "^1.64.1",
     "@types/node": "^25.5.2",
-    "@types/pg": "^8.20.0",
+    "@types/pg": "^8.23.1",
     "axe-core": "^4.11.3",
     "dotenv": "^17.4.1",
-    "pg": "^8.20.0",
+    "pg": "^8.23.1",
     "typescript": "5.9.3"
   }
 }
