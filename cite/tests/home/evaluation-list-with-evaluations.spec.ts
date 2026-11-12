@@ -4,22 +4,16 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern, seedCompleteEvaluation, cleanupCompleteEvaluation, CITE_THEMES, setCiteTheme } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, loadCiteSeedIds, CITE_THEMES, setCiteTheme } from '../../fixtures';
 
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Home Page and Evaluation List`, () => {
-    let evaluationIds: { evaluationId: string; scoringModelId: string; teamTypeId: string; } | null = null;
-
     test('Evaluation List Display - With Evaluations', async ({ citeAuthenticatedPage: page }) => {
       await setCiteTheme(page, theme);
 
-      // 1. Seed a complete evaluation with team and membership via API
-      const seededData = await seedCompleteEvaluation(`E2E Display Test Evaluation ${Date.now()}`);
-      evaluationIds = {
-        evaluationId: seededData.evaluationId,
-        scoringModelId: seededData.scoringModelId,
-        teamTypeId: seededData.teamTypeId,
-      };
+      // 1. The run-level shared evaluations (global-setup) have Admin User on a team, so
+      //    My Evaluations lists them; this test only reads the list.
+      await loadCiteSeedIds();
 
       // 2. Navigate to home page
       await page.goto(Services.Cite.UI);
@@ -43,13 +37,6 @@ for (const theme of CITE_THEMES) {
       // 5. Verify active evaluations are visible in the list
       const rows = page.locator('mat-row, tbody tr').filter({ hasNot: page.locator('th') });
       await expect(rows.first()).toBeVisible({ timeout: 15000 });
-    });
-
-    test.afterEach(async () => {
-      if (evaluationIds) {
-        await cleanupCompleteEvaluation(evaluationIds);
-        evaluationIds = null;
-      }
     });
   });
 }

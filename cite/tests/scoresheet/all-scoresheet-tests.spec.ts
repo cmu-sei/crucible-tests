@@ -7,252 +7,26 @@
 // This file combines all scoresheet tests into a single file to run them serially,
 // avoiding parallel execution issues where multiple tests compete for the same "Admin User" visibility.
 
-import { test, expect, Services, serviceUrlPattern, ensureScoringModelExists, getCiteApiToken, purgeStaleEvaluations, settleForResponse, CITE_THEMES, setCiteTheme, citeMoveLabel } from '../../fixtures';
-import { navigateToAdminSection, deleteEvaluationByName, deleteTeamTypeByName, waitForDialogOpen } from '../../test-helpers';
-import { request as pwRequest, type Locator } from '@playwright/test';
+import {
+  test,
+  expect,
+  Services,
+  seedActiveEvaluation,
+  apiDeleteEvaluation,
+  apiDeleteEvaluationsByName,
+  CITE_THEMES,
+  setCiteTheme,
+  citeMoveLabel,
+  type SeededEvaluation,
+} from '../../fixtures';
+import type { Locator, Page } from '@playwright/test';
 
 async function waitForVisible(locator: Locator, timeout: number): Promise<boolean> {
   return locator.waitFor({ state: 'visible', timeout }).then(() => true).catch(() => false);
 }
 
-async function advanceEvaluationToMove(evaluationId: string, moveNumber: number): Promise<void> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
-    const token = await getCiteApiToken(apiContext);
-
-    // First, GET the evaluation to get all its fields
-    const getResponse = await apiContext.get(`${Services.Cite.API}/api/evaluations/${evaluationId}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/json',
-      },
-    });
-
-    if (!getResponse.ok()) {
-      console.warn(`Failed to fetch evaluation ${evaluationId}: ${getResponse.status()}`);
-      return;
-    }
-
-    const evaluation = await getResponse.json();
-
-    // Update the evaluation's currentMoveNumber
-    const putResponse = await apiContext.put(`${Services.Cite.API}/api/evaluations/${evaluationId}`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      data: {
-        ...evaluation,
-        currentMoveNumber: moveNumber,
-      },
-    });
-
-    if (!putResponse.ok()) {
-      console.warn(`Failed to advance evaluation ${evaluationId} to move ${moveNumber}: ${putResponse.status()}`);
-    } else {
-      console.log(`API: Advanced evaluation ${evaluationId} to move ${moveNumber}`);
-    }
-  } finally {
-    await apiContext.dispose();
-  }
-}
-
-async function createActiveEvalWithMoveAndTeam(
-  page: import('@playwright/test').Page,
-  teamTypeName: string,
-  evalName: string,
-  teamName: string,
-  teamShortName: string,
-): Promise<string> {
-  // 0. Clean up any leftover resources from previous failed runs
-  await deleteEvaluationByName(page, evalName);
-  await deleteTeamTypeByName(page, teamTypeName);
-
-  // 0b. Ensure a SCORESHEET-READY scoring model exists (score flags on + >=1 scoring
-  //     category). The dropdown may also list bare category-less models created by the
-  //     admin suite; selecting one of those would leave the scoresheet table empty, so
-  //     we must select THIS model by name below, not just the first option.
-  const SCORING_MODEL_NAME = 'E2E Shared Scoring Model';
-  await ensureScoringModelExists(SCORING_MODEL_NAME);
-
-  // 1. Create a team type
-  await navigateToAdminSection(page, 'Team Types');
-
-  const addTeamTypeButton = page.getByRole('button', { name: 'Add Team Type' });
-  await expect(addTeamTypeButton).toBeVisible({ timeout: 10000 });
-  await addTeamTypeButton.click();
-
-  const teamTypeDialog = page.getByRole('dialog');
-  await waitForDialogOpen(teamTypeDialog);
-  await teamTypeDialog.getByRole('textbox').first().fill(teamTypeName);
-  await teamTypeDialog.getByRole('button', { name: 'Save' }).click();
-  await expect(teamTypeDialog).not.toBeVisible({ timeout: 10000 });
-  await page.waitForTimeout(1000);
-
-  // 2. Create an evaluation with Active status
-  await navigateToAdminSection(page, 'Evaluations');
-
-  const addEvalButton = page.getByRole('button', { name: 'Add Evaluation' });
-  await expect(addEvalButton).toBeVisible({ timeout: 10000 });
-  await addEvalButton.click();
-
-  const evalDialog = page.getByRole('dialog', { name: 'Add Evaluation' });
-  await waitForDialogOpen(evalDialog);
-
-  await page.getByRole('textbox', { name: 'Evaluation Description' }).fill(evalName);
-
-  const scoringModelSelect = page.getByRole('combobox', { name: 'Scoring Model' });
-  await expect(scoringModelSelect).toBeVisible({ timeout: 5000 });
-  await settleForResponse(page, '/api/scoringmodels');
-  await scoringModelSelect.click();
-  await page.waitForTimeout(1000);
-
-  let firstOption = page.locator('mat-option').first();
-  if (!(await firstOption.isVisible({ timeout: 1000 }).catch(() => false))) {
-    const matSelect = page
-      .locator('mat-select[formcontrolname="scoringModelId"], mat-select[ng-reflect-name="scoringModelId"]')
-      .first();
-    if (await matSelect.isVisible({ timeout: 1000 }).catch(() => false)) {
-      await matSelect.click();
-      await page.waitForTimeout(1000);
-    }
-  }
-  // Select the scoresheet-ready model by name (its option text starts with the name;
-  // existing models may have a "=> on <eval>" suffix). Fall back to the first option.
-  const readyOption = page.locator('mat-option').filter({ hasText: SCORING_MODEL_NAME }).first();
-  if (await readyOption.isVisible({ timeout: 5000 }).catch(() => false)) {
-    await readyOption.click();
-  } else {
-    firstOption = page.locator('mat-option').first();
-    await expect(firstOption).toBeVisible({ timeout: 10000 });
-    await firstOption.click();
-  }
-  await page.waitForTimeout(1000);
-
-  const statusSelect = page.getByRole('combobox', { name: 'Evaluation Status' });
-  await expect(statusSelect).toBeVisible({ timeout: 5000 });
-  await statusSelect.click();
-  await page.waitForTimeout(500);
-  await page.getByRole('option', { name: 'Active' }).click();
-  await page.waitForTimeout(500);
-
-  const createPromise = page.waitForResponse(
-    response =>
-      response.url().includes('/api/evaluations') && response.request().method() === 'POST' && response.ok(),
-    { timeout: 15000 },
-  );
-  await evalDialog.getByRole('button', { name: 'Save' }).click();
-  const createResponse = await createPromise.catch(() => null);
-  await expect(evalDialog).not.toBeVisible({ timeout: 15000 });
-  await page.waitForTimeout(3000);
-
-  // Extract the evaluation ID from the response
-  let evaluationId = '';
-  if (createResponse) {
-    const evalData = await createResponse.json();
-    evaluationId = evalData.id;
-  }
-
-  // 3. Add a move
-  await navigateToAdminSection(page, 'Evaluations');
-  await page.waitForTimeout(2000);
-
-  const evalRow = page.locator('tbody tr').filter({ hasText: evalName }).first();
-  await expect(evalRow).toBeVisible({ timeout: 15000 });
-  await evalRow.click();
-  await page.waitForTimeout(2000);
-
-  const movesPanel = page.locator('mat-expansion-panel').filter({ hasText: 'Moves' }).first();
-  await expect(movesPanel).toBeVisible({ timeout: 10000 });
-  await movesPanel.locator('mat-expansion-panel-header').first().click();
-  await page.waitForTimeout(1000);
-
-  const addMoveButton = movesPanel.locator('button[title="Add Move"]');
-  await expect(addMoveButton).toBeVisible({ timeout: 5000 });
-  await addMoveButton.click();
-
-  const moveDialog = page.getByRole('dialog');
-  await waitForDialogOpen(moveDialog);
-  await moveDialog.getByRole('textbox', { name: 'Move Description' }).fill('Move 1');
-  await moveDialog.getByRole('button', { name: 'Save' }).click();
-  await expect(moveDialog).not.toBeVisible({ timeout: 10000 });
-  await page.waitForTimeout(1000);
-
-  // 4. Add a team
-  const teamsPanel = page.locator('mat-expansion-panel').filter({ hasText: 'Teams' }).first();
-  await expect(teamsPanel).toBeVisible({ timeout: 10000 });
-  await teamsPanel.locator('mat-expansion-panel-header').first().click();
-  await page.waitForTimeout(1000);
-
-  const addTeamButton = teamsPanel.locator('button[title="Add Team"]');
-  await expect(addTeamButton).toBeVisible({ timeout: 5000 });
-  await addTeamButton.click();
-
-  const teamDialog = page.getByRole('dialog');
-  await waitForDialogOpen(teamDialog);
-
-  await teamDialog.getByRole('textbox').first().fill(teamName);
-  await teamDialog.getByRole('textbox').nth(1).fill(teamShortName);
-
-  const teamTypeCombobox = teamDialog.getByRole('combobox', { name: 'Team Type' });
-  await teamTypeCombobox.click();
-  await page.waitForTimeout(500);
-  await page.getByRole('option', { name: teamTypeName }).first().click();
-  await page.waitForTimeout(500);
-
-  await teamDialog.getByRole('button', { name: 'Save' }).click();
-  await expect(teamDialog).not.toBeVisible({ timeout: 10000 });
-  await page.waitForTimeout(2000);
-
-  // 5. Add Admin User as team member
-  let teamRow = teamsPanel.locator('mat-expansion-panel-header').filter({ hasText: teamName });
-  if (!(await teamRow.isVisible({ timeout: 5000 }).catch(() => false))) {
-    await navigateToAdminSection(page, 'Evaluations');
-    await page.waitForTimeout(2000);
-    const refreshedRow = page.locator('tbody tr').filter({ hasText: evalName }).first();
-    await expect(refreshedRow).toBeVisible({ timeout: 15000 });
-    await refreshedRow.click();
-    await page.waitForTimeout(2000);
-    const refreshedTeams = page.locator('mat-expansion-panel').filter({ hasText: 'Teams' }).first();
-    await refreshedTeams.locator('mat-expansion-panel-header').first().click();
-    await page.waitForTimeout(1000);
-    teamRow = refreshedTeams.locator('mat-expansion-panel-header').filter({ hasText: teamName });
-  }
-  await expect(teamRow).toBeVisible({ timeout: 10000 });
-  await teamRow.click();
-  await page.waitForTimeout(2000);
-
-  const membershipArea = page
-    .locator('mat-expansion-panel')
-    .filter({ hasText: 'Teams' })
-    .first()
-    .locator('app-admin-team-memberships')
-    .first();
-  await expect(membershipArea).toBeVisible({ timeout: 10000 });
-
-  const membersList = membershipArea.locator('app-admin-team-member-list');
-  const alreadyMember = membersList.locator('tr').filter({ hasText: 'Admin User' }).first();
-  if (!(await alreadyMember.isVisible({ timeout: 3000 }).catch(() => false))) {
-    const usersList = membershipArea.locator('app-admin-team-membership-list');
-    const adminRow = usersList.locator('tr').filter({ hasText: 'Admin User' }).first();
-    await expect(adminRow).toBeVisible({ timeout: 15000 });
-    const addButton = adminRow.locator('button').filter({ has: page.locator('mat-icon[fonticon*="plus"]') });
-    await expect(addButton).toBeVisible({ timeout: 5000 });
-    await addButton.click();
-    await page.waitForTimeout(2000);
-  }
-
-  // 6. Advance the evaluation to Move 1 via API so the scoresheet displays scoring categories
-  if (evaluationId) {
-    await advanceEvaluationToMove(evaluationId, 1);
-  }
-
-  return evaluationId;
-}
-
 /**
- * Pre-seed CITE's per-evaluation UI state in localStorage so the app opens the
- * evaluation deterministically on the Scoresheet section with the correct team active.
+ * Open `evaluation` on its Scoresheet section with its team active.
  *
  * KNOWN CITE UI BUG (documented for the maintainers): when an evaluation is opened
  * after heavy prior session activity, home-app's setTeams() does not reliably
@@ -261,155 +35,97 @@ async function createActiveEvalWithMoveAndTeam(
  * The app persists the last-used team/section in localStorage ('uiState') and honours
  * it on load, so seeding it here is a deterministic, test-only workaround that does NOT
  * mask the bug for real users (it only sets what the UI itself would have saved).
+ *
+ * The `?evaluation=<id>&section=scoresheet` URL opens the section directly; clicking the
+ * evaluation's link on the home page instead calls selectingAnEvaluation(), which forces
+ * the section back to the dashboard.
  */
-async function seedEvaluationUiState(page: import('@playwright/test').Page, evalName: string) {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
-    const token = await getCiteApiToken(apiContext);
-    const evalsResp = await apiContext.get(`${Services.Cite.API}/api/evaluations`, {
-      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-    });
-    if (!evalsResp.ok()) return;
-    const evals: Array<{ id: string; description: string }> = await evalsResp.json();
-    const target = evals.find(e => e.description === evalName);
-    if (!target) return;
-
-    // Find a team on this evaluation to make active.
-    let teamId = '';
-    const teamsResp = await apiContext.get(`${Services.Cite.API}/api/evaluations/${target.id}/teams`, {
-      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-    });
-    if (teamsResp.ok()) {
-      const teams: Array<{ id: string }> = await teamsResp.json();
-      if (teams.length > 0) teamId = teams[0].id;
-    }
-
-    await page.addInitScript(
-      ({ evalId, team }) => {
-        try {
-          const raw = window.localStorage.getItem('uiState');
-          const state = raw ? JSON.parse(raw) : {};
-          state.evaluationSection = state.evaluationSection || {};
-          state.evaluationTeam = state.evaluationTeam || {};
-          state.evaluationSubmissionType = state.evaluationSubmissionType || {};
-          state.evaluationSection[evalId] = 'scoresheet';
-          if (team) state.evaluationTeam[evalId] = team;
-          state.evaluationSubmissionType[evalId] = 'team';
-          window.localStorage.setItem('uiState', JSON.stringify(state));
-        } catch {
-          /* ignore */
-        }
-      },
-      { evalId: target.id, team: teamId },
-    );
-  } finally {
-    await apiContext.dispose();
-  }
-}
-
-async function navigateToEvaluationScoresheet(
-  page: import('@playwright/test').Page,
-  evalName: string,
-  searchText: string,
-) {
-  // Look up the evaluation id and seed its UI state (active team + scoresheet section)
-  // in localStorage so the app opens deterministically on the scoresheet with a team
-  // active (see seedEvaluationUiState for the KNOWN CITE UI BUG this works around).
-  await seedEvaluationUiState(page, evalName);
-
-  // Resolve the evaluation id so we can navigate straight to its scoresheet via the
-  // ?evaluation=<id>&section=scoresheet URL. Navigating with the section query param
-  // sets the scoresheet section directly; clicking the eval link on the home page
-  // instead calls selectingAnEvaluation() which FORCES the section back to dashboard.
-  let evalId = '';
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
-    const token = await getCiteApiToken(apiContext);
-    const evalsResp = await apiContext.get(`${Services.Cite.API}/api/evaluations`, {
-      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-    });
-    if (evalsResp.ok()) {
-      const evals: Array<{ id: string; description: string }> = await evalsResp.json();
-      evalId = evals.find(e => e.description === evalName)?.id ?? '';
-    }
-  } finally {
-    await apiContext.dispose();
-  }
+async function navigateToEvaluationScoresheet(page: Page, evaluation: SeededEvaluation) {
+  await page.addInitScript(
+    ({ evalId, team }) => {
+      try {
+        const raw = window.localStorage.getItem('uiState');
+        const state = raw ? JSON.parse(raw) : {};
+        state.evaluationSection = state.evaluationSection || {};
+        state.evaluationTeam = state.evaluationTeam || {};
+        state.evaluationSubmissionType = state.evaluationSubmissionType || {};
+        state.evaluationSection[evalId] = 'scoresheet';
+        state.evaluationTeam[evalId] = team;
+        state.evaluationSubmissionType[evalId] = 'team';
+        window.localStorage.setItem('uiState', JSON.stringify(state));
+      } catch {
+        /* ignore */
+      }
+    },
+    { evalId: evaluation.evaluationId, team: evaluation.teamId },
+  );
 
   // The User/Team submission toggle buttons are the reliable signal that the scoresheet
   // (not the dashboard, whose Score Summary also contains a <table>) has rendered with a
-  // team active. Poll, re-navigating to the scoresheet URL until they appear.
+  // team active. Re-navigate a few times until they appear.
   const userButton = page.getByRole('button', { name: 'User', exact: true });
-  let attempts = 0;
-  while (attempts < 8) {
-    const target = evalId
-      ? `${Services.Cite.UI}/?evaluation=${evalId}&section=scoresheet`
-      : Services.Cite.UI;
-    await page.goto(target);
-    await page.waitForLoadState('domcontentloaded');
-
-    // Fast path: on a warm page the scoresheet renders within a second, so wait on the
-    // success signal (the User toggle) directly instead of a fixed 2.5s sleep. Only fall
-    // through to the recovery steps below if it hasn't appeared shortly after load.
-    if (await waitForVisible(userButton, 3000)) {
-      break;
-    }
-
-    // If we landed on the home list (no id resolved), click into the eval then switch tab.
-    if (!evalId) {
-      const searchBox = page.locator('input[placeholder="Search"], input[type="search"], input[aria-label="Search"]');
-      if (await waitForVisible(searchBox, 2000)) {
-        await searchBox.fill(searchText);
-      }
-      const link = page.locator(`a:has-text("${evalName}")`).first();
-      if (await waitForVisible(link, 4000)) {
-        await link.click();
-        await page.waitForLoadState('domcontentloaded');
-      }
-    }
-
-    // Make sure we're on the scoresheet section (in case a redirect dropped the param).
-    const scoresheetTab = page.getByRole('button', { name: 'Scoresheet', exact: true });
+  const scoresheetTab = page.getByRole('button', { name: 'Scoresheet', exact: true });
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await page.goto(`${Services.Cite.UI}/?evaluation=${evaluation.evaluationId}&section=scoresheet`);
+    if (await waitForVisible(userButton, 5000)) return;
+    // A redirect may have dropped the section param; switch to the scoresheet tab.
     if (await waitForVisible(scoresheetTab, 2000)) {
       await scoresheetTab.click();
+      if (await waitForVisible(userButton, 3000)) return;
     }
-
-    // After the recovery steps, wait once more on the toggle before re-navigating.
-    if (await waitForVisible(userButton, 3000)) {
-      break;
-    }
-    attempts++;
   }
+  await expect(userButton).toBeVisible();
 }
 
-// Configure tests to run serially to avoid parallel execution conflicts
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Scoresheet Interface`, () => {
     // Serial per theme, so a failure in one theme doesn't skip the other.
     test.describe.configure({ mode: 'serial' });
 
     // The browser x theme groups of this file run on separate workers, often at the same
-    // time, so every name a group creates carries its project and theme. The cleanup at the
-    // start of each test and the purge below then only ever touch this group's own data;
-    // with shared names, one group's purge deleted another's evaluation mid-test.
+    // time, so every name a group creates carries its project and theme.
     let prefix = '';
 
-    // Keep the evaluations list small/deterministic — the admin suite may have flooded it.
+    // Readers share one API-seeded evaluation per theme group (Active, on the shared
+    // scoresheet-ready scoring model, moves 0-1 with move 1 current, Admin User on its
+    // team). They only switch the displayed submission type, which the UI keeps in the
+    // browser's localStorage, so they never change it. The two tests that write a
+    // score or a comment are mutators and seed their own evaluation (seedOwnEvaluation).
+    let shared: SeededEvaluation;
+    let ownEvaluationId: string | null = null;
+
+    async function seedScoresheetEvaluation(name: string): Promise<SeededEvaluation> {
+      // A crashed earlier run may have left this name behind.
+      await apiDeleteEvaluationsByName(name);
+      return seedActiveEvaluation(name, { moves: 1, currentMoveNumber: 1 });
+    }
+
+    async function seedOwnEvaluation(code: string): Promise<SeededEvaluation> {
+      const seeded = await seedScoresheetEvaluation(`${prefix}${code} Evaluation`);
+      ownEvaluationId = seeded.evaluationId;
+      return seeded;
+    }
+
     test.beforeAll(async () => {
       prefix = `E2E SS-${test.info().project.name}-${theme} `;
-      // Purge only this group's own evaluations: a broader purge deletes the
-      // evaluations other files and groups are using on the other workers.
-      await purgeStaleEvaluations([prefix]);
+      shared = await seedScoresheetEvaluation(`${prefix}Shared Evaluation`);
+    });
+
+    test.afterEach(async () => {
+      if (ownEvaluationId) {
+        await apiDeleteEvaluation(ownEvaluationId);
+        ownEvaluationId = null;
+      }
+    });
+
+    test.afterAll(async () => {
+      if (shared) await apiDeleteEvaluation(shared.evaluationId);
     });
 
     test('Scoresheet Initial Load', async ({ citeAuthenticatedPage: page }) => {
       await setCiteTheme(page, theme);
 
-      const TT = `${prefix}IL Team Type`;
-      const EV = `${prefix}IL Evaluation`;
-
-      await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-IL Team', 'SIL');
-      await navigateToEvaluationScoresheet(page, EV, `${prefix}IL`);
+      await navigateToEvaluationScoresheet(page, shared);
 
       // expect: Submission type buttons are visible (User / Team). These are the reliable
       // signal that the scoresheet rendered with an active team (navigateToEvaluationScoresheet
@@ -425,152 +141,99 @@ for (const theme of CITE_THEMES) {
 
       // expect: Scoring categories (discussion questions) are displayed
       await expect(scoresheetTable.getByRole('row').first()).toBeVisible({ timeout: 10000 });
-
-      // Cleanup
-      await deleteEvaluationByName(page, EV);
-      await deleteTeamTypeByName(page, TT);
     });
 
     test('View User Submission', async ({ citeAuthenticatedPage: page }) => {
       await setCiteTheme(page, theme);
 
-      const TT = `${prefix}VU Team Type`;
-      const EV = `${prefix}VU Evaluation`;
-
-      await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-VU Team', 'SVU');
-      await navigateToEvaluationScoresheet(page, EV, `${prefix}VU`);
+      await navigateToEvaluationScoresheet(page, shared);
 
       // Click the "User" submission type button
       const userButton = page.getByRole('button', { name: 'User', exact: true });
       await expect(userButton).toBeVisible({ timeout: 5000 });
       await userButton.click();
-      await page.waitForTimeout(1000);
 
       // expect: Scoresheet displays user's individual scores (table with questions visible)
       const scoresheetTable = page.getByRole('table').first();
       await expect(scoresheetTable).toBeVisible({ timeout: 10000 });
-
-      // Cleanup
-      await deleteEvaluationByName(page, EV);
-      await deleteTeamTypeByName(page, TT);
     });
 
     test('View Team Submission', async ({ citeAuthenticatedPage: page }) => {
       await setCiteTheme(page, theme);
 
-      const TT = `${prefix}VT Team Type`;
-      const EV = `${prefix}VT Evaluation`;
-
-      await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-VT Team', 'SVT');
-      await navigateToEvaluationScoresheet(page, EV, `${prefix}VT`);
+      await navigateToEvaluationScoresheet(page, shared);
 
       // Click the "Team" submission type button
       const teamButton = page.getByRole('button', { name: 'Team', exact: true });
       await expect(teamButton).toBeVisible({ timeout: 5000 });
       await teamButton.click();
-      await page.waitForTimeout(1000);
 
       // expect: Scoresheet displays team's official scores
       const scoresheetTable = page.getByRole('table').first();
       await expect(scoresheetTable).toBeVisible({ timeout: 10000 });
-
-      // Cleanup
-      await deleteEvaluationByName(page, EV);
-      await deleteTeamTypeByName(page, TT);
     });
 
     test('View Team Average Submission', async ({ citeAuthenticatedPage: page }) => {
       await setCiteTheme(page, theme);
 
-      const TT = `${prefix}TA Team Type`;
-      const EV = `${prefix}TA Evaluation`;
-
-      await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-TA Team', 'STA');
-      await navigateToEvaluationScoresheet(page, EV, `${prefix}TA`);
+      await navigateToEvaluationScoresheet(page, shared);
 
       // The "Team Avg" button may or may not be visible depending on scoring model config.
       // If visible, click it; otherwise verify the scoresheet is loaded.
       const teamAvgButton = page.getByRole('button', { name: 'Team Avg', exact: true });
       if (await teamAvgButton.isVisible({ timeout: 3000 }).catch(() => false)) {
         await teamAvgButton.click();
-        await page.waitForTimeout(1000);
       }
 
       // expect: Scoresheet is displayed (read-only for averages)
       const scoresheetTable = page.getByRole('table').first();
       await expect(scoresheetTable).toBeVisible({ timeout: 10000 });
-
-      // Cleanup
-      await deleteEvaluationByName(page, EV);
-      await deleteTeamTypeByName(page, TT);
     });
 
     test('View Group Average Submission', async ({ citeAuthenticatedPage: page }) => {
       await setCiteTheme(page, theme);
 
-      const TT = `${prefix}GA Team Type`;
-      const EV = `${prefix}GA Evaluation`;
-
-      await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-GA Team', 'SGA');
-      await navigateToEvaluationScoresheet(page, EV, `${prefix}GA`);
+      await navigateToEvaluationScoresheet(page, shared);
 
       // The "Group Avg" button may or may not be visible depending on scoring model/group config.
       // If visible, click it; otherwise verify the scoresheet is loaded.
       const groupAvgButton = page.getByRole('button', { name: 'Group Avg', exact: true });
       if (await groupAvgButton.isVisible({ timeout: 3000 }).catch(() => false)) {
         await groupAvgButton.click();
-        await page.waitForTimeout(1000);
       }
 
       // expect: Scoresheet is displayed
       const scoresheetTable = page.getByRole('table').first();
       await expect(scoresheetTable).toBeVisible({ timeout: 10000 });
-
-      // Cleanup
-      await deleteEvaluationByName(page, EV);
-      await deleteTeamTypeByName(page, TT);
     });
 
     test('View Official Submission', async ({ citeAuthenticatedPage: page }) => {
       await setCiteTheme(page, theme);
 
-      const TT = `${prefix}VO Team Type`;
-      const EV = `${prefix}VO Evaluation`;
-
-      await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-VO Team', 'SVO');
-      await navigateToEvaluationScoresheet(page, EV, `${prefix}VO`);
+      await navigateToEvaluationScoresheet(page, shared);
 
       // The "Official" button may or may not be visible depending on scoring model config.
       // If visible, click it; otherwise verify the scoresheet is loaded.
       const officialButton = page.getByRole('button', { name: 'Official', exact: true });
       if (await officialButton.isVisible({ timeout: 3000 }).catch(() => false)) {
         await officialButton.click();
-        await page.waitForTimeout(1000);
       }
 
       // expect: Scoresheet is displayed
       const scoresheetTable = page.getByRole('table').first();
       await expect(scoresheetTable).toBeVisible({ timeout: 10000 });
-
-      // Cleanup
-      await deleteEvaluationByName(page, EV);
-      await deleteTeamTypeByName(page, TT);
     });
 
     test('Modify Score with CanSubmit Permission', async ({ citeAuthenticatedPage: page }) => {
       await setCiteTheme(page, theme);
 
-      const TT = `${prefix}MS Team Type`;
-      const EV = `${prefix}MS Evaluation`;
-
-      await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-MS Team', 'SMS');
-      await navigateToEvaluationScoresheet(page, EV, `${prefix}MS`);
+      const own = await seedOwnEvaluation('MS');
+      await navigateToEvaluationScoresheet(page, own);
 
       // Ensure we're on User submission to have edit ability
       const userButton = page.getByRole('button', { name: 'User', exact: true });
       await expect(userButton).toBeVisible({ timeout: 5000 });
       await userButton.click();
-      await page.waitForTimeout(1000);
 
       // expect: Scoresheet displays with scoring question textboxes
       const scoresheetTable = page.getByRole('table').first();
@@ -596,26 +259,17 @@ for (const theme of CITE_THEMES) {
       const errorSnackbar = page.locator('snack-bar-container, mat-snack-bar-container').filter({ hasText: /error/i });
       const hasError = await errorSnackbar.isVisible({ timeout: 2000 }).catch(() => false);
       expect(hasError).toBeFalsy();
-
-      // Cleanup
-      await deleteEvaluationByName(page, EV);
-      await deleteTeamTypeByName(page, TT);
     });
 
     test('Modify Score without CanSubmit Permission', async ({ citeAuthenticatedPage: page }) => {
       await setCiteTheme(page, theme);
 
-      const TT = `${prefix}MU Team Type`;
-      const EV = `${prefix}MU Evaluation`;
-
-      await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-MU Team', 'SMU');
-      await navigateToEvaluationScoresheet(page, EV, `${prefix}MU`);
+      await navigateToEvaluationScoresheet(page, shared);
 
       // Switch to "Team" view where the admin user cannot directly modify scores
       const teamButton = page.getByRole('button', { name: 'Team', exact: true });
       await expect(teamButton).toBeVisible({ timeout: 5000 });
       await teamButton.click();
-      await page.waitForTimeout(1000);
 
       // expect: Scoresheet displays in a non-user submission mode
       const scoresheetTable = page.getByRole('table').first();
@@ -626,26 +280,18 @@ for (const theme of CITE_THEMES) {
       if (await disabledTextboxes.first().isVisible({ timeout: 3000 }).catch(() => false)) {
         await expect(disabledTextboxes.first()).toBeDisabled();
       }
-
-      // Cleanup
-      await deleteEvaluationByName(page, EV);
-      await deleteTeamTypeByName(page, TT);
     });
 
     test('Add Comment to Score', async ({ citeAuthenticatedPage: page }) => {
       await setCiteTheme(page, theme);
 
-      const TT = `${prefix}AC Team Type`;
-      const EV = `${prefix}AC Evaluation`;
-
-      await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-AC Team', 'SAC');
-      await navigateToEvaluationScoresheet(page, EV, `${prefix}AC`);
+      const own = await seedOwnEvaluation('AC');
+      await navigateToEvaluationScoresheet(page, own);
 
       // Switch to User submission to have edit ability
       const userButton = page.getByRole('button', { name: 'User', exact: true });
       await expect(userButton).toBeVisible({ timeout: 5000 });
       await userButton.click();
-      await page.waitForTimeout(1000);
 
       // expect: Scoresheet displays
       const scoresheetTable = page.getByRole('table').first();
@@ -658,22 +304,13 @@ for (const theme of CITE_THEMES) {
         await commentFields.first().fill('Test comment from automated test');
         await expect(commentFields.first()).toHaveValue('Test comment from automated test');
         await commentFields.first().blur();
-        await page.waitForTimeout(1000);
       }
-
-      // Cleanup
-      await deleteEvaluationByName(page, EV);
-      await deleteTeamTypeByName(page, TT);
     });
 
     test('View Score Summary', async ({ citeAuthenticatedPage: page }) => {
       await setCiteTheme(page, theme);
 
-      const TT = `${prefix}VS Team Type`;
-      const EV = `${prefix}VS Evaluation`;
-
-      await createActiveEvalWithMoveAndTeam(page, TT, EV, 'SS-VS Team', 'SVS');
-      await navigateToEvaluationScoresheet(page, EV, `${prefix}VS`);
+      await navigateToEvaluationScoresheet(page, shared);
 
       // expect: Scoresheet displays with the evaluation heading and move info
       const scoresheetTable = page.getByRole('table').first();
@@ -685,10 +322,6 @@ for (const theme of CITE_THEMES) {
       // The Submission Review (report) button is available for viewing score summaries
       const reportButton = page.locator('button[title="Submission Review"]');
       await expect(reportButton).toBeVisible({ timeout: 5000 });
-
-      // Cleanup
-      await deleteEvaluationByName(page, EV);
-      await deleteTeamTypeByName(page, TT);
     });
   });
 }

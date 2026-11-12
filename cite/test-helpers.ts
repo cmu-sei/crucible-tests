@@ -135,6 +135,42 @@ export function recordWebSocketMessages(page: Page): string[] {
 }
 
 /**
+ * Record the SignalR hub methods `page` invokes, and which of them the hub has answered.
+ *
+ * CITE's hub client joins the user's team group with a `switchTeam` invocation only
+ * after the evaluation has loaded (`SignalRService.join`), so a page can already show
+ * the evaluation while it is not yet subscribed to that team's live updates. Waiting on
+ * `completed('switchTeam')` is the signal that a live update sent from now on reaches it.
+ * Call it before the navigation that opens the hub connection.
+ */
+export function recordHubInvocations(page: Page): { completed: (target: string) => boolean } {
+  const invocations = new Map<string, string>(); // invocationId -> target, per socket
+  const done = new Set<string>();
+  page.on('websocket', (socket) => {
+    const key = (id: string) => `${socket.url()}#${id}`;
+    const frames = (payload: string | Buffer) =>
+      String(payload).split('\u001e').filter(Boolean).flatMap((text) => {
+        try { return [JSON.parse(text)]; } catch { return []; }
+      });
+    socket.on('framesent', (frame) => {
+      for (const message of frames(frame.payload)) {
+        if (message.type === 1 && message.invocationId) invocations.set(key(message.invocationId), message.target);
+      }
+    });
+    socket.on('framereceived', (frame) => {
+      for (const message of frames(frame.payload)) {
+        // A completion with `error` means the hub method threw — not subscribed.
+        if (message.type === 3 && message.invocationId && !message.error) {
+          const target = invocations.get(key(message.invocationId));
+          if (target) done.add(target);
+        }
+      }
+    });
+  });
+  return { completed: (target: string) => done.has(target) };
+}
+
+/**
  * Locate a row in a CITE admin list by name, typing into the Search box first so the
  * row is guaranteed onto the (paginated) first page.
  *
@@ -154,9 +190,14 @@ export async function findAdminRowByName(page: Page, name: string) {
   const searchField = page.getByRole('textbox', { name: 'Search' });
   if (await searchField.waitFor({ state: 'visible', timeout: 5000 }).then(() => true).catch(() => false)) {
     await searchField.fill(name);
-    // The filter applies on valueChanges with no debounce, but give the slice a tick
-    // to re-render before we assert on the row.
-    await page.waitForTimeout(500);
+    // Rule B: The filter applies on valueChanges with no debounce per the CITE source, but
+    // Angular needs one tick for the filtered slice to re-render. Rather than a fixed sleep,
+    // use a brief non-throwing visibility poll so cleanup calls that search for nonexistent
+    // rows don't throw here.
+    const filteredRow = page.locator('tbody tr').filter({ hasText: name }).first();
+    await filteredRow.waitFor({ state: 'visible', timeout: 2000 }).catch(() => {
+      // Row doesn't exist or hasn't rendered yet; caller will check visibility
+    });
   }
   return page.locator('tbody tr').filter({ hasText: name }).first();
 }
@@ -215,7 +256,8 @@ export async function deleteEvaluationByName(page: Page, evaluationName: string)
         await expect(openDialog).not.toBeVisible({ timeout: 5000 });
       } else {
         await page.keyboard.press('Escape');
-        await page.waitForTimeout(500);
+        // Rule E: wait for dialog to close (positive signal)
+        await expect(openDialog).not.toBeVisible({ timeout: 2000 });
       }
     }
 
@@ -248,6 +290,7 @@ export async function deleteEvaluationByName(page: Page, evaluationName: string)
       // The delete button enables only when the row is "selected" (expanded).
       // Clicking the row toggles its expanded state, so poll until the button
       // becomes enabled rather than blindly clicking multiple times.
+      // Rule C: click row, then wait for button to become enabled
       let buttonEnabled = false;
       for (let attempt = 0; attempt < 6; attempt++) {
         if (await deleteButton.isEnabled({ timeout: 500 }).catch(() => false)) {
@@ -255,7 +298,11 @@ export async function deleteEvaluationByName(page: Page, evaluationName: string)
           break;
         }
         await evaluationRow.click();
-        await page.waitForTimeout(800);
+        // Wait for button to become enabled after click
+        if (await deleteButton.isEnabled({ timeout: 1000 }).catch(() => false)) {
+          buttonEnabled = true;
+          break;
+        }
       }
 
       if (!buttonEnabled) {
@@ -275,12 +322,12 @@ export async function deleteEvaluationByName(page: Page, evaluationName: string)
       const yesButton = confirmDialog.getByRole('button', { name: 'Delete' });
       await yesButton.click();
 
+      // Rule D: wait for dialog to close, then wait for row to disappear
       await expect(confirmDialog).not.toBeVisible({ timeout: 5000 });
 
       // Wait for the row to actually disappear before looking for the next one,
       // otherwise we may find a stale row whose delete button is still disabled.
       await expect(evaluationRow).not.toBeVisible({ timeout: 10000 }).catch(() => {});
-      await page.waitForTimeout(500);
 
       deletedCount++;
       console.log(`Deleted evaluation "${evaluationName}" (${deletedCount})`);
@@ -312,7 +359,8 @@ export async function deleteScoringModelByName(page: Page, scoringModelName: str
       } else {
         // Try pressing Escape
         await page.keyboard.press('Escape');
-        await page.waitForTimeout(500);
+        // Rule E: wait for dialog to close (positive signal)
+        await expect(openDialog).not.toBeVisible({ timeout: 2000 });
       }
     }
 
@@ -326,9 +374,9 @@ export async function deleteScoringModelByName(page: Page, scoringModelName: str
       return false;
     }
 
-    // Click the row to enable action buttons
+    // Rule C: Click row to enable action buttons; the button visibility check below
+    // already serves as the completion wait
     await scoringModelRow.click();
-    await page.waitForTimeout(500);
 
     // Look for the delete button by title attribute (icon buttons use title, not text)
     const deleteButton = scoringModelRow.locator(`button[title*="Delete ${scoringModelName}"]`);
@@ -346,8 +394,8 @@ export async function deleteScoringModelByName(page: Page, scoringModelName: str
     const yesButton = confirmDialog.getByRole('button', { name: /Yes|Delete|Confirm/i });
     await yesButton.click();
 
+    // Rule D: wait for dialog to close (the row removal happens server-side)
     await expect(confirmDialog).not.toBeVisible({ timeout: 5000 });
-    await page.waitForTimeout(1000);
 
     console.log(`Successfully deleted scoring model "${scoringModelName}"`);
     return true;
@@ -375,7 +423,8 @@ export async function deleteGroupByName(page: Page, groupName: string): Promise<
         await expect(openDialog).not.toBeVisible({ timeout: 5000 });
       } else {
         await page.keyboard.press('Escape');
-        await page.waitForTimeout(500);
+        // Rule E: wait for dialog to close (positive signal)
+        await expect(openDialog).not.toBeVisible({ timeout: 2000 });
       }
     }
 
@@ -387,9 +436,9 @@ export async function deleteGroupByName(page: Page, groupName: string): Promise<
       return false;
     }
 
-    // Click the row to enable action buttons
+    // Rule C: Click row to enable action buttons; the button visibility check below
+    // already serves as the completion wait
     await groupRow.click();
-    await page.waitForTimeout(500);
 
     // Look for the delete button by MDI icon (trash icon)
     const deleteButton = groupRow.locator('button mat-icon[fonticon*="trash"]').locator('..');
@@ -407,8 +456,8 @@ export async function deleteGroupByName(page: Page, groupName: string): Promise<
     const yesButton = confirmDialog.getByRole('button', { name: /Yes|Delete|Confirm/i });
     await yesButton.click();
 
+    // Rule D: wait for dialog to close (the row removal happens server-side)
     await expect(confirmDialog).not.toBeVisible({ timeout: 5000 });
-    await page.waitForTimeout(1000);
 
     console.log(`Successfully deleted group "${groupName}"`);
     return true;
@@ -436,7 +485,8 @@ export async function deleteTeamTypeByName(page: Page, teamTypeName: string): Pr
         await expect(openDialog).not.toBeVisible({ timeout: 5000 });
       } else {
         await page.keyboard.press('Escape');
-        await page.waitForTimeout(500);
+        // Rule E: wait for dialog to close (positive signal)
+        await expect(openDialog).not.toBeVisible({ timeout: 2000 });
       }
     }
 
@@ -448,9 +498,9 @@ export async function deleteTeamTypeByName(page: Page, teamTypeName: string): Pr
       return false;
     }
 
-    // Click the row to enable action buttons
+    // Rule C: Click row to enable action buttons; the button visibility check below
+    // already serves as the completion wait
     await teamTypeRow.click();
-    await page.waitForTimeout(500);
 
     // Look for the delete button by MDI icon (trash icon)
     const deleteButton = teamTypeRow.locator('button mat-icon[fonticon*="trash"]').locator('..');
@@ -468,8 +518,8 @@ export async function deleteTeamTypeByName(page: Page, teamTypeName: string): Pr
     const yesButton = confirmDialog.getByRole('button', { name: /Yes|Delete|Confirm/i });
     await yesButton.click();
 
+    // Rule D: wait for dialog to close (the row removal happens server-side)
     await expect(confirmDialog).not.toBeVisible({ timeout: 5000 });
-    await page.waitForTimeout(1000);
 
     console.log(`Successfully deleted team type "${teamTypeName}"`);
     return true;
@@ -513,20 +563,21 @@ export async function createEvaluation(
   await settleForResponse(page, '/api/scoringmodels');
 
   // Try multiple approaches to open the dropdown - Angular Material can be finicky
-  // First try clicking the combobox itself
+  // Rule C: Click combobox, wait for options to appear
   await scoringModelSelect.click();
-  await page.waitForTimeout(1000);
 
   // Check if options appeared, if not try clicking the trigger element directly
   const firstOption = page.locator('mat-option').first();
-  const optionsVisible = await firstOption.isVisible({ timeout: 1000 }).catch(() => false);
+  const optionsVisible = await firstOption.waitFor({ state: 'visible', timeout: 2000 }).then(() => true, () => false);
 
   if (!optionsVisible) {
     // Try clicking the mat-select element inside the form field
     const matSelect = page.locator('mat-select[formcontrolname="scoringModelId"], mat-select[ng-reflect-name="scoringModelId"]').first();
-    if (await matSelect.isVisible({ timeout: 1000 }).catch(() => false)) {
+    const matSelectVisible = await matSelect.waitFor({ state: 'visible', timeout: 1000 }).then(() => true, () => false);
+    if (matSelectVisible) {
       await matSelect.click();
-      await page.waitForTimeout(1000);
+      // Wait for options to appear after second click attempt
+      await expect(firstOption).toBeVisible({ timeout: 2000 });
     }
   }
 
@@ -537,8 +588,8 @@ export async function createEvaluation(
   await expect(modelOption).toBeVisible({ timeout: 10000 });
   await modelOption.click();
 
-  // Wait for the dropdown to close and the value to be set
-  await page.waitForTimeout(1000);
+  // Rule C: Wait for dropdown to close by checking that options are no longer visible
+  await expect(modelOption).not.toBeVisible({ timeout: 2000 });
 
   const saveButton = dialog.getByRole('button', { name: 'Save' });
   await expect(saveButton).toBeEnabled({ timeout: 5000 });
@@ -554,13 +605,13 @@ export async function createEvaluation(
   // Wait for the evaluation to be created
   await createPromise.catch(() => {});
 
+  // Rule D: Wait for dialog to close, then wait for the new row to appear in the table
   await expect(dialog).not.toBeVisible({ timeout: 15000 });
   await page.waitForLoadState('domcontentloaded');
-  await page.waitForTimeout(3000);
 
-  // Note: Due to known timing/refresh issues in the CITE UI, evaluations may not immediately
-  // appear in the list after creation. The tests that use this helper should verify
-  // the evaluation exists when they need to interact with it.
+  // Wait for the new evaluation row to appear in the list (use filtered lookup to handle pagination)
+  const newEvalRow = await findAdminRowByName(page, evaluationName);
+  await expect(newEvalRow).toBeVisible({ timeout: 10000 });
 }
 
 /**
@@ -570,15 +621,15 @@ export async function createEvaluation(
  */
 export async function addAdminUserToEvaluation(page: Page, evaluationName: string): Promise<void> {
   await navigateToAdminSection(page, 'Evaluations');
-  await page.waitForTimeout(2000);
+  // Rule H: Wait for the table to be visible (navigateToAdminSection already waits for it)
 
   // Find and click the evaluation row (filter by name so it's on page 1)
   const evalRow = await findAdminRowByName(page, evaluationName);
   await expect(evalRow).toBeVisible({ timeout: 15000 });
+  // Rule C: Click row to expand; the membershipsPanel wait below serves as completion signal
   await evalRow.click();
-  await page.waitForTimeout(2000);
 
-  // Find and expand the Memberships panel
+  // Find and expand the Memberships panel (wait serves as completion signal for row click)
   const membershipsPanel = page.locator('mat-expansion-panel').filter({ hasText: 'Memberships' }).first();
   await expect(membershipsPanel).toBeVisible({ timeout: 10000 });
 
@@ -586,28 +637,32 @@ export async function addAdminUserToEvaluation(page: Page, evaluationName: strin
   const panelHeader = membershipsPanel.locator('mat-expansion-panel-header');
   const isExpanded = await membershipsPanel.locator('.mat-expanded').isVisible({ timeout: 1000 }).catch(() => false);
 
-  if (!isExpanded) {
-    await panelHeader.click();
-    await page.waitForTimeout(1000);
-  }
-
-  // Wait for memberships content to load
+  // Wait for memberships content to load (serves as completion signal if panel needs expanding)
   const membershipContent = membershipsPanel.locator('.mat-expansion-panel-body, mat-expansion-panel-body').first();
-  await expect(membershipContent).toBeVisible({ timeout: 5000 });
+
+  if (!isExpanded) {
+    // Rule C: Click to expand, wait for content to appear
+    await panelHeader.click();
+    await expect(membershipContent).toBeVisible({ timeout: 5000 });
+  } else {
+    await expect(membershipContent).toBeVisible({ timeout: 5000 });
+  }
 
   // Look for Admin User in the available users list (left side) and click to add
   // The structure has two panels - non-members on left, members on right
   const adminUserRow = membershipsPanel.locator('tr, mat-row, .user-row').filter({ hasText: 'Admin User' }).first();
 
   if (await adminUserRow.isVisible({ timeout: 5000 }).catch(() => false)) {
+    // Rule C: Click row to select, wait for add button to become visible/enabled
     await adminUserRow.click();
-    await page.waitForTimeout(1000);
 
     // Look for add button (right arrow or plus icon)
     const addButton = membershipsPanel.locator('button').filter({ hasText: /add|→|>|\+/i }).first();
     if (await addButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       await addButton.click();
-      await page.waitForTimeout(2000);
+      // Rule C: After clicking add, wait for the user to move to the members list
+      // (the row disappears from the non-members side)
+      await expect(adminUserRow).not.toBeVisible({ timeout: 5000 });
     }
   }
 }

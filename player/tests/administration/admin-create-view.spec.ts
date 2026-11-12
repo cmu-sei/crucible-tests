@@ -4,13 +4,27 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, typeIntoSearch, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
+import { test, expect, typeIntoSearch, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
+import { deleteView, getPlayerToken, listViews } from '../../../player-helpers';
 
 for (const theme of PLAYER_THEMES) {
   test.describe(`${theme} theme › Administration - Views`, () => {
+    let viewName = '';
+
+    // The view is created through the UI (that is the subject), so it is found by
+    // its unique name and deleted through the API even when the test fails midway.
+    test.afterEach(async () => {
+      if (!viewName) return;
+      const token = await getPlayerToken();
+      for (const view of await listViews(token)) {
+        if (view.name === viewName) await deleteView(token, view.id);
+      }
+      viewName = '';
+    });
+
     test('Create View', async ({ playerAuthenticatedPage: page }) => {
       await setPlayerTheme(page, theme);
-      const viewName = `Create Test View ${Date.now()}`;
+      viewName = `Create Test View ${Date.now()}`;
 
       // 1. Navigate to admin views section
       await page.getByRole('button', { name: 'Menu' }).click();
@@ -54,12 +68,6 @@ for (const theme of PLAYER_THEMES) {
       await typeIntoSearch(searchField, viewName);
       await expect(searchField).toHaveValue(viewName);
       await expect(page.getByRole('button', { name: viewName, exact: true })).toBeVisible();
-
-      // Cleanup: Delete the test view
-      await page.getByRole('button', { name: viewName, exact: true }).click();
-      await page.getByRole('button', { name: 'Delete View' }).click();
-      const confirmDialog = page.getByRole('dialog');
-      await confirmDialog.getByRole('button', { name: 'Delete' }).click();
     });
   });
 }

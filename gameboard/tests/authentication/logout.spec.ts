@@ -6,6 +6,9 @@
 
 import { test, expect, Services } from '../../fixtures';
 
+// Override the fixture's saved storageState so this test starts from a fresh unauthenticated state.
+test.use({ storageState: { cookies: [], origins: [] } });
+
 test.describe('Authentication', () => {
   test('Logout Functionality', async ({ gameboardAuthenticatedPage: page }) => {
     // 1. Start authenticated on home.
@@ -22,7 +25,6 @@ test.describe('Authentication', () => {
     // 4. Attempt to access a protected route — must prompt for login again.
     // Wait for any ongoing navigation to settle first.
     await page.waitForLoadState('domcontentloaded').catch(() => {});
-    await page.waitForTimeout(1000);
     await page.goto(Services.Gameboard.UI + '/admin', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/login\?redirectTo=/);
     await expect(page.locator('button:has-text("Login"), button:has-text("Log in")').first()).toBeVisible({ timeout: 15000 });

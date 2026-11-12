@@ -11,8 +11,7 @@
  * and builds them on these.
  */
 
-import { createHash } from 'crypto';
-import { expect, Locator, Page, TestInfo } from '@playwright/test';
+import { expect, Locator, Page, WorkerInfo } from '@playwright/test';
 
 // ---------------------------------------------------------------------------
 // Theme state
@@ -63,17 +62,18 @@ export function themedUrl(baseUrl: string, path: string, theme: Theme): string {
 // ---------------------------------------------------------------------------
 
 /**
- * `<baseName> [<project>-w<worker>-r<retry>-<hash>]`, where the hash covers the
- * file and full title path. The title path includes the `light theme ›` /
- * `dark theme ›` describe prefix, so the two theme variants of a spec never share
- * a seeded name.
+ * `<baseName> [w<parallelIndex>]`: the name of a record seeded once per Playwright
+ * worker and shared by every test that worker runs.
+ *
+ * `parallelIndex` is the worker's slot (`0..workers-1`), unique among the workers
+ * alive at any moment across every project (so a chromium and a firefox worker never
+ * share a name) and stable when a worker restarts after a failure. Deterministic on
+ * purpose: the restarted worker's seeder clears its predecessor's exact-name copy
+ * before it creates its own, and a leftover from a crashed run is recognisable by its
+ * prefix (global-teardown purges `<baseName> [`).
  */
-export function seededName(baseName: string, testInfo: TestInfo): string {
-  const seed = createHash('sha1')
-    .update(`${testInfo.project.name}:${testInfo.file}:${testInfo.titlePath.join(' > ')}:${testInfo.retry}`)
-    .digest('hex')
-    .slice(0, 8);
-  return `${baseName} [${testInfo.project.name}-w${testInfo.workerIndex}-r${testInfo.retry}-${seed}]`;
+export function seededName(baseName: string, workerInfo: Pick<WorkerInfo, 'parallelIndex'>): string {
+  return `${baseName} [w${workerInfo.parallelIndex}]`;
 }
 
 // ---------------------------------------------------------------------------

@@ -13,8 +13,13 @@ test.describe('Workspace Management', () => {
     const sidebarToggle = page.locator('button[aria-label="Toggle sidebar"], button:has(mat-icon:text("menu"))').first();
     const hasSidebarToggle = await sidebarToggle.isVisible({ timeout: 10000 }).catch(() => false);
     if (hasSidebarToggle) {
+      // The toggle flips app-workspace-browser's [hidden] binding (sidebar `open`, default
+      // true, persisted in localStorage), so the click's completion signal is the browser
+      // switching to the opposite visibility from before the click.
+      const workspaceBrowser = page.locator('app-workspace-browser');
+      const wasOpen = await workspaceBrowser.isVisible();
       await sidebarToggle.click();
-      await page.waitForTimeout(500);
+      await expect(workspaceBrowser).toBeVisible({ visible: !wasOpen });
     }
 
     const workspaceItems = page.locator('[class*="workspace-card"], [class*="item-card"], mat-list-item, [class*="list-item"]');
@@ -23,23 +28,23 @@ test.describe('Workspace Management', () => {
     if (itemCount > 0) {
       // First favorite a workspace if not already
       await workspaceItems.first().hover();
-      await page.waitForTimeout(300);
 
       const starIcon = page.locator('mat-icon:text("star_border"), mat-icon:text("star_outline"), [class*="favorite"]:not([class*="favorite-on"])').first();
-      const hasStar = await starIcon.isVisible({ timeout: 3000 }).catch(() => false);
+      const hasStar = await starIcon.waitFor({ state: 'visible', timeout: 3000 }).then(() => true, () => false);
       if (hasStar) {
         await starIcon.click();
-        await page.waitForTimeout(500);
       }
 
       // expect: Favorited workspace displays with filled/solid star icon
-      const filledStar = page.locator('mat-icon:text("star"), [class*="favorite-on"], [class*="favorited"]').first();
-      const isFavorited = await filledStar.isVisible({ timeout: 5000 }).catch(() => false);
+      const favoritedStars = page.locator('mat-icon:text("star"), [class*="favorite-on"], [class*="favorited"]');
+      const filledStar = favoritedStars.first();
+      const isFavorited = await filledStar.waitFor({ state: 'visible', timeout: 5000 }).then(() => true, () => false);
 
       if (isFavorited) {
         // 2. Click the filled star icon on favorited workspace
+        const favoritedCount = await favoritedStars.count();
         await filledStar.click();
-        await page.waitForTimeout(500);
+        await expect(favoritedStars).toHaveCount(favoritedCount - 1);
 
         // expect: Workspace is removed from favorites
         // expect: Star icon changes to outline/regular style

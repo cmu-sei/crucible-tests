@@ -4,7 +4,7 @@
 // spec: alloy/alloy-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../fixtures';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
 import { ALLOY_THEMES, applyAlloyTheme, deleteEventTemplateByName, deleteEventTemplatesByPattern, fillFieldAndVerify } from '../../test-helpers';
 
@@ -59,7 +59,7 @@ for (const theme of ALLOY_THEMES) {
       await saveButton.click();
 
       // expect: The dialog closes and the template appears in the list
-      await expect(createDialog).not.toBeVisible({ timeout: 60000 });
+      await expect(createDialog).not.toBeVisible({ timeout: 30000 });
 
       // Verify the template is in the list. With parallel tests, SignalR updates
       // may cause the table to re-render; filter to the specific template.

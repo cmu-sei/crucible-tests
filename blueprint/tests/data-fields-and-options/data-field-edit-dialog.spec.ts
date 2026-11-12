@@ -7,14 +7,16 @@ import { Page, Locator } from '@playwright/test';
 import { test, expect, selectMatSelectOption, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import {
   getBlueprintToken,
-  createMsel,
   deleteMsel,
   createDataField,
   createRenderableScenarioEvent,
   navigateToMselSection,
   findScenarioEventRow,
   listMselDataFields,
-  tempBlueprintName,
+  createSharedRenderableMsel,
+  resetSharedRenderableMsel,
+  type CreatedMsel,
+  sharedChildName,
 } from '../../test-helpers';
 
 /**
@@ -26,8 +28,9 @@ import {
  * through it is actually *consumed*: it becomes a column of the Scenario Events grid and an
  * input in the scenario event editor.
  *
- * Every field name is a `tempBlueprintName()`, so a row or column header can only belong to
- * this test. Deleting the MSEL in teardown cascades to its data fields and events.
+ * Every field name is unique to the test (`sharedChildName`), so a row or column header can
+ * only belong to this test. The afterEach reset deletes the test's fields and events from the
+ * file's shared MSEL.
  */
 
 /** The Data Fields grid row for a field, matched by its (unique) name cell. */
@@ -64,33 +67,47 @@ async function openEditEventDialog(page: Page, eventText: string): Promise<Locat
   return dialog;
 }
 
+// One MSEL with the standard DataFields (13 POSTs) is seeded per file and shared by both
+// theme runs. Safe to share: each test's extra DataFields are its own, and the afterEach reset deletes them so the next test again sees exactly the standard 13.
+// Each test seeds its own uniquely named events, and `resetSharedRenderableMsel` removes
+// them (and any extra DataField) in afterEach.
+let shared: CreatedMsel;
+
+test.beforeAll(async ({}, workerInfo) => {
+  shared = await createSharedRenderableMsel(await getBlueprintToken(), 'DataFieldDialog', workerInfo.parallelIndex);
+});
+
+test.afterAll(async () => {
+  if (shared) await deleteMsel(await getBlueprintToken(), shared.id);
+});
+
 for (const theme of BLUEPRINT_THEMES) {
   test.describe(`${theme} theme › Data Fields and Options`, () => {
+    // Per-test names for this test's own records on the shared MSEL.
+    let child: (base: string) => string;
     let token: string;
     let mselId: string;
     let eventText: string;
 
-    test.beforeEach(async () => {
+    test.beforeEach(async ({}, testInfo) => {
+      child = (base: string) => sharedChildName(base, testInfo, theme);
       token = await getBlueprintToken();
-      mselId = (await createMsel(token)).id;
+      mselId = shared.id;
       // Seeds the standard 13 data fields plus one event to open in the editor.
-      eventText = tempBlueprintName('TestBP-DataFieldEvent');
+      eventText = child('TestBP-DataFieldEvent');
       await createRenderableScenarioEvent(token, mselId, eventText, { deltaSeconds: 300 });
     });
 
     test.afterEach(async () => {
-      try {
-        if (mselId) await deleteMsel(token, mselId);
-      } catch (err) {
-        console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
-      }
+      // Back to "standard DataFields, no events" for the next test on the shared MSEL.
+      await resetSharedRenderableMsel(token, mselId);
     });
 
     test('Add a data field through the dialog, and it becomes an event column and editor input', async ({
       blueprintAuthenticatedPage: page,
     }) => {
       await applyBlueprintTheme(page, theme);
-      const fieldName = tempBlueprintName('TestBP-NewField');
+      const fieldName = child('TestBP-NewField');
 
       await navigateToMselSection(page, mselId, 'Data Fields');
       await expect(dataFieldRow(page, 'Control Number')).toBeVisible({ timeout: 15000 });
@@ -161,8 +178,8 @@ for (const theme of BLUEPRINT_THEMES) {
       blueprintAuthenticatedPage: page,
     }) => {
       await applyBlueprintTheme(page, theme);
-      const originalName = tempBlueprintName('TestBP-EditField');
-      const renamed = tempBlueprintName('TestBP-RenamedField');
+      const originalName = child('TestBP-EditField');
+      const renamed = child('TestBP-RenamedField');
       await createDataField(token, mselId, {
         name: originalName,
         dataType: 'String',
@@ -230,7 +247,7 @@ for (const theme of BLUEPRINT_THEMES) {
       await expect(dataFieldRow(page, 'Control Number')).toBeVisible({ timeout: 15000 });
 
       const dialog = await openNewDataFieldDialog(page);
-      await dialog.getByRole('textbox', { name: 'Name' }).fill(tempBlueprintName('TestBP-TypeField'));
+      await dialog.getByRole('textbox', { name: 'Name' }).fill(child('TestBP-TypeField'));
 
       const useOptionList = dialog.getByRole('checkbox', { name: 'Use Option List' });
       const multiSelect = dialog.getByRole('checkbox', { name: 'Multi-select' });

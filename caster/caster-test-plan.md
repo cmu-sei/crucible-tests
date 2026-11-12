@@ -622,19 +622,24 @@ Caster has no single-file upload; files reach a directory by importing an archiv
 
 **File:** `tests/workspaces-management/lock-and-unlock-workspace.spec.ts`
 
+Caster has no per-workspace Lock/Unlock control: the workspace view offers only the
+Runs, State and Topology toggles, and the API's workspace lock is an internal mutex
+held while a run executes. The only user-facing workspace switch is the global
+"Disable Workspace Operations" toggle (covered by `global-workspace-settings/`). What a
+user can lock and unlock inside a workspace is the edit lock on the workspace's files,
+which are listed under the workspace in the project sidebar's WORKSPACES section.
+
 **Steps:**
-  1. Navigate to a workspace detail view
-    - expect: Workspace details are displayed
-  2. Click 'Lock Workspace' button (if available)
-    - expect: The workspace is locked
-    - expect: A lock icon or indicator is displayed
-    - expect: New runs cannot be created while locked
-    - expect: A success notification is displayed
-  3. Click 'Unlock Workspace' button
-    - expect: The workspace is unlocked
-    - expect: Lock indicator is removed
-    - expect: Runs can be created again
-    - expect: A success notification is displayed
+  1. Open a project, expand a directory, open the WORKSPACES section and expand a workspace that has a file
+    - expect: The workspace's files are listed with the plain file icon
+  2. Open the file and click 'Edit this file'
+    - expect: The file is locked by the current user ('Finish editing' is shown)
+    - expect: The file shows the file-lock icon in the sidebar
+    - expect: The API reports the file's `lockedById` as set
+  3. Click 'Finish editing'
+    - expect: The lock is released ('Edit this file' is shown again)
+    - expect: The file-lock icon is replaced by the plain file icon
+    - expect: The API reports the file's `lockedById` as null
 
 ### 6. Runs Management (Plan, Apply, Destroy)
 
@@ -1545,13 +1550,15 @@ accessibility contract is covered separately by 17.7.
 
 **File:** `tests/error-handling/workspace-lock-enforcement.spec.ts`
 
+Caster has no per-workspace lock a user can set (see 5.7). The workspace lock in the
+API is an internal mutex held while a run executes. The user-facing way to stop
+workspace operations is the global "Disable Workspace Operations" switch in the admin
+Workspaces settings.
+
 **Steps:**
-  1. Lock a workspace
-    - expect: Workspace is locked
-  2. Attempt to create a new run on the locked workspace
-    - expect: An error message is displayed indicating workspace is locked
-    - expect: Run creation is prevented
-    - expect: User is informed they must unlock the workspace first
+  1. Navigate to Administration → Workspaces
+    - expect: The Settings heading is shown
+    - expect: The 'Disable Workspace Operations' switch is available
 
 #### 15.8. File Names Cannot Leave The Working Directory
 

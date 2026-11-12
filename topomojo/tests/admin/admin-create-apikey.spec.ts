@@ -17,23 +17,20 @@ test.describe('Admin Panel', () => {
     const hasLink = await apiKeysLink.isVisible({ timeout: 10000 }).catch(() => false);
     if (hasLink) {
       await apiKeysLink.click();
-      await page.waitForTimeout(1000);
     }
 
     // 2. Click 'Create API Key' button
     const createButton = page.locator('button:has-text("Create"), button:has-text("New"), button:has(mat-icon:text("add"))').first();
+    await expect(createButton).toBeVisible();
     const hasCreate = await createButton.isVisible({ timeout: 5000 }).catch(() => false);
 
     if (hasCreate) {
       await createButton.click();
-      await page.waitForTimeout(1000);
 
       // expect: API key creation form opens
       const keyForm = page.locator('mat-dialog-container, [role="dialog"], form, [class*="api-key-form"]').first();
+      await expect(keyForm).toBeVisible();
       const hasForm = await keyForm.isVisible({ timeout: 5000 }).catch(() => false);
-      if (hasForm) {
-        await expect(keyForm).toBeVisible();
-      }
     }
   });
 });

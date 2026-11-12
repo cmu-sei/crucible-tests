@@ -4,9 +4,9 @@
 // spec: alloy/alloy-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../fixtures';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
-import { ALLOY_THEMES, applyAlloyTheme, createTestEventTemplate, deleteEventTemplateByName } from '../../test-helpers';
+import { ALLOY_THEMES, applyAlloyTheme, createTestEventTemplate, deleteEventTemplateByName, findEventTemplateEditButton } from '../../test-helpers';
 
 for (const theme of ALLOY_THEMES) {
   test.describe(`${theme} theme › Event Templates Management`, () => {
@@ -37,7 +37,7 @@ for (const theme of ALLOY_THEMES) {
       await createTestEventTemplate(page, seededTemplateName);
 
       // 2. Open the seeded template's edit dialog
-      await page.getByRole('button', { name: `Edit: ${seededTemplateName}` }).click();
+      await (await findEventTemplateEditButton(page, seededTemplateName)).click();
 
       // expect: The event template edit form is displayed
       const dialog = page.getByRole('dialog', { name: 'Edit Event Template' });

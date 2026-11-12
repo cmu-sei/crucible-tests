@@ -76,7 +76,7 @@ test.describe('Admin - Challenges', () => {
     specId = spec.id;
     expect(spec.externalId).toBe(workspace.id);
 
-    await page.goto(Services.Gameboard.UI + '/admin/dashboard', { waitUntil: 'networkidle' });
+    await page.goto(Services.Gameboard.UI + '/admin/dashboard', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
   });
 });

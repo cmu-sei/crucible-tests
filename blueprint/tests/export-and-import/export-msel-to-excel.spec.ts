@@ -7,12 +7,14 @@ import { test, expect, Services, BLUEPRINT_THEMES, applyBlueprintTheme } from '.
 import fs from 'fs';
 import {
   getBlueprintToken,
-  createMsel,
   deleteMsel,
   createRenderableScenarioEvent,
-  tempBlueprintName,
   findMselRowByName,
   downloadMselFile,
+  createSharedRenderableMsel,
+  resetSharedRenderableMsel,
+  type CreatedMsel,
+  sharedChildName,
 } from '../../test-helpers';
 
 /**
@@ -27,32 +29,42 @@ import {
  * Now the MSEL is seeded (with a scenario event, so the workbook has content), located by
  * name via the list's search box, exported, and deleted in teardown.
  */
+// One MSEL with the standard DataFields (13 POSTs) is seeded per file and shared by both
+// theme runs. Safe to share: the test only downloads the MSEL.
+// Each test seeds its own uniquely named events, and `resetSharedRenderableMsel` removes
+// them (and any extra DataField) in afterEach.
+let shared: CreatedMsel;
+
+test.beforeAll(async ({}, workerInfo) => {
+  shared = await createSharedRenderableMsel(await getBlueprintToken(), 'XlsxExport', workerInfo.parallelIndex);
+});
+
+test.afterAll(async () => {
+  if (shared) await deleteMsel(await getBlueprintToken(), shared.id);
+});
+
 for (const theme of BLUEPRINT_THEMES) {
     test.describe(`${theme} theme › Export and Import`, () => {
+    // Per-test names for this test's own records on the shared MSEL.
+    let child: (base: string) => string;
     let token: string;
     let mselId: string;
     let mselName: string;
 
-    test.beforeEach(async () => {
+    test.beforeEach(async ({}, testInfo) => {
+      child = (base: string) => sharedChildName(base, testInfo, theme);
       token = await getBlueprintToken();
-      mselName = tempBlueprintName('TestBP-Xlsx');
-      const msel = await createMsel(token, {
-        name: mselName,
-        description: 'Seeded for xlsx export',
-      });
-      mselId = msel.id;
+      mselId = shared.id;
+      mselName = shared.name;
 
-      await createRenderableScenarioEvent(token, mselId, 'Event in the workbook', {
+      await createRenderableScenarioEvent(token, mselId, child('TestBP-XlsxEvent'), {
         deltaSeconds: 600,
       });
     });
 
     test.afterEach(async () => {
-      try {
-        if (mselId) await deleteMsel(token, mselId);
-      } catch (err) {
-        console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
-      }
+      // Back to "standard DataFields, no events" for the next test on the shared MSEL.
+      await resetSharedRenderableMsel(token, mselId);
     });
 
     test('Export MSEL to Excel', async ({ blueprintAuthenticatedPage: page }) => {

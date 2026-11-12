@@ -2,7 +2,14 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 import { test as base, Page } from '@playwright/test';
-import { Services, authenticateWithKeycloak } from '../shared-fixtures';
+import { authStatePath } from '../auth-paths';
+import { freshAuthStatePath, savedSessionState } from '../auth-state';
+import {
+  Services,
+  authenticateWithKeycloak,
+  ensureAuthenticatedShell,
+  setAuthenticatedSignal,
+} from '../shared-fixtures';
 import {
   THEMES,
   Theme,
@@ -11,6 +18,8 @@ import {
   closeMenuAndWaitForOverlay,
   themedUrl,
 } from '../theme-helpers';
+import { poolUsers, PoolUser } from '../user-pool';
+import { deletePlayerUser, getPlayerToken, provisionPlayerUser, PlayerUser } from '../player-helpers';
 
 export async function authenticatePlayerVmWithKeycloak(
   page: Page,
@@ -37,9 +46,87 @@ export type PlayerVmFixtures = {
   playerVmAuthenticatedPage: Page;
 };
 
-export const test = base.extend<PlayerVmFixtures>({
-  playerVmAuthenticatedPage: async ({ page }, use) => {
-    await authenticatePlayerVmWithKeycloak(page);
+/** A pool user (see `user-pool.ts`) with its Player row provisioned. */
+export type PlayerVmPoolUser = PoolUser & { player: PlayerUser };
+
+export type PlayerVmWorkerFixtures = {
+  /** This worker's two pool users: non-admins, registered with Player, on no team. */
+  nonAdminUsers: PlayerVmPoolUser[];
+  /** The first of `nonAdminUsers`. */
+  nonAdminUser: PlayerVmPoolUser;
+};
+
+/**
+ * Extended test with Player VM-specific fixtures.
+ *
+ * `storageState` defaults to Player's pre-authenticated state captured once by
+ * global-setup.ts (refreshed when its token is near expiry), so every spec's
+ * browser context starts with a valid Player OIDC token in sessionStorage.
+ * The `page` fixture replays that sessionStorage and registers the Player Menu
+ * button as the authenticated signal, so the existing `authenticatePlayerVmWithKeycloak`
+ * calls return as soon as the Player shell renders — no per-test Keycloak round-trip.
+ * Auth-flow specs opt out with `test.use({ storageState: { cookies: [], origins: [] } })`.
+ *
+ * Player's OIDC client (oidc-client-ts) stores its token in sessionStorage, not localStorage,
+ * so the saved state alone is not enough: the `page` override below replays the session entries
+ * via `addInitScript` when the state was loaded from the saved path.
+ */
+export const test = base.extend<PlayerVmFixtures, PlayerVmWorkerFixtures>({
+  // Reset contract for Player: a test removes the pool user from every team it put them
+  // on — in practice by deleting the view it seeded, which takes the view's teams and
+  // their memberships with it. The Player row (Player has no "create user" call: the row
+  // appears when the user's token is first presented) is provisioned here and deleted when
+  // the worker ends. Leased by `parallelIndex`, the stable worker slot.
+  nonAdminUsers: [
+    async ({}, use, workerInfo) => {
+      const leased: PlayerVmPoolUser[] = [];
+      for (const user of poolUsers(workerInfo.parallelIndex, 2)) {
+        const token = await getPlayerToken(user.username, user.password);
+        leased.push({ ...user, player: await provisionPlayerUser(token, user.userId) });
+      }
+      await use(leased);
+      const adminToken = await getPlayerToken();
+      for (const user of leased) await deletePlayerUser(adminToken, user.userId);
+    },
+    { scope: 'worker' },
+  ],
+  nonAdminUser: [async ({ nonAdminUsers }, use) => use(nonAdminUsers[0]), { scope: 'worker' }],
+
+  // `undefined` when global-setup could not provision Player; the shell check below
+  // then falls back to an interactive login.
+  storageState: async ({ browser }, use) => use(await freshAuthStatePath('player', browser)),
+
+  // Override the built-in `page` fixture to replay sessionStorage when the saved state is loaded.
+  // Player's OIDC token lives in sessionStorage, and Playwright's `storageState` only restores
+  // localStorage/cookies, so without this the default `page` would navigate to Player with cookies
+  // but no token, triggering a full login despite the state being loaded.
+  // It also registers the Player Menu button as this page's authenticated signal, so the specs'
+  // `authenticatePlayerVmWithKeycloak` calls see the signed-in shell (or the Keycloak form) as
+  // soon as it renders instead of sitting out the helper's 15 s "will OIDC redirect?" window.
+  page: async ({ page, storageState }, use) => {
+    setAuthenticatedSignal(page, page.getByRole('button', { name: 'Menu', exact: true }));
+    if (storageState === authStatePath('player')) {
+      const entries = savedSessionState('player');
+      await page.addInitScript(
+        (items) => {
+          for (const [k, v] of items) sessionStorage.setItem(k, v);
+        },
+        entries
+      );
+    }
+    await use(page);
+  },
+
+  playerVmAuthenticatedPage: async ({ page, storageState }, use) => {
+    await ensureAuthenticatedShell(page, {
+      app: 'player',
+      url: Services.Player.UI,
+      shell: page.getByRole('button', { name: 'Menu', exact: true }),
+      login: authenticatePlayerVmWithKeycloak,
+      restoreSession: storageState === authStatePath('player'),
+      fromSavedState: storageState === authStatePath('player'),
+    });
+
     await use(page);
   },
 });

@@ -14,7 +14,6 @@ test.describe('Profile', () => {
     await page.locator('text=History').first().click();
 
     // URL and an identifiable element (heading or empty-state message) should appear.
-    await page.waitForTimeout(1500);
     // Either the user has prior games (list rows) or the page shows an empty state.
     // Assert at least that the word "History" remains visible somewhere.
     await expect(page.locator('text=History').first()).toBeVisible();

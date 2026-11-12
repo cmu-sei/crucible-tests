@@ -38,7 +38,7 @@ test.describe('Admin - Games', () => {
       await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
 
       await page.getByRole('button', { name: /New Game/i }).click();
-      await page.waitForTimeout(3000);
+      await expect(page).not.toHaveURL(/\/admin\/dashboard\/?$/);
 
       const after = await ctx.fetch(`${Services.Gameboard.API}/api/games`, {
         headers: { Authorization: `Bearer ${token}` },

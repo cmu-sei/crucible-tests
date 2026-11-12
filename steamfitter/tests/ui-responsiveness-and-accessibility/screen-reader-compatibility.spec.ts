@@ -89,13 +89,13 @@ for (const theme of STEAMFITTER_THEMES) {
     const USER_NAME = `E2E A11y User ${STAMP}`;
     const ROLE_NAME = `E2E A11y Role ${STAMP}`;
 
-    test.beforeEach(async () => {
+    test.beforeAll(async () => {
       await seedGroup(GROUP_NAME);
       await seedUser(USER_NAME);
       await seedSystemRole(ROLE_NAME);
     });
 
-    test.afterEach(async () => {
+    test.afterAll(async () => {
       await deleteGroupsByPrefix(['E2E A11y Group']);
       await deleteUsersByPrefix(['E2E A11y User']);
       await deleteSystemRolesByPrefix(['E2E A11y Role']);

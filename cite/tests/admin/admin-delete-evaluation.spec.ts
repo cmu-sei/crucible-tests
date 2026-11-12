@@ -36,7 +36,6 @@ for (const theme of CITE_THEMES) {
       await expect(searchBox).toBeVisible({ timeout: 5000 });
       await searchBox.clear();
       await searchBox.fill(evalName);
-      await page.waitForTimeout(1000);
 
       // Find the exact eval row by searching for the cell with exact name match
       const evalRow = page.locator('tbody tr').filter({ has: page.getByRole('cell', { name: evalName, exact: true }) }).first();
@@ -45,7 +44,6 @@ for (const theme of CITE_THEMES) {
       // Click the row cell to expand and enable action buttons
       const evalCell = evalRow.getByRole('cell', { name: evalName, exact: true });
       await evalCell.click();
-      await page.waitForTimeout(1000);
 
       // 5. Find and click the delete button using getByRole within the row
       const deleteButton = evalRow.getByRole('button', { name: /Delete.*Evaluation/i });
@@ -59,7 +57,6 @@ for (const theme of CITE_THEMES) {
       const yesButton = confirmDialog.getByRole('button', { name: 'Delete' });
       await yesButton.click();
       await expect(confirmDialog).not.toBeVisible({ timeout: 5000 });
-      await page.waitForTimeout(1000);
 
       // 7. Verify the evaluation is gone from the table
       await expect(evalRow).not.toBeVisible({ timeout: 10000 });

@@ -4,29 +4,28 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen, CASTER_THEMES, setCasterTheme } from '../../fixtures';
+import { test, expect, seedCasterSharedProjectPageFree, casterSharedProjectName, deleteCasterProjectPageFree, CASTER_THEMES, setCasterTheme, Services } from '../../fixtures';
 
-for (const theme of CASTER_THEMES) {
-  test.describe(`${theme} theme › Users and Permissions Management`, () => {
-    test('Project-Level User Permissions', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+test.describe('Users and Permissions Management', () => {
+  let projectId: string;
+  let projectName: string;
+
+  test.beforeAll(async ({}, workerInfo) => {
+    projectName = casterSharedProjectName('project-level-user-permissions', workerInfo);
+    projectId = await seedCasterSharedProjectPageFree(projectName);
+  });
+
+  test.afterAll(async () => {
+    if (projectId) await deleteCasterProjectPageFree(projectId);
+  });
+
+  for (const theme of CASTER_THEMES) {
+    test(`${theme} theme › Project-Level User Permissions`, async ({ casterAuthenticatedPage: page }) => {
       await setCasterTheme(page, theme);
 
-      await expect(page.getByText('My Projects')).toBeVisible();
-
-      await page.locator('button[mattooltip="Add New Project"]').click();
-      await expect(page.getByRole('dialog', { name: 'Add Project' })).toBeVisible();
-      await page.getByRole('textbox', { name: 'Name' }).fill('Permission Project');
-
-      const createResponsePromise = page.waitForResponse(resp =>
-        resp.url().includes('/api/projects') && resp.request().method() === 'POST' && resp.ok()
-      );
-      await page.getByRole('button', { name: 'Save' }).click();
-
-      const createResponse = await createResponsePromise;
-      const projectData = await createResponse.json();
-      cleanupCasterProject(projectData.id);
-
-      await expectCasterProjectOpen(page, 'Permission Project');
+      // Navigate to project
+      await page.goto(`${Services.Caster.UI}/projects/${projectId}`);
+      await expect(page.getByText(projectName, { exact: true })).toBeVisible({ timeout: 10000 });
     });
-  });
-}
+  }
+});

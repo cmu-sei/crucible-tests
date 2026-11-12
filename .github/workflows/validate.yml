@@ -46,6 +46,18 @@ jobs:
       - name: Check for conditional self-skips
         run: npm run check:skips
 
+      # Fails on any wait antipattern without an escape comment: fixed sleeps,
+      # networkidle waits, Promise.race over wait calls, long timeouts, and
+      # test.setTimeout. See scripts/check-wait-antipatterns.mjs.
+      - name: Check for wait antipatterns
+        run: npm run check:waits
+
+      # Table-driven self-check of playwright-run-filters.ts: which apps a run's
+      # path filters include. Setup and teardown gate provisioning and every
+      # app's purge on that answer. See scripts/check-run-filters.mjs.
+      - name: Check run-filter parsing
+        run: npm run check:run-filters
+
       # Loads every spec and fixture. Catches syntax errors, unresolved imports,
       # renamed exports and duplicate test titles, and fails outright if zero
       # tests are discovered - which is what a broken testMatch or a spec moved

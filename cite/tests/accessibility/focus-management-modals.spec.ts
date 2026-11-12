@@ -12,11 +12,8 @@ for (const theme of CITE_THEMES) {
       await setCiteTheme(page, theme);
 
       // Navigate to the home page
-      await page.waitForLoadState('networkidle');
-
       // Wait for the page to be loaded with content
       await expect(page.locator('text=My Evaluations')).toBeVisible({ timeout: 10000 });
-      await page.waitForTimeout(1000);
 
       // Test focus management by using keyboard navigation through interactive elements
       // This tests that focus moves logically and is visible throughout the interface
@@ -40,7 +37,6 @@ for (const theme of CITE_THEMES) {
 
       for (let i = 0; i < 8; i++) {
         await page.keyboard.press('Tab');
-        await page.waitForTimeout(200);
 
         const focusInfo = await page.evaluate(() => {
           const el = document.activeElement;
@@ -63,7 +59,6 @@ for (const theme of CITE_THEMES) {
 
       // 3. Test Shift+Tab moves focus backwards
       await page.keyboard.press('Shift+Tab');
-      await page.waitForTimeout(200);
 
       const afterShiftTab = await page.evaluate(() => {
         const el = document.activeElement;

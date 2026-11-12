@@ -11,21 +11,21 @@ test.describe('Accessibility', () => {
 
     // 1. Navigate to a form area
     const sidebarToggle = page.locator('button[aria-label="Toggle sidebar"], button:has(mat-icon:text("menu"))').first();
+    const sidebar = page.locator('mat-sidenav, mat-drawer, [class*="sidebar"]').first();
+    const workspaceItems = page.locator('[class*="workspace-card"], [class*="item-card"], mat-list-item, [class*="list-item"]');
     const hasSidebarToggle = await sidebarToggle.isVisible({ timeout: 10000 }).catch(() => false);
     if (hasSidebarToggle) {
       await sidebarToggle.click();
-      await page.waitForTimeout(500);
+      await expect(sidebar).toBeVisible({ timeout: 5000 });
     }
-
-    const workspaceItems = page.locator('[class*="workspace-card"], [class*="item-card"], mat-list-item, [class*="list-item"]');
     const itemCount = await workspaceItems.count();
 
     if (itemCount > 0) {
+      const inputs = page.locator('input:visible, textarea:visible, select:visible');
       await workspaceItems.first().click();
-      await page.waitForTimeout(2000);
+      await expect(inputs.first()).toBeVisible({ timeout: 10000 });
 
       // expect: All form fields have associated labels
-      const inputs = page.locator('input:visible, textarea:visible, select:visible');
       const inputCount = await inputs.count();
 
       for (let i = 0; i < Math.min(inputCount, 5); i++) {

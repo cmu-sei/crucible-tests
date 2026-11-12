@@ -11,11 +11,10 @@ import { test, expect, Services } from '../../fixtures';
 // supplied.
 test.describe('Error Handling', () => {
   test('Form Validation - Required Fields', async ({ gameboardAuthenticatedPage: page }) => {
-    await page.goto(Services.Gameboard.UI + '/admin/notifications', { waitUntil: 'networkidle' });
+    await page.goto(Services.Gameboard.UI + '/admin/notifications', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Notifications' })).toBeVisible();
 
     await page.getByRole('button', { name: /Create Notification/i }).click();
-    await page.waitForTimeout(1500);
 
     // In the create notification modal, Save should be disabled until required fields are filled.
     const saveBtn = page.getByRole('button', { name: 'Save', exact: true });

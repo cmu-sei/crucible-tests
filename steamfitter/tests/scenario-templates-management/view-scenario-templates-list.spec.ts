@@ -16,12 +16,12 @@ for (const theme of STEAMFITTER_THEMES) {
     const TEMPLATE_DESCRIPTION = 'Seeded so the list has a known row to assert on.';
 
     // Seed via the API so the list is guaranteed to have our row regardless of what
-    // else exists in the environment.
-    test.beforeEach(async () => {
+    // else exists in the environment. Shared across both theme runs — test only reads.
+    test.beforeAll(async () => {
       await seedScenarioTemplate(TEMPLATE_NAME, TEMPLATE_DESCRIPTION, 1);
     });
 
-    test.afterEach(async () => {
+    test.afterAll(async () => {
       await deleteScenarioTemplatesByPrefix(['E2E View List Template']);
     });
 

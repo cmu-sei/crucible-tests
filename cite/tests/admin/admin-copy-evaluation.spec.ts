@@ -37,14 +37,14 @@ for (const theme of CITE_THEMES) {
       await expect(searchBox).toBeVisible({ timeout: 5000 });
       await searchBox.clear();
       await searchBox.fill(evalName);
-      await page.waitForTimeout(1000);
+      // Rule B: evalRow wait below serves as completion signal
 
       const evalRow = page.locator('tbody tr').filter({ hasText: evalName }).first();
       await expect(evalRow).toBeVisible({ timeout: 10000 });
 
       // 4. Click the row to enable action buttons
       await evalRow.click();
-      await page.waitForTimeout(500);
+      // Rule C: copyButton wait below serves as completion signal
 
       // 5. Copy the evaluation using the copy button
       const copyButton = evalRow.locator(`button[title^="Copy"]`);
@@ -58,13 +58,13 @@ for (const theme of CITE_THEMES) {
 
       await copyButton.click();
       await copyPromise.catch(() => {});
-      await page.waitForTimeout(1000);
+      // Rule D: copiedRow search+wait below serves as completion signal
 
       // 6. Verify the copy appears in the list (copy is named "{original} - Admin User")
       const copiedEvalName = `${evalName} ${COPIED_EVAL_SUFFIX}`;
       await searchBox.clear();
       await searchBox.fill(copiedEvalName);
-      await page.waitForTimeout(1000);
+      // Rule B: copiedRow wait below serves as completion signal
 
       const copiedRow = page.locator('tbody tr').filter({ hasText: copiedEvalName }).first();
       await expect(copiedRow).toBeVisible({ timeout: 10000 });

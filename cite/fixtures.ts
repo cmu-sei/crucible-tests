@@ -1,8 +1,9 @@
 // Copyright 2026 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
-import { test as base, Page, request as pwRequest, APIRequestContext } from '@playwright/test';
 import fs from 'fs';
+import path from 'path';
+import { test as base, expect, Page, APIRequestContext } from '@playwright/test';
 import {
   Services,
   serviceUrlPattern,
@@ -10,15 +11,13 @@ import {
   authenticateWithKeycloak,
   waitForFirstVisible,
   settleForResponse,
+  ensureAuthenticatedShell,
 } from '../shared-fixtures';
 import { authStatePath } from '../auth-paths';
-import {
-  getKeycloakAdminToken,
-  createKeycloakUser,
-  deleteKeycloakUser,
-  tempUsername,
-  getUserToken,
-} from '../keycloak-admin';
+import { cachedUserToken, sharedRequestContext } from '../api-cache';
+import { acquireAuthLock, freshAuthStatePath, releaseAuthLock } from '../auth-state';
+import { getUserToken } from '../keycloak-admin';
+import { poolUsers, PoolUser } from '../user-pool';
 
 /**
  * CITE-specific fixtures
@@ -40,13 +39,57 @@ export async function authenticateCiteWithKeycloak(
 }
 
 // ========================================================================
+// Shared record names and the run-level seed file
+// ========================================================================
+
+/** The scoresheet-ready scoring model every suite reuses (`ensureScoringModelExists`). */
+export const SHARED_SCORING_MODEL = 'E2E Shared Scoring Model';
+/** The team type every suite reuses (`ensureTeamTypeExists`). */
+export const SHARED_TEAM_TYPE = 'E2E Shared Team Type';
+/** Run-level evaluation the read-only consumers open; never advanced, scored, edited or deleted by a test. */
+export const SHARED_READ_ONLY_EVALUATION = 'E2E Shared Read-Only Evaluation';
+/** A second run-level read-only evaluation, for list specs that need two rows to filter or sort. */
+export const SHARED_BETA_EVALUATION = 'E2E Shared Beta Evaluation';
+
+/** The one team `seedActiveEvaluation` puts on an evaluation (named as `seedCompleteEvaluation` names its team). */
+export function sharedTeamName(evaluationDescription: string): string {
+  return `Team for ${evaluationDescription}`;
+}
+
+/** Ids global-setup writes to `.auth/cite-seed.json` for the whole run. */
+export type CiteSeedIds = {
+  readOnlyEvaluationId: string;
+  betaEvaluationId: string;
+  sharedScoringModelId: string;
+  sharedTeamTypeId: string;
+  adminUserId: string;
+};
+
+/** `.auth/cite-seed.json` — gitignored with the rest of `.auth/`. */
+export function citeSeedPath(): string {
+  return path.resolve(__dirname, '..', '.auth', 'cite-seed.json');
+}
+
+function readCiteSeedFile(): CiteSeedIds | null {
+  try {
+    return JSON.parse(fs.readFileSync(citeSeedPath(), 'utf8')) as CiteSeedIds;
+  } catch {
+    return null;
+  }
+}
+
+// ========================================================================
 // API-based test data seeding and cleanup
 // ========================================================================
 
 /**
- * Get a Keycloak access token for the CITE API.
+ * Get a Keycloak access token for the CITE API, cached per worker until near expiry.
  */
 export async function getCiteApiToken(apiContext: APIRequestContext): Promise<string> {
+  return cachedUserToken('crucible', 'cite.ui', 'admin', 'openid profile cite', () => fetchCiteApiToken(apiContext));
+}
+
+async function fetchCiteApiToken(apiContext: APIRequestContext): Promise<string> {
   const tokenResponse = await apiContext.post(
     `${Services.Keycloak}/realms/crucible/protocol/openid-connect/token`,
     {
@@ -76,8 +119,8 @@ export async function getCiteApiToken(apiContext: APIRequestContext): Promise<st
 export async function seedScoringModel(
   description: string = `Test Scoring Model ${Date.now()}`
 ): Promise<string> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getCiteApiToken(apiContext);
 
     const response = await apiContext.post(`${Services.Cite.API}/api/scoringmodels`, {
@@ -113,8 +156,6 @@ export async function seedScoringModel(
     const scoringModel = await response.json();
     console.log(`API seed: Created scoring model "${description}" (${scoringModel.id})`);
     return scoringModel.id;
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -132,10 +173,14 @@ export async function seedScoringModel(
  * precondition without depending on cross-test seed state.
  */
 export async function ensureScoringModelExists(
-  description: string = 'E2E Shared Scoring Model'
+  description: string = SHARED_SCORING_MODEL
 ): Promise<string> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  // The run-level seed (global-setup) already ensured the default model.
+  const seeded = readCiteSeedFile();
+  if (seeded && description === SHARED_SCORING_MODEL) return seeded.sharedScoringModelId;
+
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getCiteApiToken(apiContext);
     const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
     const listResponse = await apiContext.get(`${Services.Cite.API}/api/scoringmodels`, {
@@ -204,8 +249,6 @@ export async function ensureScoringModelExists(
 
     console.log(`API seed: Created scoresheet-ready scoring model "${description}" (${model.id})`);
     return model.id;
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -259,10 +302,12 @@ async function seedScoringCategoryWithOptions(
  */
 export async function seedEvaluation(
   scoringModelId: string,
-  description: string = `Test Evaluation ${Date.now()}`
+  description: string = `Test Evaluation ${Date.now()}`,
+  /** Further evaluation fields, e.g. `{ galleryExhibitId }`. */
+  extra: Record<string, unknown> = {},
 ): Promise<string> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getCiteApiToken(apiContext);
 
     const response = await apiContext.post(`${Services.Cite.API}/api/evaluations`, {
@@ -280,6 +325,7 @@ export async function seedEvaluation(
         situationTime: new Date().toISOString(),
         situationDescription: 'Test situation',
         showAdvanceButton: true,
+        ...extra,
       },
     });
 
@@ -290,8 +336,6 @@ export async function seedEvaluation(
     const evaluation = await response.json();
     console.log(`API seed: Created evaluation "${description}" (${evaluation.id})`);
     return evaluation.id;
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -304,8 +348,8 @@ export async function seedMove(
   moveNumber: number,
   description: string = `Move ${moveNumber}`
 ): Promise<string> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getCiteApiToken(apiContext);
 
     const response = await apiContext.post(`${Services.Cite.API}/api/moves`, {
@@ -329,8 +373,6 @@ export async function seedMove(
     const move = await response.json();
     console.log(`API seed: Created move "${description}" for evaluation ${evaluationId} (${move.id})`);
     return move.id;
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -342,8 +384,8 @@ export async function seedTeamType(
   name: string = `Test Team Type ${Date.now()}`,
   options: { isOfficialScoreContributor?: boolean } = {}
 ): Promise<string> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getCiteApiToken(apiContext);
 
     const response = await apiContext.post(`${Services.Cite.API}/api/teamtypes`, {
@@ -364,8 +406,6 @@ export async function seedTeamType(
     const teamType = await response.json();
     console.log(`API seed: Created team type "${name}" (${teamType.id})`);
     return teamType.id;
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -374,10 +414,12 @@ export async function seedTeamType(
  * a UI dropdown when adding a team). Returns an existing team type id or seeds one.
  */
 export async function ensureTeamTypeExists(
-  name: string = 'E2E Shared Team Type'
+  name: string = SHARED_TEAM_TYPE
 ): Promise<string> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const seeded = readCiteSeedFile();
+  if (seeded && name === SHARED_TEAM_TYPE) return seeded.sharedTeamTypeId;
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getCiteApiToken(apiContext);
     const listResponse = await apiContext.get(`${Services.Cite.API}/api/teamtypes`, {
       headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
@@ -392,8 +434,6 @@ export async function ensureTeamTypeExists(
         return existing.id;
       }
     }
-  } finally {
-    await apiContext.dispose();
   }
   return seedTeamType(name);
 }
@@ -407,8 +447,8 @@ export async function seedTeam(
   teamTypeId: string,
   name: string = `Test Team ${Date.now()}`
 ): Promise<string> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getCiteApiToken(apiContext);
 
     const response = await apiContext.post(`${Services.Cite.API}/api/teams`, {
@@ -432,8 +472,6 @@ export async function seedTeam(
     const team = await response.json();
     console.log(`API seed: Created team "${name}" for evaluation ${evaluationId} (${team.id})`);
     return team.id;
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -445,8 +483,8 @@ export async function seedTeamMembership(
   teamId: string,
   userId: string
 ): Promise<string> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getCiteApiToken(apiContext);
 
     const response = await apiContext.post(`${Services.Cite.API}/api/teams/${teamId}/memberships`, {
@@ -467,8 +505,6 @@ export async function seedTeamMembership(
     const membership = await response.json();
     console.log(`API seed: Added user ${userId} to team ${teamId} (membership ${membership.id})`);
     return membership.id;
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -476,8 +512,10 @@ export async function seedTeamMembership(
  * Get the admin user's ID from the CITE API by looking for a user named "Admin User".
  */
 export async function getCurrentUserId(): Promise<string> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const seeded = readCiteSeedFile();
+  if (seeded) return seeded.adminUserId;
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getCiteApiToken(apiContext);
 
     const response = await apiContext.get(`${Services.Cite.API}/api/users`, {
@@ -498,8 +536,6 @@ export async function getCurrentUserId(): Promise<string> {
     }
 
     return adminUser.id;
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -507,8 +543,8 @@ export async function getCurrentUserId(): Promise<string> {
  * Delete a scoring model by ID via the CITE API.
  */
 export async function apiDeleteScoringModel(scoringModelId: string): Promise<void> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getCiteApiToken(apiContext);
 
     const response = await apiContext.delete(`${Services.Cite.API}/api/scoringmodels/${scoringModelId}`, {
@@ -520,8 +556,6 @@ export async function apiDeleteScoringModel(scoringModelId: string): Promise<voi
     } else {
       console.warn(`API cleanup: Failed to delete scoring model ${scoringModelId}: ${response.status()}`);
     }
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -529,8 +563,8 @@ export async function apiDeleteScoringModel(scoringModelId: string): Promise<voi
  * Delete an evaluation by ID via the CITE API.
  */
 export async function apiDeleteEvaluation(evaluationId: string): Promise<void> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getCiteApiToken(apiContext);
 
     const response = await apiContext.delete(`${Services.Cite.API}/api/evaluations/${evaluationId}`, {
@@ -542,8 +576,6 @@ export async function apiDeleteEvaluation(evaluationId: string): Promise<void> {
     } else {
       console.warn(`API cleanup: Failed to delete evaluation ${evaluationId}: ${response.status()}`);
     }
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -551,8 +583,8 @@ export async function apiDeleteEvaluation(evaluationId: string): Promise<void> {
  * Delete a team type by ID via the CITE API.
  */
 export async function apiDeleteTeamType(teamTypeId: string): Promise<void> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getCiteApiToken(apiContext);
 
     const response = await apiContext.delete(`${Services.Cite.API}/api/teamtypes/${teamTypeId}`, {
@@ -564,8 +596,6 @@ export async function apiDeleteTeamType(teamTypeId: string): Promise<void> {
     } else {
       console.warn(`API cleanup: Failed to delete team type ${teamTypeId}: ${response.status()}`);
     }
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -577,8 +607,8 @@ export async function seedEvaluationMembership(
   evaluationId: string,
   userId: string
 ): Promise<string> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getCiteApiToken(apiContext);
 
     const response = await apiContext.post(`${Services.Cite.API}/api/evaluations/${evaluationId}/memberships`, {
@@ -599,8 +629,6 @@ export async function seedEvaluationMembership(
     const membership = await response.json();
     console.log(`API seed: Added user ${userId} as evaluation member for ${evaluationId} (membership ${membership.id})`);
     return membership.id;
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -653,68 +681,311 @@ export async function seedCompleteEvaluation(
   };
 }
 
-/** A temporary non-admin user on one team, from `seedTeamMemberUser`. */
-export type TeamMemberUser = {
-  username: string;
-  password: string;
-  /** The Keycloak id, which CITE also uses as the user's id. */
-  userId: string;
+/**
+ * Make `moveNumber` the evaluation's current move through the API's set-current-move
+ * call (`PUT /api/evaluations/{id}/move/{move}`), which also copies that move's
+ * situation onto the evaluation — the same change the dashboard's Advance Move makes.
+ */
+export async function setEvaluationCurrentMove(evaluationId: string, moveNumber: number): Promise<void> {
+  const apiContext = await sharedRequestContext();
+  const token = await getCiteApiToken(apiContext);
+  const response = await apiContext.put(`${Services.Cite.API}/api/evaluations/${evaluationId}/move/${moveNumber}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok()) {
+    throw new Error(`Failed to set evaluation ${evaluationId} to move ${moveNumber}: ${response.status()} ${await response.text()}`);
+  }
+}
+
+/** Ids of an evaluation `seedActiveEvaluation` created. */
+export type SeededEvaluation = {
+  evaluationId: string;
+  /** The evaluation's one team, which Admin User is a member of. */
+  teamId: string;
+  /** Moves 1..n (move 0, "Default Move", is created by the API with the evaluation). */
+  moveIds: string[];
 };
 
 /**
- * Create a Keycloak user with no CITE system permissions and put it on `teamId` with the
- * default Member role.
+ * Seed an Active evaluation Admin User can open and score, entirely through the API:
+ * on the shared scoresheet-ready scoring model (the API copies it onto the evaluation),
+ * with moves 1..`moves` on top of the API's default move 0, and one team of the shared
+ * team type (`sharedTeamName(description)` unless `teamName` is given) with Admin User on it. `currentMoveNumber`
+ * optionally makes a later move current.
  *
- * For specs about what a team member sees: `admin` holds every system permission, so it
- * reads every move and every official score, and it can never show what a team limits.
- * CITE creates its own user row the first time a token is presented, so the user calls
- * the API once before the membership is added. Pair every call with
- * `cleanupTeamMemberUser`, after the evaluation is deleted.
+ * This is what the report and scoresheet suites used to build through six admin
+ * dialogs. Only the evaluation is the caller's to delete (`apiDeleteEvaluation`); the
+ * scoring model and team type are the shared ensure-exists records.
  */
-export async function seedTeamMemberUser(teamId: string, prefix: string = 'citemember'): Promise<TeamMemberUser> {
-  const kcAdminToken = await getKeycloakAdminToken();
-  const username = tempUsername(prefix);
-  const password = 'TestPassword123!';
-  const kcUser = await createKeycloakUser(kcAdminToken, { username, password, realmRoles: [] });
-  const member: TeamMemberUser = { username, password, userId: kcUser.id };
+export async function seedActiveEvaluation(
+  description: string,
+  options: {
+    moves?: number;
+    currentMoveNumber?: number;
+    /** Team name; defaults to `sharedTeamName(description)`. */
+    teamName?: string;
+    /** Links the evaluation to a Gallery exhibit. */
+    galleryExhibitId?: string;
+  } = {},
+): Promise<SeededEvaluation> {
+  const scoringModelId = await ensureScoringModelExists();
+  const teamTypeId = await ensureTeamTypeExists();
+  const userId = await getCurrentUserId();
 
+  const evaluationId = await seedEvaluation(
+    scoringModelId,
+    description,
+    options.galleryExhibitId ? { galleryExhibitId: options.galleryExhibitId } : {},
+  );
   try {
-    const userToken = await getUserToken(username, password, 'cite.ui', 'openid profile cite');
-    const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-    try {
-      const provision = await apiContext.get(`${Services.Cite.API}/api/my-evaluations`, {
-        headers: { Authorization: `Bearer ${userToken}` },
-      });
-      if (!provision.ok()) {
-        throw new Error(`Failed to provision CITE user ${username}: ${provision.status()} ${await provision.text()}`);
-      }
-    } finally {
-      await apiContext.dispose();
+    const moveIds: string[] = [];
+    for (let i = 1; i <= (options.moves ?? 0); i++) {
+      moveIds.push(await seedMove(evaluationId, i, `Move ${i}`));
     }
-
-    await seedTeamMembership(teamId, member.userId);
-    return member;
+    const teamId = await seedTeam(evaluationId, teamTypeId, options.teamName ?? sharedTeamName(description));
+    await seedTeamMembership(teamId, userId);
+    if (options.currentMoveNumber) {
+      await setEvaluationCurrentMove(evaluationId, options.currentMoveNumber);
+    }
+    return { evaluationId, teamId, moveIds };
   } catch (error) {
-    await cleanupTeamMemberUser(member);
+    await apiDeleteEvaluation(evaluationId);
     throw error;
   }
 }
 
-/** Delete the CITE user row and the Keycloak user `seedTeamMemberUser` created. */
-export async function cleanupTeamMemberUser(member: TeamMemberUser): Promise<void> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
+/**
+ * Ensure an intact evaluation named `description` exists (see `seedActiveEvaluation`;
+ * no moves beyond the default move 0) and return its id. An intact copy is Active, on
+ * move 0 and has its team; among several, the lowest id is kept, so every caller
+ * picks the same one.
+ *
+ * `repair` (global-setup only, which runs before any worker exists) also deletes every
+ * other copy — duplicates and damaged ones a crashed earlier run left — so the run's
+ * readers see a single row. Workers never pass it: a copy that looks damaged or
+ * redundant to a worker may be one another process is still building or using.
+ */
+async function ensureSharedEvaluation(description: string, repair: boolean): Promise<string> {
+  const apiContext = await sharedRequestContext();
+  const token = await getCiteApiToken(apiContext);
+  const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
+
+  const listResponse = await apiContext.get(`${Services.Cite.API}/api/evaluations`, { headers });
+  if (!listResponse.ok()) {
+    throw new Error(`Failed to list evaluations: ${listResponse.status()} ${await listResponse.text()}`);
+  }
+  const matches = ((await listResponse.json()) as Array<{ id: string; description: string; status: string; currentMoveNumber: number }>)
+    .filter(e => e.description === description)
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+
+  let keep: string | null = null;
+  for (const evaluation of matches) {
+    let intact = false;
+    if (!keep && evaluation.status === 'Active' && evaluation.currentMoveNumber === 0) {
+      const teams = await apiContext.get(`${Services.Cite.API}/api/evaluations/${evaluation.id}/teams`, { headers });
+      intact = teams.ok() && ((await teams.json()) as Array<{ name: string }>).some(t => t.name === sharedTeamName(description));
+    }
+    if (intact) keep = evaluation.id;
+    else if (repair) await apiDeleteEvaluation(evaluation.id);
+    if (keep && !repair) break;
+  }
+  return keep ?? (await seedActiveEvaluation(description)).evaluationId;
+}
+
+/** Ensure the run-level `E2E Shared Read-Only Evaluation` exists and return its id. */
+export function ensureSharedReadOnlyEvaluation(): Promise<string> {
+  return ensureSharedEvaluation(SHARED_READ_ONLY_EVALUATION, false);
+}
+
+/** Ensure the run-level `E2E Shared Beta Evaluation` exists and return its id. */
+export function ensureSharedBetaEvaluation(): Promise<string> {
+  return ensureSharedEvaluation(SHARED_BETA_EVALUATION, false);
+}
+
+/** `repair`: see `ensureSharedEvaluation` — true only from global-setup. */
+async function buildCiteSeedIds(repair: boolean): Promise<CiteSeedIds> {
+  const sharedScoringModelId = await ensureScoringModelExists();
+  const sharedTeamTypeId = await ensureTeamTypeExists();
+  const adminUserId = await getCurrentUserId();
+  const readOnlyEvaluationId = await ensureSharedEvaluation(SHARED_READ_ONLY_EVALUATION, repair);
+  const betaEvaluationId = await ensureSharedEvaluation(SHARED_BETA_EVALUATION, repair);
+  return { readOnlyEvaluationId, betaEvaluationId, sharedScoringModelId, sharedTeamTypeId, adminUserId };
+}
+
+/** Write the seed file via `.tmp` + rename, so a concurrent reader never sees half of it. */
+function writeCiteSeedFile(ids: CiteSeedIds): void {
+  const file = citeSeedPath();
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const tmp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(ids, null, 2));
+  fs.renameSync(tmp, file);
+}
+
+/**
+ * Run-level seed, called once by global-setup when the run includes CITE: ensure the
+ * shared scoring model, team type and two read-only evaluations, and write their ids
+ * (plus Admin User's) to `.auth/cite-seed.json`.
+ *
+ * The old file is removed first, so the ensure helpers look the records up afresh
+ * rather than trusting ids from a run whose teardown purged them; if seeding fails no
+ * file is left and `loadCiteSeedIds` falls back to ensuring in the worker. Setup runs
+ * in one process before any worker starts, so this is the one path that also deletes
+ * duplicate and damaged copies of the shared evaluations.
+ *
+ * Lifetime: the records are named `E2E Shared ...`, so global-teardown's
+ * `purgeAllCiteTestData` deletes them after the run (and the file with them); the next
+ * run's setup re-ensures them by name. Teardown runs only after every worker has
+ * finished, so no consumer can lose them mid-run.
+ */
+export async function writeCiteSeed(): Promise<CiteSeedIds> {
+  fs.rmSync(citeSeedPath(), { force: true });
+  const ids = await buildCiteSeedIds(true);
+  writeCiteSeedFile(ids);
+  return ids;
+}
+
+let workerSeedIds: Promise<CiteSeedIds> | null = null;
+
+/**
+ * Worker fallback for a missing seed file, serialised across workers by the
+ * `.auth/cite-seed.lock` file lock: the first worker in ensures the records (by fixed
+ * name, never deleting anything) and writes the file; every worker that was waiting
+ * re-reads the file after taking the lock and uses those ids instead of building.
+ */
+async function buildCiteSeedIdsInWorker(): Promise<CiteSeedIds> {
+  const lock = await acquireAuthLock('cite-seed');
   try {
-    const token = await getCiteApiToken(apiContext);
-    const response = await apiContext.delete(`${Services.Cite.API}/api/users/${member.userId}`, {
+    const written = readCiteSeedFile();
+    if (written) return written;
+    const ids = await buildCiteSeedIds(false);
+    writeCiteSeedFile(ids);
+    return ids;
+  } finally {
+    releaseAuthLock(lock);
+  }
+}
+
+/**
+ * The run-level shared ids from `.auth/cite-seed.json`. When global-setup could not
+ * write it (CITE was down at setup), one worker ensures the records under a lock and
+ * writes the file for the rest (`buildCiteSeedIdsInWorker`).
+ */
+export async function loadCiteSeedIds(): Promise<CiteSeedIds> {
+  const fromFile = readCiteSeedFile();
+  if (fromFile) return fromFile;
+  workerSeedIds ??= buildCiteSeedIdsInWorker().catch(error => {
+    workerSeedIds = null; // Let the next test retry rather than reuse a rejection.
+    throw error;
+  });
+  return workerSeedIds;
+}
+
+/**
+ * Delete every record at `listPath` whose `nameKey` equals `name` — the API
+ * counterpart of the admin UI's delete-by-name helpers, for cleanup that is not
+ * the subject of the test. Returns how many were deleted.
+ */
+async function apiDeleteByName(listPath: string, nameKey: 'description' | 'name', name: string): Promise<number> {
+  const apiContext = await sharedRequestContext();
+  const token = await getCiteApiToken(apiContext);
+  const listResponse = await apiContext.get(`${Services.Cite.API}${listPath}`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+  });
+  if (!listResponse.ok()) {
+    console.warn(`API cleanup: Failed to list ${listPath}: ${listResponse.status()}`);
+    return 0;
+  }
+  let deleted = 0;
+  for (const item of (await listResponse.json()) as Array<Record<string, string>>) {
+    if (item[nameKey] !== name) continue;
+    const response = await apiContext.delete(`${Services.Cite.API}${listPath}/${item.id}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    if (!response.ok() && response.status() !== 404) {
-      console.warn(`API cleanup: Failed to delete CITE user ${member.username}: ${response.status()}`);
-    }
-  } finally {
-    await apiContext.dispose();
+    if (response.ok() || response.status() === 404) deleted++;
+    else console.warn(`API cleanup: Failed to delete ${listPath}/${item.id} ("${name}"): ${response.status()}`);
   }
-  await deleteKeycloakUser(await getKeycloakAdminToken(), member.userId);
+  return deleted;
+}
+
+/** Delete every evaluation whose description is exactly `description`. */
+export function apiDeleteEvaluationsByName(description: string): Promise<number> {
+  return apiDeleteByName('/api/evaluations', 'description', description);
+}
+
+/** Delete every scoring model whose description is exactly `description`. */
+export function apiDeleteScoringModelsByName(description: string): Promise<number> {
+  return apiDeleteByName('/api/scoringmodels', 'description', description);
+}
+
+/** Delete every team type named exactly `name`. */
+export function apiDeleteTeamTypesByName(name: string): Promise<number> {
+  return apiDeleteByName('/api/teamtypes', 'name', name);
+}
+
+/** Delete every group named exactly `name`. */
+export function apiDeleteGroupsByName(name: string): Promise<number> {
+  return apiDeleteByName('/api/groups', 'name', name);
+}
+
+/** A pool user put on one team by `seedTeamMemberUser`. */
+export type TeamMemberUser = PoolUser & {
+  /** The CITE team membership `seedTeamMemberUser` created — what `cleanupTeamMemberUser` deletes. */
+  membershipId: string;
+};
+
+/**
+ * Register `user` with CITE: CITE creates its own user row the first time a token is
+ * presented. Idempotent.
+ */
+async function provisionCiteUser(user: PoolUser): Promise<void> {
+  const userToken = await getUserToken(user.username, user.password, 'cite.ui', 'openid profile cite');
+  const apiContext = await sharedRequestContext();
+  const provision = await apiContext.get(`${Services.Cite.API}/api/my-evaluations`, {
+    headers: { Authorization: `Bearer ${userToken}` },
+  });
+  if (!provision.ok()) {
+    throw new Error(`Failed to provision CITE user ${user.username}: ${provision.status()} ${await provision.text()}`);
+  }
+}
+
+/** Delete a user's CITE row. Tolerates 404. */
+async function deleteCiteUser(user: PoolUser): Promise<void> {
+  const apiContext = await sharedRequestContext();
+  const token = await getCiteApiToken(apiContext);
+  const response = await apiContext.delete(`${Services.Cite.API}/api/users/${user.userId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok() && response.status() !== 404) {
+    console.warn(`API cleanup: Failed to delete CITE user ${user.username}: ${response.status()}`);
+  }
+}
+
+/**
+ * Put a pool user (no CITE system permissions — see `nonAdminUser`) on `teamId` with the
+ * default Member role.
+ *
+ * For specs about what a team member sees: `admin` holds every system permission, so it
+ * reads every move and every official score, and it can never show what a team limits.
+ * Pair every call with `cleanupTeamMemberUser` in `afterEach`.
+ */
+export async function seedTeamMemberUser(teamId: string, user: PoolUser): Promise<TeamMemberUser> {
+  const membershipId = await seedTeamMembership(teamId, user.userId);
+  return { ...user, membershipId };
+}
+
+/**
+ * The CITE reset for a pool user: delete the team membership `seedTeamMemberUser`
+ * created. Tolerates 404 — deleting the evaluation first removes its teams' memberships.
+ */
+export async function cleanupTeamMemberUser(member: TeamMemberUser): Promise<void> {
+  const apiContext = await sharedRequestContext();
+  const token = await getCiteApiToken(apiContext);
+  const response = await apiContext.delete(`${Services.Cite.API}/api/teams/memberships/${member.membershipId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok() && response.status() !== 404) {
+    console.warn(`API cleanup: Failed to delete team membership ${member.membershipId}: ${response.status()}`);
+  }
 }
 
 /**
@@ -729,8 +1000,8 @@ export async function cleanupTeamMemberUser(member: TeamMemberUser): Promise<voi
 export async function purgeStaleEvaluations(
   prefixes: string[] = ['E2E', 'Test Evaluation', 'Group Aggregation', 'Delete Test', 'Copy Test'],
 ): Promise<void> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getCiteApiToken(apiContext);
     const listResponse = await apiContext.get(`${Services.Cite.API}/api/evaluations`, {
       headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
@@ -746,8 +1017,6 @@ export async function purgeStaleEvaluations(
         }).catch(() => { /* best effort */ });
       }
     }
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -781,8 +1050,8 @@ function matchesTestPrefix(name: string | undefined): boolean {
 }
 
 export async function purgeAllCiteTestData(): Promise<void> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getCiteApiToken(apiContext);
     const headers = { Authorization: `Bearer ${token}`, Accept: 'application/json' };
 
@@ -811,8 +1080,9 @@ export async function purgeAllCiteTestData(): Promise<void> {
       }
     }
     console.log(`Teardown: purged ${removed} CITE test record(s) by name prefix`);
-  } finally {
-    await apiContext.dispose();
+    // The purge took the run-level shared records with it; the next run's global-setup
+    // writes a fresh seed file.
+    fs.rmSync(citeSeedPath(), { force: true });
   }
 }
 
@@ -837,61 +1107,54 @@ export type CiteFixtures = {
   citeAuthenticatedPage: Page;
 };
 
-/**
- * Path to the CITE storageState saved by global-setup.ts. May not exist if the
- * global setup failed to provision (stack down at startup) — handled below.
- */
-const citeStatePath = authStatePath('cite');
-
-/**
- * True when global-setup successfully wrote the CITE auth state this run.
- * Evaluated once at module load. Specs that want a clean unauthenticated context
- * still override this with `test.use({ storageState: { cookies: [], origins: [] } })`.
- */
-const citeStateExists = fs.existsSync(citeStatePath);
+export type CiteWorkerFixtures = {
+  /**
+   * This worker's two pool users (see `user-pool.ts`): no realm roles, so no CITE system
+   * permissions, and registered with CITE.
+   */
+  nonAdminUsers: PoolUser[];
+  /** The first of `nonAdminUsers`. */
+  nonAdminUser: PoolUser;
+};
 
 /**
  * Extended test with CITE-specific fixtures.
  *
  * `storageState` defaults to the pre-authenticated state captured once by
- * global-setup.ts, so every spec's browser context starts with a valid OIDC token
- * in localStorage. The `citeAuthenticatedPage` fixture then just navigates and
- * waits for the Angular shell — no per-test Keycloak round-trip. Auth-flow specs
- * opt out with `test.use({ storageState: { cookies: [], origins: [] } })`.
+ * global-setup.ts (refreshed by `freshAuthStatePath` when its token is near expiry),
+ * so every spec's browser context starts with a valid OIDC token. The
+ * `citeAuthenticatedPage` fixture then just navigates and waits for the Angular
+ * shell — no per-test Keycloak round-trip. Auth-flow specs opt out with
+ * `test.use({ storageState: { cookies: [], origins: [] } })`.
  */
-export const test = base.extend<CiteFixtures>({
-  // Default the context to the saved auth state when it exists. When it doesn't
-  // (provisioning failed), leave Playwright's default and rely on the fixture's
-  // interactive-login fallback below.
-  storageState: citeStateExists ? citeStatePath : undefined,
+export const test = base.extend<CiteFixtures, CiteWorkerFixtures>({
+  // Reset contract for CITE: a test deletes the team memberships it gave a pool user
+  // (`cleanupTeamMemberUser`) and the evaluations it seeded; the user's CITE row is
+  // created here and deleted when the worker ends. Leased by `parallelIndex`, the stable
+  // worker slot.
+  nonAdminUsers: [
+    async ({}, use, workerInfo) => {
+      const users = poolUsers(workerInfo.parallelIndex, 2);
+      for (const user of users) await provisionCiteUser(user);
+      await use(users);
+      for (const user of users) await deleteCiteUser(user);
+    },
+    { scope: 'worker' },
+  ],
+  nonAdminUser: [async ({ nonAdminUsers }, use) => use(nonAdminUsers[0]), { scope: 'worker' }],
 
-  citeAuthenticatedPage: async ({ page }, use) => {
-    // Fast path: storageState already carries a valid token, so navigating home
-    // should render the authenticated shell without redirecting to Keycloak.
-    await page.goto(Services.Cite.UI, { waitUntil: 'domcontentloaded' });
+  // `undefined` when global-setup could not provision CITE; the shell check below
+  // then falls back to an interactive login.
+  storageState: async ({ browser }, use) => use(await freshAuthStatePath('cite', browser)),
 
-    const appShell = page.locator('app-root mat-toolbar').first();
-    const keycloakField = page.locator('input[name="username"]');
-
-    // Race the authenticated shell against a Keycloak login form. The form appears
-    // only if the saved state is missing/expired — in that case fall back to the
-    // full interactive login so the test still proceeds (just not as fast).
-    // waitForFirstVisible is cancellation-safe: a plain Promise.race leaves the
-    // losing waitFor() running to its full 20s timeout in the background.
-    const winner = await waitForFirstVisible(
-      page,
-      [
-        { key: 'shell', locator: appShell },
-        { key: 'keycloak', locator: keycloakField },
-      ],
-      { timeout: 20000 }
-    );
-
-    if (winner !== 'shell') {
-      // Either Keycloak appeared or neither did within the window — do a full login.
-      await authenticateCiteWithKeycloak(page);
-      await appShell.waitFor({ state: 'visible', timeout: 30000 });
-    }
+  citeAuthenticatedPage: async ({ page, storageState }, use) => {
+    await ensureAuthenticatedShell(page, {
+      app: 'cite',
+      url: Services.Cite.UI,
+      shell: page.locator('app-root mat-toolbar').first(),
+      login: authenticateCiteWithKeycloak,
+      fromSavedState: storageState === authStatePath('cite'),
+    });
 
     await use(page);
   },
@@ -927,25 +1190,44 @@ export function citeThemeUrl(url: string, theme: CiteTheme): string {
 }
 
 /**
- * Switch CITE between light and dark theme through the user menu, and wait for
- * the change to actually land on `document.body`.
+ * Put CITE in `theme` through its persisted preference, without the user menu.
  *
- * CITE persists the selected theme in the `auth.ui` slice of its Akita store,
- * saved to localStorage under 'akita-cite-ui'. So a theme set here survives the
- * reloads and client-side navigations a test performs afterward, and only needs
- * applying once, right after authentication. The saved auth state carries no
- * Akita store, so every test's fresh browser context starts light.
+ * CITE keeps the selected theme in localStorage `uiState.selectedTheme`
+ * (`'light-theme'`/`'dark-theme'`, `UIDataService.setTheme`), and the top bar applies it
+ * when it initializes (`TopbarComponent` constructor, cite.ui at the time of writing).
+ * So this writes that key on the CITE origin and reloads the current URL, then waits
+ * for the app shell and for `document.body` to carry the theme. The preference lives in
+ * the browser context's localStorage, so it survives the test's later reloads and
+ * navigations; the saved auth state carries no `uiState`, so every test starts light.
  *
- * Use the toggle rather than the `?theme=dark-theme` query param: the param is read in
- * `AppComponent`'s constructor, so it only applies on a fresh app bootstrap and is
- * a no-op for a client-side navigation within an already-running app. The one
- * place the param is the right tool is a spec's first navigation, before the app
- * has bootstrapped; see `citeThemeUrl`.
+ * Writing the preference rather than the `?theme=` query param (`citeThemeUrl`) keeps the
+ * URL the test asserts on unchanged: `AppComponent` keeps a param theme in the URL and
+ * rewrites it on every later theme change.
  *
- * No-ops when the requested theme is already active, so callers can use it to
- * restore state unconditionally.
+ * No-ops when the requested theme is already active, so callers can use it to restore
+ * state unconditionally. Specs whose subject is the theme switch itself use
+ * `toggleCiteThemeViaMenu`.
  */
 export async function setCiteTheme(page: Page, theme: CiteTheme): Promise<void> {
+  const want = theme === 'dark';
+  if ((await citeIsDarkTheme(page)) === want) return;
+
+  await page.evaluate((selectedTheme) => {
+    const state = JSON.parse(window.localStorage.getItem('uiState') ?? '{}');
+    state.selectedTheme = selectedTheme;
+    window.localStorage.setItem('uiState', JSON.stringify(state));
+  }, `${theme}-theme`);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.locator('app-root mat-toolbar').first().waitFor({ state: 'visible', timeout: 15000 });
+  await expect.poll(() => citeIsDarkTheme(page), { timeout: 10000 }).toBe(want);
+}
+
+/**
+ * Switch CITE to `theme` through the user menu's Dark Theme switch, and wait for the
+ * change to land on `document.body`. For specs whose subject is the switch itself; the
+ * others use `setCiteTheme`. No-ops when the requested theme is already active.
+ */
+export async function toggleCiteThemeViaMenu(page: Page, theme: CiteTheme): Promise<void> {
   const want = theme === 'dark';
   if ((await citeIsDarkTheme(page)) === want) return;
 
@@ -960,26 +1242,7 @@ export async function setCiteTheme(page: Page, theme: CiteTheme): Promise<void> 
   await page.locator('.mat-mdc-menu-panel').waitFor({ state: 'detached', timeout: 5000 });
   await page.locator('.cdk-overlay-backdrop').waitFor({ state: 'detached', timeout: 5000 });
 
-  await page
-    .locator('body')
-    .evaluate(
-      (body, expected) =>
-        new Promise<void>((resolve, reject) => {
-          if (body.classList.contains('darkMode') === expected) return resolve();
-          const observer = new MutationObserver(() => {
-            if (body.classList.contains('darkMode') === expected) {
-              observer.disconnect();
-              resolve();
-            }
-          });
-          observer.observe(body, { attributes: true, attributeFilter: ['class'] });
-          setTimeout(() => {
-            observer.disconnect();
-            reject(new Error(`Theme did not become ${expected ? 'dark' : 'light'}`));
-          }, 10000);
-        }),
-      want,
-    );
+  await expect.poll(() => citeIsDarkTheme(page), { timeout: 10000 }).toBe(want);
 }
 
 /**

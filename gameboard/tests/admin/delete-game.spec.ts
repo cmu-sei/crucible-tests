@@ -52,7 +52,7 @@ test.describe('Admin - Games', () => {
     }
 
     // UI sanity check — admin dashboard still renders normally.
-    await page.goto(Services.Gameboard.UI + '/admin/dashboard', { waitUntil: 'networkidle' });
+    await page.goto(Services.Gameboard.UI + '/admin/dashboard', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
   });
 });

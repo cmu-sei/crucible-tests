@@ -25,18 +25,17 @@ test.describe('Home Page and Navigation', () => {
       await expect(hamburgerButton).toBeVisible();
 
       // 2. Use keyboard to focus on hamburger button and press Enter
+      const sidebar = page.locator('mat-sidenav, mat-drawer, [class*="sidebar"]').first();
       await hamburgerButton.focus();
       await page.keyboard.press('Enter');
-      await page.waitForTimeout(500);
 
       // expect: Sidebar toggles open/closed via keyboard
-      const sidebar = page.locator('mat-sidenav, mat-drawer, [class*="sidebar"]').first();
       await expect(sidebar).toBeVisible({ timeout: 5000 });
 
       // expect: Button is fully keyboard accessible
       await hamburgerButton.focus();
       await page.keyboard.press('Enter');
-      await page.waitForTimeout(500);
+      // Sidebar closes - no positive signal to wait for after closing, test ends
     } else {
       // Fallback: look for any hamburger-style button
       const anyHamburger = page.locator('button:has(mat-icon:text("menu")), [class*="hamburger"]').first();

@@ -11,28 +11,30 @@ test.describe('Workspace Editor', () => {
 
     // 1. Navigate to workspace document tab
     const sidebarToggle = page.locator('button[aria-label="Toggle sidebar"], button:has(mat-icon:text("menu"))').first();
+    const sidebar = page.locator('mat-sidenav, mat-drawer, [class*="sidebar"], [class*="side-panel"]').first();
     const hasSidebarToggle = await sidebarToggle.isVisible({ timeout: 10000 }).catch(() => false);
     if (hasSidebarToggle) {
       await sidebarToggle.click();
-      await page.waitForTimeout(500);
+      await expect(sidebar).toBeVisible();
     }
 
     const workspaceItems = page.locator('[class*="workspace-card"], [class*="item-card"], mat-list-item, [class*="list-item"]');
+
     const itemCount = await workspaceItems.count();
 
     if (itemCount > 0) {
-      await workspaceItems.first().click();
-      await page.waitForTimeout(2000);
-
       const documentTab = page.locator('mat-tab:has-text("Document"), a:has-text("Document"), button:has-text("Document")').first();
+      const editor = page.locator('textarea, [class*="editor"], .CodeMirror, [contenteditable]').first();
+      await workspaceItems.first().click();
+      await expect(page).toHaveURL(/\/topo\//);
+
       const hasTab = await documentTab.isVisible({ timeout: 5000 }).catch(() => false);
       if (hasTab) {
         await documentTab.click();
-        await page.waitForTimeout(1000);
+        await expect(editor).toBeVisible({ timeout: 10000 });
       }
 
       // expect: Document editor is displayed
-      const editor = page.locator('textarea, [class*="editor"], .CodeMirror, [contenteditable]').first();
       const hasEditor = await editor.isVisible({ timeout: 10000 }).catch(() => false);
 
       if (hasEditor) {
@@ -52,7 +54,9 @@ test.describe('Workspace Editor', () => {
         const hasSave = await saveButton.isVisible({ timeout: 3000 }).catch(() => false);
         if (hasSave) {
           await saveButton.click();
-          await page.waitForTimeout(1000);
+          // expect: "Saved" indicator appears after save completes
+          const savedIndicator = page.locator('fa-icon[aria-label="Saved"], [tooltip="Saved"]');
+          await expect(savedIndicator).toBeVisible({ timeout: 10000 });
         }
       }
     }

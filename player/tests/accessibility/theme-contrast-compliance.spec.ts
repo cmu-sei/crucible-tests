@@ -5,7 +5,7 @@
 // seed: seed.spec.ts
 
 import type { Page } from '@playwright/test';
-import { test, expect, Services, setPlayerTheme, PLAYER_THEMES } from '../../fixtures';
+import { test, expect, Services, togglePlayerThemeViaMenu, PLAYER_THEMES } from '../../fixtures';
 import { luminance, contrastRatio, sample, assertReadable, effectiveColorSettings, cssVar, hexToRgb } from '../../../theme-helpers';
 
 /**
@@ -25,8 +25,9 @@ import { luminance, contrastRatio, sample, assertReadable, effectiveColorSetting
  *
  * Read-only: it navigates and reads computed styles, and depends on no table rows
  * (it measures the always-present "My Views" title, column headers, the "Add New
- * View" icon button, and an unsaved "Create New View?" dialog). The fixture's own
- * seeded views are cleaned up by the fixture. The theme is persisted in
+ * View" icon button, and an unsaved "Create New View?" dialog), so the worker's
+ * shared views are not touched. It sets the theme through the menu switch on purpose
+ * (the switch's effect is what it measures). The theme is persisted in
  * localStorage, so it is restored in afterEach to leave the context as it found it.
  */
 
@@ -49,13 +50,13 @@ for (const theme of PLAYER_THEMES) {
       // context inherits dark. Reload first: a failed dialog test leaves its CDK
       // backdrop over the user menu.
       await gotoHome(page);
-      await setPlayerTheme(page, 'light');
+      await togglePlayerThemeViaMenu(page, 'light');
     });
 
     // WCAG 1.4.3 — text contrast on the page surface.
     test('Theme Contrast Compliance (WCAG 1.4.3 text)', async ({ playerAuthenticatedPage: page }) => {
       await gotoHome(page);
-      await setPlayerTheme(page, theme);
+      await togglePlayerThemeViaMenu(page, theme);
 
       // 1. The "My Views" title against the page surface (24px, so the large-text
       //    bar applies).
@@ -99,7 +100,7 @@ for (const theme of PLAYER_THEMES) {
     // setting, so don't hardcode a specific hex.
     test('Primary action icon contrast (WCAG 1.4.11)', async ({ playerAuthenticatedPage: page }) => {
       await gotoHome(page);
-      await setPlayerTheme(page, theme);
+      await togglePlayerThemeViaMenu(page, theme);
 
       const addButton = page.getByRole('button', { name: 'Add New View', exact: true });
       await expect(addButton).toBeVisible({ timeout: 10000 });
@@ -124,7 +125,7 @@ for (const theme of PLAYER_THEMES) {
     // falls back to light when its key is absent). Nothing is derived or corrected.
     test('Color settings applied per theme (design spec)', async ({ playerAuthenticatedPage: page }) => {
       await gotoHome(page);
-      await setPlayerTheme(page, theme);
+      await togglePlayerThemeViaMenu(page, theme);
 
       const settings = await effectiveColorSettings(page);
       for (const key of [
@@ -177,7 +178,7 @@ for (const theme of PLAYER_THEMES) {
     // shared crucible-dialog NameDialog) without submitting.
     test('Primary and on-primary text contrast (WCAG 1.4.3)', async ({ playerAuthenticatedPage: page }) => {
       await gotoHome(page);
-      await setPlayerTheme(page, theme);
+      await togglePlayerThemeViaMenu(page, theme);
 
       await page.getByRole('button', { name: 'Add New View', exact: true }).click();
       const dialog = page.getByRole('dialog', { name: 'Create New View?' });

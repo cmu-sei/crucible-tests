@@ -25,7 +25,8 @@ for (const theme of CITE_THEMES) {
       // expect: Application handles error gracefully
       // expect: Error message is displayed to user
       // expect: No uncaught exceptions in console
-      await page.waitForTimeout(3000);
+      // Anchor on CITE shell (app structure loads even with API errors)
+      await expect(page.locator('app-root mat-toolbar')).toBeVisible({ timeout: 10000 });
       const body = page.locator('body');
       await expect(body).toBeVisible();
 

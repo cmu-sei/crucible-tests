@@ -2,7 +2,14 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 import { test as base, Page } from '@playwright/test';
-import { Services, authenticateWithKeycloak } from '../shared-fixtures';
+import { authStatePath } from '../auth-paths';
+import { freshAuthStatePath, savedSessionState } from '../auth-state';
+import {
+  Services,
+  authenticateWithKeycloak,
+  ensureAuthenticatedShell,
+  setAuthenticatedSignal,
+} from '../shared-fixtures';
 import {
   THEMES,
   Theme,
@@ -88,9 +95,57 @@ export type ConsoleFixtures = {
   consoleAuthenticatedPage: Page;
 };
 
+/**
+ * Extended test with Console-specific fixtures.
+ *
+ * `storageState` defaults to Player's pre-authenticated state captured once by
+ * global-setup.ts (refreshed when its token is near expiry), so every spec's
+ * browser context starts with a valid Player OIDC token in sessionStorage.
+ * The `page` fixture replays that sessionStorage and registers the Player Menu
+ * button as the authenticated signal, so the existing `authenticateConsoleWithKeycloak`
+ * calls return as soon as the Player shell renders — no per-test Keycloak round-trip.
+ * Auth-flow specs opt out with `test.use({ storageState: { cookies: [], origins: [] } })`.
+ *
+ * Player's OIDC client (oidc-client-ts) stores its token in sessionStorage, not localStorage,
+ * so the saved state alone is not enough: the `page` override below replays the session entries
+ * via `addInitScript` when the state was loaded from the saved path.
+ */
 export const test = base.extend<ConsoleFixtures>({
-  consoleAuthenticatedPage: async ({ page }, use) => {
-    await authenticateConsoleWithKeycloak(page);
+  // `undefined` when global-setup could not provision Player; the shell check below
+  // then falls back to an interactive login.
+  storageState: async ({ browser }, use) => use(await freshAuthStatePath('player', browser)),
+
+  // Override the built-in `page` fixture to replay sessionStorage when the saved state is loaded.
+  // Player's OIDC token lives in sessionStorage, and Playwright's `storageState` only restores
+  // localStorage/cookies, so without this the default `page` would navigate to Player with cookies
+  // but no token, triggering a full login despite the state being loaded.
+  // It also registers the Player Menu button as this page's authenticated signal, so the specs'
+  // `authenticateConsoleWithKeycloak` calls see the signed-in shell (or the Keycloak form) as
+  // soon as it renders instead of sitting out the helper's 15 s "will OIDC redirect?" window.
+  page: async ({ page, storageState }, use) => {
+    setAuthenticatedSignal(page, page.getByRole('button', { name: 'Menu', exact: true }));
+    if (storageState === authStatePath('player')) {
+      const entries = savedSessionState('player');
+      await page.addInitScript(
+        (items) => {
+          for (const [k, v] of items) sessionStorage.setItem(k, v);
+        },
+        entries
+      );
+    }
+    await use(page);
+  },
+
+  consoleAuthenticatedPage: async ({ page, storageState }, use) => {
+    await ensureAuthenticatedShell(page, {
+      app: 'player',
+      url: Services.Player.UI,
+      shell: page.getByRole('button', { name: 'Menu', exact: true }),
+      login: authenticateConsoleWithKeycloak,
+      restoreSession: storageState === authStatePath('player'),
+      fromSavedState: storageState === authStatePath('player'),
+    });
+
     await use(page);
   },
 });

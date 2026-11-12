@@ -29,18 +29,15 @@ for (const theme of CITE_THEMES) {
       await expect(searchBox).toBeVisible({ timeout: 5000 });
       await searchBox.clear();
       await searchBox.fill(evalName);
-      await page.waitForTimeout(1000);
 
       const evalRow = page.locator('tbody tr').filter({ hasText: evalName }).first();
       await expect(evalRow).toBeVisible({ timeout: 10000 });
       await evalRow.click();
-      await page.waitForTimeout(1000);
 
       // 3. Find and expand the Memberships panel
       const membershipsPanelButton = page.getByRole('button', { name: 'Memberships', exact: true });
       await expect(membershipsPanelButton).toBeVisible({ timeout: 10000 });
       await membershipsPanelButton.click();
-      await page.waitForTimeout(1000);
 
       // 4. Verify membership management UI is displayed (two-column layout: non-members and members)
       const membershipRegion = page.getByRole('region', { name: 'Memberships' });

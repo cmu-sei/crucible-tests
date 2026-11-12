@@ -18,11 +18,11 @@ for (const theme of STEAMFITTER_THEMES) {
   test.describe(`${theme} theme › User Management in Admin`, () => {
     const USER_NAME = `E2E Search User ${Date.now()}`;
 
-    test.beforeEach(async () => {
+    test.beforeAll(async () => {
       await seedUser(USER_NAME);
     });
 
-    test.afterEach(async () => {
+    test.afterAll(async () => {
       await deleteUsersByPrefix(['E2E Search User']);
     });
 

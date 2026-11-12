@@ -7,45 +7,54 @@
 import { test, expect, Services, serviceUrlPattern, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import {
   getBlueprintToken,
-  createMsel,
   deleteMsel,
   createRenderableScenarioEvent,
-  deleteScenarioEvent,
   navigateToMselSection,
-  tempBlueprintName,
+  createSharedRenderableMsel,
+  resetSharedRenderableMsel,
+  type CreatedMsel,
+  sharedChildName,
 } from '../../test-helpers';
+
+// One MSEL with the standard DataFields (13 POSTs) is seeded per file and shared by both
+// theme runs. Safe to share: filtering is client-side and changes nothing.
+// Each test seeds its own uniquely named events, and `resetSharedRenderableMsel` removes
+// them (and any extra DataField) in afterEach.
+let shared: CreatedMsel;
+
+test.beforeAll(async ({}, workerInfo) => {
+  shared = await createSharedRenderableMsel(await getBlueprintToken(), 'EventTypeFilter', workerInfo.parallelIndex);
+});
+
+test.afterAll(async () => {
+  if (shared) await deleteMsel(await getBlueprintToken(), shared.id);
+});
 
 for (const theme of BLUEPRINT_THEMES) {
     test.describe(`${theme} theme › Search and Filtering`, () => {
+    // Per-test names for this test's own records on the shared MSEL.
+    let child: (base: string) => string;
     let token: string;
     let mselId: string;
     let eventId1: string;
     let eventId2: string;
 
-    test.beforeEach(async () => {
+    test.beforeEach(async ({}, testInfo) => {
+      child = (base: string) => sharedChildName(base, testInfo, theme);
       token = await getBlueprintToken();
-      const msel = await createMsel(token, {
-        name: tempBlueprintName('EventFilterTest'),
-        description: 'MSEL for event type filtering test',
-      });
-      mselId = msel.id;
+      mselId = shared.id;
 
       // Create two scenario events
-      const event1 = await createRenderableScenarioEvent(token, mselId, 'First test event', { deltaSeconds: 0 });
+      const event1 = await createRenderableScenarioEvent(token, mselId, child('TestBP-TypeFilterFirst'), { deltaSeconds: 0 });
       eventId1 = event1.id;
 
-      const event2 = await createRenderableScenarioEvent(token, mselId, 'Second test event', { deltaSeconds: 60 });
+      const event2 = await createRenderableScenarioEvent(token, mselId, child('TestBP-TypeFilterSecond'), { deltaSeconds: 60 });
       eventId2 = event2.id;
     });
 
     test.afterEach(async () => {
-      try {
-        if (eventId1) await deleteScenarioEvent(token, eventId1);
-        if (eventId2) await deleteScenarioEvent(token, eventId2);
-        if (mselId) await deleteMsel(token, mselId);
-      } catch (err) {
-        console.warn(`Cleanup failed: ${err}`);
-      }
+      // Back to "standard DataFields, no events" for the next test on the shared MSEL.
+      await resetSharedRenderableMsel(token, mselId);
     });
 
     test('Scenario Event Filtering by Event Type', async ({ blueprintAuthenticatedPage: page }) => {

@@ -4,9 +4,10 @@
 // spec: alloy/alloy-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Locator, Page } from '@playwright/test';
+import { Locator, Page } from '@playwright/test';
+import { test, expect } from '../../fixtures';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
-import { ALLOY_THEMES, applyAlloyTheme } from '../../test-helpers';
+import { ALLOY_THEMES, toggleAlloyThemeViaMenu } from '../../test-helpers';
 
 /**
  * Accessibility and Usability — real WCAG contrast on the Alloy admin surface, in
@@ -151,7 +152,7 @@ for (const theme of ALLOY_THEMES) {
     // WCAG 1.4.3 — text contrast. Passes in both themes today.
     test('Theme Contrast Compliance (WCAG 1.4.3 text)', async ({ page }: { page: Page }) => {
       await authenticateWithKeycloak(page, Services.Alloy.UI);
-      await applyAlloyTheme(page, theme);
+      await toggleAlloyThemeViaMenu(page, theme);
 
       // Sanity: we are actually measuring the theme we asked for.
       const isDark = await page.evaluate(() => document.body.classList.contains('darkMode'));
@@ -192,7 +193,7 @@ for (const theme of ALLOY_THEMES) {
     // setting, so don't hardcode a specific hex.
     test('Primary action icon contrast (WCAG 1.4.11)', async ({ page }: { page: Page }) => {
       await authenticateWithKeycloak(page, Services.Alloy.UI);
-      await applyAlloyTheme(page, theme);
+      await toggleAlloyThemeViaMenu(page, theme);
       await page.goto(`${Services.Alloy.UI}/admin`);
       await expect(page.getByRole('table')).toBeVisible();
 
@@ -215,7 +216,7 @@ for (const theme of ALLOY_THEMES) {
     // falls back to light when its key is absent). Nothing is derived or corrected.
     test('Color settings applied per theme (design spec)', async ({ page }: { page: Page }) => {
       await authenticateWithKeycloak(page, Services.Alloy.UI);
-      await applyAlloyTheme(page, theme);
+      await toggleAlloyThemeViaMenu(page, theme);
       await page.goto(`${Services.Alloy.UI}/admin`);
       await expect(page.getByRole('table')).toBeVisible();
 
@@ -258,7 +259,7 @@ for (const theme of ALLOY_THEMES) {
     // `primary` button must each reach 4.5:1. Uses the create dialog without saving.
     test('Primary and on-primary text contrast (WCAG 1.4.3)', async ({ page }: { page: Page }) => {
       await authenticateWithKeycloak(page, Services.Alloy.UI);
-      await applyAlloyTheme(page, theme);
+      await toggleAlloyThemeViaMenu(page, theme);
       await page.goto(`${Services.Alloy.UI}/admin`);
       await expect(page.getByRole('table')).toBeVisible();
 

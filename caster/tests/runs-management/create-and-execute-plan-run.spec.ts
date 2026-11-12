@@ -4,40 +4,89 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen, CASTER_THEMES, setCasterTheme } from '../../fixtures';
+import {
+  test,
+  expect,
+  CASTER_THEMES,
+  setCasterTheme,
+  seedCasterSharedProjectPageFree,
+  casterSharedProjectName,
+  seedCasterDirectoryPageFree,
+  deleteCasterProjectPageFree,
+  Services,
+} from '../../fixtures';
+
+let projectId: string;
+let directoryId: string;
+let projectName: string;
+const directoryName = 'SharedDirectory';
+
+test.beforeAll(async ({}, workerInfo) => {
+  projectName = casterSharedProjectName('create-and-execute-plan-run', workerInfo);
+  projectId = await seedCasterSharedProjectPageFree(projectName);
+  directoryId = await seedCasterDirectoryPageFree(projectId, directoryName);
+});
+
+test.afterAll(async () => {
+  await deleteCasterProjectPageFree(projectId);
+});
 
 for (const theme of CASTER_THEMES) {
   test.describe(`${theme} theme › Runs Management (Plan, Apply, Destroy)`, () => {
-    test('Create and Execute Plan Run', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+    let workspaceId: string | null = null;
+
+    test.afterEach(async ({ casterAuthenticatedPage: page }) => {
+      // Delete the workspace created by this test
+      if (workspaceId) {
+        await page.evaluate(async ({ apiUrl, token, wsId }) => {
+          await fetch(`${apiUrl}/api/workspaces/${wsId}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${token}` },
+          });
+        }, {
+          apiUrl: Services.Caster.API,
+          token: await page.evaluate(() => {
+            for (let i = 0; i < sessionStorage.length; i++) {
+              const key = sessionStorage.key(i);
+              if (key) {
+                try {
+                  const val = JSON.parse(sessionStorage.getItem(key) || '');
+                  if (val.access_token) return val.access_token;
+                } catch {}
+              }
+            }
+            return '';
+          }),
+          wsId: workspaceId,
+        });
+        workspaceId = null;
+      }
+    });
+
+    test('Create and Execute Plan Run', async ({ casterAuthenticatedPage: page }, testInfo) => {
       await setCasterTheme(page, theme);
-      const projectName = `Plan-Run-Project-${Date.now()}`;
 
-      await expect(page.getByText('My Projects')).toBeVisible();
+      await page.goto(`${Services.Caster.UI}/projects/${projectId}`);
+      await expect(page.getByText(projectName, { exact: true })).toBeVisible({ timeout: 10000 });
 
-      await page.locator('button[mattooltip="Add New Project"]').click();
-      await expect(page.getByRole('dialog', { name: 'Add Project' })).toBeVisible();
-      await page.getByRole('textbox', { name: 'Name' }).fill(projectName);
-      await page.getByRole('button', { name: 'Save' }).click();
-      await expectCasterProjectOpen(page, projectName);
-
-      // Extract project ID from URL for cleanup
-      const projectId = page.url().match(/\/projects\/([^/]+)/)?.[1];
-      if (projectId) cleanupCasterProject(projectId);
-
-      await page.getByTitle('Add New Directory').click();
-      await expect(page.getByRole('dialog', { name: 'Add Directory' })).toBeVisible();
-      await page.getByRole('textbox', { name: 'Name' }).fill('Plan-Run-Dir');
-      await page.getByRole('button', { name: 'Save' }).click();
-      await expect(page.getByRole('button', { name: 'Plan-Run-Dir' })).toBeVisible({ timeout: 10000 });
-
-      await page.getByRole('button', { name: 'Plan-Run-Dir' }).click();
+      await page.getByRole('button', { name: directoryName, exact: true }).click();
       await page.getByRole('button', { name: 'WORKSPACES' }).click();
-      await page.getByText('Add Workspace').click();
 
+      // Create workspace via UI (per-test mutator resource with unique name)
+      const workspaceName = `Plan-WS-${theme}-${testInfo.repeatEachIndex}`;
+      await page.getByText('Add Workspace', { exact: true }).click();
       const nameInput = page.getByRole('textbox', { name: 'Name' });
       if (await nameInput.isVisible({ timeout: 5000 }).catch(() => false)) {
-        await nameInput.fill('Plan-WS');
+        await nameInput.fill(workspaceName);
+
+        const createResponsePromise = page.waitForResponse(resp =>
+          resp.url().includes('/api/workspaces') && resp.request().method() === 'POST' && resp.ok()
+        );
         await page.getByRole('button', { name: 'Save' }).click();
+
+        const createResponse = await createResponsePromise;
+        const workspaceData = await createResponse.json();
+        workspaceId = workspaceData.id;
       }
 
       const planButton = page.getByRole('button', { name: /plan/i });

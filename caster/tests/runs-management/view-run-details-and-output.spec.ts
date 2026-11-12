@@ -4,33 +4,42 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen, CASTER_THEMES, setCasterTheme } from '../../fixtures';
+import {
+  test,
+  expect,
+  CASTER_THEMES,
+  setCasterTheme,
+  seedCasterSharedProjectPageFree,
+  casterSharedProjectName,
+  seedCasterDirectoryPageFree,
+  deleteCasterProjectPageFree,
+  Services,
+} from '../../fixtures';
+
+let projectId: string;
+let directoryId: string;
+let projectName: string;
+const directoryName = 'SharedDirectory';
+
+test.beforeAll(async ({}, workerInfo) => {
+  projectName = casterSharedProjectName('view-run-details-and-output', workerInfo);
+  projectId = await seedCasterSharedProjectPageFree(projectName);
+  directoryId = await seedCasterDirectoryPageFree(projectId, directoryName);
+});
+
+test.afterAll(async () => {
+  await deleteCasterProjectPageFree(projectId);
+});
 
 for (const theme of CASTER_THEMES) {
   test.describe(`${theme} theme › Runs Management (Plan, Apply, Destroy)`, () => {
-    test('View Run Details and Output', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+    test('View Run Details and Output', async ({ casterAuthenticatedPage: page }) => {
       await setCasterTheme(page, theme);
-      const projectName = `Run-Detail-Project-${Date.now()}`;
 
-      await expect(page.getByText('My Projects')).toBeVisible();
+      await page.goto(`${Services.Caster.UI}/projects/${projectId}`);
+      await expect(page.getByText(projectName, { exact: true })).toBeVisible({ timeout: 10000 });
 
-      await page.locator('button[mattooltip="Add New Project"]').click();
-      await expect(page.getByRole('dialog', { name: 'Add Project' })).toBeVisible();
-      await page.getByRole('textbox', { name: 'Name' }).fill(projectName);
-      await page.getByRole('button', { name: 'Save' }).click();
-      await expectCasterProjectOpen(page, projectName);
-
-      // Extract project ID from URL for cleanup
-      const projectId = page.url().match(/\/projects\/([^/]+)/)?.[1];
-      if (projectId) cleanupCasterProject(projectId);
-
-      await page.getByTitle('Add New Directory').click();
-      await expect(page.getByRole('dialog', { name: 'Add Directory' })).toBeVisible();
-      await page.getByRole('textbox', { name: 'Name' }).fill('Run-Detail-Dir');
-      await page.getByRole('button', { name: 'Save' }).click();
-      await expect(page.getByRole('button', { name: 'Run-Detail-Dir' })).toBeVisible({ timeout: 10000 });
-
-      await page.getByRole('button', { name: 'Run-Detail-Dir' }).click();
+      await page.getByRole('button', { name: directoryName, exact: true }).click();
       await page.getByRole('button', { name: 'WORKSPACES' }).click();
       await expect(page.getByText('Add Workspace')).toBeVisible();
     });

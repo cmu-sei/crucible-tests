@@ -1,17 +1,19 @@
 // Copyright 2026 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
-import { test as base, Locator, Page } from '@playwright/test';
-import fs from 'fs';
+import { test as base, Locator, Page, WorkerInfo, expect } from '@playwright/test';
 import {
   Services,
   serviceUrlPattern,
   oidcStorageKey,
   authenticateWithKeycloak,
   waitForFirstVisible,
+  ensureAuthenticatedShell,
   requirePrecondition,
 } from '../shared-fixtures';
-import { authSessionStatePath, authStatePath } from '../auth-paths';
+import { authStatePath } from '../auth-paths';
+import { freshAuthStatePath, freshSavedAccessToken } from '../auth-state';
+import { tokenIsFresh, cachedToken, sharedRequestContext } from '../api-cache';
 
 /**
  * Caster-specific fixtures
@@ -47,11 +49,23 @@ export async function expectCasterProjectOpen(page: Page, projectName: string): 
   return projectId;
 }
 
+/** {@link getCasterApiContext} results, per page, reused while the token is fresh. */
+const casterApiContexts = new WeakMap<Page, { apiUrl: string; token: string }>();
+
 /**
  * Get an access token from session storage and the API URL from the Angular
  * app's runtime settings.  Both are needed by the API helper functions below.
+ * Cached per `Page` and re-read once the token is within 60 s of expiry.
  */
 async function getCasterApiContext(page: Page): Promise<{ apiUrl: string; token: string }> {
+  const cached = casterApiContexts.get(page);
+  if (cached && tokenIsFresh(cached.token)) return cached;
+  const fresh = await readCasterApiContext(page);
+  casterApiContexts.set(page, fresh);
+  return fresh;
+}
+
+async function readCasterApiContext(page: Page): Promise<{ apiUrl: string; token: string }> {
   return page.evaluate(async () => {
     const settingsResp = await fetch('/assets/config/settings.env.json');
     const settings = await settingsResp.json();
@@ -76,6 +90,54 @@ async function getCasterApiContext(page: Page): Promise<{ apiUrl: string; token:
     if (!token) throw new Error('No access token found in session storage');
     return { apiUrl, token };
   });
+}
+
+/**
+ * Page-free variant of `getCasterApiContext` for `beforeAll` seeders.
+ * Reads the token from the saved session state via `freshSavedAccessToken`,
+ * and the API URL from `Services` (not from the browser's runtime settings).
+ * Pair with `cachedToken` from api-cache.ts for per-worker caching.
+ */
+async function getCasterApiContextFromSavedState(): Promise<{ apiUrl: string; token: string }> {
+  const token = await cachedToken('caster', () => freshSavedAccessToken('caster'));
+  return { apiUrl: Services.Caster.API, token };
+}
+
+/**
+ * Page-free variant of `casterApi` for `beforeAll` seeders. Uses the shared
+ * request context instead of `page.request`.
+ */
+async function casterApiPageFree<T = any>(
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
+  path: string,
+  data?: unknown,
+): Promise<CasterApiResponse<T>> {
+  const { apiUrl, token } = await getCasterApiContextFromSavedState();
+  const ctx = await sharedRequestContext();
+  const res = await ctx.fetch(`${apiUrl}/api/${path.replace(/^\//, '')}`, {
+    method,
+    headers: { Authorization: `Bearer ${token}` },
+    data,
+  });
+  const text = await res.text();
+  let body: any = null;
+  try {
+    body = text ? JSON.parse(text) : null;
+  } catch {
+    body = text;
+  }
+  return { status: res.status(), body };
+}
+
+/**
+ * Page-free variant of `casterCreate` for `beforeAll` seeders.
+ */
+async function casterCreatePageFree<T = any>(path: string, data: unknown): Promise<T> {
+  const res = await casterApiPageFree<T>('POST', path, data);
+  if (res.status !== 201 && res.status !== 200) {
+    throw new Error(`POST /api/${path} returned ${res.status}: ${JSON.stringify(res.body)}`);
+  }
+  return res.body;
 }
 
 /**
@@ -265,6 +327,86 @@ async function deleteCasterRoleByName(page: Page, roleName: string): Promise<num
 }
 
 /**
+ * Name prefix of the file-level shared projects Caster specs seed in `beforeAll`
+ * (see {@link casterSharedProjectName}). Deliberately narrower than "E2E Shared": Blueprint's
+ * run-level `E2E Shared Blueprint Caster Templates` project lives in Caster too and
+ * must survive a Caster purge that runs while Blueprint specs still use it.
+ */
+const CASTER_SHARED_PROJECT_PREFIX = 'E2E Shared Project [';
+
+/**
+ * `E2E Shared Project [<label>] [w<parallelIndex>]`: the name of a project a spec file seeds
+ * in `beforeAll` and shares between its tests. `label` is the spec file's name (plus a suffix
+ * when the file seeds more than one).
+ *
+ * The file name alone is not enough: the chromium and firefox projects, or `--repeat-each`
+ * copies, run the same file on two workers at once, and both would create the same project.
+ * `parallelIndex` is unique among live workers and stable across a worker restart, so the
+ * restarted worker's {@link seedCasterSharedProjectPageFree} replaces its predecessor's copy.
+ */
+export function casterSharedProjectName(label: string, workerInfo: Pick<WorkerInfo, 'parallelIndex'>): string {
+  return `${CASTER_SHARED_PROJECT_PREFIX}${label}] [w${workerInfo.parallelIndex}]`;
+}
+
+/**
+ * Create a file-level shared project (named by {@link casterSharedProjectName}, or starting
+ * with it) and return its ID. Any project with the same name is deleted first: only this
+ * worker slot uses the name, so a match is a leftover from a worker that died before its
+ * `afterAll`, and keeping it would put two rows with the same name in the projects list.
+ */
+export async function seedCasterSharedProjectPageFree(name: string): Promise<string> {
+  if (!name.startsWith(CASTER_SHARED_PROJECT_PREFIX)) {
+    throw new Error(`Shared project "${name}" must start with "${CASTER_SHARED_PROJECT_PREFIX}" so teardown purges it`);
+  }
+  const res = await casterApiPageFree<Array<{ id: string; name: string }>>('GET', 'projects');
+  if (res.status !== 200 || !Array.isArray(res.body)) {
+    throw new Error(`GET /api/projects returned ${res.status}`);
+  }
+  for (const stale of res.body.filter((project) => project.name === name)) {
+    await deleteCasterProjectPageFree(stale.id);
+  }
+  return seedCasterProjectPageFree(name);
+}
+
+/**
+ * Names `search-and-filter-projects.spec.ts` used before it moved under
+ * {@link CASTER_SHARED_PROJECT_PREFIX}. Still purged so a stack that holds leftovers from
+ * those runs is cleaned up.
+ */
+const LEGACY_CASTER_PROJECT_PREFIXES = ['E2E Searchable Project [', 'E2E Unrelated Project ['];
+
+/**
+ * Global-teardown safety net: delete every Caster project named
+ * {@link CASTER_SHARED_PROJECT_PREFIX} (or a legacy prefix), i.e. the file-level projects of a spec whose
+ * worker died before its `afterAll`. Best effort: one failed DELETE is logged and the
+ * rest still go. Uses the same saved-state token as the page-free seeders.
+ */
+export async function purgeAllCasterTestData(): Promise<void> {
+  const res = await casterApiPageFree<Array<{ id: string; name: string }>>('GET', 'projects');
+  if (res.status !== 200 || !Array.isArray(res.body)) {
+    throw new Error(`GET /api/projects returned ${res.status}`);
+  }
+  const leftovers = res.body.filter((project) =>
+    [CASTER_SHARED_PROJECT_PREFIX, ...LEGACY_CASTER_PROJECT_PREFIXES].some((prefix) => project.name?.startsWith(prefix))
+  );
+  const purged: string[] = [];
+  for (const project of leftovers) {
+    const del = await casterApiPageFree('DELETE', `projects/${project.id}`).catch((error) => {
+      console.warn(`[caster purge] DELETE project "${project.name}" failed: ${error}`);
+      return null;
+    });
+    if (del && (del.status === 204 || del.status === 200 || del.status === 404)) {
+      purged.push(project.name);
+    } else if (del) {
+      console.warn(`[caster purge] DELETE project "${project.name}" returned ${del.status}`);
+    }
+  }
+  if (purged.length > 0) {
+    console.log(`[global-teardown] Caster: purged ${purged.length} leftover shared project(s): ${purged.join(', ')}`);
+  }
+}
+
+/**
  * Caster-specific fixtures
  */
 export type CasterFixtures = {
@@ -283,21 +425,14 @@ export type CasterFixtures = {
   cleanupCasterUser: (userName: string) => Promise<void>;
 };
 
-const casterStatePath = authStatePath('caster');
-const casterStateExists = fs.existsSync(casterStatePath);
-const casterSessionStatePath = authSessionStatePath('caster');
-const casterSessionState: Array<[string, string]> = fs.existsSync(casterSessionStatePath)
-  ? JSON.parse(fs.readFileSync(casterSessionStatePath, 'utf8'))
-  : [];
-
 /**
  * Extended test with Caster-specific fixtures
  */
 export const test = base.extend<CasterFixtures>({
-  // Reuse the authenticated state global-setup captured for Caster. Auth-flow
-  // specs override this with an empty state; fallback login keeps normal specs
-  // working if setup could not provision a token.
-  storageState: casterStateExists ? casterStatePath : undefined,
+  // Reuse the authenticated state global-setup captured for Caster, refreshed when
+  // its token is near expiry. Auth-flow specs override this with an empty state;
+  // fallback login keeps normal specs working if setup could not provision a token.
+  storageState: async ({ browser }, use) => use(await freshAuthStatePath('caster', browser)),
 
   cleanupCasterProject: async ({ page }, use) => {
     const projectIds: string[] = [];
@@ -416,30 +551,14 @@ export const test = base.extend<CasterFixtures>({
     }
   },
   casterAuthenticatedPage: async ({ page, storageState }, use) => {
-    if (storageState === casterStatePath && casterSessionState.length > 0) {
-      await page.addInitScript((entries: Array<[string, string]>) => {
-        for (const [key, value] of entries) {
-          sessionStorage.setItem(key, value);
-        }
-      }, casterSessionState);
-    }
-    await page.goto(Services.Caster.UI, { waitUntil: 'domcontentloaded' });
-
-    const appShell = page.getByRole('button', { name: 'Admin User', exact: true });
-    const keycloakField = page.locator('input[name="username"]');
-    const winner = await waitForFirstVisible(
-      page,
-      [
-        { key: 'shell', locator: appShell },
-        { key: 'keycloak', locator: keycloakField },
-      ],
-      { timeout: 20000 }
-    );
-
-    if (winner !== 'shell') {
-      await authenticateCasterWithKeycloak(page);
-      await appShell.waitFor({ state: 'visible', timeout: 30000 });
-    }
+    await ensureAuthenticatedShell(page, {
+      app: 'caster',
+      url: Services.Caster.UI,
+      shell: page.getByRole('button', { name: 'Admin User', exact: true }),
+      login: authenticateCasterWithKeycloak,
+      restoreSession: storageState === authStatePath('caster'),
+      fromSavedState: storageState === authStatePath('caster'),
+    });
 
     await use(page);
   },
@@ -663,6 +782,60 @@ export async function seedCasterWorkspace(page: Page, directoryId: string, name:
 }
 
 /**
+ * Page-free seed functions for `beforeAll` — use the saved Caster token instead of
+ * extracting it from a page's session storage. Pair with `deleteCasterProjectPageFree`
+ * in `afterAll`.
+ */
+
+/** Page-free variant for beforeAll: create project via API using saved token. */
+export async function seedCasterProjectPageFree(name: string): Promise<string> {
+  return (await casterCreatePageFree('projects', { name })).id;
+}
+
+/** Page-free variant for beforeAll: create directory via API using saved token. */
+export async function seedCasterDirectoryPageFree(
+  projectId: string,
+  name: string,
+  settings: { parentId?: string; terraformVersion?: string; parallelism?: number } = {},
+): Promise<string> {
+  return (await casterCreatePageFree('directories', { name, projectId, ...settings })).id;
+}
+
+/** Page-free variant for beforeAll: create workspace via API using saved token. */
+export async function seedCasterWorkspacePageFree(directoryId: string, name: string): Promise<string> {
+  return (await casterCreatePageFree('workspaces', { name, directoryId })).id;
+}
+
+/** Page-free variant for beforeAll: create design via API using saved token. */
+export async function seedCasterDesignPageFree(directoryId: string, name: string): Promise<string> {
+  return (await casterCreatePageFree('designs', { name, directoryId })).id;
+}
+
+/** Page-free variant for beforeAll: delete project via API using saved token. */
+export async function deleteCasterProjectPageFree(projectId: string): Promise<void> {
+  const res = await casterApiPageFree('DELETE', `projects/${projectId}`);
+  if (res.status !== 204 && res.status !== 200) {
+    throw new Error(`DELETE /api/projects/${projectId} returned ${res.status}`);
+  }
+}
+
+/** Delete a design via API using saved token. */
+export async function deleteCasterDesignPageFree(designId: string): Promise<void> {
+  const res = await casterApiPageFree('DELETE', `designs/${designId}`);
+  if (res.status !== 204 && res.status !== 200) {
+    throw new Error(`DELETE /api/designs/${designId} returned ${res.status}`);
+  }
+}
+
+/** Delete a workspace via API using saved token. */
+export async function deleteCasterWorkspacePageFree(workspaceId: string): Promise<void> {
+  const res = await casterApiPageFree('DELETE', `workspaces/${workspaceId}`);
+  if (res.status !== 204 && res.status !== 200 && res.status !== 404) {
+    throw new Error(`DELETE /api/workspaces/${workspaceId} returned ${res.status}`);
+  }
+}
+
+/**
  * Open a project and expand one of its top-level directories in the sidebar.
  * The section buttons (FILES, WORKSPACES, DESIGNS) render only once it is expanded.
  */
@@ -780,37 +953,82 @@ export async function casterIsDarkTheme(page: Page): Promise<boolean> {
 }
 
 /**
- * Switch Caster between light and dark theme through the user menu, and wait for
- * the change to actually land on `document.body`.
+ * Switch Caster between light and dark theme by writing its persisted preference
+ * directly to localStorage, then reload and wait for the theme to apply.
  *
- * Caster persists the selected theme in the `auth.ui` slice of its Akita store,
- * saved to localStorage under 'akita-project-ui'. So a theme set here survives the
- * reloads and client-side navigations a test performs afterward, and only needs
- * applying once, right after authentication. The saved auth state carries no
- * localStorage, so every test's fresh browser context starts light.
- *
- * Use the toggle rather than the `?theme=dark` query param: the param is read in
- * `AppComponent`'s constructor, so it only applies on a fresh app bootstrap and is
- * a no-op for a client-side navigation within an already-running app (verified
- * against the running stack — the param left `body.darkMode` unset).
+ * Caster persists the selected theme in the `auth` and `currentUser` slices of its
+ * Akita store, saved to localStorage under 'akita-project-ui' (main.ts lines 18-57).
+ * The theme value is "light-theme" or "dark-theme". A theme set this way survives
+ * reloads and client-side navigations; the saved auth state carries no localStorage,
+ * so every test's fresh browser context starts light.
  *
  * No-ops when the requested theme is already active, so callers can use it to
  * restore state unconditionally.
+ *
+ * Dark-theme localStorage structure captured from Caster UI 2026-11-09 (caster.ui
+ * main.ts debounceTime(1000) means the toggle's write lands ~1s after the click):
+ *
+ * {
+ *   "$cache": { "currentUser": false, "auth": false, ... },
+ *   "currentUser": { "name": "...", "id": "...", "theme": "dark-theme", ... },
+ *   "auth": { "theme": "dark-theme" },
+ *   ...
+ * }
  */
 export async function setCasterTheme(page: Page, theme: CasterTheme): Promise<void> {
   const want = theme === 'dark';
   if ((await casterIsDarkTheme(page)) === want) return;
 
+  const themeValue = theme === 'dark' ? 'dark-theme' : 'light-theme';
+
+  // Write the theme preference to localStorage
+  await page.evaluate(
+    ({ key, themeValue }) => {
+      const existing = localStorage.getItem(key);
+      let state = existing ? JSON.parse(existing) : {};
+
+      // Update both auth and currentUser theme fields
+      if (!state.auth) state.auth = {};
+      state.auth.theme = themeValue;
+
+      if (!state.currentUser) state.currentUser = {};
+      state.currentUser.theme = themeValue;
+
+      localStorage.setItem(key, JSON.stringify(state));
+    },
+    { key: 'akita-project-ui', themeValue },
+  );
+
+  // Reload to apply the persisted theme
+  await page.reload();
+
+  // Wait for app shell to load
+  await page.locator('app-root').waitFor({ state: 'attached', timeout: 15000 });
+
+  // Poll until the theme state matches what was requested
+  await expect.poll(() => casterIsDarkTheme(page), { timeout: 10000 }).toBe(want);
+}
+
+/**
+ * Toggle Caster's theme via the user menu's "Dark Theme" switch, for specs whose
+ * subject IS the toggle. Production tests should use `setCasterTheme` instead
+ * (localStorage write + reload is faster and doesn't exercise the menu).
+ */
+export async function toggleCasterThemeViaMenu(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Admin User', exact: true }).click();
   const toggle = page.getByRole('switch', { name: 'Dark Theme' });
   await toggle.waitFor({ state: 'visible', timeout: 10000 });
+  const wasChecked = await toggle.isChecked();
   await toggle.click();
+
   // Close the menu, and wait for its overlay to tear down so a lingering CDK
   // backdrop can't silently intercept the test's next click.
   await page.keyboard.press('Escape');
   await page.locator('.mat-mdc-menu-panel').waitFor({ state: 'detached', timeout: 5000 });
   await page.locator('.cdk-overlay-backdrop').waitFor({ state: 'detached', timeout: 5000 });
 
+  // Wait for the theme to apply to body
+  const wantDark = !wasChecked;
   await page
     .locator('body')
     .evaluate(
@@ -829,7 +1047,7 @@ export async function setCasterTheme(page: Page, theme: CasterTheme): Promise<vo
             reject(new Error(`Theme did not become ${expected ? 'dark' : 'light'}`));
           }, 10000);
         }),
-      want,
+      wantDark,
     );
 }
 

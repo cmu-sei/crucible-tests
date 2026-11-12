@@ -7,29 +7,47 @@
 import { test, expect, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import {
   getBlueprintToken,
-  createMsel,
   deleteMsel,
   createRenderableScenarioEvent,
-  deleteScenarioEvent,
   navigateToMselSection,
+  createSharedRenderableMsel,
+  resetSharedRenderableMsel,
+  type CreatedMsel,
+  sharedChildName,
 } from '../../test-helpers';
+
+// One MSEL with the standard DataFields (13 POSTs) is seeded per file and shared by both
+// theme runs. Safe to share: the test only reads the grid.
+// Each test seeds its own uniquely named events, and `resetSharedRenderableMsel` removes
+// them (and any extra DataField) in afterEach.
+let shared: CreatedMsel;
+
+test.beforeAll(async ({}, workerInfo) => {
+  shared = await createSharedRenderableMsel(await getBlueprintToken(), 'ViewEvents', workerInfo.parallelIndex);
+});
+
+test.afterAll(async () => {
+  if (shared) await deleteMsel(await getBlueprintToken(), shared.id);
+});
 
 for (const theme of BLUEPRINT_THEMES) {
     test.describe(`${theme} theme › Scenario Events Management`, () => {
+    // Per-test names for this test's own records on the shared MSEL.
+    let child: (base: string) => string;
     let token: string;
     let mselId: string;
     let eventId: string;
 
-    test.beforeEach(async () => {
+    test.beforeEach(async ({}, testInfo) => {
+      child = (base: string) => sharedChildName(base, testInfo, theme);
       // Seed: create a MSEL with a renderable scenario event
       token = await getBlueprintToken();
-      const msel = await createMsel(token);
-      mselId = msel.id;
+      mselId = shared.id;
 
       const event = await createRenderableScenarioEvent(
         token,
         mselId,
-        'Test scenario event for viewing',
+        child('TestBP-ViewEvent'),
         {
           deltaSeconds: 300,
           rowMetadata: 'CTRL-001',
@@ -39,17 +57,8 @@ for (const theme of BLUEPRINT_THEMES) {
     });
 
     test.afterEach(async () => {
-      // Cleanup: delete the scenario event and MSEL
-      try {
-        if (eventId) await deleteScenarioEvent(token, eventId);
-      } catch (err) {
-        console.warn(`Cleanup failed for event ${eventId}: ${err}`);
-      }
-      try {
-        if (mselId) await deleteMsel(token, mselId);
-      } catch (err) {
-        console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
-      }
+      // Back to "standard DataFields, no events" for the next test on the shared MSEL.
+      await resetSharedRenderableMsel(token, mselId);
     });
 
     test('View Scenario Events in MSEL', async ({ blueprintAuthenticatedPage: page }) => {
@@ -70,7 +79,7 @@ for (const theme of BLUEPRINT_THEMES) {
       await expect(eventRow).toBeVisible({ timeout: 5000 });
 
       // expect: The seeded event's data values render in the grid
-      const descriptionCell = page.getByText('Test scenario event for viewing');
+      const descriptionCell = page.getByText(child('TestBP-ViewEvent'));
       await expect(descriptionCell).toBeVisible();
     });
     });

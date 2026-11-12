@@ -4,51 +4,61 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen, CASTER_THEMES, setCasterTheme } from '../../fixtures';
+import {
+  test,
+  expect,
+  openCasterDirectory,
+  seedCasterSharedProjectPageFree,
+  casterSharedProjectName,
+  seedCasterDirectoryPageFree,
+  seedCasterWorkspacePageFree,
+  deleteCasterProjectPageFree,
+  CASTER_THEMES,
+  setCasterTheme,
+} from '../../fixtures';
 
-for (const theme of CASTER_THEMES) {
-  test.describe(`${theme} theme › Workspaces Management`, () => {
-    test('Delete Workspace', async ({ casterAuthenticatedPage: page, cleanupCasterProjectByName }) => {
+test.describe('Workspaces Management › Delete Workspace', () => {
+  let projectId: string;
+  let directoryId: string;
+  const directoryName = 'Del-WS-Dir';
+
+  test.beforeAll(async ({}, workerInfo) => {
+    projectId = await seedCasterSharedProjectPageFree(casterSharedProjectName('delete-workspace', workerInfo));
+    directoryId = await seedCasterDirectoryPageFree(projectId, directoryName);
+  });
+
+  test.afterAll(async () => {
+    await deleteCasterProjectPageFree(projectId);
+  });
+
+  for (const theme of CASTER_THEMES) {
+    test(`Delete Workspace - ${theme}`, async ({ casterAuthenticatedPage: page }) => {
       await setCasterTheme(page, theme);
 
-      const projectName = 'Del WS Project';
-      await cleanupCasterProjectByName(projectName);
+      // Each test gets its own workspace to delete (mutator: deletes it)
+      const workspaceName = `WS_To_Delete_${theme}`;
+      await seedCasterWorkspacePageFree(directoryId, workspaceName);
 
-      await expect(page.getByText('My Projects')).toBeVisible();
-      await page.reload();
-
-      await page.locator('[mattooltip="Add New Project"]').click();
-      const projectDialog = page.getByRole('dialog', { name: 'Add Project' });
-      await expect(projectDialog).toBeVisible();
-      await projectDialog.getByRole('textbox', { name: 'Name' }).fill(projectName);
-      await projectDialog.getByRole('button', { name: 'Save' }).click();
-      await expectCasterProjectOpen(page, projectName);
-
-      await page.getByTitle('Add New Directory').click();
-      const dirDialog = page.getByRole('dialog', { name: 'Add Directory' });
-      await expect(dirDialog).toBeVisible();
-      await dirDialog.getByRole('textbox', { name: 'Name' }).fill('Del-WS-Dir');
-      await dirDialog.getByRole('button', { name: 'Save' }).click();
-      await expect(page.getByRole('button', { name: 'Del-WS-Dir' })).toBeVisible({ timeout: 10000 });
-
-      await page.getByRole('button', { name: 'Del-WS-Dir' }).click();
+      // Navigate to the seeded directory
+      await openCasterDirectory(page, projectId, directoryName);
       await page.getByRole('button', { name: 'WORKSPACES' }).click();
 
-      await page.getByText('Add Workspace').click();
-      const wsDialog = page.getByRole('dialog', { name: 'Add Workspace' });
-      await expect(wsDialog).toBeVisible();
-      // Workspace names must match pattern: ^[a-zA-Z0-9-_.]+$ (no spaces allowed)
-      await wsDialog.getByRole('textbox', { name: 'Name' }).fill('WS_To_Delete');
-      await wsDialog.getByRole('button', { name: 'Save' }).click();
+      // Get the WORKSPACES region and verify workspace exists
+      const workspacesRegion = page.getByRole('region', { name: 'WORKSPACES' });
+      const workspaceItem = workspacesRegion.getByRole('button', { name: workspaceName, exact: true });
+      await expect(workspaceItem).toBeVisible({ timeout: 5000 });
 
-      const deleteButton = page.getByRole('button', { name: 'delete' }).first();
-      if (await deleteButton.isVisible({ timeout: 5000 }).catch(() => false)) {
-        await deleteButton.click();
-        const confirmButton = page.getByRole('button', { name: 'Confirm' });
-        if (await confirmButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-          await confirmButton.click();
-        }
-      }
+      // Right-click to open context menu and select Delete
+      await workspaceItem.click({ button: 'right' });
+      await page.getByRole('menuitem', { name: /delete/i }).click();
+
+      // Confirm deletion
+      const deleteDialog = page.getByRole('dialog', { name: 'Delete Workspace' });
+      await expect(deleteDialog).toBeVisible();
+      await deleteDialog.getByRole('button', { name: 'Delete' }).click();
+
+      // Verify workspace was deleted
+      await expect(workspaceItem).toHaveCount(0);
     });
-  });
-}
+  }
+});

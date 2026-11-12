@@ -4,8 +4,8 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, ensureScoringModelExists, ensureTeamTypeExists, CITE_THEMES, setCiteTheme } from '../../fixtures';
-import { navigateToAdminSection, createEvaluation, deleteEvaluationByName, findAdminRowByName, waitForDialogOpen } from '../../test-helpers';
+import { test, expect, Services, ensureScoringModelExists, ensureTeamTypeExists, seedEvaluation, apiDeleteEvaluationsByName, CITE_THEMES, setCiteTheme } from '../../fixtures';
+import { navigateToAdminSection, findAdminRowByName, waitForDialogOpen } from '../../test-helpers';
 
 // These tests share backend state (admin user memberships, team types) with
 // other aggregate tests. Running them serially avoids SignalR/session races
@@ -17,24 +17,28 @@ for (const theme of CITE_THEMES) {
     // Serial per theme, so a failure in one theme doesn't skip the other.
     test.describe.configure({ mode: 'serial' });
 
-    const TEST_EVAL_NAME = 'Aggregate Display Test Eval';
+    // Per theme: the two theme groups can run on separate workers at once.
+    const TEST_EVAL_NAME = `Aggregate Display Test Eval ${theme}`;
     const TEST_TEAM_NAME = 'Aggregate Test Team';
     const TEST_TEAM_SHORT = 'AGT';
 
-    test.beforeEach(async ({ citeAuthenticatedPage: page }) => {
-      // Ensure a scoring model and a team type exist so the Add Evaluation and
-      // Add Team dialog dropdowns are populated on a clean database.
-      await ensureScoringModelExists();
+    let scoringModelId = '';
+
+    test.beforeEach(async () => {
+      // The evaluation is seeded on the shared scoring model; the team type must exist
+      // for the Add Team dialog's dropdown.
+      scoringModelId = await ensureScoringModelExists();
       await ensureTeamTypeExists(SHARED_TEAM_TYPE);
-      // Clean up any existing test evaluations first
-      await deleteEvaluationByName(page, TEST_EVAL_NAME);
+      // Clean up any evaluation a crashed earlier run left behind.
+      await apiDeleteEvaluationsByName(TEST_EVAL_NAME);
     });
 
     test('Aggregate Display', async ({ citeAuthenticatedPage: page }) => {
       await setCiteTheme(page, theme);
 
-      // 1. Create an evaluation via admin
-      await createEvaluation(page, TEST_EVAL_NAME);
+      // 1. Seed the evaluation through the API (its creation is not this test's subject;
+      //    adding its team and member through the admin UI below is)
+      await seedEvaluation(scoringModelId, TEST_EVAL_NAME);
 
       // 2. Navigate to evaluations admin and expand the evaluation row
       await navigateToAdminSection(page, 'Evaluations');
@@ -54,8 +58,6 @@ for (const theme of CITE_THEMES) {
         const isExpanded = (await teamsPanelHeader.getAttribute('aria-expanded')) === 'true';
         if (!isExpanded) {
           await teamsPanelHeader.click();
-          // Give the animation a moment to start before re-reading aria-expanded
-          await page.waitForTimeout(750);
         }
         expect(await teamsPanelHeader.getAttribute('aria-expanded')).toBe('true');
       }).toPass({ timeout: 20000, intervals: [500, 1000, 2000] });
@@ -86,7 +88,6 @@ for (const theme of CITE_THEMES) {
       const teamTypeOption = page.getByRole('option', { name: SHARED_TEAM_TYPE, exact: true }).first(); // parallel workers can each seed one on a fresh DB
       await expect(teamTypeOption).toBeVisible({ timeout: 10000 });
       await teamTypeOption.click();
-      await page.waitForTimeout(500);
 
       // Save team
       const saveButton = dialog.getByRole('button', { name: 'Save' });
@@ -102,9 +103,6 @@ for (const theme of CITE_THEMES) {
       const teamResponse = await teamCreatePromise;
       await expect(dialog).not.toBeVisible({ timeout: 10000 });
 
-      // Wait for the team to be created and the UI to update
-      await page.waitForTimeout(2000);
-
       // 6. The CITE UI doesn't always refresh the team list via SignalR in dev mode,
       // so explicitly re-navigate to the evaluations admin to get a fresh state, then
       // re-expand the evaluation row and the Teams panel.
@@ -112,7 +110,6 @@ for (const theme of CITE_THEMES) {
       const evalRowAfter = await findAdminRowByName(page, TEST_EVAL_NAME);
       await expect(evalRowAfter).toBeVisible({ timeout: 15000 });
       await evalRowAfter.click();
-      await page.waitForTimeout(1000);
 
       const teamsPanelHeaderAfter = page.locator('mat-expansion-panel-header')
         .filter({ has: page.locator('h4', { hasText: 'Teams' }) });
@@ -122,11 +119,9 @@ for (const theme of CITE_THEMES) {
         const isExpanded = (await teamsPanelHeaderAfter.getAttribute('aria-expanded')) === 'true';
         if (!isExpanded) {
           await teamsPanelHeaderAfter.click();
-          await page.waitForTimeout(750);
         }
         expect(await teamsPanelHeaderAfter.getAttribute('aria-expanded')).toBe('true');
       }).toPass({ timeout: 20000, intervals: [500, 1000, 2000] });
-      await page.waitForTimeout(1000);
 
       // Expand the newly created team to see memberships.
       // The team row inside app-admin-teams is itself a mat-expansion-panel-header,
@@ -138,11 +133,9 @@ for (const theme of CITE_THEMES) {
         const isExpanded = (await teamButton.getAttribute('aria-expanded')) === 'true';
         if (!isExpanded) {
           await teamButton.click();
-          await page.waitForTimeout(750);
         }
         expect(await teamButton.getAttribute('aria-expanded')).toBe('true');
       }).toPass({ timeout: 15000, intervals: [500, 1000, 2000] });
-      await page.waitForTimeout(1500);
 
       // 7. Add admin user as team member — find the "+" button next to "Admin User" in the non-members list
       const membershipList = page.locator('app-admin-team-membership-list');
@@ -177,7 +170,7 @@ for (const theme of CITE_THEMES) {
         await page.goto(Services.Cite.UI, { waitUntil: 'domcontentloaded' });
         await page.getByRole('textbox', { name: 'Search' }).pressSequentially(TEST_EVAL_NAME);
         await expect(evaluationRows.first()).toBeVisible({ timeout: 10000 });
-      }).toPass({ timeout: 45000, intervals: [1000, 2000, 5000] });
+      }).toPass({ timeout: 30000, intervals: [1000, 2000, 5000] });
 
       // 9. Click on the evaluation
       await evaluationRows.first().click();
@@ -188,8 +181,8 @@ for (const theme of CITE_THEMES) {
       await expect(evaluationContent).toBeVisible({ timeout: 15000 });
     });
 
-    test.afterEach(async ({ citeAuthenticatedPage: page }) => {
-      await deleteEvaluationByName(page, TEST_EVAL_NAME);
+    test.afterEach(async () => {
+      await apiDeleteEvaluationsByName(TEST_EVAL_NAME);
     });
   });
 }

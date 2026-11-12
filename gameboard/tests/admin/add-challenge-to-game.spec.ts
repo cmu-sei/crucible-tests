@@ -4,7 +4,7 @@
 // spec: gameboard/gameboard-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, type SharedWorkspace } from '../../fixtures';
 import {
   getAdminToken,
   createGame,
@@ -15,30 +15,19 @@ import {
   CreatedGame,
   CreatedChallengeSpec,
 } from '../../api-helpers';
-import {
-  getTopoMojoAdminToken,
-  createWorkspace,
-  deleteWorkspace,
-  CreatedWorkspace,
-} from '../../../topomojo-helpers';
 
-// Creates a TopoMojo workspace visible to Gameboard (audience includes
-// `gameboard`), then attaches it as a challenge spec to a Gameboard game.
+// Attaches the run's shared TopoMojo workspace (audience includes `gameboard`)
+// as a challenge spec to a Gameboard game.
 // Verifies the challenge is persisted and associated with the game.
 test.describe('Admin - Challenges', () => {
   let gbToken: string;
-  let tmToken: string;
   let game: CreatedGame;
-  let workspace: CreatedWorkspace;
+  let workspace: SharedWorkspace;
   let spec: CreatedChallengeSpec | null = null;
 
-  test.beforeEach(async () => {
+  test.beforeEach(async ({ sharedWorkspace }) => {
     gbToken = await getAdminToken();
-    tmToken = await getTopoMojoAdminToken();
-    workspace = await createWorkspace(tmToken, {
-      name: `AddChal-WS-${Date.now()}`,
-      audience: 'gameboard',
-    });
+    workspace = sharedWorkspace;
     game = await createGame(gbToken, {
       name: `AddChal-Game-${Date.now()}`,
       startOffsetDays: -1,
@@ -49,7 +38,6 @@ test.describe('Admin - Challenges', () => {
   test.afterEach(async () => {
     if (spec) await deleteChallengeSpec(gbToken, spec.id).catch(() => {});
     if (game) await deleteGame(gbToken, game.id);
-    if (workspace) await deleteWorkspace(tmToken, workspace.id);
   });
 
   test('Add Challenge to Game', async ({ gameboardAuthenticatedPage: page }) => {
@@ -65,7 +53,7 @@ test.describe('Admin - Challenges', () => {
     expect(specs.some(s => s.id === spec!.id)).toBe(true);
 
     // UI sanity — admin area still reachable.
-    await page.goto(Services.Gameboard.UI + '/admin/dashboard', { waitUntil: 'networkidle' });
+    await page.goto(Services.Gameboard.UI + '/admin/dashboard', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
   });
 });

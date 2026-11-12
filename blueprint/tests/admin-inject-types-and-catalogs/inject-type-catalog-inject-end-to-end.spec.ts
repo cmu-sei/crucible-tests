@@ -288,7 +288,7 @@ for (const theme of BLUEPRINT_THEMES) {
         await expect(newInjectMenuItem).toBeVisible({ timeout: 3000 });
         await newInjectMenuItem.click({ timeout: 3000 });
         await expect(page.locator('input[title="The Name of the Inject"]')).toBeVisible({ timeout: 3000 });
-      }).toPass({ timeout: 45000 });
+      }).toPass({ timeout: 30000 });
 
       // 9. Fill in the required fields
       const injectNameInput = page.locator('input[title="The Name of the Inject"]').first();
@@ -322,7 +322,7 @@ for (const theme of BLUEPRINT_THEMES) {
         await expect(
           injectList.getByRole('cell', { name: INJECT_NAME, exact: true })
         ).toBeVisible({ timeout: 3000 });
-      }).toPass({ timeout: 45000 });
+      }).toPass({ timeout: 30000 });
 
       // ── Step 4: Verify inject appears under the Inject Type ──────────────────
       // 11. Navigate to Inject Types and expand the inject type row, open its Injects
@@ -335,7 +335,7 @@ for (const theme of BLUEPRINT_THEMES) {
         await expect(
           injectList.getByRole('cell', { name: INJECT_NAME, exact: true })
         ).toBeVisible({ timeout: 3000 });
-      }).toPass({ timeout: 45000 });
+      }).toPass({ timeout: 30000 });
 
       // ── Step 5: Delete the inject from the inject type view ──────────────────
       // 13. Click the delete button for the inject within the inject type's Injects
@@ -354,7 +354,7 @@ for (const theme of BLUEPRINT_THEMES) {
         await expect(
           injectList.getByRole('cell', { name: INJECT_NAME, exact: true })
         ).not.toBeVisible({ timeout: 3000 });
-      }).toPass({ timeout: 45000 });
+      }).toPass({ timeout: 30000 });
 
       // ── Step 6: Verify inject is gone from the catalog ───────────────────────
       // 14. Navigate to Catalogs and expand the catalog row, open the Injects panel
@@ -367,7 +367,7 @@ for (const theme of BLUEPRINT_THEMES) {
         await expect(
           injectList.getByRole('cell', { name: INJECT_NAME, exact: true })
         ).not.toBeVisible({ timeout: 3000 });
-      }).toPass({ timeout: 45000 });
+      }).toPass({ timeout: 30000 });
 
       // ── Step 7: Delete the catalog ───────────────────────────────────────────
       // 16. Click the delete button for the catalog and confirm

@@ -4,7 +4,14 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen, CASTER_THEMES, setCasterTheme } from '../../fixtures';
+import {
+  test,
+  expect,
+  CASTER_THEMES,
+  setCasterTheme,
+  seedCasterProject,
+  Services,
+} from '../../fixtures';
 
 for (const theme of CASTER_THEMES) {
   test.describe(`${theme} theme › Projects Management`, () => {
@@ -12,28 +19,13 @@ for (const theme of CASTER_THEMES) {
       await setCasterTheme(page, theme);
       const projectName = `Project To Delete ${Date.now()}`;
 
-      // 1. Navigate to Projects section
-      // expect: Projects list is visible
+      // Create project via API for testing deletion
+      const projectId = await seedCasterProject(page, projectName);
+      cleanupCasterProject(projectId); // Safety cleanup in case deletion fails
+
+      // Navigate to Projects list
+      await page.goto(Services.Caster.UI);
       await expect(page.getByText('My Projects')).toBeVisible();
-
-      // Create a project to delete
-      await page.locator('button[mattooltip="Add New Project"]').click();
-      await expect(page.getByRole('dialog', { name: 'Add Project' })).toBeVisible();
-      await page.getByRole('textbox', { name: 'Name' }).fill(projectName);
-
-      const createResponsePromise = page.waitForResponse(resp =>
-        resp.url().includes('/api/projects') && resp.request().method() === 'POST' && resp.ok()
-      );
-      await page.getByRole('button', { name: 'Save' }).click();
-
-      // Capture project ID for cleanup (in case deletion fails mid-test)
-      const createResponse = await createResponsePromise;
-      const projectData = await createResponse.json();
-      const projectId = projectData.id;
-      cleanupCasterProject(projectId);
-
-      await expectCasterProjectOpen(page, projectName);
-      await page.getByRole('link', { name: 'Caster', exact: true }).click();
       const searchBox = page.getByRole('textbox', { name: 'Search' });
       await searchBox.fill(projectName);
       await searchBox.press('End');

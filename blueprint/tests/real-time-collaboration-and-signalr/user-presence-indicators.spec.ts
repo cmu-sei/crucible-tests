@@ -6,12 +6,6 @@
 import { test, expect, Services, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import { chromium } from '@playwright/test';
 import {
-  getKeycloakAdminToken,
-  createKeycloakUser,
-  deleteKeycloakUser,
-  tempUsername,
-} from '../../../keycloak-admin';
-import {
   getBlueprintToken,
   createMsel,
   deleteMsel,
@@ -20,8 +14,6 @@ import {
   addUnitToMsel,
   removeUnitFromMsel,
   addUserToUnit,
-  createBlueprintUser,
-  deleteBlueprintUser,
   navigateToMsel,
   tempBlueprintName,
 } from '../../test-helpers';
@@ -51,8 +43,8 @@ import {
  * (line 133). `updatePresence` in `signalr.service.ts` then dedupes by actor id. So a second
  * window signed in as the same account is deliberately excluded from its own presence list:
  * the old spec's "multi-user" step could never add a chip, no matter how long it slept.
- * This version creates a real second Keycloak user and puts it in a **unit** attached to the
- * seeded MSEL. Team membership is *not* enough: `MainHub.GetMselIdList` (MainHub.cs:182-214)
+ * This version signs in a real second Keycloak user — one of the worker's pool users
+ * (`user-pool.ts`) — and puts it in a **unit** attached to the seeded MSEL. Team membership is *not* enough: `MainHub.GetMselIdList` (MainHub.cs:182-214)
  * builds a non-admin user's group list from `UnitUsers` -> `MselUnits`, plus MSELs they
  * created and templates — it never looks at teams. Seeding a team instead produced exactly
  * zero chips, which is how this was found.
@@ -64,17 +56,15 @@ import {
 for (const theme of BLUEPRINT_THEMES) {
     test.describe(`${theme} theme › Real-time Collaboration and SignalR`, () => {
     let blueprintToken: string;
-    let keycloakToken: string;
     let mselId: string;
     let unitId: string | undefined;
     let mselUnitId: string | undefined;
-    let secondUserId: string | undefined;
-    let secondBlueprintUserId: string | undefined;
+    let secondUserId: string;
     let secondUsername: string;
     let secondDisplayName: string;
-    const secondPassword = 'TestPassword123!';
+    let secondPassword: string;
 
-    test.beforeEach(async () => {
+    test.beforeEach(async ({ nonAdminUser }) => {
       blueprintToken = await getBlueprintToken();
       const msel = await createMsel(blueprintToken, {
         name: tempBlueprintName('TestBP-Presence'),
@@ -83,61 +73,39 @@ for (const theme of BLUEPRINT_THEMES) {
       mselId = msel.id;
 
       // A real second identity. Presence excludes your own connections, so the observer and
-      // the observed must be different users.
-      keycloakToken = await getKeycloakAdminToken();
-      secondUsername = tempUsername('bppresence');
+      // the observed must be different users. The pool user's Blueprint row (keyed by the
+      // Keycloak subject, which presence uses) is ensured by the fixture.
+      secondUserId = nonAdminUser.userId;
+      secondUsername = nonAdminUser.username;
+      secondPassword = nonAdminUser.password;
       // The presence chip renders the token's `name` claim, which Keycloak composes from
-      // firstName + lastName -- NOT the username. Left at the helper's defaults it reads
-      // "Test User", which would make the name assertion below indistinguishable between
-      // users. Set both explicitly so the chip carries something unique to this run.
-      secondDisplayName = `Presence ${secondUsername}`;
-      const kcUser = await createKeycloakUser(keycloakToken, {
-        username: secondUsername,
-        password: secondPassword,
-        email: `${secondUsername}@test.local`,
-        firstName: 'Presence',
-        lastName: secondUsername,
-        realmRoles: [],
-      });
-      secondUserId = kcUser.id;
-
-      // Blueprint keys presence off its own user id, which must match the Keycloak subject.
-      const bpUser = await createBlueprintUser(blueprintToken, {
-        id: kcUser.id,
-        name: secondUsername,
-      });
-      secondBlueprintUserId = bpUser.id;
+      // firstName + lastName -- NOT the username. Pool users are named `E2E Pool <n>`, which
+      // no other account (in particular not "Admin User") carries.
+      secondDisplayName = nonAdminUser.displayName;
 
       // Unit membership is what puts the second user in this MSEL's SignalR group
       // (MainHub.Join -> GetMselIdList, which reads UnitUsers -> MselUnits).
       const unit = await createUnit(blueprintToken, { name: tempBlueprintName('TestBP-PresenceUnit') });
       unitId = unit.id;
-      await addUserToUnit(blueprintToken, unit.id, kcUser.id);
+      await addUserToUnit(blueprintToken, unit.id, secondUserId);
       const mselUnit = await addUnitToMsel(blueprintToken, mselId, unit.id);
       mselUnitId = mselUnit.id;
     });
 
+    // Also the pool user's reset: deleting the unit takes their unit membership with it.
     test.afterEach(async () => {
       try {
         if (mselUnitId) await removeUnitFromMsel(blueprintToken, mselUnitId);
       } catch (err) {
         console.warn(`Cleanup failed for MselUnit ${mselUnitId}: ${err}`);
       }
+      mselUnitId = undefined;
       try {
         if (unitId) await deleteUnit(blueprintToken, unitId);
       } catch (err) {
         console.warn(`Cleanup failed for unit ${unitId}: ${err}`);
       }
-      try {
-        if (secondBlueprintUserId) await deleteBlueprintUser(blueprintToken, secondBlueprintUserId);
-      } catch (err) {
-        console.warn(`Cleanup failed for Blueprint user ${secondBlueprintUserId}: ${err}`);
-      }
-      try {
-        if (secondUserId) await deleteKeycloakUser(keycloakToken, secondUserId);
-      } catch (err) {
-        console.warn(`Cleanup failed for Keycloak user ${secondUserId}: ${err}`);
-      }
+      unitId = undefined;
       try {
         if (mselId) await deleteMsel(blueprintToken, mselId);
       } catch (err) {
@@ -160,19 +128,18 @@ for (const theme of BLUEPRINT_THEMES) {
       // ── Window 2: the second user, on the same MSEL ─────────────────────────────
       const browser = await chromium.launch();
       try {
-        const context2 = await browser.newContext({ ignoreHTTPSErrors: true });
+        // An explicit empty storageState: inside a test, Playwright applies the fixture's
+        // context options to every new context that does not set them, and the Blueprint
+        // fixture's storageState is admin's saved login. Inherited, it would hand this context
+        // admin's Keycloak SSO cookies and the visit below would land straight in as admin.
+        const context2 = await browser.newContext({
+          ignoreHTTPSErrors: true,
+          storageState: { cookies: [], origins: [] },
+        });
         const page2 = await context2.newPage();
 
-        // Sign in as the second user. Two Keycloak behaviours have to be worked around:
-        //   - A plain visit to Blueprint reuses the realm's existing SSO session and lands
-        //     straight in as *admin*, with no login form.
-        //   - Adding `prompt=login` does re-prompt, but Keycloak pins the form to the already
-        //     identified account: it renders "admin / Please re-authenticate to continue" with a
-        //     password field only, and no username field (measured).
-        // Clearing the realm cookies for this context drops that session, so the next
-        // authorization request renders the full username+password form.
-        await page2.goto(Services.Blueprint.UI, { waitUntil: 'domcontentloaded' });
-        await context2.clearCookies();
+        // Sign in as the second user. With no SSO session in this context, Keycloak renders
+        // the full username+password form.
         await page2.goto(Services.Blueprint.UI, { waitUntil: 'domcontentloaded' });
 
         const usernameField = page2.getByRole('textbox', { name: /username/i });
@@ -198,9 +165,9 @@ for (const theme of BLUEPRINT_THEMES) {
         await expect(presenceContainer).toBeVisible();
 
         // expect: the chip names the *other* user, not the viewer. The name comes from the
-        // token's `name` claim (firstName + lastName), seeded uniquely above.
+        // token's `name` claim (firstName + lastName) — the pool user's `E2E Pool <n>`.
         await expect(page.locator('.presence-chip .presence-name').first()).toHaveText(
-          new RegExp(secondDisplayName, 'i'),
+          new RegExp(`${secondDisplayName}(?!\\d)`, 'i'),
           { timeout: 15000 }
         );
         await expect(page.locator('.presence-chip .presence-name')).not.toHaveText(/Admin User/i);

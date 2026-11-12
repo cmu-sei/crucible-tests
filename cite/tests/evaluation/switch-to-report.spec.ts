@@ -4,22 +4,16 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, seedCompleteEvaluation, cleanupCompleteEvaluation, CITE_THEMES, setCiteTheme } from '../../fixtures';
+import { test, expect, Services, loadCiteSeedIds, CITE_THEMES, setCiteTheme } from '../../fixtures';
 
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Evaluation Dashboard Interface`, () => {
-    let evaluationIds: { evaluationId: string; scoringModelId: string; teamTypeId: string; } | null = null;
-
     test('Section Navigation - Switch to Report', async ({ citeAuthenticatedPage: page }) => {
       await setCiteTheme(page, theme);
 
-      // Create evaluation with team membership via API
-      const seededData = await seedCompleteEvaluation(`Switch Report Test ${Date.now()}`);
-      evaluationIds = {
-        evaluationId: seededData.evaluationId,
-        scoringModelId: seededData.scoringModelId,
-        teamTypeId: seededData.teamTypeId,
-      };
+      // The run-level shared evaluation (global-setup): Active, only the default move 0,
+      // Admin User on its one team. This test only reads it.
+      const seededData = { evaluationId: (await loadCiteSeedIds()).readOnlyEvaluationId };
 
       // 1. Navigate to evaluation dashboard
       await page.goto(`${Services.Cite.UI}/?evaluation=${seededData.evaluationId}`);
@@ -30,18 +24,12 @@ for (const theme of CITE_THEMES) {
       const submissionReviewButton = page.getByRole('button', { name: 'Submission Review' });
       await expect(submissionReviewButton).toBeVisible({ timeout: 10000 });
       await submissionReviewButton.click();
-      await page.waitForTimeout(1000);
 
       // expect: Report/Submission Review section is now displayed
       // The page stays on same URL but changes section content
+      // Wait for report-specific heading
+      await expect(page.getByText('Submission Review', { exact: true })).toBeVisible({ timeout: 10000 });
       await expect(page).toHaveURL(new RegExp(seededData.evaluationId), { timeout: 5000 });
-    });
-
-    test.afterEach(async () => {
-      if (evaluationIds) {
-        await cleanupCompleteEvaluation(evaluationIds);
-        evaluationIds = null;
-      }
     });
   });
 }

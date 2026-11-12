@@ -4,8 +4,8 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, seedCompleteEvaluation, cleanupCompleteEvaluation, CITE_THEMES, setCiteTheme } from '../../fixtures';
-import { navigateToAdminSection, waitForAdminListLoad, deleteEvaluationByName } from '../../test-helpers';
+import { test, expect, apiDeleteEvaluationsByName, Services, seedCompleteEvaluation, cleanupCompleteEvaluation, CITE_THEMES, setCiteTheme } from '../../fixtures';
+import { navigateToAdminSection, waitForAdminListLoad } from '../../test-helpers';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -29,12 +29,11 @@ for (const theme of CITE_THEMES) {
       await navigateToAdminSection(page, 'Evaluations');
       await waitForAdminListLoad(page, '/api/evaluations', true);
 
-      // Search for the evaluation
+      // Search for the evaluation (Rule B: wait for filtered row)
       const searchBox = page.locator('input[placeholder="Search"], input[type="search"], input[aria-label="Search"]').first();
       await expect(searchBox).toBeVisible({ timeout: 5000 });
       await searchBox.clear();
       await searchBox.fill(evalName);
-      await page.waitForTimeout(1000);
 
       const evalRow = page.locator('tbody tr').filter({ hasText: evalName }).first();
       await expect(evalRow).toBeVisible({ timeout: 10000 });
@@ -68,26 +67,22 @@ for (const theme of CITE_THEMES) {
       const fileInput = page.locator('input[type="file"][accept=".json"]');
       await fileInput.setInputFiles(tempFilePath);
 
-      // Wait for the upload to complete
-      await page.waitForTimeout(2000);
-
-      // 6. Verify the uploaded evaluation appears in the list
+      // 6. Verify the uploaded evaluation appears in the list (Rule B + D: search and wait for row)
       await searchBox.clear();
       await searchBox.fill(UPLOADED_EVAL_NAME);
-      await page.waitForTimeout(1000);
 
       const uploadedRow = page.locator('tbody tr').filter({ hasText: UPLOADED_EVAL_NAME }).first();
       await expect(uploadedRow).toBeVisible({ timeout: 10000 });
     });
 
-    test.afterEach(async ({ citeAuthenticatedPage: page }) => {
+    test.afterEach(async () => {
       // Clean up the original seeded evaluation via API
       if (seedData) {
         await cleanupCompleteEvaluation(seedData);
         seedData = null;
       }
-      // Clean up the uploaded evaluation via UI
-      await deleteEvaluationByName(page, UPLOADED_EVAL_NAME);
+      // Clean up the uploaded evaluation via the API
+      await apiDeleteEvaluationsByName(UPLOADED_EVAL_NAME);
       if (tempFilePath && fs.existsSync(tempFilePath)) {
         fs.unlinkSync(tempFilePath);
       }

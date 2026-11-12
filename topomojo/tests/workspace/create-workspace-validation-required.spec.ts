@@ -13,18 +13,22 @@ test.describe('Workspace Management', () => {
     const sidebarToggle = page.locator('button[aria-label="Toggle sidebar"], button:has(mat-icon:text("menu"))').first();
     const hasSidebarToggle = await sidebarToggle.isVisible({ timeout: 10000 }).catch(() => false);
     if (hasSidebarToggle) {
+      // The toggle flips app-workspace-browser's [hidden] binding (sidebar `open`, default
+      // true, persisted in localStorage), so the click's completion signal is the browser
+      // switching to the opposite visibility from before the click.
+      const workspaceBrowser = page.locator('app-workspace-browser');
+      const wasOpen = await workspaceBrowser.isVisible();
       await sidebarToggle.click();
-      await page.waitForTimeout(500);
+      await expect(workspaceBrowser).toBeVisible({ visible: !wasOpen });
     }
 
     const createButton = page.locator('button:has-text("Create"), button:has-text("New"), button:has(mat-icon:text("add"))').first();
     await expect(createButton).toBeVisible({ timeout: 10000 });
     await createButton.click();
-    await page.waitForTimeout(1000);
 
     // expect: Create workspace form is displayed (if dialog-based)
     const dialog = page.locator('mat-dialog-container, [class*="dialog"], [role="dialog"]').first();
-    const hasDialog = await dialog.isVisible({ timeout: 3000 }).catch(() => false);
+    const hasDialog = await dialog.waitFor({ state: 'visible', timeout: 3000 }).then(() => true, () => false);
 
     if (hasDialog) {
       // 2. Leave workspace name field empty

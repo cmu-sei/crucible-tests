@@ -21,7 +21,7 @@ test.describe('Authentication and Authorization', () => {
     await page.goto(Services.Caster.UI + '/admin');
 
     // expect: The application redirects to the Keycloak login page
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 70000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 30000 });
 
     // expect: No application content is displayed before authentication
     await expect(page.getByText('Sign in to your account')).toBeVisible();

@@ -4,9 +4,9 @@
 // spec: alloy/alloy-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../fixtures';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
-import { ALLOY_THEMES, applyAlloyTheme, deleteEventTemplatesByPattern, waitForDialogOpen } from '../../test-helpers';
+import { ALLOY_THEMES, applyAlloyTheme, deleteEventTemplatesByPattern, waitForDialogOpen, findEventTemplateEditButton } from '../../test-helpers';
 
 for (const theme of ALLOY_THEMES) {
   test.describe(`${theme} theme › Event Templates Management`, () => {
@@ -47,7 +47,7 @@ for (const theme of ALLOY_THEMES) {
 
       // 4. Re-open the freshly created template by name to delete it
       const editDialog = page.getByRole('dialog', { name: 'Edit Event Template' });
-      await page.getByRole('button', { name: `Edit: ${uniqueName}` }).click();
+      await (await findEventTemplateEditButton(page, uniqueName)).click();
       await expect(editDialog).toBeVisible();
 
       // 5. Click 'Delete' button within the edit dialog

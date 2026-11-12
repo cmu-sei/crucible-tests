@@ -9,15 +9,17 @@ import fs from 'fs';
 import { authStatePath, authSessionStatePath } from '../../../auth-paths';
 import {
   getBlueprintToken,
-  createMsel,
   deleteMsel,
   createRenderableScenarioEvent,
   setScenarioEventFieldValue,
   getScenarioEvent,
   listMselDataFields,
   assertJoinedMselGroup,
-  tempBlueprintName,
   navigateToMselSection,
+  createSharedRenderableMsel,
+  resetSharedRenderableMsel,
+  type CreatedMsel,
+  sharedChildName,
 } from '../../test-helpers';
 
 /**
@@ -54,34 +56,45 @@ import {
  * If Blueprint ever gains real conflict detection, this spec should fail and be rewritten —
  * which is the correct outcome, rather than a spec that passes either way.
  */
+// One MSEL with the standard DataFields (13 POSTs) is seeded per file and shared by both
+// theme runs. Safe to share: both writes land on the test's own event.
+// Each test seeds its own uniquely named events, and `resetSharedRenderableMsel` removes
+// them (and any extra DataField) in afterEach.
+let shared: CreatedMsel;
+
+test.beforeAll(async ({}, workerInfo) => {
+  shared = await createSharedRenderableMsel(await getBlueprintToken(), 'Conflict', workerInfo.parallelIndex);
+});
+
+test.afterAll(async () => {
+  if (shared) await deleteMsel(await getBlueprintToken(), shared.id);
+});
+
 for (const theme of BLUEPRINT_THEMES) {
     test.describe(`${theme} theme › Real-time Collaboration and SignalR`, () => {
+    // Per-test names for this test's own records on the shared MSEL.
+    let child: (base: string) => string;
     let token: string;
     let mselId: string;
     let eventId: string;
 
-    const ORIGINAL = 'Conflict baseline';
+    let original: string;
 
-    test.beforeEach(async () => {
+    test.beforeEach(async ({}, testInfo) => {
+      child = (base: string) => sharedChildName(base, testInfo, theme);
       token = await getBlueprintToken();
-      const msel = await createMsel(token, {
-        name: tempBlueprintName('TestBP-Conflict'),
-        description: 'Seeded to verify concurrent-edit convergence.',
-      });
-      mselId = msel.id;
+      mselId = shared.id;
+      original = child('TestBP-ConflictBaseline');
 
-      const event = await createRenderableScenarioEvent(token, mselId, ORIGINAL, {
+      const event = await createRenderableScenarioEvent(token, mselId, original, {
         deltaSeconds: 60,
       });
       eventId = event.id;
     });
 
     test.afterEach(async () => {
-      try {
-        if (mselId) await deleteMsel(token, mselId);
-      } catch (err) {
-        console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
-      }
+      // Back to "standard DataFields, no events" for the next test on the shared MSEL.
+      await resetSharedRenderableMsel(token, mselId);
     });
 
     test('Collaborative Editing Conflict Resolution', async ({
@@ -90,7 +103,7 @@ for (const theme of BLUEPRINT_THEMES) {
       await applyBlueprintTheme(page, theme);
       // ── Window 1 ────────────────────────────────────────────────────────────────
       await navigateToMselSection(page, mselId, 'Scenario Events');
-      await expect(page.getByText(ORIGINAL).first()).toBeVisible({ timeout: 20000 });
+      await expect(page.getByText(original).first()).toBeVisible({ timeout: 20000 });
 
       // ── Window 2, on the same MSEL ──────────────────────────────────────────────
       const statePath = authStatePath('blueprint');
@@ -120,7 +133,7 @@ for (const theme of BLUEPRINT_THEMES) {
         const page2 = await context2.newPage();
 
         await navigateToMselSection(page2, mselId, 'Scenario Events');
-        await expect(page2.getByText(ORIGINAL).first()).toBeVisible({ timeout: 20000 });
+        await expect(page2.getByText(original).first()).toBeVisible({ timeout: 20000 });
 
         // Both clients must be in the MSEL's SignalR group before convergence can be asserted.
         // The app's join is fire-and-forget and loses the race under suite load, leaving a
@@ -141,13 +154,13 @@ for (const theme of BLUEPRINT_THEMES) {
           (d: any) => d.dataFieldId === descField.id
         );
         expect(staleCopy, 'the seeded event should have a Description DataValue').toBeTruthy();
-        expect(staleCopy.value).toBe(ORIGINAL);
+        expect(staleCopy.value).toBe(original);
 
-        const firstWrite = `Window 1 wrote ${Date.now()}`;
+        const firstWrite = child('TestBP-ConflictWindow1');
         await setScenarioEventFieldValue(token, eventId, 'Description', firstWrite);
 
         // Window 2 saves its stale copy. expect: it is accepted (no conflict detection exists).
-        const secondWrite = `Window 2 wrote ${Date.now()}`;
+        const secondWrite = child('TestBP-ConflictWindow2');
         const apiBase = process.env.BLUEPRINT_API_URL || 'http://localhost:4724';
         const staleResponse = await fetch(`${apiBase}/api/dataValues/${staleCopy.id}`, {
           method: 'PUT',

@@ -9,12 +9,14 @@ import fs from 'fs';
 import { authStatePath, authSessionStatePath } from '../../../auth-paths';
 import {
   getBlueprintToken,
-  createMsel,
   deleteMsel,
   createRenderableScenarioEvent,
   setScenarioEventFieldValue,
-  tempBlueprintName,
   navigateToMselSection,
+  createSharedRenderableMsel,
+  resetSharedRenderableMsel,
+  type CreatedMsel,
+  sharedChildName,
 } from '../../test-helpers';
 
 /**
@@ -41,36 +43,45 @@ import {
  * the one that raises the SignalR notification), and poll window 2 for the new text.
  * Window 2 is never reloaded, so only a pushed update can satisfy the assertion.
  */
+// One MSEL with the standard DataFields (13 POSTs) is seeded per file and shared by both
+// theme runs. Safe to share: the edit lands on the test's own event.
+// Each test seeds its own uniquely named events, and `resetSharedRenderableMsel` removes
+// them (and any extra DataField) in afterEach.
+let shared: CreatedMsel;
+
+test.beforeAll(async ({}, workerInfo) => {
+  shared = await createSharedRenderableMsel(await getBlueprintToken(), 'RealtimeEdit', workerInfo.parallelIndex);
+});
+
+test.afterAll(async () => {
+  if (shared) await deleteMsel(await getBlueprintToken(), shared.id);
+});
+
 for (const theme of BLUEPRINT_THEMES) {
     test.describe(`${theme} theme › Real-time Collaboration and SignalR`, () => {
+    // Per-test names for this test's own records on the shared MSEL.
+    let child: (base: string) => string;
     let token: string;
     let mselId: string;
     let eventId: string;
 
-    const ORIGINAL_TITLE = 'Realtime edit baseline';
+    let originalTitle: string;
 
-    test.beforeEach(async () => {
+    test.beforeEach(async ({}, testInfo) => {
+      child = (base: string) => sharedChildName(base, testInfo, theme);
       token = await getBlueprintToken();
-      const msel = await createMsel(token, {
-        name: tempBlueprintName('TestBP-RealtimeEdit'),
-        description: 'Seeded to verify SignalR scenario-event edit propagation.',
-      });
-      mselId = msel.id;
+      mselId = shared.id;
+      originalTitle = child('TestBP-RealtimeEditBaseline');
 
-      const event = await createRenderableScenarioEvent(token, mselId, ORIGINAL_TITLE, {
+      const event = await createRenderableScenarioEvent(token, mselId, originalTitle, {
         deltaSeconds: 60,
       });
       eventId = event.id;
     });
 
     test.afterEach(async () => {
-      if (mselId) {
-        try {
-          await deleteMsel(token, mselId);
-        } catch (err) {
-          console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
-        }
-      }
+      // Back to "standard DataFields, no events" for the next test on the shared MSEL.
+      await resetSharedRenderableMsel(token, mselId);
     });
 
     test('Real-time Scenario Event Updates', async ({ blueprintAuthenticatedPage: page }) => {
@@ -80,7 +91,7 @@ for (const theme of BLUEPRINT_THEMES) {
 
       // The seeded title must be on screen before the edit, otherwise "the new title appeared"
       // proves nothing about propagation.
-      await expect(page.getByText(ORIGINAL_TITLE).first()).toBeVisible({ timeout: 20000 });
+      await expect(page.getByText(originalTitle).first()).toBeVisible({ timeout: 20000 });
 
       // ── Window 2: a separate context on the same MSEL ───────────────────────────
       // Reuses the storageState global-setup captured, so this costs no extra Keycloak
@@ -115,13 +126,13 @@ for (const theme of BLUEPRINT_THEMES) {
         await navigateToMselSection(page2, mselId, 'Scenario Events');
 
         // Both windows start from the same state.
-        await expect(page2.getByText(ORIGINAL_TITLE).first()).toBeVisible({ timeout: 20000 });
+        await expect(page2.getByText(originalTitle).first()).toBeVisible({ timeout: 20000 });
 
         // ── Edit the event ─────────────────────────────────────────────────────────
         // `createRenderableScenarioEvent` writes its text into the 'Description' DataField, so
         // that is the field to change — a ScenarioEvent has no `description` column of its own,
         // its text lives in DataValue rows.
-        const updatedTitle = `Realtime edited ${Date.now()}`;
+        const updatedTitle = child('TestBP-RealtimeEdited');
         await setScenarioEventFieldValue(token, eventId, 'Description', updatedTitle);
 
         // ── Window 2 must receive it with NO reload ────────────────────────────────
@@ -138,7 +149,7 @@ for (const theme of BLUEPRINT_THEMES) {
 
         // expect: it is genuinely an update, not an extra row — the old title is gone.
         await expect
-          .poll(() => page2.getByText(ORIGINAL_TITLE).count(), {
+          .poll(() => page2.getByText(originalTitle).count(), {
             timeout: 15000,
             intervals: [250, 500, 1000],
             message: 'the pre-edit title should be replaced, not duplicated',

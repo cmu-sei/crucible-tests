@@ -12,8 +12,10 @@
  * Keycloak presents a self-signed cert on https://localhost:8443.
  */
 
-import { APIRequestContext, request as playwrightRequest } from '@playwright/test';
-import { Services } from './fixtures';
+// From shared-fixtures, not ./fixtures: fixtures.ts imports this module for its pool
+// fixture, and the cycle would leave `Services` undefined while this module initialises.
+import { Services } from '../shared-fixtures';
+import { cachedUserToken, sharedRequestContext } from '../api-cache';
 
 // Gameboard API base URL. Read from Services.Gameboard.API (which is driven
 // by GAMEBOARD_API_URL in the active .env profile). No more port-probing —
@@ -24,17 +26,26 @@ async function resolveApiBase(): Promise<string> {
 
 export const GAMEBOARD_API = Services.Gameboard.API.replace(/\/$/, ''); // legacy export
 
-async function newRequestContext(): Promise<APIRequestContext> {
-  return playwrightRequest.newContext({ ignoreHTTPSErrors: true });
-}
-
 export async function getAdminToken(
   username: string = 'admin',
   password: string = 'admin'
 ): Promise<string> {
-  const ctx = await newRequestContext();
-  let token: string;
-  try {
+  const token = await cachedUserToken('crucible', 'gameboard.ui', username, 'openid profile gameboard', () =>
+    fetchGameboardToken(username, password)
+  );
+  // Ensure the Gameboard Users row for admin exists. Gameboard JIT-provisions
+  // users on first UI login (Angular calls POST /api/user after Keycloak),
+  // so tests that only hit the API before any UI navigation race against
+  // that — /api/users returns an empty list and enrollment calls throw
+  // InvalidOperation from EF's SingleAsync. Hitting POST /api/user here is
+  // idempotent and guarantees the row exists for downstream helpers.
+  await ensureAdminProvisioned(token);
+  return token;
+}
+
+async function fetchGameboardToken(username: string, password: string): Promise<string> {
+  const ctx = await sharedRequestContext();
+  {
     const keycloak = Services.Keycloak.replace(/\/$/, '');
     const res = await ctx.post(
       `${keycloak}/realms/crucible/protocol/openid-connect/token`,
@@ -52,18 +63,8 @@ export async function getAdminToken(
       throw new Error(`Keycloak token request failed (${res.status()}): ${await res.text()}`);
     }
     const data = await res.json();
-    token = data.access_token as string;
-  } finally {
-    await ctx.dispose();
+    return data.access_token as string;
   }
-  // Ensure the Gameboard Users row for admin exists. Gameboard JIT-provisions
-  // users on first UI login (Angular calls POST /api/user after Keycloak),
-  // so tests that only hit the API before any UI navigation race against
-  // that — /api/users returns an empty list and enrollment calls throw
-  // InvalidOperation from EF's SingleAsync. Hitting POST /api/user here is
-  // idempotent and guarantees the row exists for downstream helpers.
-  await ensureAdminProvisioned(token);
-  return token;
 }
 
 function decodeJwtSub(token: string): string {
@@ -106,8 +107,8 @@ async function apiCall<T = any>(
   opts: ApiCallOptions = {}
 ): Promise<{ ok: boolean; status: number; data: T; text: string }> {
   const base = await resolveApiBase();
-  const ctx = await newRequestContext();
-  try {
+  const ctx = await sharedRequestContext();
+  {
     const res = await ctx.fetch(`${base}${path}`, {
       method: opts.method ?? 'GET',
       headers: { Authorization: `Bearer ${token}` },
@@ -117,8 +118,6 @@ async function apiCall<T = any>(
     let data: any = undefined;
     try { data = text ? JSON.parse(text) : undefined; } catch { /* non-JSON */ }
     return { ok: res.ok(), status: res.status(), data, text };
-  } finally {
-    await ctx.dispose();
   }
 }
 
@@ -196,6 +195,23 @@ export async function deleteGame(token: string, gameId: string): Promise<void> {
   if (!r.ok && r.status !== 404) {
     console.warn(`deleteGame(${gameId}) returned ${r.status}`);
   }
+}
+
+/**
+ * Games whose searchable fields contain `term` (GET /api/games; an admin token also
+ * sees unpublished games). Callers match the exact name themselves.
+ */
+export async function listGamesByTerm(token: string, term: string): Promise<Array<{ id: string; name: string }>> {
+  const r = await apiCall<any[]>(token, `/api/games?term=${encodeURIComponent(term)}`);
+  if (!r.ok) throw new Error(`Failed to list games (${r.status}): ${r.text}`);
+  return (r.data ?? []).map(g => ({ id: g.id, name: g.name }));
+}
+
+/** Every sponsor (GET /api/sponsors has no name filter). */
+export async function listSponsors(token: string): Promise<Array<{ id: string; name: string }>> {
+  const r = await apiCall<any[]>(token, '/api/sponsors');
+  if (!r.ok) throw new Error(`Failed to list sponsors (${r.status}): ${r.text}`);
+  return (r.data ?? []).map(s => ({ id: s.id, name: s.name }));
 }
 
 export interface CreatedSponsor {
@@ -327,8 +343,8 @@ export async function uploadSponsorAvatar(
   mimeType: string = filename.endsWith('.svg') ? 'image/svg+xml' : 'image/png'
 ): Promise<void> {
   const base = await resolveApiBase();
-  const ctx = await newRequestContext();
-  try {
+  const ctx = await sharedRequestContext();
+  {
     const res = await ctx.fetch(`${base}/api/sponsor/${sponsorId}/avatar`, {
       method: 'PUT',
       headers: { Authorization: `Bearer ${token}` },
@@ -343,8 +359,6 @@ export async function uploadSponsorAvatar(
     if (!res.ok()) {
       throw new Error(`uploadSponsorAvatar failed (${res.status()}): ${await res.text()}`);
     }
-  } finally {
-    await ctx.dispose();
   }
 }
 
@@ -359,8 +373,8 @@ export async function uploadGameCardImage(
   mimeType: string = filename.endsWith('.svg') ? 'image/svg+xml' : 'image/png'
 ): Promise<void> {
   const base = await resolveApiBase();
-  const ctx = await newRequestContext();
-  try {
+  const ctx = await sharedRequestContext();
+  {
     const res = await ctx.fetch(`${base}/api/game/${gameId}/image/card`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
@@ -371,8 +385,6 @@ export async function uploadGameCardImage(
     if (!res.ok()) {
       throw new Error(`uploadGameCardImage failed (${res.status()}): ${await res.text()}`);
     }
-  } finally {
-    await ctx.dispose();
   }
 }
 
@@ -387,8 +399,8 @@ export async function uploadGameMapImage(
   mimeType: string = filename.endsWith('.svg') ? 'image/svg+xml' : 'image/png'
 ): Promise<void> {
   const base = await resolveApiBase();
-  const ctx = await newRequestContext();
-  try {
+  const ctx = await sharedRequestContext();
+  {
     const res = await ctx.fetch(`${base}/api/game/${gameId}/image/map`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
@@ -399,8 +411,6 @@ export async function uploadGameMapImage(
     if (!res.ok()) {
       throw new Error(`uploadGameMapImage failed (${res.status()}): ${await res.text()}`);
     }
-  } finally {
-    await ctx.dispose();
   }
 }
 
@@ -499,7 +509,7 @@ export async function listGameChallengeSpecs(token: string, gameId: string): Pro
  */
 export async function provisionGameboardUser(
   userToken: string,
-  sponsorId: string
+  sponsorId: string | null
 ): Promise<string> {
   // Decode JWT `sub` claim to get user id.
   const payload = JSON.parse(
@@ -516,6 +526,9 @@ export async function provisionGameboardUser(
     throw new Error(`provisionGameboardUser (POST) failed (${createRes.status}): ${createRes.text}`);
   }
 
+  // `null`: register only, keeping whatever sponsor the row has.
+  if (sponsorId === null) return userId;
+
   // PUT /api/user to set sponsor (needed before enrolling)
   const updateRes = await apiCall(userToken, '/api/user', {
     method: 'PUT',
@@ -525,6 +538,46 @@ export async function provisionGameboardUser(
     throw new Error(`provisionGameboardUser (PUT sponsor) failed (${updateRes.status}): ${updateRes.text}`);
   }
   return userId;
+}
+
+/** The parts of a Gameboard user row a test can change and must put back. */
+export interface GameboardUserState {
+  sponsorId: string;
+  role: string;
+}
+
+/**
+ * Read a user's sponsor and role. `token` is the user's own (or an admin's); the
+ * Retrieve endpoint allows either.
+ */
+export async function getGameboardUserState(token: string, userId: string): Promise<GameboardUserState> {
+  const r = await apiCall<any>(token, `/api/user/${userId}`);
+  if (!r.ok) throw new Error(`getGameboardUserState(${userId}) failed (${r.status}): ${r.text}`);
+  return { sponsorId: r.data.sponsorId ?? r.data.sponsor?.id, role: r.data.role };
+}
+
+/**
+ * Put a user's sponsor and role back to `state` — the reset for a pooled user whose
+ * sponsor a test changed (every team spec moves its users onto a per-test sponsor,
+ * which the test then deletes) or who was granted a role. Needs an admin token
+ * (Users_CreateEditDelete) to write the role.
+ */
+export async function restoreGameboardUser(
+  adminToken: string,
+  userId: string,
+  state: GameboardUserState
+): Promise<void> {
+  const r = await apiCall(adminToken, '/api/user', {
+    method: 'PUT',
+    body: { id: userId, sponsorId: state.sponsorId, role: state.role },
+  });
+  if (!r.ok) console.warn(`restoreGameboardUser(${userId}) returned ${r.status}: ${r.text}`);
+}
+
+/** Delete a Gameboard user row. Tolerates 404. Needs an admin token. */
+export async function deleteGameboardUser(adminToken: string, userId: string): Promise<void> {
+  const r = await apiCall(adminToken, `/api/user/${userId}`, { method: 'DELETE' });
+  if (!r.ok && r.status !== 404) console.warn(`deleteGameboardUser(${userId}) returned ${r.status}: ${r.text}`);
 }
 
 /**

@@ -11,18 +11,19 @@ test.describe('Real-time Updates and Notifications', () => {
 
     // 1. Open workspace in browser window
     const sidebarToggle = page.locator('button[aria-label="Toggle sidebar"], button:has(mat-icon:text("menu"))').first();
+    const sidebar = page.locator('mat-sidenav, mat-drawer, [class*="sidebar"]').first();
+    const workspaceItems = page.locator('[class*="workspace-card"], [class*="item-card"], mat-list-item, [class*="list-item"]');
+
     const hasSidebarToggle = await sidebarToggle.isVisible({ timeout: 10000 }).catch(() => false);
     if (hasSidebarToggle) {
       await sidebarToggle.click();
-      await page.waitForTimeout(500);
+      await expect(sidebar).toBeVisible({ timeout: 5000 });
     }
 
-    const workspaceItems = page.locator('[class*="workspace-card"], [class*="item-card"], mat-list-item, [class*="list-item"]');
     const itemCount = await workspaceItems.count();
 
     if (itemCount > 0) {
       await workspaceItems.first().click();
-      await page.waitForTimeout(2000);
 
       // expect: Workspace is open
       await expect(page).toHaveURL(/\/topo\//, { timeout: 10000 });

@@ -4,45 +4,60 @@
 // spec: alloy/alloy-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../fixtures';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
-import { ALLOY_THEMES, applyAlloyTheme } from '../../test-helpers';
+import { ALLOY_THEMES, applyAlloyTheme, createTestEventTemplate, deleteEventTemplateByName, findEventTemplateEditButton } from '../../test-helpers';
 
 for (const theme of ALLOY_THEMES) {
   test.describe(`${theme} theme › Event Templates Management`, () => {
-    test('Event Template Form Validation', async ({ page }) => {
-      // 1. Navigate to admin Event Templates section
+    let templateName: string;
+
+    // The test edits a template of its own: other workers create and delete templates
+    // concurrently, so "whichever is listed first" changes under it.
+    test.beforeEach(async ({ page }) => {
       await authenticateWithKeycloak(page, Services.Alloy.UI);
       await applyAlloyTheme(page, theme);
+      templateName = `Form Validation Test ${Date.now()}`;
+      await createTestEventTemplate(page, templateName);
+    });
+
+    test.afterEach(async ({ page }) => {
+      await deleteEventTemplateByName(page, templateName);
+    });
+
+    test('Event Template Form Validation', async ({ page }) => {
+      // 1. Navigate to admin Event Templates section
       await page.goto(`${Services.Alloy.UI}/admin`);
       await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
 
-      // Open edit dialog on an existing template to test form validation
-      await page.getByRole('button', { name: /^Edit:/ }).first().click();
+      // Open the edit dialog on the test's template to test form validation
+      await (await findEventTemplateEditButton(page, templateName)).click();
 
       // expect: Event template edit form is displayed
-      await expect(page.getByRole('dialog', { name: 'Edit Event Template' })).toBeVisible();
+      const editDialog = page.getByRole('dialog', { name: 'Edit Event Template' });
+      await expect(editDialog).toBeVisible();
 
       // 2. Leave the Name field empty and try to submit the form
-      const nameField = page.getByRole('textbox', { name: 'Name (required)' });
+      const nameField = editDialog.getByRole('textbox', { name: 'Name (required)' });
       await nameField.fill('');
 
       // 3. Enter a name but set Duration Hours to a negative value
       await nameField.fill('Test Template');
-      await page.getByRole('spinbutton', { name: 'Duration Hours' }).fill('-1');
+      await editDialog.getByRole('spinbutton', { name: 'Duration Hours' }).fill('-1');
 
       // 5. Enter Duration Hours as valid value
-      await page.getByRole('spinbutton', { name: 'Duration Hours' }).fill('4');
+      await editDialog.getByRole('spinbutton', { name: 'Duration Hours' }).fill('4');
 
       // 6. Fill all required fields correctly
       await expect(nameField).toHaveValue('Test Template');
-      await expect(page.getByRole('spinbutton', { name: 'Duration Hours' })).toHaveValue('4');
+      await expect(editDialog.getByRole('spinbutton', { name: 'Duration Hours' })).toHaveValue('4');
 
       // expect: Save button is available
-      await expect(page.getByRole('button', { name: 'Save' })).toBeVisible();
+      await expect(editDialog.getByRole('button', { name: 'Save' })).toBeVisible();
 
       // Cancel without saving
-      await page.getByRole('button', { name: 'Cancel' }).first().click();
+      await editDialog.getByRole('button', { name: 'Cancel' }).click();
+      await expect(editDialog).toBeHidden();
     });
   });
 }

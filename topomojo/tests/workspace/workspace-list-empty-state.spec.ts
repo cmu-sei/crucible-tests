@@ -13,8 +13,13 @@ test.describe('Workspace Management', () => {
     const sidebarToggle = page.locator('button[aria-label="Toggle sidebar"], button:has(mat-icon:text("menu"))').first();
     const hasSidebarToggle = await sidebarToggle.isVisible({ timeout: 10000 }).catch(() => false);
     if (hasSidebarToggle) {
+      // The toggle flips app-workspace-browser's [hidden] binding (sidebar `open`, default
+      // true, persisted in localStorage), so the click's completion signal is the browser
+      // switching to the opposite visibility from before the click.
+      const workspaceBrowser = page.locator('app-workspace-browser');
+      const wasOpen = await workspaceBrowser.isVisible();
       await sidebarToggle.click();
-      await page.waitForTimeout(500);
+      await expect(workspaceBrowser).toBeVisible({ visible: !wasOpen });
     }
 
     // expect: Empty state message is displayed or workspace list is empty

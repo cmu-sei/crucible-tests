@@ -19,10 +19,8 @@
  */
 
 import {
-  APIRequestContext,
   Locator,
   Page,
-  request as playwrightRequest,
   expect,
 } from '@playwright/test';
 import { Services, isKeycloakUrl, waitForFirstVisible } from '../shared-fixtures';
@@ -30,55 +28,25 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { randomUUID } from 'crypto';
-import { authSessionStatePath } from '../auth-paths';
+import { cachedToken, sharedRequestContext } from '../api-cache';
+import { freshSavedAccessToken } from '../auth-state';
 import { setMselIntegrationState } from './db-helpers';
 
 // ============================================================================
 // Token acquisition
 // ============================================================================
 
-let _cachedToken: string | null = null;
-
 /**
  * Acquire a Blueprint-scoped bearer token.
  *
- * The `blueprint.ui` public client rejects password grants, so we extract the
- * access_token from the pre-authenticated sessionStorage captured by global-setup.ts.
- * If the session file is missing or the token is expired, this throws — tests must
- * run after global-setup has provisioned the auth state.
+ * The `blueprint.ui` public client rejects password grants, so we lift the
+ * access_token from the pre-authenticated state global-setup.ts saved. `cachedToken`
+ * re-checks the JWT expiry on every call, and a stale saved token makes
+ * `freshSavedAccessToken` re-authenticate and rewrite the saved state first, so a
+ * long run never keeps calling the API with a dead token.
  */
 export async function getBlueprintToken(): Promise<string> {
-  if (_cachedToken) return _cachedToken;
-
-  const sessionPath = authSessionStatePath('blueprint');
-  if (!fs.existsSync(sessionPath)) {
-    throw new Error(
-      `Blueprint sessionStorage auth state not found at ${sessionPath}. ` +
-      `Run global-setup.ts first to provision authentication.`
-    );
-  }
-
-  const sessionData: Array<[string, string]> = JSON.parse(fs.readFileSync(sessionPath, 'utf8'));
-  const oidcEntry = sessionData.find(([key]) => key.includes('oidc.user:'));
-  if (!oidcEntry) {
-    throw new Error(`No oidc.user entry in ${sessionPath}`);
-  }
-
-  const payload = JSON.parse(oidcEntry[1]);
-  const token = payload.access_token as string;
-  if (!token) {
-    throw new Error(`No access_token in sessionStorage OIDC payload`);
-  }
-
-  _cachedToken = token;
-  return token;
-}
-
-/**
- * Helper to create a Playwright API context with ignoreHTTPSErrors set.
- */
-async function newContext(): Promise<APIRequestContext> {
-  return playwrightRequest.newContext({ ignoreHTTPSErrors: true });
+  return cachedToken('blueprint', () => freshSavedAccessToken('blueprint'));
 }
 
 // ============================================================================
@@ -103,8 +71,8 @@ export async function blueprintCall<T = any>(
       if (v !== undefined) url.searchParams.append(k, String(v));
     }
   }
-  const ctx = await newContext();
-  try {
+  const ctx = await sharedRequestContext();
+  {
     const res = await ctx.fetch(url.toString(), {
       method: opts.method ?? 'GET',
       headers: { Authorization: `Bearer ${token}` },
@@ -114,8 +82,6 @@ export async function blueprintCall<T = any>(
     let data: any;
     try { data = text ? JSON.parse(text) : undefined; } catch { /* non-JSON */ }
     return { ok: res.ok(), status: res.status(), data, text };
-  } finally {
-    await ctx.dispose();
   }
 }
 
@@ -655,6 +621,98 @@ export async function createRenderableScenarioEvent(
   const event = await createScenarioEvent(token, mselId, opts);
   await setScenarioEventFieldValue(token, event.id, opts.fieldName ?? 'Description', text);
   return event;
+}
+
+// ============================================================================
+// File-level shared MSELs (one per spec file per worker)
+// ============================================================================
+//
+// Seeding the standard DataField set is 13 POSTs — the most expensive per-test seed in
+// Blueprint. Spec files whose tests only need *a* renderable MSEL create one in a file-level
+// `beforeAll` (above the theme loop) and share it; each test still creates its own events.
+//
+// Sharing contract:
+//   - The MSEL itself is never edited or deleted by a test; `afterAll` deletes it.
+//   - Each test's children (events, extra DataFields, organizations) are deterministic and
+//     unique to the test (`sharedChildName`), and `resetSharedRenderableMsel` in `afterEach`
+//     puts the MSEL back to "standard DataFields, no events" — so a count assertion in the
+//     next test (including the other theme's run) starts from the same state as before.
+
+/** Name prefix of every shared MSEL. The teardown purge sweeps it. */
+export const SHARED_MSEL_PREFIX = 'E2E Shared ';
+
+/**
+ * Deterministic name of a file's shared MSEL for one worker slot (`parallelIndex`, stable
+ * across a worker restart, so the restarted worker's setup replaces its predecessor's copy).
+ */
+export function sharedMselName(label: string, slot: number): string {
+  return `${SHARED_MSEL_PREFIX}${label} [w${slot}]`;
+}
+
+/**
+ * Deterministic, per-test name for a child record of a shared MSEL. Unique across the two
+ * theme runs, across workers running the same file at once (the other browser project, or
+ * a `--repeat-each` copy) via `parallelIndex`, and across `--repeat-each` copies that run
+ * one after another on the same worker.
+ * Scenario-event text must be unique stack-wide because the grid shows other MSELs' events
+ * (see `findScenarioEventRow`), so `base` must be specific to the spec file.
+ */
+export function sharedChildName(
+  base: string,
+  testInfo: { parallelIndex: number; repeatEachIndex: number },
+  theme?: string
+): string {
+  // Closing delimiter so `-r1` is not a substring of `-r10`.
+  return `${base}${theme ? `-${theme}` : ''}-w${testInfo.parallelIndex}-r${testInfo.repeatEachIndex}-`;
+}
+
+/**
+ * Create a file's shared MSEL with the standard DataField set. Any leftover MSEL with the
+ * same deterministic name (a crashed run) is deleted first so exact-name lookups stay unique.
+ */
+export async function createSharedRenderableMsel(
+  token: string,
+  label: string,
+  slot: number,
+  opts: { description?: string } = {}
+): Promise<CreatedMsel> {
+  const name = sharedMselName(label, slot);
+  const list = await blueprintCall<any[]>(token, '/api/msels');
+  for (const stale of (list.data ?? []).filter((m: any) => m.name === name)) {
+    await deleteMsel(token, stale.id);
+  }
+  const msel = await createMsel(token, {
+    name,
+    description: opts.description ?? 'Shared by one spec file; deleted in afterAll.',
+  });
+  await seedMselDataFields(token, msel.id);
+  return msel;
+}
+
+/**
+ * Restore a shared MSEL to "standard DataFields, no scenario events": deletes every event
+ * and every DataField outside the standard set. Throws if a standard field went missing —
+ * a test must not alter the shared fields, and silently continuing would let the next test
+ * fail for a reason that is not its own.
+ */
+export async function resetSharedRenderableMsel(token: string, mselId: string): Promise<void> {
+  for (const event of await listScenarioEvents(token, mselId)) {
+    await deleteScenarioEvent(token, event.id);
+  }
+  const standard = new Set(STANDARD_DATA_FIELDS.map((f) => f.name as string));
+  const fields = await listMselDataFields(token, mselId);
+  for (const field of fields.filter((f: any) => !standard.has(f.name))) {
+    const r = await blueprintCall(token, `/api/dataFields/${field.id}`, { method: 'DELETE' });
+    if (!r.ok && r.status !== 404) {
+      throw new Error(`resetSharedRenderableMsel: DELETE dataField ${field.id} failed (${r.status}): ${r.text}`);
+    }
+  }
+  const kept = fields.filter((f: any) => standard.has(f.name)).length;
+  if (kept !== STANDARD_DATA_FIELDS.length) {
+    throw new Error(
+      `resetSharedRenderableMsel: shared MSEL ${mselId} has ${kept} standard DataFields, expected ${STANDARD_DATA_FIELDS.length}`
+    );
+  }
 }
 
 // ============================================================================
@@ -1661,6 +1719,69 @@ export async function setAdminUserRole(
 // Cross-worker mutex for the shared admin catalog/inject-type surface
 // ============================================================================
 
+// ============================================================================
+// Admin catalog records (inject types, catalogs, catalog injects)
+// ============================================================================
+//
+// API seeders for the admin-catalog specs' preconditions, so a spec drives a dialog only when
+// that dialog is what it tests. Seed *while holding* `acquireAdminCatalogLock`: every create
+// broadcasts to open admin sessions, which is exactly what the lock keeps away from another
+// worker's admin page. The specs delete these by name in afterEach (DELETE /api/injectTypes/{id},
+// /api/catalogs/{id}).
+
+/** Create an inject type (no DataFields) via `POST /api/injectTypes`. */
+export async function createInjectType(
+  token: string,
+  opts: { name: string; description?: string }
+): Promise<{ id: string; name: string }> {
+  const r = await blueprintCall<any>(token, '/api/injectTypes', {
+    method: 'POST',
+    body: { name: opts.name, description: opts.description ?? 'Seeded by an admin-catalog spec.', dataFields: [] },
+  });
+  if (!r.ok) throw new Error(`createInjectType failed (${r.status}): ${r.text}`);
+  return { id: r.data.id as string, name: r.data.name as string };
+}
+
+/** Create a (non-public) catalog of an inject type via `POST /api/catalogs`. */
+export async function createCatalog(
+  token: string,
+  opts: { name: string; injectTypeId: string; description?: string }
+): Promise<{ id: string; name: string }> {
+  const r = await blueprintCall<any>(token, '/api/catalogs', {
+    method: 'POST',
+    body: {
+      name: opts.name,
+      description: opts.description ?? 'Seeded by an admin-catalog spec.',
+      injectTypeId: opts.injectTypeId,
+      isPublic: false,
+    },
+  });
+  if (!r.ok) throw new Error(`createCatalog failed (${r.status}): ${r.text}`);
+  return { id: r.data.id as string, name: r.data.name as string };
+}
+
+/**
+ * Create an inject in a catalog via `POST /api/catalog/{catalogId}/injects` (the path the admin
+ * UI's New Inject dialog posts to), as that dialog would.
+ */
+export async function createCatalogInject(
+  token: string,
+  catalogId: string,
+  opts: { name: string; injectTypeId: string; description?: string }
+): Promise<{ id: string; name: string }> {
+  const r = await blueprintCall<any>(token, `/api/catalog/${catalogId}/injects`, {
+    method: 'POST',
+    body: {
+      name: opts.name,
+      description: opts.description ?? 'Seeded by an admin-catalog spec.',
+      injectTypeId: opts.injectTypeId,
+      dataValues: [],
+    },
+  });
+  if (!r.ok) throw new Error(`createCatalogInject failed (${r.status}): ${r.text}`);
+  return { id: r.data.id as string, name: r.data.name as string };
+}
+
 /**
  * Serialize the specs that drive Blueprint's **admin Catalogs / Inject Types** pages.
  *
@@ -1698,8 +1819,12 @@ const ADMIN_LOCK_PATH = path.join(os.tmpdir(), 'blueprint-admin-catalog.lock');
 const ADMIN_LOCK_STALE_MS = 240_000;
 let _holdsAdminLock = false;
 
-/** Take the admin catalog/inject-type lock, waiting for another worker to finish. */
-export async function acquireAdminCatalogLock(timeoutMs = 300_000): Promise<void> {
+/**
+ * Take the admin catalog/inject-type lock, waiting for another worker to finish.
+ * Called from `beforeEach` of normal (120 s) tests, so the wait stays under that
+ * budget and reports the held lock rather than dying on a bare test timeout.
+ */
+export async function acquireAdminCatalogLock(timeoutMs = 90_000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
 
   for (;;) {
@@ -1766,7 +1891,10 @@ export async function purgeAllBlueprintTestData(): Promise<void> {
       return;
     }
 
-    const testMsels = listRes.data?.filter((m: any) => isTempBlueprintName(m.name)) ?? [];
+    const testMsels =
+      listRes.data?.filter(
+        (m: any) => isTempBlueprintName(m.name) || m.name?.startsWith(SHARED_MSEL_PREFIX)
+      ) ?? [];
     console.log(`[Blueprint purge] Found ${testMsels.length} seeded MSEL(s) to delete.`);
 
     for (const msel of testMsels) {
@@ -1914,8 +2042,8 @@ export async function purgeAllBlueprintTestData(): Promise<void> {
 
     // Player application templates seeded by the player-applications specs live in Player, not
     // Blueprint. Only `TestBP-` names are swept, so other apps' templates are never touched.
-    const playerCtx = await newContext();
-    try {
+    const playerCtx = await sharedRequestContext();
+    {
       const res = await playerCtx.get(
         `${Services.Player.API.replace(/\/$/, '')}/api/application-templates`,
         { headers: { Authorization: `Bearer ${token}` } }
@@ -1931,8 +2059,6 @@ export async function purgeAllBlueprintTestData(): Promise<void> {
       } else {
         console.warn(`[Blueprint purge] Player application template list failed (${res.status()}); not purged.`);
       }
-    } finally {
-      await playerCtx.dispose();
     }
   } catch (error) {
     console.warn(`[Blueprint purge] Error during cleanup: ${error}`);
@@ -2108,8 +2234,8 @@ export async function createPlayerApplicationTemplate(
   token: string,
   opts: { name: string; url: string; icon?: string; embeddable?: boolean; loadInBackground?: boolean }
 ): Promise<{ id: string; name: string; url: string }> {
-  const ctx = await newContext();
-  try {
+  const ctx = await sharedRequestContext();
+  {
     const res = await ctx.post(`${Services.Player.API.replace(/\/$/, '')}/api/application-templates`, {
       headers: { Authorization: `Bearer ${token}` },
       data: {
@@ -2125,15 +2251,13 @@ export async function createPlayerApplicationTemplate(
     }
     const data = await res.json();
     return { id: data.id, name: data.name, url: data.url };
-  } finally {
-    await ctx.dispose();
   }
 }
 
 /** Delete a Player application template by id. Swallows 404. */
 export async function deletePlayerApplicationTemplate(token: string, templateId: string): Promise<void> {
-  const ctx = await newContext();
-  try {
+  const ctx = await sharedRequestContext();
+  {
     const res = await ctx.delete(
       `${Services.Player.API.replace(/\/$/, '')}/api/application-templates/${templateId}`,
       { headers: { Authorization: `Bearer ${token}` } }
@@ -2141,8 +2265,6 @@ export async function deletePlayerApplicationTemplate(token: string, templateId:
     if (!res.ok() && res.status() !== 404) {
       console.warn(`deletePlayerApplicationTemplate(${templateId}) returned ${res.status()}`);
     }
-  } finally {
-    await ctx.dispose();
   }
 }
 

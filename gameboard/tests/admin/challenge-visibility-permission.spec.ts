@@ -76,7 +76,7 @@ test.describe('Admin - Challenges', () => {
     // Toggle restricted workspace's audience to `gameboard` — it becomes visible.
     await setWorkspaceAudience(tmToken, restricted.id, 'gameboard');
 
-    await page.goto(Services.Gameboard.UI + '/admin/dashboard', { waitUntil: 'networkidle' });
+    await page.goto(Services.Gameboard.UI + '/admin/dashboard', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
   });
 });

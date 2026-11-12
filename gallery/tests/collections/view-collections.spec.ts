@@ -8,35 +8,14 @@ import {
   test,
   expect,
   gotoGalleryAdmin,
-  apiCreateCollection,
-  apiDeleteCollectionById,
   GALLERY_THEMES,
   setGalleryTheme,
 } from '../../fixtures';
 
 for (const theme of GALLERY_THEMES) {
   test.describe(`${theme} theme › Collection Management`, () => {
-    // Collections created by this file, tracked so `afterEach` can remove them even
-    // when the test body throws partway through.
-    let createdCollectionIds: string[] = [];
-
-    test.beforeEach(() => {
-      createdCollectionIds = [];
-    });
-
-    test.afterEach(async () => {
-      for (const id of createdCollectionIds) {
-        await apiDeleteCollectionById(id);
-      }
-    });
-
-    test('View Collections List', async ({ galleryAuthenticatedPage: page }) => {
+    test('View Collections List', async ({ galleryAuthenticatedPage: page, seededCollection }) => {
       await setGalleryTheme(page, theme);
-      // Seed our own row rather than depending on whatever happens to be in the
-      // database — the per-row action-button assertions below need a known row.
-      const seedName = `View Test Collection ${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-      const seeded = await apiCreateCollection(seedName, 'Collection for the view-list test');
-      createdCollectionIds.push(seeded.id);
 
       // 1. Log in as admin and navigate to Administration > Collections
       await gotoGalleryAdmin(page);
@@ -62,15 +41,15 @@ for (const theme of GALLERY_THEMES) {
       // 2. Observe each collection row
       // The admin list paginates, so filter down to the seeded row first instead of
       // scanning page 1.
-      await searchField.fill(seedName);
-      const row = page.getByRole('row').filter({ hasText: seedName });
+      await searchField.fill(seededCollection.collectionName);
+      const row = page.getByRole('row').filter({ hasText: seededCollection.collectionName });
       await expect(row).toHaveCount(1);
 
       // expect: Each row has action buttons: Edit, Copy, Download, Delete
-      await expect(row.getByRole('button', { name: `Edit ${seedName}` })).toBeVisible();
-      await expect(row.getByRole('button', { name: `Copy ${seedName}` })).toBeVisible();
-      await expect(row.getByRole('button', { name: `Download ${seedName}` })).toBeVisible();
-      await expect(row.getByRole('button', { name: `Delete ${seedName}` })).toBeVisible();
+      await expect(row.getByRole('button', { name: `Edit ${seededCollection.collectionName}` })).toBeVisible();
+      await expect(row.getByRole('button', { name: `Copy ${seededCollection.collectionName}` })).toBeVisible();
+      await expect(row.getByRole('button', { name: `Download ${seededCollection.collectionName}` })).toBeVisible();
+      await expect(row.getByRole('button', { name: `Delete ${seededCollection.collectionName}` })).toBeVisible();
     });
   });
 }

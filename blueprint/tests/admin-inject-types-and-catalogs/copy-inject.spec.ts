@@ -6,6 +6,9 @@
 
 import { test, expect, Services, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import { getBlueprintToken, tempBlueprintName,
+  createInjectType,
+  createCatalog,
+  createCatalogInject,
   acquireAdminCatalogLock,
   releaseAdminCatalogLock,
 } from '../../test-helpers';
@@ -31,10 +34,16 @@ for (const theme of BLUEPRINT_THEMES) {
     let CATALOG_NAME: string;
     let INJECT_TYPE_NAME: string;
 
-    test.beforeEach(() => {
+    test.beforeEach(async () => {
       INJECT_TYPE_NAME = tempBlueprintName('CopyInjIT');
       CATALOG_NAME = tempBlueprintName('CopyInjCat');
       INJECT_NAME = tempBlueprintName('CopyInj');
+      // Preconditions over the API, inside the lock the first beforeEach took (every create
+      // broadcasts to open admin pages). Only the copy goes through the UI.
+      const token = await getBlueprintToken();
+      const injectType = await createInjectType(token, { name: INJECT_TYPE_NAME });
+      const catalog = await createCatalog(token, { name: CATALOG_NAME, injectTypeId: injectType.id });
+      await createCatalogInject(token, catalog.id, { name: INJECT_NAME, injectTypeId: injectType.id });
     });
 
     // Cleanup runs in afterEach (not inline at the end of the test body) so a mid-test
@@ -162,146 +171,14 @@ for (const theme of BLUEPRINT_THEMES) {
             await expect(candidateInjectList.locator('table')).toBeVisible({ timeout: 3000 });
           }
           injectList = candidateInjectList;
-        }).toPass({ timeout: 45000 });
+        }).toPass({ timeout: 30000 });
         return injectList;
       };
 
-      // ── Step 1: Create a prerequisite Inject Type ────────────────────────────
+      // ── Step 1-3: the Inject Type, Catalog and Inject were seeded in beforeEach ──
 
-      await navigateTo('Inject Types');
-
-      // 3. Click add button to create a new inject type
-      const addInjectTypeButton = page.locator(
-        'button[title*="Add"], button[aria-label*="Add"]'
-      ).first();
-      await expect(addInjectTypeButton).toBeVisible({ timeout: 5000 });
-      await addInjectTypeButton.click();
-
-      // 4. Fill in the inject type name — the dialog's name field appearing IS the
-      // signal that the "add" dialog opened; no fixed sleep needed.
-      const injectTypeNameField = page.locator(
-        'input[formControlName="name"], input[placeholder*="Name"]'
-      ).first();
-      await expect(injectTypeNameField).toBeVisible({ timeout: 5000 });
-      await injectTypeNameField.fill(INJECT_TYPE_NAME);
-
-      // 5. Fill in the inject type description
-      const injectTypeDescField = page.locator(
-        'input[formControlName="description"], input[placeholder*="Description"], textarea[placeholder*="Description"]'
-      ).first();
-      await expect(injectTypeDescField).toBeVisible({ timeout: 5000 });
-      await injectTypeDescField.fill('Test inject type for copy inject test');
-
-      // 6. Save the inject type
-      const injectTypeSaveButton = page.locator(
-        'button:has-text("Save"), button[type="submit"]'
-      ).first();
-      await expect(injectTypeSaveButton).toBeEnabled({ timeout: 5000 });
-      await injectTypeSaveButton.click();
-
-      // expect: The inject type appears in the list
-      await expect(page.locator(`text=${INJECT_TYPE_NAME}`).first()).toBeVisible({ timeout: 10000 });
-
-      // ── Step 2: Create a Catalog ─────────────────────────────────────────────
-
-      // 7. Navigate to Catalogs section
       await navigateTo('Catalogs');
-
-      // 8. Click the add catalog button
-      const addCatalogButton = page.getByRole('button', { name: 'Add new Catalog' });
-      await expect(addCatalogButton).toBeVisible({ timeout: 5000 });
-      await addCatalogButton.click();
-
-      // 9. Fill in catalog name — waiting for this field IS the signal the dialog opened.
-      const catalogNameField = page.locator('input[placeholder*="Name"]').first();
-      await expect(catalogNameField).toBeVisible({ timeout: 5000 });
-      await catalogNameField.fill(CATALOG_NAME);
-
-      // 10. Fill in catalog description
-      const catalogDescField = page.locator(
-        'input[placeholder*="Description"], textarea[placeholder*="Description"]'
-      ).first();
-      await expect(catalogDescField).toBeVisible({ timeout: 5000 });
-      await catalogDescField.fill('Test catalog for copy inject test');
-
-      // 11. Select the inject type from the combobox
-      const injectTypeCombobox = page.getByRole('combobox', { name: /Inject Type/i }).first();
-      await expect(injectTypeCombobox).toBeVisible({ timeout: 5000 });
-      await injectTypeCombobox.click();
-      // Select this spec's own inject type by name, not whatever happens to render first —
-      // the option list is global across concurrently-running specs, and picking the first
-      // option binds this catalog to a sibling spec's inject type. Deleting that sibling's
-      // inject type in its own teardown then CASCADE-DELETEs this catalog mid-test.
-      const injectTypeOption = page
-        .locator('mat-option, [role="option"]')
-        .filter({ hasText: INJECT_TYPE_NAME });
-      await expect(injectTypeOption).toBeVisible({ timeout: 5000 });
-      await injectTypeOption.click();
-
-      // 12. Save the catalog
-      const catalogSaveButton = page.locator('button:has-text("Save"), button[type="submit"]').first();
-      await expect(catalogSaveButton).toBeEnabled({ timeout: 5000 });
-      await catalogSaveButton.click();
-
-      // expect: The catalog appears in the list
-      await expect(page.locator(`text=${CATALOG_NAME}`).first()).toBeVisible({ timeout: 10000 });
-
-      // ── Step 3: Create an Inject inside the Catalog ──────────────────────────
-
-      // 13. Expand the catalog row and open the Injects panel
-      await ensureInjectsPanelOpen(CATALOG_NAME);
-
-      // 14/15/16. Click "Add Inject", choose "New Inject", then wait for the create
-      // dialog to open. As noted on ensureInjectsPanelOpen above, a sibling spec's
-      // unrelated mutation running concurrently at --workers 2 can force a full-table
-      // re-render (silently re-collapsing this catalog's Injects panel, or replacing its
-      // "Add Inject" button with a new DOM node) at any point in this sequence. Retry the
-      // whole re-open-panel → click-through-dialog sequence so a re-render landing
-      // mid-sequence self-heals instead of failing the test.
-      await expect(async () => {
-        const injectList = await ensureInjectsPanelOpen(CATALOG_NAME);
-        const addInjectButton = injectList.getByRole('button', { name: 'Add Inject' });
-        await expect(addInjectButton).toBeVisible({ timeout: 3000 });
-        await addInjectButton.click({ timeout: 3000 });
-        const newInjectMenuItem = page.locator('button[mat-menu-item]:has-text("New Inject"), button:has-text("New Inject")').first();
-        await expect(newInjectMenuItem).toBeVisible({ timeout: 3000 });
-        await newInjectMenuItem.click({ timeout: 3000 });
-        // Angular Material dialogs render as mat-dialog-container. Use a specific selector
-        // for the inject dialog that distinguishes it from the catalog dialog (inject
-        // dialog has "Name of the Inject" title attribute).
-        await expect(page.locator('input[title="The Name of the Inject"]')).toBeVisible({ timeout: 3000 });
-      }).toPass({ timeout: 45000 });
-
-      // 17. Fill in inject name using the title attribute for precise targeting
-      const nameInput = page.locator('input[title="The Name of the Inject"]').first();
-      await expect(nameInput).toBeVisible({ timeout: 5000 });
-      await nameInput.fill(INJECT_NAME);
-
-      // 18. Fill in inject description using title attribute (required for Save to enable)
-      const descriptionInput = page.locator('input[title="The Description of the Inject"]').first();
-      await expect(descriptionInput).toBeVisible({ timeout: 5000 });
-      await descriptionInput.fill('Test inject for copy test');
-
-      // 19. Save the inject
-      // Scope Save button to dialog to avoid matching unrelated buttons
-      const injectDialog = page.locator('mat-dialog-container').first();
-      const injectSaveButton = injectDialog.locator('button:has-text("Save")').first();
-      await expect(injectSaveButton).toBeEnabled({ timeout: 5000 });
-      const createInjectResponse = page.waitForResponse(
-        (response) =>
-          response.request().method() === 'POST' &&
-          /^\/api\/catalog\/[^/]+\/injects$/.test(new URL(response.url()).pathname),
-        { timeout: 15000 }
-      );
-      await injectSaveButton.click();
-      expect((await createInjectResponse).ok(), 'create inject response').toBeTruthy();
-      await expect(injectDialog).not.toBeVisible({ timeout: 15000 });
-
-      // The client closes the dialog before it updates the list without re-fetching it
-      // (see ensureInjectsPanelOpen's forceReload doc above) — force a real reload by
-      // navigating away and back so this assertion checks freshly-fetched server state,
-      // not a race against the SignalR self-echo.
-      let injectList = await ensureInjectsPanelOpen(CATALOG_NAME, { forceReload: true });
+      let injectList = await ensureInjectsPanelOpen(CATALOG_NAME);
       // expect: The inject appears in the list
       await expect(injectList.getByRole('cell', { name: INJECT_NAME, exact: true })).toBeVisible({
         timeout: 10000,
@@ -325,7 +202,7 @@ for (const theme of BLUEPRINT_THEMES) {
         await copyInjectButton.click({ timeout: 3000 });
         // expect: Dialog contains "Create an Inject" title
         await expect(page.locator('mat-dialog-container').filter({ hasText: 'Create' })).toBeVisible({ timeout: 3000 });
-      }).toPass({ timeout: 45000 });
+      }).toPass({ timeout: 30000 });
 
       const copyDialog = page.locator('mat-dialog-container').filter({ hasText: 'Create' });
 

@@ -23,7 +23,7 @@ for (const theme of PLAYER_THEMES) {
       await page.goto(playerUrl('/admin', theme));
 
       // expect: User is redirected to Keycloak login page
-      await page.getByText('Sign in to your account').first().waitFor({ state: 'visible', timeout: 70000 });
+      await page.getByText('Sign in to your account').first().waitFor({ state: 'visible', timeout: 30000 });
       await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak));
 
       // expect: Protected route is not accessible without authentication

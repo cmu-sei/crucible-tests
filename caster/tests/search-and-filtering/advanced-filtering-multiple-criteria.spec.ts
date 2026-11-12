@@ -4,22 +4,28 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen, CASTER_THEMES, setCasterTheme } from '../../fixtures';
+import { test, expect, seedCasterSharedProjectPageFree, casterSharedProjectName, deleteCasterProjectPageFree, CASTER_THEMES, setCasterTheme, Services } from '../../fixtures';
 
-for (const theme of CASTER_THEMES) {
-  test.describe(`${theme} theme › Search and Filtering`, () => {
-    test('Advanced Filtering with Multiple Criteria', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+test.describe('Search and Filtering', () => {
+  let projectId: string;
+  let projectName: string;
+
+  test.beforeAll(async ({}, workerInfo) => {
+    projectName = casterSharedProjectName('advanced-filtering-multiple-criteria', workerInfo);
+    projectId = await seedCasterSharedProjectPageFree(projectName);
+  });
+
+  test.afterAll(async () => {
+    if (projectId) await deleteCasterProjectPageFree(projectId);
+  });
+
+  for (const theme of CASTER_THEMES) {
+    test(`${theme} theme › Advanced Filtering with Multiple Criteria`, async ({ casterAuthenticatedPage: page }) => {
       await setCasterTheme(page, theme);
-      const projectName = `Multi Filter Project ${Date.now()}`;
 
+      // Navigate to home to test search
+      await page.goto(Services.Caster.UI);
       await expect(page.getByText('My Projects')).toBeVisible();
-
-      await page.locator('button[mattooltip="Add New Project"]').click();
-      await expect(page.getByRole('dialog', { name: 'Add Project' })).toBeVisible();
-      await page.getByRole('textbox', { name: 'Name' }).fill(projectName);
-      await page.getByRole('button', { name: 'Save' }).click();
-      cleanupCasterProject(await expectCasterProjectOpen(page, projectName));
-      await page.getByRole('link', { name: 'Caster', exact: true }).click();
 
       const searchBar = page.getByRole('textbox', { name: 'Search' });
       await expect(searchBar).toBeVisible();
@@ -35,5 +41,5 @@ for (const theme of CASTER_THEMES) {
       await expect(searchBar).toHaveValue('');
       await expect(page.getByText(/No data matching the filter/)).not.toBeVisible();
     });
-  });
-}
+  }
+});

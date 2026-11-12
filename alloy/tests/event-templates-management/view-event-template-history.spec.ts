@@ -3,9 +3,9 @@
 
 // spec: alloy/alloy-test-plan.md
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../fixtures';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
-import { ALLOY_THEMES, applyAlloyTheme, createTestEventTemplate, deleteEventTemplateByName } from '../../test-helpers';
+import { ALLOY_THEMES, applyAlloyTheme, createTestEventTemplate, deleteEventTemplateByName, findEventTemplateEditButton } from '../../test-helpers';
 
 for (const theme of ALLOY_THEMES) {
   test.describe(`${theme} theme › Event Templates Management`, () => {
@@ -23,9 +23,13 @@ for (const theme of ALLOY_THEMES) {
       // Make the template public so it appears on the home page
       await page.goto(`${Services.Alloy.UI}/admin`);
       await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
-      await page.getByRole('button', { name: `Edit: ${templateName}` }).click();
+      await (await findEventTemplateEditButton(page, templateName)).click();
       await expect(page.getByRole('dialog', { name: 'Edit Event Template' })).toBeVisible();
-      const publicCheckbox = page.getByRole('checkbox', { name: 'Public' });
+      // Scoped to the dialog and exact: other templates' row checkboxes are labelled
+      // "Select <name>", and a concurrent test's template name can contain "Public".
+      const publicCheckbox = page
+        .getByRole('dialog', { name: 'Edit Event Template' })
+        .getByRole('checkbox', { name: 'Public', exact: true });
       if (!(await publicCheckbox.isChecked())) {
         await publicCheckbox.check();
       }

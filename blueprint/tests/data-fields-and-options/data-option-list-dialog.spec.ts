@@ -7,14 +7,16 @@ import { Page, Locator } from '@playwright/test';
 import { test, expect, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import {
   getBlueprintToken,
-  createMsel,
   deleteMsel,
   createOptionListDataField,
   createRenderableScenarioEvent,
   navigateToMselSection,
   findScenarioEventRow,
   listMselDataFields,
-  tempBlueprintName,
+  createSharedRenderableMsel,
+  resetSharedRenderableMsel,
+  type CreatedMsel,
+  sharedChildName,
 } from '../../test-helpers';
 
 /**
@@ -74,32 +76,46 @@ async function openEditEventDialog(page: Page, eventText: string): Promise<Locat
   return dialog;
 }
 
+// One MSEL with the standard DataFields (13 POSTs) is seeded per file and shared by both
+// theme runs. Safe to share: each test's extra DataFields are its own, and the afterEach reset deletes them so the next test again sees exactly the standard 13.
+// Each test seeds its own uniquely named events, and `resetSharedRenderableMsel` removes
+// them (and any extra DataField) in afterEach.
+let shared: CreatedMsel;
+
+test.beforeAll(async ({}, workerInfo) => {
+  shared = await createSharedRenderableMsel(await getBlueprintToken(), 'OptionListDialog', workerInfo.parallelIndex);
+});
+
+test.afterAll(async () => {
+  if (shared) await deleteMsel(await getBlueprintToken(), shared.id);
+});
+
 for (const theme of BLUEPRINT_THEMES) {
   test.describe(`${theme} theme › Data Fields and Options`, () => {
+    // Per-test names for this test's own records on the shared MSEL.
+    let child: (base: string) => string;
     let token: string;
     let mselId: string;
     let eventText: string;
 
-    test.beforeEach(async () => {
+    test.beforeEach(async ({}, testInfo) => {
+      child = (base: string) => sharedChildName(base, testInfo, theme);
       token = await getBlueprintToken();
-      mselId = (await createMsel(token)).id;
-      eventText = tempBlueprintName('TestBP-OptionEvent');
+      mselId = shared.id;
+      eventText = child('TestBP-OptionEvent');
       await createRenderableScenarioEvent(token, mselId, eventText, { deltaSeconds: 300 });
     });
 
     test.afterEach(async () => {
-      try {
-        if (mselId) await deleteMsel(token, mselId);
-      } catch (err) {
-        console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
-      }
+      // Back to "standard DataFields, no events" for the next test on the shared MSEL.
+      await resetSharedRenderableMsel(token, mselId);
     });
 
     test('Manage a field’s options in the Edit Data Field dialog, and the event editor offers the result', async ({
       blueprintAuthenticatedPage: page,
     }) => {
       await applyBlueprintTheme(page, theme);
-      const fieldName = tempBlueprintName('TestBP-ListField');
+      const fieldName = child('TestBP-ListField');
       const field = await createOptionListDataField(token, mselId, fieldName, SEEDED_OPTIONS);
 
       await navigateToMselSection(page, mselId, 'Data Fields');
@@ -196,7 +212,7 @@ for (const theme of BLUEPRINT_THEMES) {
       blueprintAuthenticatedPage: page,
     }) => {
       await applyBlueprintTheme(page, theme);
-      const fieldName = tempBlueprintName('TestBP-GridListField');
+      const fieldName = child('TestBP-GridListField');
       const field = await createOptionListDataField(token, mselId, fieldName, SEEDED_OPTIONS);
 
       await navigateToMselSection(page, mselId, 'Data Fields');
@@ -309,7 +325,7 @@ for (const theme of BLUEPRINT_THEMES) {
       blueprintAuthenticatedPage: page,
     }) => {
       await applyBlueprintTheme(page, theme);
-      const fieldName = tempBlueprintName('TestBP-DraftListField');
+      const fieldName = child('TestBP-DraftListField');
       await createOptionListDataField(token, mselId, fieldName, SEEDED_OPTIONS);
 
       await navigateToMselSection(page, mselId, 'Data Fields');
@@ -359,8 +375,8 @@ for (const theme of BLUEPRINT_THEMES) {
       blueprintAuthenticatedPage: page,
     }) => {
       await applyBlueprintTheme(page, theme);
-      const integerField = tempBlueprintName('TestBP-IntListField');
-      const doubleField = tempBlueprintName('TestBP-DblListField');
+      const integerField = child('TestBP-IntListField');
+      const doubleField = child('TestBP-DblListField');
       await createOptionListDataField(
         token,
         mselId,

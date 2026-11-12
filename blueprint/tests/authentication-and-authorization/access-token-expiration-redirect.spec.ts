@@ -60,7 +60,7 @@ test.describe('Authentication and Authorization', () => {
     await page.reload();
 
     // expect: The application detects no valid session and redirects to Keycloak login page
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 70000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 30000 });
 
     // expect: User must re-authenticate to continue
     const usernameField = page.locator('input[name="username"]');

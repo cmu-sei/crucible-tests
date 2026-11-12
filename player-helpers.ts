@@ -28,8 +28,8 @@
  * growing a second copy somewhere else.
  */
 
-import { APIRequestContext, request as playwrightRequest } from '@playwright/test';
 import { Services } from './shared-fixtures';
+import { cachedUserToken, sharedRequestContext } from './api-cache';
 
 /**
  * The Keycloak client used for API-level seeding.
@@ -54,10 +54,6 @@ import { Services } from './shared-fixtures';
 const SEEDING_CLIENT_ID = process.env.PLAYER_SEEDING_CLIENT_ID || 'player.vm.api';
 const SEEDING_SCOPE = process.env.PLAYER_SEEDING_SCOPE || 'openid profile player player-vm';
 
-async function newContext(): Promise<APIRequestContext> {
-  return playwrightRequest.newContext({ ignoreHTTPSErrors: true });
-}
-
 /**
  * Acquire a bearer token that both the Player API and the Player VM API accept.
  * Default credentials are `admin`/`admin`, the seed Keycloak user holding the
@@ -68,9 +64,15 @@ export async function getPlayerToken(
   username: string = 'admin',
   password: string = 'admin'
 ): Promise<string> {
+  return cachedUserToken('crucible', SEEDING_CLIENT_ID, username, SEEDING_SCOPE, () =>
+    fetchPlayerToken(username, password)
+  );
+}
+
+async function fetchPlayerToken(username: string, password: string): Promise<string> {
   const keycloak = Services.Keycloak.replace(/\/$/, '');
-  const ctx = await newContext();
-  try {
+  const ctx = await sharedRequestContext();
+  {
     const res = await ctx.post(`${keycloak}/realms/crucible/protocol/openid-connect/token`, {
       form: {
         client_id: SEEDING_CLIENT_ID,
@@ -97,8 +99,6 @@ export async function getPlayerToken(
     }
     const data = await res.json();
     return data.access_token as string;
-  } finally {
-    await ctx.dispose();
   }
 }
 
@@ -148,8 +148,8 @@ async function playerCall<T = any>(
   opts: { method?: 'GET' | 'POST' | 'PUT' | 'DELETE'; body?: unknown } = {}
 ): Promise<{ ok: boolean; status: number; data: T; text: string }> {
   const base = Services.Player.API.replace(/\/$/, '');
-  const ctx = await newContext();
-  try {
+  const ctx = await sharedRequestContext();
+  {
     const res = await ctx.fetch(`${base}${path}`, {
       method: opts.method ?? 'GET',
       headers: authHeaders(token),
@@ -163,8 +163,6 @@ async function playerCall<T = any>(
       /* non-JSON body (an error page, say) — callers get `text` instead */
     }
     return { ok: res.ok(), status: res.status(), data, text };
-  } finally {
-    await ctx.dispose();
   }
 }
 
@@ -188,8 +186,8 @@ export async function uploadViewFile(
   form.append('viewId', viewId);
   for (const teamId of teamIds) form.append('teamIds', teamId);
   form.append('ToUpload', new Blob([file.content], { type: file.mimeType }), file.name);
-  const ctx = await newContext();
-  try {
+  const ctx = await sharedRequestContext();
+  {
     const res = await ctx.post(`${base}/api/files`, {
       headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
       multipart: form,
@@ -206,8 +204,6 @@ export async function uploadViewFile(
       throw new Error(`uploadViewFile: ${file.name} is not in the upload's answer: ${text}`);
     }
     return uploaded;
-  } finally {
-    await ctx.dispose();
   }
 }
 
@@ -310,6 +306,19 @@ export async function deleteView(token: string, viewId: string): Promise<boolean
     return false;
   }
   return true;
+}
+
+/**
+ * Every view the caller can see (`GET /api/views`; the seed admin sees all of
+ * them). For finding a test's own leftovers by name — never for picking a view to
+ * test against.
+ */
+export async function listViews(token: string): Promise<PlayerView[]> {
+  const r = await playerCall<PlayerView[]>(token, '/api/views');
+  if (!r.ok) {
+    throw new Error(`listViews failed (${r.status}): ${r.text}`);
+  }
+  return r.data;
 }
 
 /**
