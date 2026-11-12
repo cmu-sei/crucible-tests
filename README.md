@@ -165,11 +165,89 @@ npx playwright test --project=chromium topomojo/tests/
 
 The script automatically checks that **Keycloak** and the **target application** are reachable before running tests. Use `--no-check` to skip these checks.
 
-By default the number of parallel workers comes from `playwright.config.ts` (1 on CI, 2 locally). Use `--workers <n>` to override it per run — accepting either a count (`4`) or a percentage of CPU cores (`50%`). The flag is ignored for the interactive `ui` and `debug` modes, which Playwright always runs with a single worker. Note that tests share a single Crucible stack, so raising the worker count increases concurrent load on Keycloak and the apps and can surface auth/timing flakiness.
+By default the number of parallel workers comes from `playwright.config.ts` (2 on CI, 4 locally). Use `--workers <n>` to override it per run — accepting either a count (`4`) or a percentage of CPU cores (`50%`). The flag is ignored for the interactive `ui` and `debug` modes, which Playwright always runs with a single worker. Note that tests share a single Crucible stack, so raising the worker count increases concurrent load on Keycloak and the apps and can surface auth/timing flakiness.
 
 Most authenticated specs run once per theme, under describe blocks titled `light theme › ...` and `dark theme › ...`. Use `--theme light|dark` to run just one of those variants; it works by excluding the other theme's titles (`--grep-invert`), so tests that aren't theme-parameterized (e.g. Gameboard, Moodle, TopoMojo) still run. It combines with `--filter` and with every command, including `quick`, `ui`, `headed` and `debug`.
 
 **Supported applications:** `alloy`, `blueprint`, `caster`, `cite`, `gallery`, `gameboard`, `keycloak`, `moodle`, `player`, `steamfitter`, `topomojo`
+
+## CI
+
+End-to-end tests run automatically in GitHub Actions on pull requests, pushes to main, and on a weekly schedule.
+
+### When Tests Run
+
+- **Pull requests to main** — only specs affected by changed files
+- **Pushes to main** — only specs affected by the pushed commits
+- **Weekly schedule** (Mondays at 06:00 UTC) — the full suite for all apps
+- **Manual dispatch** — the full suite, optionally filtered to specific apps
+
+The planner analyzes the git diff to determine which specs need to run. A change to shared code (fixtures, helpers, or configuration) triggers tests for every app that imports it. When no specs are affected (e.g., a docs-only PR), the workflow completes successfully without running any tests.
+
+### Matrix Strategy
+
+CI runs one job per application, never the full stack on a single runner. Each job provisions only the services that app needs: its UI, API, and shared infrastructure (Keycloak, Postgres). This keeps jobs fast and isolated — a Blueprint failure does not block Player.
+
+### Job Summaries
+
+Each app job uploads a markdown summary showing:
+
+- Which image digests were pulled and tested (`:main` tags from Docker Hub)
+- Test results grouped by passing, known failures, and unexpected failures
+- Suggestions for updating `ci/known-failures.json` when a listed test now passes
+
+The `E2E Result` job aggregates these and serves as the single required check. It passes when all app jobs succeed or are skipped (no affected specs), and fails otherwise.
+
+### Known Failures vs. Skip Lists
+
+Two JSON files control CI behavior for tests that cannot run or are expected to fail:
+
+#### `ci/known-failures.json`
+
+Documents app bugs. Tests on this list **still run in CI** but do not block the workflow when they fail. Each entry includes:
+
+- `spec` — the spec file path relative to the repo root
+- `title` — the full test title (including `describe` block prefixes, joined with ` › `)
+- `issue` — a GitHub issue URL or short description of the bug
+
+When a known failure starts passing, CI leaves a comment on the PR reminding you to remove the entry. To add a known failure:
+
+1. Confirm the test fails due to a documented app bug (not test code or missing CI infrastructure)
+2. Add an entry to `ci/known-failures.json` with the exact spec path and title
+3. Open or reference a GitHub issue for the underlying app bug
+
+#### `ci/skip-in-ci.json`
+
+Lists tests that need infrastructure CI does not provide. Tests on this list **never run in CI**. Each entry includes:
+
+- `spec` — the spec file path
+- `title` — the full test title
+- `requires` — what the test needs (e.g., `"docker exec"`, `"live hypervisor"`, `"VM console access"`)
+
+Examples of infrastructure CI cannot provide:
+
+- Moodle plugin installation via `docker exec`
+- Caster Terraform plan/apply to live cloud resources
+- VM console connections and hypervisor API calls
+- Gameboard challenge deployment and scoring engine interaction
+
+To add a skip entry:
+
+1. Confirm the test needs infrastructure unavailable in GitHub Actions (not an app bug)
+2. Add an entry to `ci/skip-in-ci.json` with the exact spec path, title, and `requires` field
+3. Never add an entry to both lists — a test is either skipped or allowed to fail, never both
+
+### Validation
+
+The `validate.yml` workflow runs static checks on every PR:
+
+- TypeScript type checking
+- Test discovery (ensure all specs are discoverable and have no syntax errors)
+- Self-checks for the skip list, known failures, and planner logic
+- Actionlint on workflow files
+- Docker Compose config validation
+
+These checks catch common mistakes (typos, missing imports, unreachable tests) before the full suite runs.
 
 ## Configuring Service URLs
 

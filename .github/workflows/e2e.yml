@@ -1,0 +1,110 @@
+# Copyright 2026 Carnegie Mellon University. All Rights Reserved.
+# Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
+
+name: E2E
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      apps:
+        description: 'Comma-separated app list (empty = all)'
+        required: false
+        type: string
+        default: ''
+
+concurrency:
+  group: e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      has_runs: ${{ steps.plan.outputs.has_runs }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+
+      - name: Plan CI runs
+        id: plan
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_BEFORE: ${{ github.event.before }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
+          APPS_INPUT: ${{ inputs.apps }}
+        run: |
+          case "$EVENT_NAME" in
+            pull_request)
+              node --no-warnings scripts/plan-ci-runs.mjs --base "$PR_BASE_SHA" --head "$HEAD_SHA"
+              ;;
+            push)
+              if [[ "$EVENT_BEFORE" == "0000000000000000000000000000000000000000" ]]; then
+                node --no-warnings scripts/plan-ci-runs.mjs --full
+              else
+                node --no-warnings scripts/plan-ci-runs.mjs --base "$EVENT_BEFORE" --head "$HEAD_SHA"
+              fi
+              ;;
+            schedule)
+              node --no-warnings scripts/plan-ci-runs.mjs --full
+              ;;
+            workflow_dispatch)
+              if [[ -n "$APPS_INPUT" ]]; then
+                node --no-warnings scripts/plan-ci-runs.mjs --full --apps "$APPS_INPUT"
+              else
+                node --no-warnings scripts/plan-ci-runs.mjs --full
+              fi
+              ;;
+          esac
+
+  e2e:
+    name: E2E
+    needs: plan
+    if: needs.plan.outputs.has_runs == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    uses: ./.github/workflows/e2e-app.yml
+    with:
+      app: ${{ matrix.app }}
+      specs: ${{ matrix.specs }}
+      full: ${{ github.event_name == 'schedule' }}
+    secrets: inherit
+
+  e2e-result:
+    name: E2E Result
+    runs-on: ubuntu-24.04
+    needs: [plan, e2e]
+    if: always()
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Evaluate result
+        env:
+          PLAN_RESULT: ${{ needs.plan.result }}
+          E2E_RESULT: ${{ needs.e2e.result }}
+        run: bash ci/result-gate.sh "$PLAN_RESULT" "$E2E_RESULT"

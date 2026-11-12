@@ -12,11 +12,11 @@ permissions: {}
 
 jobs:
   # Static validation only. Running the suite needs a full Crucible stack -
-  # Keycloak, every app API and UI, Postgres - which a hosted runner cannot
-  # provide, so this job checks everything that can be checked without one.
-  # It is not a substitute for running the suite; it catches the breakage that
-  # would otherwise only surface minutes into a real run, on a machine that has
-  # a stack.
+  # Keycloak, every app API and UI, Postgres - which is provisioned per job by
+  # .github/workflows/e2e.yml. This job checks everything that can be checked
+  # without one. It is not a substitute for running the suite; it catches the
+  # breakage that would otherwise only surface minutes into a real run, on a
+  # machine that has a stack.
   validate:
     name: Validate
     runs-on: ubuntu-latest
@@ -70,3 +70,12 @@ jobs:
       # references, shellcheck findings in run blocks, and common mistakes.
       - name: Lint workflows
         run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.8
+
+      # Validate the CI stack compose file for syntax errors and misconfigurations.
+      - name: Check CI stack compose
+        run: docker compose -f ci/stack/compose.yaml config -q
+
+      # Test the e2e-result gate logic: pass when plan succeeded and e2e succeeded
+      # or was skipped; fail otherwise. This is the one check marked as required.
+      - name: Test result gate
+        run: bash ci/test-result-gate.sh
