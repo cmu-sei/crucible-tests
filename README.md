@@ -198,6 +198,10 @@ Each app job uploads a markdown summary showing:
 
 The `E2E Result` job aggregates these and serves as the single required check. It passes when all app jobs succeed or are skipped (no affected specs), and fails otherwise.
 
+### Regression Issues
+
+Weekly runs that find new failures automatically open or update GitHub issues to notify `@cmu-sei/crucible-code-owners`. A failure is confirmed by rerunning just the failing specs; only tests that fail both times become a regression. Each app gets one issue (labeled `e2e-regression`), and the issue body shows which `:main` image digests changed since the last clean weekly run. The issue closes automatically when the app runs clean again.
+
 ### Known Failures vs. Skip Lists
 
 Two JSON files control CI behavior for tests that cannot run or are expected to fail:

@@ -154,3 +154,261 @@ jobs:
           else
             bash ci/pr-comment.sh "$PR_NUMBER" -
           fi
+
+  collect:
+    name: Collect new failures
+    runs-on: ubuntu-24.04
+    needs: e2e
+    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    outputs:
+      confirm_matrix: ${{ steps.build_matrix.outputs.matrix }}
+      has_confirms: ${{ steps.build_matrix.outputs.has_confirms }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+
+      - name: Download artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: e2e-eval-*
+          path: artifacts
+          merge-multiple: false
+
+      - name: Build confirm matrix
+        id: build_matrix
+        run: |
+          # Exclude e2e-eval-confirm-* artifacts (only read first-pass evals)
+          apps=()
+          for dir in artifacts/e2e-eval-*; do
+            if [[ ! -d "$dir" ]]; then continue; fi
+            dirname=$(basename "$dir")
+            if [[ "$dirname" == e2e-eval-confirm-* ]]; then continue; fi
+
+            app="${dirname#e2e-eval-}"
+            eval_file="$dir/ci-evaluation.json"
+
+            if [[ ! -f "$eval_file" ]]; then continue; fi
+
+            # Check if there are newFailures
+            new_failures=$(node --no-warnings -p "
+              const fs = require('fs');
+              const e = JSON.parse(fs.readFileSync('$eval_file', 'utf8'));
+              JSON.stringify(e.newFailures || []);
+            ")
+
+            if [[ "$new_failures" != "[]" ]]; then
+              # Extract unique spec files from newFailures
+              specs=$(node --no-warnings -p "
+                const fs = require('fs');
+                const e = JSON.parse(fs.readFileSync('$eval_file', 'utf8'));
+                const files = [...new Set((e.newFailures || []).map(k => k.file))];
+                files.join(' ');
+              ")
+
+              apps+=("{\"app\":\"$app\",\"specs\":\"$specs\"}")
+            fi
+          done
+
+          if [[ ${#apps[@]} -eq 0 ]]; then
+            echo "matrix={\"include\":[]}" >> "$GITHUB_OUTPUT"
+            echo "has_confirms=false" >> "$GITHUB_OUTPUT"
+          else
+            matrix=$(printf '%s\n' "${apps[@]}" | jq -s '{include: .}')
+            echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+            echo "has_confirms=true" >> "$GITHUB_OUTPUT"
+          fi
+
+  confirm:
+    name: Confirm
+    needs: collect
+    if: always() && needs.collect.outputs.has_confirms == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.collect.outputs.confirm_matrix) }}
+    uses: ./.github/workflows/e2e-app.yml
+    with:
+      app: ${{ matrix.app }}
+      specs: ${{ matrix.specs }}
+      full: false
+      confirm: true
+    secrets: inherit
+
+  regressions:
+    name: Report regressions
+    runs-on: ubuntu-24.04
+    needs: [e2e, confirm]
+    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    permissions:
+      contents: read
+      issues: write
+      actions: read
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+
+      - name: Download all evaluation artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: e2e-eval-*
+          path: artifacts
+          merge-multiple: false
+
+      - name: Download all digest artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: e2e-digests-*
+          path: artifacts
+          merge-multiple: false
+        continue-on-error: true
+
+      - name: Find last clean weekly run
+        id: last_clean
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Find the most recent successful run of e2e.yml that was a full weekly run
+          # (schedule event, or workflow_dispatch with empty apps input)
+          runs=$(gh run list \
+            --workflow e2e.yml \
+            --status success \
+            --limit 50 \
+            --json databaseId,event,createdAt)
+
+          last_clean_id=""
+          for id in $(echo "$runs" | jq -r '.[] | select(.event == "schedule") | .databaseId'); do
+            # Exclude the current run
+            if [[ "$id" == "${{ github.run_id }}" ]]; then continue; fi
+
+            # Check if this run has digest artifacts for all apps
+            # A successful full run should have digests for each app
+            has_all=true
+            for app in alloy blueprint caster cite console gallery gameboard player playerVm steamfitter topomojo; do
+              if ! gh run view "$id" --json artifacts --jq '.artifacts[] | select(.name == "e2e-digests-'"$app"'")' | grep -q .; then
+                has_all=false
+                break
+              fi
+            done
+
+            if [[ "$has_all" == "true" ]]; then
+              last_clean_id="$id"
+              break
+            fi
+          done
+
+          if [[ -z "$last_clean_id" ]]; then
+            # Try workflow_dispatch runs (may have been filtered, so just check for success)
+            for id in $(echo "$runs" | jq -r '.[] | select(.event == "workflow_dispatch") | .databaseId'); do
+              if [[ "$id" == "${{ github.run_id }}" ]]; then continue; fi
+
+              # For dispatch, we can't easily check inputs, so accept any successful run with digests
+              last_clean_id="$id"
+              break
+            done
+          fi
+
+          echo "last_clean_id=$last_clean_id" >> "$GITHUB_OUTPUT"
+
+          if [[ -n "$last_clean_id" ]]; then
+            echo "Found last clean run: $last_clean_id"
+          else
+            echo "No earlier clean run found"
+          fi
+
+      - name: Download last clean digest artifacts
+        if: steps.last_clean.outputs.last_clean_id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id="${{ steps.last_clean.outputs.last_clean_id }}"
+          mkdir -p artifacts/last-clean
+          for app in alloy blueprint caster cite console gallery gameboard player playerVm steamfitter topomojo; do
+            gh run download "$run_id" \
+              --name "e2e-digests-$app" \
+              --dir "artifacts/last-clean/e2e-digests-$app" || true
+          done
+        continue-on-error: true
+
+      - name: Report regressions for each app
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          REPO: ${{ github.repository }}
+        run: |
+          for app in alloy blueprint caster cite console gallery gameboard player playerVm steamfitter topomojo; do
+            first_eval="artifacts/e2e-eval-$app/ci-evaluation.json"
+            confirm_eval="artifacts/e2e-eval-confirm-$app/ci-evaluation.json"
+            current_digests="artifacts/e2e-digests-$app/digests.json"
+            last_clean_digests="artifacts/last-clean/e2e-digests-$app/digests.json"
+
+            # Skip if first eval doesn't exist (app didn't run)
+            if [[ ! -f "$first_eval" ]]; then
+              echo "Skipping $app: no evaluation found"
+              continue
+            fi
+
+            # Check if app ran clean (no newFailures)
+            new_failures=$(node --no-warnings -p "
+              const fs = require('fs');
+              const e = JSON.parse(fs.readFileSync('$first_eval', 'utf8'));
+              (e.newFailures || []).length;
+            ")
+
+            if [[ "$new_failures" == "0" ]]; then
+              # App ran clean, close any open regression issue
+              echo "Passing again in [this run]($RUN_URL); closing." > recovered.txt
+              bash ci/regression-issue.sh "$app" -recovered || true
+              continue
+            fi
+
+            # App has failures, check for confirmed regressions
+            args=(
+              --app "$app"
+              --first "$first_eval"
+              --run-url "$RUN_URL"
+              --repo "$REPO"
+            )
+
+            if [[ -f "$confirm_eval" ]]; then
+              args+=(--confirm "$confirm_eval")
+            fi
+
+            if [[ -f "$current_digests" ]]; then
+              args+=(--current-digests "$current_digests")
+            fi
+
+            if [[ -f "$last_clean_digests" ]]; then
+              args+=(--last-clean-digests "$last_clean_digests")
+            fi
+
+            # Generate regression report
+            result=$(node --no-warnings scripts/report-regressions.mjs "${args[@]}")
+            action=$(echo "$result" | jq -r '.action')
+
+            if [[ "$action" == "none" ]]; then
+              echo "$app: no confirmed regressions"
+              echo "## $app: Unconfirmed" >> "$GITHUB_STEP_SUMMARY"
+              echo "New failures did not reproduce on confirming rerun." >> "$GITHUB_STEP_SUMMARY"
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+
+            # Write issue body
+            echo "$result" > "issue-$app.json"
+            bash ci/regression-issue.sh "$app" "issue-$app.json"
+
+            echo "## $app: Regression reported" >> "$GITHUB_STEP_SUMMARY"
+            echo "See issue for details." >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+          done
