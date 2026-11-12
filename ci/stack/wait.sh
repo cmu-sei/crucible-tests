@@ -23,10 +23,10 @@
 #   UIs                 GET http://localhost:<port>/ -> 200
 #   anything else       container healthcheck reports healthy
 #
-# Restart behavior: If a service with an HTTP probe (APIs, UIs, topomojo-api, gameboard-api)
-# is running but not ready for WAIT_STALL_RESTART_SECONDS, it is restarted once. Subsequent
-# polls wait for it within the overall timeout. postgres, keycloak, keycloak-config and
-# healthcheck-only services are never restarted.
+# Restart behavior: If a service with an HTTP probe (keycloak, APIs, UIs, topomojo-api,
+# gameboard-api) is running but not ready for WAIT_STALL_RESTART_SECONDS, it is restarted
+# once. Subsequent polls wait for it within the overall timeout. postgres, keycloak-config
+# and healthcheck-only services are never restarted.
 #
 # Fails at once when a container has exited (other than keycloak-config with 0),
 # and on timeout; either way it prints `docker compose logs --tail=200` for each

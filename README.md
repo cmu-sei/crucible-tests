@@ -206,7 +206,7 @@ The job summary of the `Report regressions` job says, per app, whether new failu
 
 ### Service Restart on Stall
 
-If a service with an HTTP readiness probe (APIs, UIs, topomojo-api, gameboard-api) is running but not ready for 90 seconds (configurable via `WAIT_STALL_RESTART_SECONDS`), `wait.sh` restarts it once and continues polling within the overall timeout. This handles transient startup stalls without extending the timeout. Set `WAIT_STALL_RESTART_SECONDS=0` to disable restarts. Services that rely only on container healthchecks (postgres, keycloak-config) are never restarted.
+If a service with an HTTP readiness probe (Keycloak, APIs, UIs, topomojo-api, gameboard-api) is running but not ready for 90 seconds (configurable via `WAIT_STALL_RESTART_SECONDS`), `wait.sh` restarts it once and continues polling within the overall timeout. This handles transient startup stalls without extending the timeout. Set `WAIT_STALL_RESTART_SECONDS=0` to disable restarts. Services that rely only on container healthchecks (postgres, keycloak-config) are never restarted.
 
 ### Reproduce a CI failure locally
 
