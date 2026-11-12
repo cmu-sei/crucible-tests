@@ -134,12 +134,30 @@ jobs:
             stack-logs.txt
           retention-days: 14
 
+      # download-artifact extracts a lone pattern match straight into its path, but
+      # several into <path>/<name>/. So each artifact carries its own <name>/ folder,
+      # and e2e.yml downloads them with merge-multiple: true: the layout is then
+      # <path>/<name>/<file> however many artifacts match.
+      - name: Stage evaluation and digest artifacts
+        if: always()
+        env:
+          EVAL_NAME: ${{ inputs.confirm && format('e2e-eval-confirm-{0}', inputs.app) || format('e2e-eval-{0}', inputs.app) }}
+          DIGESTS_NAME: e2e-digests-${{ inputs.app }}
+        run: |
+          mkdir -p "ci-artifacts/eval/$EVAL_NAME" "ci-artifacts/digests/$DIGESTS_NAME"
+          if [[ -f test-results/ci-evaluation.json ]]; then
+            cp test-results/ci-evaluation.json "ci-artifacts/eval/$EVAL_NAME/"
+          fi
+          if [[ -f ci-artifacts/digests.json ]]; then
+            cp ci-artifacts/digests.json "ci-artifacts/digests/$DIGESTS_NAME/"
+          fi
+
       - name: Upload evaluation result
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ inputs.confirm && format('e2e-eval-confirm-{0}', inputs.app) || format('e2e-eval-{0}', inputs.app) }}
-          path: test-results/ci-evaluation.json
+          path: ci-artifacts/eval/
           retention-days: 3
 
       - name: Upload digest snapshot
@@ -147,7 +165,7 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-digests-${{ inputs.app }}
-          path: ci-artifacts/digests.json
+          path: ci-artifacts/digests/
           retention-days: 90
 
       - name: Clean up
