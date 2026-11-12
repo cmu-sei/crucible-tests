@@ -24,7 +24,7 @@ echo "$*" >> "${GH_LOG}"
 # Simulate gh responses
 if [[ "$1" == "issue" && "$2" == "list" ]]; then
   if [[ "${EXISTING_ISSUE:-}" == "1" ]]; then
-    JSON='[{"number": 456, "body": "<!-- crucible-tests:e2e-regression:cite -->\nOld content"}]'
+    JSON='[{"number": 456, "body": "<!-- crucible-tests:e2e-regression:cite -->\\nOld content"}]'
   else
     JSON='[]'
   fi
@@ -52,30 +52,8 @@ EOF
 
 chmod +x "$GH_STUB"
 
-# Create jq stub
-cat > "$TEMP_DIR/jq" << 'EOF'
-#!/usr/bin/env node
-const fs = require('fs');
-const input = fs.readFileSync(0, 'utf-8');
-
-const args = process.argv.slice(2);
-if (args[0] === '-r') {
-  const selector = args[1];
-  try {
-    const obj = JSON.parse(input);
-    if (selector === '.title') {
-      console.log(obj.title || '');
-    } else if (selector === '.issueBody') {
-      console.log(obj.issueBody || obj.body || '');
-    } else if (selector === '.recurrenceBody') {
-      console.log(obj.recurrenceBody || '');
-    }
-  } catch (e) {
-    // If not JSON, just output empty
-  }
-}
-EOF
-chmod +x "$TEMP_DIR/jq"
+# No jq stub needed - real jq handles all filters correctly
+# The gh stub now outputs valid JSON with proper escaping
 
 # Export environment for regression-issue.sh
 export PATH="$TEMP_DIR:$PATH"
