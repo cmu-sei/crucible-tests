@@ -2,25 +2,25 @@
   {
     "file": "blueprint/tests/admin-gallery-and-cite/cite-actions.spec.ts",
     "title": "dark theme › CITE Actions › New MSEL CITE Action Fans Out Across All Teams And Moves",
-    "reason": "App bug: The MSEL page has no CITE Actions section to open (failed the same way in the Aspire run).",
+    "reason": "App bug: The MSEL page has no CITE Actions section to open.",
     "added": "2026-11-11"
   },
   {
     "file": "blueprint/tests/admin-gallery-and-cite/cite-actions.spec.ts",
     "title": "light theme › CITE Actions › New MSEL CITE Action Fans Out Across All Teams And Moves",
-    "reason": "App bug: The MSEL page has no CITE Actions section to open (failed the same way in the Aspire run).",
+    "reason": "App bug: The MSEL page has no CITE Actions section to open.",
     "added": "2026-11-11"
   },
   {
     "file": "blueprint/tests/admin-gallery-and-cite/cite-duties.spec.ts",
     "title": "dark theme › CITE Duties › New MSEL CITE Duty Fans Out Across All Teams",
-    "reason": "App bug: The MSEL page has no CITE Duties section to open (failed the same way in the Aspire run).",
+    "reason": "App bug: The MSEL page has no CITE Duties section to open.",
     "added": "2026-11-11"
   },
   {
     "file": "blueprint/tests/admin-gallery-and-cite/cite-duties.spec.ts",
     "title": "light theme › CITE Duties › New MSEL CITE Duty Fans Out Across All Teams",
-    "reason": "App bug: The MSEL page has no CITE Duties section to open (failed the same way in the Aspire run).",
+    "reason": "App bug: The MSEL page has no CITE Duties section to open.",
     "added": "2026-11-11"
   },
   {
@@ -38,7 +38,7 @@
   {
     "file": "blueprint/tests/error-handling-and-validation/unauthorized-action-handling.spec.ts",
     "title": "Error Handling and Validation › Unauthorized Action Handling › User without permissions is shown no privileged controls",
-    "reason": "App bug: A user without permissions is still shown the BUILD mission card (failed the same way in the Aspire run).",
+    "reason": "App bug: A user without permissions is still shown the BUILD mission card.",
     "added": "2026-11-11"
   },
   {
@@ -56,13 +56,13 @@
   {
     "file": "console/tests/accessibility/theme-contrast-compliance.spec.ts",
     "title": "dark theme › Responsive Design and Accessibility › Dark Theme switch contrast (WCAG 1.4.11)",
-    "reason": "App bug: Dark theme contrast is below WCAG AA (primary-colored labels and the Dark Theme switch track); failed the same way in the Aspire run.",
+    "reason": "App bug: Dark theme contrast is below WCAG AA (primary-colored labels and the Dark Theme switch track).",
     "added": "2026-11-11"
   },
   {
     "file": "console/tests/accessibility/theme-contrast-compliance.spec.ts",
     "title": "dark theme › Responsive Design and Accessibility › Primary and on-primary text contrast (WCAG 1.4.3)",
-    "reason": "App bug: Dark theme contrast is below WCAG AA (primary-colored labels and the Dark Theme switch track); failed the same way in the Aspire run.",
+    "reason": "App bug: Dark theme contrast is below WCAG AA (primary-colored labels and the Dark Theme switch track).",
     "added": "2026-11-11"
   },
   {
@@ -128,19 +128,19 @@
   {
     "file": "player/tests/accessibility/theme-contrast-compliance.spec.ts",
     "title": "dark theme › Responsive Design and Accessibility › Primary and on-primary text contrast (WCAG 1.4.3)",
-    "reason": "App bug: Dark theme primary-colored button labels are below WCAG 1.4.3 contrast (failed the same way in the Aspire run).",
+    "reason": "App bug: Dark theme primary-colored button labels are below WCAG 1.4.3 contrast.",
     "added": "2026-11-11"
   },
   {
     "file": "player/tests/errors/non-existent-view.spec.ts",
     "title": "dark theme › Error Handling and Edge Cases › Navigate to Non-Existent View",
-    "reason": "App bug: Intermittent. Opening a view that does not exist runs the failed lookup twice and opens two View Not Found bottom sheets, so the heading is briefly duplicated (strict mode violation). Seen in both themes: light failed in the Aspire run (2026-11-10), dark failed in fork CI run 43160946595, and both passed in fork CI run 43254238270.",
+    "reason": "App bug: Intermittent. Opening a view that does not exist runs the failed lookup twice and opens two View Not Found bottom sheets, so the heading is briefly duplicated (strict mode violation). Seen in both themes.",
     "added": "2026-11-11"
   },
   {
     "file": "player/tests/errors/non-existent-view.spec.ts",
     "title": "light theme › Error Handling and Edge Cases › Navigate to Non-Existent View",
-    "reason": "App bug: Intermittent. Opening a view that does not exist runs the failed lookup twice and opens two View Not Found bottom sheets, so the heading is briefly duplicated (strict mode violation). Seen in both themes: light failed in the Aspire run (2026-11-10), dark failed in fork CI run 43160946595, and both passed in fork CI run 43254238270.",
+    "reason": "App bug: Intermittent. Opening a view that does not exist runs the failed lookup twice and opens two View Not Found bottom sheets, so the heading is briefly duplicated (strict mode violation). Seen in both themes.",
     "added": "2026-11-11"
   },
   {
@@ -194,25 +194,25 @@
   {
     "file": "playerVm/tests/accessibility/theme-contrast-compliance.spec.ts",
     "title": "dark theme › Responsive Design and Accessibility › Primary and on-primary text contrast (WCAG 1.4.3)",
-    "reason": "App bug: Dark theme primary-colored button labels are below WCAG 1.4.3 contrast (failed the same way in the Aspire run).",
+    "reason": "App bug: Dark theme primary-colored button labels are below WCAG 1.4.3 contrast.",
     "added": "2026-11-11"
   },
   {
     "file": "steamfitter/tests/scenario-templates-management/create-new-scenario-template.spec.ts",
     "title": "light theme › Scenario Templates Management › Create a new scenario template",
-    "reason": "App bug: Intermittent. The new scenario template dialog does not always keep the typed description. Failed in the Aspire run (2026-11-10), was flaky in 2 of 3 single-spec fork CI runs, and passed in fork CI run 43254238270.",
+    "reason": "App bug: Intermittent. The new scenario template dialog does not always keep the typed description.",
     "added": "2026-11-11"
   },
   {
     "file": "steamfitter/tests/ui-responsiveness-and-accessibility/theme-contrast-compliance.spec.ts",
     "title": "dark theme › UI Responsiveness and Accessibility › Primary and on-primary text contrast (WCAG 1.4.3)",
-    "reason": "App bug: Dark theme primary-colored button labels are below WCAG 1.4.3 contrast (failed the same way in the Aspire run).",
+    "reason": "App bug: Dark theme primary-colored button labels are below WCAG 1.4.3 contrast.",
     "added": "2026-11-11"
   },
   {
     "file": "topomojo/tests/admin/admin-create-apikey.spec.ts",
     "title": "Admin Panel › Admin - Create API Key",
-    "reason": "Test bug: its loose Create/New selector only matches leftover data, so it fails on a fresh database. Passed in the Aspire run against a long-lived database.",
+    "reason": "Test bug: its loose Create/New selector only matches leftover data, so it fails on a fresh database=.",
     "added": "2026-11-11"
   }
 ]
