@@ -62,18 +62,18 @@ export function themedUrl(baseUrl: string, path: string, theme: Theme): string {
 // ---------------------------------------------------------------------------
 
 /**
- * `<baseName> [w<workerIndex>]`: the name of a record seeded once per Playwright
+ * `<baseName> [w<parallelIndex>]`: the name of a record seeded once per Playwright
  * worker and shared by every test that worker runs.
  *
- * `workerIndex` is unique per worker process within a run (a worker restarted
- * after a failure gets a new index), so two live workers never share a name.
- * Deterministic on purpose: the same run never needs two of them, a leftover from
- * a crashed run is recognisable by its prefix (global-teardown purges
- * `<baseName> [`), and the seeder can clear an exact-name leftover before it
- * creates its own.
+ * `parallelIndex` is the worker's slot (`0..workers-1`), unique among the workers
+ * alive at any moment across every project (so a chromium and a firefox worker never
+ * share a name) and stable when a worker restarts after a failure. Deterministic on
+ * purpose: the restarted worker's seeder clears its predecessor's exact-name copy
+ * before it creates its own, and a leftover from a crashed run is recognisable by its
+ * prefix (global-teardown purges `<baseName> [`).
  */
-export function seededName(baseName: string, workerInfo: Pick<WorkerInfo, 'workerIndex'>): string {
-  return `${baseName} [w${workerInfo.workerIndex}]`;
+export function seededName(baseName: string, workerInfo: Pick<WorkerInfo, 'parallelIndex'>): string {
+  return `${baseName} [w${workerInfo.parallelIndex}]`;
 }
 
 // ---------------------------------------------------------------------------
