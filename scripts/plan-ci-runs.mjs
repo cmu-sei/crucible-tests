@@ -12,14 +12,14 @@
 
 import { execFileSync } from 'child_process';
 import { readFileSync, existsSync, appendFileSync } from 'fs';
-import { affectedRuns, buildImportGraph, toMatrix } from './lib/ci-affected.mjs';
+import { affectedRuns, buildImportGraph, toMatrix, parseAppsFilter } from './lib/ci-affected.mjs';
 
 // Parse arguments
 const args = process.argv.slice(2);
 let base = null;
 let head = null;
 let full = false;
-let appsFilter = null;
+let appsArg = null;
 
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--base' && i + 1 < args.length) {
@@ -29,7 +29,7 @@ for (let i = 0; i < args.length; i++) {
   } else if (args[i] === '--full') {
     full = true;
   } else if (args[i] === '--apps' && i + 1 < args.length) {
-    appsFilter = args[++i].split(',');
+    appsArg = args[++i];
   }
 }
 
@@ -39,23 +39,15 @@ if (!full && (!base || !head)) {
   process.exit(2);
 }
 
-if (appsFilter && !full) {
-  console.error('Error: --apps can only be used with --full');
-  process.exit(2);
-}
-
 // Validate app names if filter provided
 const slices = JSON.parse(readFileSync('ci/slices.json', 'utf8'));
 const validApps = Object.keys(slices);
-if (appsFilter) {
-  for (const app of appsFilter) {
-    if (!validApps.includes(app)) {
-      console.error(`Error: Unknown app name: ${app}`);
-      console.error(`Valid apps: ${validApps.join(', ')}`);
-      process.exit(2);
-    }
-  }
+const appsFilterResult = parseAppsFilter(appsArg, full, validApps);
+if (!appsFilterResult.ok) {
+  console.error(`Error: ${appsFilterResult.error}`);
+  process.exit(2);
 }
+const appsFilter = appsFilterResult.apps;
 
 let result;
 let changed = [];

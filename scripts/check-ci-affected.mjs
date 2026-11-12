@@ -8,7 +8,7 @@
 
 import { existsSync } from 'fs';
 import { execSync } from 'child_process';
-import { affectedRuns, buildImportGraph, toMatrix } from './lib/ci-affected.mjs';
+import { affectedRuns, buildImportGraph, toMatrix, parseAppsFilter } from './lib/ci-affected.mjs';
 
 const APPS = ['alloy', 'blueprint', 'caster', 'cite', 'console', 'gallery', 'gameboard', 'player', 'playerVm', 'steamfitter', 'topomojo'];
 
@@ -119,6 +119,50 @@ const MATRIX_CASES = [
     input: { full: false, runs: [{ app: 'cite', specs: ['cite/tests/home/a.spec.ts', 'cite/tests/home/b.spec.ts'] }], dropped: [] },
     expected: { include: [{ app: 'cite', specs: 'cite/tests/home/a.spec.ts cite/tests/home/b.spec.ts' }] },
   },
+  {
+    name: 'toMatrix with full mode and filtered apps',
+    input: { full: true, runs: [{ app: 'cite', specs: [] }, { app: 'player', specs: [] }], dropped: [] },
+    expected: { include: [{ app: 'cite', specs: 'cite/tests/' }, { app: 'player', specs: 'player/tests/' }] },
+  },
+];
+
+// parseAppsFilter test
+const APPS_FILTER_CASES = [
+  {
+    name: 'parseAppsFilter with valid apps in full mode',
+    appsArg: 'player,cite',
+    fullMode: true,
+    validApps: APPS,
+    expected: { ok: true, apps: ['player', 'cite'] },
+  },
+  {
+    name: 'parseAppsFilter with unknown app (wrong case)',
+    appsArg: 'playervm',
+    fullMode: true,
+    validApps: APPS,
+    expected: { ok: false, errorContains: 'playervm' },
+  },
+  {
+    name: 'parseAppsFilter with moodle (excluded app)',
+    appsArg: 'moodle',
+    fullMode: true,
+    validApps: APPS,
+    expected: { ok: false, errorContains: 'moodle' },
+  },
+  {
+    name: 'parseAppsFilter without full mode',
+    appsArg: 'player,cite',
+    fullMode: false,
+    validApps: APPS,
+    expected: { ok: false, errorContains: '--apps can only be used with --full' },
+  },
+  {
+    name: 'parseAppsFilter with null appsArg',
+    appsArg: null,
+    fullMode: true,
+    validApps: APPS,
+    expected: { ok: true, apps: null },
+  },
 ];
 
 // Build import graph once for all tests
@@ -190,6 +234,34 @@ for (const testCase of MATRIX_CASES) {
   }
 }
 
+// Run parseAppsFilter tests
+console.log();
+for (const testCase of APPS_FILTER_CASES) {
+  const { name, appsArg, fullMode, validApps, expected } = testCase;
+  const result = parseAppsFilter(appsArg, fullMode, validApps);
+
+  const problems = [];
+  if (result.ok !== expected.ok) {
+    problems.push(`ok: ${result.ok} !== ${expected.ok}`);
+  }
+  if (expected.ok && JSON.stringify(result.apps) !== JSON.stringify(expected.apps)) {
+    problems.push(`apps: ${JSON.stringify(result.apps)} !== ${JSON.stringify(expected.apps)}`);
+  }
+  if (!expected.ok && expected.errorContains && !result.error.includes(expected.errorContains)) {
+    problems.push(`error does not contain "${expected.errorContains}": ${result.error}`);
+  }
+
+  if (problems.length > 0) {
+    failures++;
+    console.log(`FAIL ${name}`);
+    for (const problem of problems) {
+      console.log(`  ${problem}`);
+    }
+  } else {
+    console.log(`ok   ${name}`);
+  }
+}
+
 // Check that every app in slices.json has a folder and every service exists in compose.yaml
 console.log();
 const slicesPath = 'ci/slices.json';
@@ -234,5 +306,6 @@ if (!existsSync(slicesPath)) {
   }
 }
 
-console.log(`\n${CASES.length + MATRIX_CASES.length - failures}/${CASES.length + MATRIX_CASES.length} cases passed`);
+const totalCases = CASES.length + MATRIX_CASES.length + APPS_FILTER_CASES.length;
+console.log(`\n${totalCases - failures}/${totalCases} cases passed`);
 process.exit(failures ? 1 : 0);

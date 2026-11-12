@@ -278,24 +278,43 @@ export function affectedRuns(changed, graph, lists) {
 }
 
 /**
+ * Parse and validate --apps filter.
+ * Returns { ok: true, apps: string[] } or { ok: false, error: string }.
+ */
+export function parseAppsFilter(appsArg, fullMode, validApps) {
+  if (appsArg && !fullMode) {
+    return { ok: false, error: '--apps can only be used with --full' };
+  }
+
+  if (!appsArg) {
+    return { ok: true, apps: null };
+  }
+
+  const apps = appsArg.split(',').map(a => a.trim()).filter(Boolean);
+  for (const app of apps) {
+    if (!validApps.includes(app)) {
+      return {
+        ok: false,
+        error: `Unknown app name: ${app}\nValid apps: ${validApps.join(', ')}`,
+      };
+    }
+  }
+
+  return { ok: true, apps };
+}
+
+/**
  * Convert affected runs to GitHub Actions matrix format.
  */
 export function toMatrix(result) {
   const include = [];
 
-  if (result.full) {
-    // Full run: load slices and emit all apps
-    const slicesPath = join(process.cwd(), 'ci/slices.json');
-    const slices = JSON.parse(readFileSync(slicesPath, 'utf8'));
-    for (const app of Object.keys(slices).sort()) {
-      include.push({ app, specs: `${app}/tests/` });
-    }
-  } else {
-    // Partial run: emit affected apps
-    for (const run of result.runs) {
-      const specs = run.specs.length === 0 ? `${run.app}/tests/` : run.specs.join(' ');
-      include.push({ app: run.app, specs });
-    }
+  // Always use result.runs, regardless of full flag.
+  // The full flag just indicates this is a full run (for reporting),
+  // but the actual list of apps comes from result.runs.
+  for (const run of result.runs) {
+    const specs = run.specs.length === 0 ? `${run.app}/tests/` : run.specs.join(' ');
+    include.push({ app: run.app, specs });
   }
 
   return { include };
