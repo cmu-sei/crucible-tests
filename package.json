@@ -16,8 +16,9 @@
     "check:run-filters": "node --no-warnings scripts/check-run-filters.mjs",
     "check:ci-results": "node --no-warnings scripts/check-ci-results.mjs",
     "check:ci-skip": "node --no-warnings scripts/check-ci-skip.mjs",
+    "check:ci-affected": "node --no-warnings scripts/check-ci-affected.mjs",
     "check:discovery": "playwright test --list --reporter=list",
-    "validate": "npm run typecheck && npm run check:skips && npm run check:waits && npm run check:run-filters && npm run check:ci-results && npm run check:ci-skip && npm run check:discovery",
+    "validate": "npm run typecheck && npm run check:skips && npm run check:waits && npm run check:run-filters && npm run check:ci-results && npm run check:ci-skip && npm run check:ci-affected && npm run check:discovery",
     "report:durations": "node scripts/report-durations.mjs"
   },
   "devDependencies": {
