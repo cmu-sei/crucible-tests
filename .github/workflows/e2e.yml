@@ -61,7 +61,10 @@ jobs:
               node --no-warnings scripts/plan-ci-runs.mjs --base "$PR_BASE_SHA" --head "$HEAD_SHA"
               ;;
             push)
-              if [[ "$EVENT_BEFORE" == "0000000000000000000000000000000000000000" ]]; then
+              # A new branch has no before; after a force push the old tip is not in this
+              # clone's history. Either way there is nothing to diff, so run everything.
+              if [[ "$EVENT_BEFORE" == "0000000000000000000000000000000000000000" ]] \
+                || ! git cat-file -e "${EVENT_BEFORE}^{commit}" 2>/dev/null; then
                 node --no-warnings scripts/plan-ci-runs.mjs --full
               else
                 node --no-warnings scripts/plan-ci-runs.mjs --base "$EVENT_BEFORE" --head "$HEAD_SHA"
