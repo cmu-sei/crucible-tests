@@ -37,7 +37,9 @@ async function gotoAdminSection(page: any, section: string) {
 
 for (const theme of BLUEPRINT_THEMES) {
     test.describe(`${theme} theme › User and Role Management`, () => {
-    test('Search Users', async ({ blueprintAuthenticatedPage: page }) => {
+    // nonAdminUser: a user row whose name doesn't match "admin", so the filter has
+    // something to hide even on a fresh database.
+    test('Search Users', async ({ blueprintAuthenticatedPage: page, nonAdminUser: _nonAdminUser }) => {
     await applyBlueprintTheme(page, theme);
       await expect(page).toHaveURL(serviceUrlPattern(Services.Blueprint.UI), { timeout: 10000 });
 

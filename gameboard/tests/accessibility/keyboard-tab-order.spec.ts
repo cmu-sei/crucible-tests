@@ -7,7 +7,7 @@
 import { test, expect, Services } from '../../fixtures';
 
 test.describe('Accessibility', () => {
-  test('Keyboard Navigation - Tab Order', async ({ gameboardAuthenticatedPage: page }) => {
+  test('Keyboard Navigation - Tab Order', async ({ gameboardAuthenticatedPage: page, readOnlyGame: _liveGame }) => {
     await page.goto(Services.Gameboard.UI + '/home', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('app-game-card').first()).toBeVisible();
     // Ensure something is focusable.

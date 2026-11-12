@@ -1,0 +1,16 @@
+[
+  {
+    "file": "alloy/tests/roles-and-permissions-management/create-system-role.spec.ts",
+    "title": "light theme > Roles and Permissions Management > Create System Role",
+    "requires": "terraform",
+    "reason": "Sample single-test skip for self-check",
+    "added": "2026-11-12"
+  },
+  {
+    "file": "cite/tests/admin/admin-create-group.spec.ts",
+    "title": "*",
+    "requires": "moodle",
+    "reason": "Sample whole-file skip for self-check",
+    "added": "2026-11-12"
+  }
+]

@@ -1,0 +1,291 @@
+# Copyright 2026 Carnegie Mellon University. All Rights Reserved.
+# Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
+
+# The CI stack: Postgres, Keycloak and every app's published cmusei/<app>:main image,
+# standing in for the crucible-development Aspire AppHost. Ports match .env.aspire,
+# so the tests run against it with CRUCIBLE_TARGET=ci (.env.ci).
+#
+# Run ci/stack/prepare.sh <crucible-development-dir> first: it writes the Keycloak
+# certificate, the realm files and the UI settings this file mounts from .generated/.
+# Start one app's slice with ci/stack/up.sh <app> (services per app: ci/slices.json).
+#
+# The APIs use the host network so that, like the Aspire projects, they reach
+# Keycloak at https://localhost:8443 - the issuer the browser sees - and Postgres at
+# localhost:5432. The UIs are static nginx and stay on the bridge network.
+
+# Its own project name, so it never collides with the containers of a local Aspire run.
+name: crucible-ci
+
+x-ca-bundle: &ca-bundle
+  # The runner's system CA bundle plus the self-signed Keycloak certificate. The chiseled
+  # .NET images have no update-ca-certificates; OpenSSL reads SSL_CERT_FILE instead.
+  type: bind
+  source: .generated/ca-bundle.pem
+  target: /ci-certs/ca-bundle.pem
+  read_only: true
+  bind:
+    create_host_path: false
+
+# Chiseled .NET images have no shell or curl, so the APIs get no container healthcheck;
+# wait.sh polls their /api/health/ready from the host instead.
+x-api: &api
+  network_mode: host
+  restart: on-failure:5
+  environment:
+    SSL_CERT_FILE: /ci-certs/ca-bundle.pem
+  volumes:
+    - *ca-bundle
+  depends_on:
+    postgres:
+      condition: service_healthy
+    keycloak-config:
+      condition: service_completed_successfully
+
+x-shared-ui-settings: &shared-ui-settings
+  type: bind
+  source: .generated/ui/settings.shared.json
+  target: /usr/share/nginx/html/assets/config/settings.shared.json
+  read_only: true
+  bind:
+    create_host_path: false
+
+services:
+  # ---------------------------------------------------------------- infrastructure
+
+  postgres:
+    image: postgres:17.6
+    environment:
+      POSTGRES_PASSWORD: crucible-ci
+    ports:
+      - "5432:5432"
+    volumes:
+      - type: bind
+        source: postgres/init.sql
+        target: /docker-entrypoint-initdb.d/init.sql
+        read_only: true
+    healthcheck:
+      # Over TCP: during first-run init the entrypoint's temporary server only listens
+      # on the Unix socket, so a socket check would pass before the APIs can connect.
+      test: ["CMD", "pg_isready", "-U", "postgres", "-h", "127.0.0.1"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.6
+    # The default dev-file database: the realm lives only as long as the container.
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_HOSTNAME: localhost
+      KC_HTTPS_PORT: "8443"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
+      KC_HEALTH_ENABLED: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HTTPS_CERTIFICATE_FILE: /opt/keycloak/conf/ci-certs/keycloak.crt
+      KC_HTTPS_CERTIFICATE_KEY_FILE: /opt/keycloak/conf/ci-certs/keycloak.key
+      JAVA_OPTS: -Xms256m -Xmx384m
+    ports:
+      # 8080 (plain HTTP, for keycloak-config) stays on the bridge network.
+      - "8443:8443"
+    volumes:
+      # Creates the realm with the seed users' fixed IDs (see prepare.sh);
+      # keycloak-config applies the rest of crucible-realm.json.
+      - type: bind
+        source: .generated/realm-bootstrap.json
+        target: /opt/keycloak/data/import/crucible-realm.json
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: .generated/keycloak.crt
+        target: /opt/keycloak/conf/ci-certs/keycloak.crt
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: .generated/keycloak.key
+        target: /opt/keycloak/conf/ci-certs/keycloak.key
+        read_only: true
+        bind:
+          create_host_path: false
+
+  # Applies crucible-realm.json to the crucible realm, then exits 0. Every API waits for it.
+  keycloak-config:
+    image: adorsys/keycloak-config-cli:6.5.1-26.5.5
+    restart: "no"
+    depends_on:
+      keycloak:
+        condition: service_started
+    environment:
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_USER: admin
+      KEYCLOAK_PASSWORD: admin
+      KEYCLOAK_AVAILABILITYCHECK_ENABLED: "true"
+      KEYCLOAK_AVAILABILITYCHECK_TIMEOUT: 300s
+      IMPORT_FILES_LOCATIONS: /config/crucible-realm.json
+    volumes:
+      - type: bind
+        source: .generated/realm.json
+        target: /config/crucible-realm.json
+        read_only: true
+        bind:
+          create_host_path: false
+
+  # ---------------------------------------------------------------- APIs
+
+  player-api:
+    <<: *api
+    image: cmusei/player-api:main
+    env_file: [env/crucible-api.env, env/player-api.env]
+    volumes:
+      - *ca-bundle
+      # View file uploads (FileUpload:basePath, relative to /app); the image's /app isn't writable.
+      - { type: tmpfs, target: /app/player, tmpfs: { mode: 0o1777 } }
+
+  vm-api:
+    <<: *api
+    image: cmusei/vm-api:main
+    env_file: [env/crucible-api.env, env/vm-api.env]
+
+  caster-api:
+    <<: *api
+    image: cmusei/caster-api:main
+    env_file: [env/crucible-api.env, env/caster-api.env]
+    volumes:
+      - *ca-bundle
+      # Terraform:RootWorkingDirectory and an empty Terraform:BinaryPath (caster-api.env):
+      # workspace directories and no installed Terraform versions; CI runs no Terraform.
+      - { type: tmpfs, target: /caster-root, tmpfs: { mode: 0o1777 } }
+      - { type: tmpfs, target: /terraform-binaries, tmpfs: { mode: 0o1777 } }
+
+  alloy-api:
+    <<: *api
+    image: cmusei/alloy-api:main
+    env_file:
+      - env/crucible-api.env
+      - env/alloy-api.env
+      # Written by prepare.sh; optional only so `docker compose config` works without it.
+      - path: .generated/alloy-api.secrets.env
+        required: false
+
+  steamfitter-api:
+    <<: *api
+    image: cmusei/steamfitter-api:main
+    env_file: [env/crucible-api.env, env/steamfitter-api.env]
+
+  cite-api:
+    <<: *api
+    image: cmusei/cite-api:main
+    env_file: [env/crucible-api.env, env/cite-api.env]
+
+  gallery-api:
+    <<: *api
+    image: cmusei/gallery-api:main
+    env_file: [env/crucible-api.env, env/gallery-api.env]
+
+  blueprint-api:
+    <<: *api
+    image: cmusei/blueprint-api:main
+    env_file: [env/crucible-api.env, env/blueprint-api.env]
+
+  topomojo-api:
+    <<: *api
+    image: cmusei/topomojo-api:main
+    env_file: [env/topomojo-api.env]
+    volumes:
+      - *ca-bundle
+      # Document images and ISOs (FileUpload:DocRoot/IsoRoot); the image's wwwroot is root-owned.
+      - { type: tmpfs, target: /home/app/wwwroot/docs, tmpfs: { mode: 0o1777 } }
+      - { type: tmpfs, target: /home/app/wwwroot/isos, tmpfs: { mode: 0o1777 } }
+
+  gameboard-api:
+    <<: *api
+    image: cmusei/gameboard-api:main
+    env_file:
+      - env/gameboard-api.env
+      # Written by prepare.sh; optional only so `docker compose config` works without it.
+      - path: .generated/gameboard-api.secrets.env
+        required: false
+
+  # ---------------------------------------------------------------- UIs
+  # Crucible UIs read assets/config/settings.env.json over the image's settings.json,
+  # plus settings.shared.json; both come from crucible-development via prepare.sh.
+
+  player-ui:
+    image: cmusei/player-ui:main
+    ports: ["4301:8080"]
+    volumes:
+      - { type: bind, source: .generated/ui/player.ui.json, target: /usr/share/nginx/html/assets/config/settings.env.json, read_only: true, bind: { create_host_path: false } }
+      - *shared-ui-settings
+
+  vm-ui:
+    image: cmusei/vm-ui:main
+    ports: ["4303:8080"]
+    volumes:
+      - { type: bind, source: .generated/ui/vm.ui.json, target: /usr/share/nginx/html/assets/config/settings.env.json, read_only: true, bind: { create_host_path: false } }
+      - *shared-ui-settings
+
+  console-ui:
+    image: cmusei/vm-console-ui:main
+    ports: ["4305:8080"]
+    volumes:
+      - { type: bind, source: .generated/ui/console.ui.json, target: /usr/share/nginx/html/assets/config/settings.env.json, read_only: true, bind: { create_host_path: false } }
+      - *shared-ui-settings
+
+  caster-ui:
+    image: cmusei/caster-ui:main
+    ports: ["4310:8080"]
+    volumes:
+      - { type: bind, source: .generated/ui/caster.ui.json, target: /usr/share/nginx/html/assets/config/settings.env.json, read_only: true, bind: { create_host_path: false } }
+      - *shared-ui-settings
+
+  alloy-ui:
+    image: cmusei/alloy-ui:main
+    ports: ["4403:8080"]
+    volumes:
+      - { type: bind, source: .generated/ui/alloy.ui.json, target: /usr/share/nginx/html/assets/config/settings.env.json, read_only: true, bind: { create_host_path: false } }
+      - *shared-ui-settings
+
+  steamfitter-ui:
+    image: cmusei/steamfitter-ui:main
+    ports: ["4401:8080"]
+    volumes:
+      - { type: bind, source: .generated/ui/steamfitter.ui.json, target: /usr/share/nginx/html/assets/config/settings.env.json, read_only: true, bind: { create_host_path: false } }
+      - *shared-ui-settings
+
+  cite-ui:
+    image: cmusei/cite-ui:main
+    ports: ["4721:8080"]
+    volumes:
+      - { type: bind, source: .generated/ui/cite.ui.json, target: /usr/share/nginx/html/assets/config/settings.env.json, read_only: true, bind: { create_host_path: false } }
+      - *shared-ui-settings
+
+  gallery-ui:
+    image: cmusei/gallery-ui:main
+    ports: ["4723:8080"]
+    volumes:
+      - { type: bind, source: .generated/ui/gallery.ui.json, target: /usr/share/nginx/html/assets/config/settings.env.json, read_only: true, bind: { create_host_path: false } }
+      - *shared-ui-settings
+
+  blueprint-ui:
+    image: cmusei/blueprint-ui:main
+    ports: ["4725:8080"]
+    volumes:
+      - { type: bind, source: .generated/ui/blueprint.ui.json, target: /usr/share/nginx/html/assets/config/settings.env.json, read_only: true, bind: { create_host_path: false } }
+      - *shared-ui-settings
+
+  # Gameboard and TopoMojo UIs are plain nginx on port 80 and read assets/settings.json.
+  gameboard-ui:
+    image: cmusei/gameboard-ui:main
+    ports: ["4202:80"]
+    volumes:
+      - { type: bind, source: .generated/ui/gameboard.ui.json, target: /var/www/assets/settings.json, read_only: true, bind: { create_host_path: false } }
+
+  # The image serves topomojo-work at / (and the launchpoint at /lp).
+  topomojo-ui:
+    image: cmusei/topomojo-ui:main
+    ports: ["4201:80"]
+    volumes:
+      - { type: bind, source: .generated/ui/topomojo.ui.json, target: /var/www/assets/settings.json, read_only: true, bind: { create_host_path: false } }

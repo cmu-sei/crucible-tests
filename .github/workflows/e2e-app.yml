@@ -1,0 +1,184 @@
+# Copyright 2026 Carnegie Mellon University. All Rights Reserved.
+# Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
+
+name: E2E per-app
+
+on:
+  workflow_call:
+    inputs:
+      app:
+        description: 'App name to test'
+        required: true
+        type: string
+      specs:
+        description: 'Space-separated spec paths or <app>/tests/'
+        required: true
+        type: string
+      full:
+        description: 'Run full evaluation'
+        required: false
+        type: boolean
+        default: false
+      confirm:
+        description: 'Confirming rerun of specific failures'
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      DOCKERHUB_USERNAME:
+        required: false
+      DOCKERHUB_PASSWORD:
+        required: false
+
+# Nothing by default; the job grants what it needs (and never more than its caller grants).
+permissions: {}
+
+jobs:
+  run:
+    name: e2e (${{ inputs.app }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+
+    steps:
+      - name: Check out this repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check out crucible-development
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: cmu-sei/crucible-development
+          ref: main
+          path: crucible-development
+          sparse-checkout: |
+            Crucible.AppHost/resources
+            Crucible.AppHost/KeycloakRealmBootstrap.cs
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Log in to Docker Hub
+        if: env.DOCKERHUB_USERNAME != ''
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
+      - name: Prepare stack
+        run: ci/stack/prepare.sh crucible-development
+
+      - name: Start app slice
+        env:
+          APP_NAME: ${{ inputs.app }}
+        run: ci/stack/up.sh "$APP_NAME"
+
+      # Every image is pulled by now, so drop the Docker Hub credentials before any test
+      # code runs. Runs after a failed start too.
+      - name: Log out of Docker Hub
+        if: always() && env.DOCKERHUB_USERNAME != ''
+        run: docker logout
+
+      # Also after a failed start: the images that were pulled are what a "suite did not
+      # run" issue compares with the last clean weekly run.
+      - name: Record image digests
+        if: always()
+        run: ci/stack/digests.sh >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Run tests
+        env:
+          CI: true
+          CRUCIBLE_TARGET: ci
+          CRUCIBLE_BROWSERS: chromium
+          SPEC_PATHS: ${{ inputs.specs }}
+        run: |
+          # shellcheck disable=SC2086
+          npx playwright test $SPEC_PATHS
+        continue-on-error: true
+
+      - name: Evaluate results
+        if: always()
+        env:
+          APP_NAME: ${{ inputs.app }}
+          FULL_EVAL: ${{ inputs.full }}
+          SPEC_PATHS: ${{ inputs.specs }}
+        run: |
+          args=(
+            --results test-results/results.json
+            --known ci/known-failures.json
+            --skip ci/skip-in-ci.json
+            --app "$APP_NAME"
+          )
+
+          if [[ "$FULL_EVAL" == "true" ]] || [[ "$SPEC_PATHS" == "$APP_NAME/tests/" ]]; then
+            args+=(--full)
+          fi
+
+          node --no-warnings scripts/evaluate-ci-results.mjs "${args[@]}"
+
+      - name: Capture stack logs
+        if: failure() || always()
+        run: docker compose -f ci/stack/compose.yaml logs --no-color > stack-logs.txt
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ inputs.confirm && format('e2e-confirm-{0}', inputs.app) || format('e2e-{0}', inputs.app) }}
+          path: |
+            playwright-report/
+            test-results/
+            stack-logs.txt
+          retention-days: 14
+
+      # download-artifact extracts a lone pattern match straight into its path, but
+      # several into <path>/<name>/. So each artifact carries its own <name>/ folder,
+      # and e2e.yml downloads them with merge-multiple: true: the layout is then
+      # <path>/<name>/<file> however many artifacts match.
+      - name: Stage evaluation and digest artifacts
+        if: always()
+        env:
+          EVAL_NAME: ${{ inputs.confirm && format('e2e-eval-confirm-{0}', inputs.app) || format('e2e-eval-{0}', inputs.app) }}
+          DIGESTS_NAME: e2e-digests-${{ inputs.app }}
+        run: |
+          mkdir -p "ci-artifacts/eval/$EVAL_NAME" "ci-artifacts/digests/$DIGESTS_NAME"
+          if [[ -f test-results/ci-evaluation.json ]]; then
+            cp test-results/ci-evaluation.json "ci-artifacts/eval/$EVAL_NAME/"
+          fi
+          if [[ -f ci-artifacts/digests.json ]]; then
+            cp ci-artifacts/digests.json "ci-artifacts/digests/$DIGESTS_NAME/"
+          fi
+
+      - name: Upload evaluation result
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ inputs.confirm && format('e2e-eval-confirm-{0}', inputs.app) || format('e2e-eval-{0}', inputs.app) }}
+          path: ci-artifacts/eval/
+          retention-days: 3
+
+      - name: Upload digest snapshot
+        if: always() && !inputs.confirm
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-digests-${{ inputs.app }}
+          path: ci-artifacts/digests/
+          retention-days: 90
+
+      - name: Clean up
+        if: always()
+        run: docker compose -f ci/stack/compose.yaml down -v

@@ -1,0 +1,35 @@
+{
+  "alloy": {
+    "services": ["alloy-api", "alloy-ui", "player-api", "vm-api", "caster-api", "steamfitter-api"]
+  },
+  "blueprint": {
+    "services": ["blueprint-api", "blueprint-ui", "caster-api", "caster-ui", "player-api", "player-ui", "vm-api", "gallery-api", "cite-api", "steamfitter-api"]
+  },
+  "caster": {
+    "services": ["caster-api", "caster-ui", "player-api", "vm-api", "alloy-api", "alloy-ui"]
+  },
+  "cite": {
+    "services": ["cite-api", "cite-ui", "gallery-api", "gallery-ui"]
+  },
+  "console": {
+    "services": ["player-api", "player-ui", "vm-api", "vm-ui", "console-ui"]
+  },
+  "gallery": {
+    "services": ["gallery-api", "gallery-ui"]
+  },
+  "gameboard": {
+    "services": ["gameboard-api", "gameboard-ui", "topomojo-api"]
+  },
+  "player": {
+    "services": ["player-api", "player-ui", "vm-api", "vm-ui", "alloy-ui"]
+  },
+  "playerVm": {
+    "services": ["player-api", "player-ui", "vm-api", "vm-ui", "console-ui"]
+  },
+  "steamfitter": {
+    "services": ["steamfitter-api", "steamfitter-ui", "player-api", "vm-api", "vm-ui"]
+  },
+  "topomojo": {
+    "services": ["topomojo-api", "topomojo-ui"]
+  }
+}
