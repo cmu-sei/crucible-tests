@@ -78,7 +78,7 @@ const lastCleanDigests = lastCleanDigestsPath && existsSync(lastCleanDigestsPath
 
 const diff = digestDiff(currentDigests, lastCleanDigests);
 const mention = mentionFor(repo);
-const ctx = { runUrl, mention };
+const ctx = { runUrl, mention, hasLastClean: lastCleanDigests !== null };
 
 // Render both issue and recurrence bodies
 // The shell script will choose which to use based on whether an issue exists

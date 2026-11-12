@@ -78,6 +78,11 @@ const CASES = [
     (r) => r && r.body.includes('no earlier clean run to compare'),
   ],
   [
+    'renderRegressionIssue with a clean run but no diff → says no image changed',
+    () => renderRegressionIssue('cite', [A], [], { ...ctx, hasLastClean: true }),
+    (r) => r && r.body.includes('No image digest changed') && !r.body.includes('no earlier clean run'),
+  ],
+  [
     'renderRegressionIssue details block → parses and passes lintLists (except TODO)',
     () => renderRegressionIssue('cite', [A, B], [], ctx),
     (r) => {

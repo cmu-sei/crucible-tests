@@ -62,7 +62,8 @@ export function mentionFor(repo) {
  * @param {string} app - App name
  * @param {Array<{file: string, title: string}>} keys - Failing test keys
  * @param {Array<{service: string, from: string|null, to: string}>} diff - Image digest changes
- * @param {{runUrl: string, mention: string}} ctx
+ * @param {{runUrl: string, mention: string, hasLastClean?: boolean}} ctx - hasLastClean: an
+ *   earlier clean weekly run was found, so an empty diff means no image changed
  * @returns {{title: string, body: string}}
  */
 export function renderRegressionIssue(app, keys, diff, ctx) {
@@ -86,7 +87,9 @@ export function renderRegressionIssue(app, keys, diff, ctx) {
   lines.push('');
 
   if (diff.length === 0) {
-    lines.push('no earlier clean run to compare');
+    lines.push(ctx.hasLastClean
+      ? 'No image digest changed since the last clean weekly run.'
+      : 'no earlier clean run to compare');
   } else {
     lines.push('| Service | From | To |');
     lines.push('|---|---|---|');
