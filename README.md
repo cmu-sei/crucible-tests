@@ -210,7 +210,9 @@ Documents app bugs. Tests on this list **still run in CI** but do not block the 
 - `title` — the full test title (including `describe` block prefixes, joined with ` › `)
 - `issue` — a GitHub issue URL or short description of the bug
 
-When a known failure starts passing, CI leaves a comment on the PR reminding you to remove the entry. To add a known failure:
+When a known failure starts passing, CI leaves a sticky comment on the PR reminding you to remove the entry. The comment lists all now-passing tests grouped by app, shows the reason and tracking link from each list entry, and includes a JSON block with the exact entries to delete. CI never edits the list itself — you must remove the entries manually. On the next run after removal, the comment updates to indicate the issue is resolved. Fork PRs and non-PR runs do not post comments; those runs report now-passing tests only in the job summary.
+
+To add a known failure:
 
 1. Confirm the test fails due to a documented app bug (not test code or missing CI infrastructure)
 2. Add an entry to `ci/known-failures.json` with the exact spec path and title

@@ -108,3 +108,49 @@ jobs:
           PLAN_RESULT: ${{ needs.plan.result }}
           E2E_RESULT: ${{ needs.e2e.result }}
         run: bash ci/result-gate.sh "$PLAN_RESULT" "$E2E_RESULT"
+
+  pr-comment:
+    name: PR Comment
+    runs-on: ubuntu-24.04
+    needs: [plan, e2e]
+    if: always() && github.event_name == 'pull_request' && needs.plan.outputs.has_runs == 'true' && github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+
+      - name: Download artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: e2e-eval-*
+          path: artifacts
+          merge-multiple: false
+
+      - name: Render comment
+        env:
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SHA: ${{ github.sha }}
+        run: |
+          node --no-warnings scripts/render-pr-comment.mjs \
+            --dir artifacts \
+            --run-url "$RUN_URL" \
+            --sha "$SHA" > body.md
+
+      - name: Post or update comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if [[ -s body.md ]]; then
+            bash ci/pr-comment.sh "$PR_NUMBER" body.md
+          else
+            bash ci/pr-comment.sh "$PR_NUMBER" -
+          fi
