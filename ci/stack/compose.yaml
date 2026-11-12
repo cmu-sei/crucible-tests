@@ -139,6 +139,10 @@ services:
     <<: *api
     image: cmusei/player-api:main
     env_file: [env/crucible-api.env, env/player-api.env]
+    volumes:
+      - *ca-bundle
+      # View file uploads (FileUpload:basePath, relative to /app); the image's /app isn't writable.
+      - { type: tmpfs, target: /app/player, tmpfs: { mode: 0o1777 } }
 
   vm-api:
     <<: *api
@@ -149,6 +153,10 @@ services:
     <<: *api
     image: cmusei/caster-api:main
     env_file: [env/crucible-api.env, env/caster-api.env]
+    volumes:
+      - *ca-bundle
+      # Terraform:RootWorkingDirectory (caster-api.env): workspace directories, no Terraform runs.
+      - { type: tmpfs, target: /caster-root, tmpfs: { mode: 0o1777 } }
 
   alloy-api:
     <<: *api
@@ -184,6 +192,11 @@ services:
     <<: *api
     image: cmusei/topomojo-api:main
     env_file: [env/topomojo-api.env]
+    volumes:
+      - *ca-bundle
+      # Document images and ISOs (FileUpload:DocRoot/IsoRoot); the image's wwwroot is root-owned.
+      - { type: tmpfs, target: /home/app/wwwroot/docs, tmpfs: { mode: 0o1777 } }
+      - { type: tmpfs, target: /home/app/wwwroot/isos, tmpfs: { mode: 0o1777 } }
 
   gameboard-api:
     <<: *api

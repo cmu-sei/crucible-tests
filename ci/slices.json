@@ -3,7 +3,7 @@
     "services": ["alloy-api", "alloy-ui", "player-api", "vm-api", "caster-api", "steamfitter-api"]
   },
   "blueprint": {
-    "services": ["blueprint-api", "blueprint-ui", "caster-api", "caster-ui", "player-api", "vm-api", "gallery-api", "cite-api", "steamfitter-api"]
+    "services": ["blueprint-api", "blueprint-ui", "caster-api", "caster-ui", "player-api", "player-ui", "vm-api", "gallery-api", "cite-api", "steamfitter-api"]
   },
   "caster": {
     "services": ["caster-api", "caster-ui", "player-api", "vm-api", "alloy-api", "alloy-ui"]
