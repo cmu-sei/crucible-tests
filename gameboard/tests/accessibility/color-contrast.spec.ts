@@ -11,7 +11,7 @@ import { test, expect, Services } from '../../fixtures';
 // color-contrast violations. Warnings at serious/moderate impact are not
 // failed; the intent is to catch blocking WCAG AA violations.
 test.describe('Accessibility', () => {
-  test('Color Contrast Compliance', async ({ gameboardAuthenticatedPage: page }) => {
+  test('Color Contrast Compliance', async ({ gameboardAuthenticatedPage: page, readOnlyGame: _liveGame }) => {
     await page.goto(Services.Gameboard.UI + '/home', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('app-game-card').first()).toBeVisible();
 
