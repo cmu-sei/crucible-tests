@@ -463,8 +463,14 @@
   },
   {
     "file": "player/tests/errors/non-existent-view.spec.ts",
+    "title": "dark theme › Error Handling and Edge Cases › Navigate to Non-Existent View",
+    "reason": "Opening a view that does not exist runs the failed lookup twice and opens two View Not Found bottom sheets, so the heading is briefly duplicated (strict mode violation); intermittent in both themes, failed in the Aspire run and in a fork CI run.",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "player/tests/errors/non-existent-view.spec.ts",
     "title": "light theme › Error Handling and Edge Cases › Navigate to Non-Existent View",
-    "reason": "Opening a view id that does not exist shows no 'View Not Found' heading (failed in the Aspire run).",
+    "reason": "Opening a view that does not exist runs the failed lookup twice and opens two View Not Found bottom sheets, so the heading is briefly duplicated (strict mode violation); intermittent in both themes, failed in the Aspire run and in a fork CI run.",
     "added": "2026-11-11"
   },
   {
