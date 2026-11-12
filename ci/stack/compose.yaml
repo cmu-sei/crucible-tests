@@ -155,8 +155,10 @@ services:
     env_file: [env/crucible-api.env, env/caster-api.env]
     volumes:
       - *ca-bundle
-      # Terraform:RootWorkingDirectory (caster-api.env): workspace directories, no Terraform runs.
+      # Terraform:RootWorkingDirectory and an empty Terraform:BinaryPath (caster-api.env):
+      # workspace directories and no installed Terraform versions; CI runs no Terraform.
       - { type: tmpfs, target: /caster-root, tmpfs: { mode: 0o1777 } }
+      - { type: tmpfs, target: /terraform-binaries, tmpfs: { mode: 0o1777 } }
 
   alloy-api:
     <<: *api
