@@ -52,9 +52,10 @@ fi
 
 MARKER="<!-- crucible-tests:e2e-regression:$APP -->"
 
-# Find existing issue by marker
-EXISTING_ISSUE=$(gh issue list --repo "$REPO" --label "$LABEL" --state open --json number,body --jq ".[] | select(.body | contains(\"$MARKER\")) | .number" | head -n 1 || true)
-EXISTING_ISSUE="${EXISTING_ISSUE// /}"  # Trim whitespace
+# Find the existing issue by marker. A failed lookup aborts here: guessing "no issue"
+# would open a duplicate.
+EXISTING_ISSUE=$(gh issue list --repo "$REPO" --label "$LABEL" --state open --limit 200 --json number,body \
+  --jq "[.[] | select(.body | contains(\"$MARKER\")) | .number] | first // empty")
 
 # Determine action
 if [[ "$BODY_ARG" == "--recovered" ]]; then

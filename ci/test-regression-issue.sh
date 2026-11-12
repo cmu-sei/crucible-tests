@@ -23,6 +23,10 @@ echo "$*" >> "${GH_LOG}"
 
 # Simulate gh responses
 if [[ "$1" == "issue" && "$2" == "list" ]]; then
+  if [[ "${LOOKUP_FAIL:-}" == "1" ]]; then
+    echo "HTTP 502: Bad Gateway" >&2
+    exit 1
+  fi
   if [[ "${EXISTING_ISSUE:-}" == "1" ]]; then
     JSON='[{"number": 456, "body": "<!-- crucible-tests:e2e-regression:cite -->\\nOld content"}]'
   else
@@ -192,6 +196,26 @@ test_real "no action when no issue and recovered" "0" "1" "--recovered $TEMP_DIR
 test_real "create with missing label" "0" "0" "$TEMP_DIR/body.json" \
   "Created regression issue" \
   "label create e2e-regression" "issue create"
+
+# A failed issue lookup must fail the script without creating, commenting or closing
+for call_args in "$TEMP_DIR/body.json" "--recovered $TEMP_DIR/recovered.txt"; do
+  > "$GH_LOG"
+  export EXISTING_ISSUE=0 LABEL_EXISTS=1 LOOKUP_FAIL=1
+  unset REGRESSION_ISSUE_DRY_RUN
+  status=0
+  output=$(eval "$SCRIPT_DIR/regression-issue.sh cite $call_args" 2>&1) || status=$?
+  if [[ $status -ne 0 ]] && ! grep -qE "^issue (create|comment|close)" "$GH_LOG"; then
+    echo "✓ REAL: failed lookup exits non-zero without writing ($call_args)"
+    PASS=$((PASS + 1))
+  else
+    echo "✗ REAL: failed lookup exits non-zero without writing ($call_args)"
+    echo "  Exit: $status"
+    echo "  Output: $output"
+    cat "$GH_LOG"
+    FAIL=$((FAIL + 1))
+  fi
+  unset LOOKUP_FAIL
+done
 
 # Report
 echo ""
