@@ -84,7 +84,7 @@ echo "$output"
 echo "---"
 
 if [[ $status -ne 0 ]]; then pass "timeout: wait.sh exits non-zero ($status)"; else fail "timeout: wait.sh exited 0 for a service that never became ready"; fi
-if [[ $elapsed -ge 4 && $elapsed -lt 16 ]]; then pass "timeout: wait.sh gave up after its timeout (${elapsed}s)"; else fail "timeout: wait.sh took ${elapsed}s (expected 4-15s)"; fi
+if [[ $elapsed -ge 6 && $elapsed -lt 16 ]]; then pass "timeout: wait.sh gave up after its timeout (${elapsed}s)"; else fail "timeout: wait.sh took ${elapsed}s (expected 6-15s)"; fi
 if grep -q 'not ready after 6s: hangy' <<<"$output"; then pass "timeout: output names the service"; else fail "timeout: output does not name hangy"; fi
 if grep -Eq '^hangy-1 +\| hangy: still starting' <<<"$output"; then
   pass "timeout: output contains the hangy service's log lines"

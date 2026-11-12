@@ -222,7 +222,7 @@ while :; do
         fi
         docker compose restart "$service" >/dev/null 2>&1
         restarted[$service]=yes
-        # Reset first_running so we measure from the restart
+        # Reset first_running so the stall clock restarts at the restart command
         first_running[$service]=$SECONDS
       fi
     fi
@@ -235,7 +235,7 @@ while :; do
     echo "all services ready ($((SECONDS - start))s)"
     exit 0
   fi
-  if (( SECONDS + POLL_SECONDS > deadline )); then
+  if (( SECONDS >= deadline )); then
     echo "FAIL: not ready after ${TIMEOUT}s: ${pending[*]}"
     for service in "${pending[@]}"; do
       read -r status exit_code health <<<"$(container_state "$service")"
@@ -244,5 +244,8 @@ while :; do
     dump_logs "${pending[@]}"
     exit 1
   fi
-  sleep "$POLL_SECONDS"
+  # Sleep only the remaining time if we're close to the deadline
+  time_left=$((deadline - SECONDS))
+  sleep_duration=$((time_left < POLL_SECONDS ? time_left : POLL_SECONDS))
+  sleep "$sleep_duration"
 done
