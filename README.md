@@ -236,6 +236,7 @@ Examples of infrastructure CI cannot provide:
 - Caster Terraform plan/apply to live cloud resources
 - VM console connections and hypervisor API calls
 - Gameboard challenge deployment and scoring engine interaction
+- Angular development-build debug APIs (the `:main` images are production builds)
 
 To add a skip entry:
 

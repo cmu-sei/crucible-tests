@@ -1,1 +1,548 @@
-[]
+[
+  {
+    "file": "alloy/tests/accessibility-and-usability/focus-management-in-dialogs.spec.ts",
+    "title": "dark theme › Accessibility and Usability › Focus Management in Dialogs",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/accessibility-and-usability/focus-management-in-dialogs.spec.ts",
+    "title": "light theme › Accessibility and Usability › Focus Management in Dialogs",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/accessibility-and-usability/loading-states-and-feedback.spec.ts",
+    "title": "dark theme › Accessibility and Usability › Loading States and Feedback",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/accessibility-and-usability/loading-states-and-feedback.spec.ts",
+    "title": "light theme › Accessibility and Usability › Loading States and Feedback",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/accessibility-and-usability/screen-reader-compatibility.spec.ts",
+    "title": "dark theme › Accessibility and Usability › Screen Reader Compatibility",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/accessibility-and-usability/screen-reader-compatibility.spec.ts",
+    "title": "light theme › Accessibility and Usability › Screen Reader Compatibility",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/accessibility-and-usability/theme-contrast-compliance.spec.ts",
+    "title": "dark theme › Accessibility and Usability › Primary and on-primary text contrast (WCAG 1.4.3)",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/accessibility-and-usability/theme-contrast-compliance.spec.ts",
+    "title": "light theme › Accessibility and Usability › Primary and on-primary text contrast (WCAG 1.4.3)",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/error-handling-and-validation/api-error-display.spec.ts",
+    "title": "dark theme › Error Handling and Validation › API Error Display",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/error-handling-and-validation/api-error-display.spec.ts",
+    "title": "light theme › Error Handling and Validation › API Error Display",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/error-handling-and-validation/data-type-validation.spec.ts",
+    "title": "dark theme › Error Handling and Validation › Data Type Validation",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/error-handling-and-validation/data-type-validation.spec.ts",
+    "title": "light theme › Error Handling and Validation › Data Type Validation",
+    "reason": "Duration Hours does not keep a typed value of 5 (failed the same way in the Aspire run).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/error-handling-and-validation/required-field-validation.spec.ts",
+    "title": "dark theme › Error Handling and Validation › Required Field Validation",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/error-handling-and-validation/required-field-validation.spec.ts",
+    "title": "light theme › Error Handling and Validation › Required Field Validation",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/event-templates-management/clone-event-template.spec.ts",
+    "title": "dark theme › Event Templates Management › Clone Event Template",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/event-templates-management/clone-event-template.spec.ts",
+    "title": "light theme › Event Templates Management › Clone Event Template",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/event-templates-management/create-new-event-template.spec.ts",
+    "title": "dark theme › Event Templates Management › Create New Event Template",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/event-templates-management/create-new-event-template.spec.ts",
+    "title": "light theme › Event Templates Management › Create New Event Template",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/event-templates-management/delete-event-template.spec.ts",
+    "title": "dark theme › Event Templates Management › Delete Event Template",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/event-templates-management/delete-event-template.spec.ts",
+    "title": "light theme › Event Templates Management › Delete Event Template",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/event-templates-management/edit-event-template.spec.ts",
+    "title": "dark theme › Event Templates Management › Edit Event Template",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/event-templates-management/edit-event-template.spec.ts",
+    "title": "light theme › Event Templates Management › Edit Event Template",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/event-templates-management/event-template-form-validation.spec.ts",
+    "title": "dark theme › Event Templates Management › Event Template Form Validation",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/event-templates-management/event-template-form-validation.spec.ts",
+    "title": "light theme › Event Templates Management › Event Template Form Validation",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/event-templates-management/export-and-import-event-templates.spec.ts",
+    "title": "dark theme › Event Templates Management › Export and Import Event Templates",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/event-templates-management/export-and-import-event-templates.spec.ts",
+    "title": "dark theme › Event Templates Management › Import a JSON array of Event Templates",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/event-templates-management/export-and-import-event-templates.spec.ts",
+    "title": "light theme › Event Templates Management › Export and Import Event Templates",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/event-templates-management/export-and-import-event-templates.spec.ts",
+    "title": "light theme › Event Templates Management › Import a JSON array of Event Templates",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/event-templates-management/public-template-configuration.spec.ts",
+    "title": "dark theme › Event Templates Management › Public Template Configuration",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/event-templates-management/public-template-configuration.spec.ts",
+    "title": "light theme › Event Templates Management › Public Template Configuration",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/event-templates-management/publish-and-unpublish-event-template.spec.ts",
+    "title": "dark theme › Event Templates Management › Publish and Unpublish Event Template",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/event-templates-management/publish-and-unpublish-event-template.spec.ts",
+    "title": "light theme › Event Templates Management › Publish and Unpublish Event Template",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/event-templates-management/search-and-filter-event-templates.spec.ts",
+    "title": "dark theme › Event Templates Management › Search and Filter Event Templates",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/event-templates-management/search-and-filter-event-templates.spec.ts",
+    "title": "light theme › Event Templates Management › Search and Filter Event Templates",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/event-templates-management/use-dynamic-host-configuration.spec.ts",
+    "title": "dark theme › Event Templates Management › Use Dynamic Host Configuration",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/event-templates-management/use-dynamic-host-configuration.spec.ts",
+    "title": "light theme › Event Templates Management › Use Dynamic Host Configuration",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/event-templates-management/view-event-template-details.spec.ts",
+    "title": "dark theme › Event Templates Management › View Event Template Details",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/event-templates-management/view-event-template-details.spec.ts",
+    "title": "light theme › Event Templates Management › View Event Template Details",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/event-templates-management/view-event-template-history.spec.ts",
+    "title": "dark theme › Event Templates Management › View Event Template History",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/event-templates-management/view-event-template-history.spec.ts",
+    "title": "light theme › Event Templates Management › View Event Template History",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/integration-points/caster-integration-directory-selection.spec.ts",
+    "title": "dark theme › Integration Points › Caster Integration - Directory Selection",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/integration-points/caster-integration-directory-selection.spec.ts",
+    "title": "light theme › Integration Points › Caster Integration - Directory Selection",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/integration-points/player-integration-view-selection.spec.ts",
+    "title": "dark theme › Integration Points › Player Integration - View Selection",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/integration-points/player-integration-view-selection.spec.ts",
+    "title": "light theme › Integration Points › Player Integration - View Selection",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/integration-points/steamfitter-integration-scenario-template-selection.spec.ts",
+    "title": "dark theme › Integration Points › Steamfitter Integration - Scenario Template Selection",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "alloy/tests/integration-points/steamfitter-integration-scenario-template-selection.spec.ts",
+    "title": "light theme › Integration Points › Steamfitter Integration - Scenario Template Selection",
+    "reason": "Test out of date with the :main image: Alloy.Ui PR 736 renamed the dialog to \"Add Event Template\". Updated by upstream crucible-tests PR 110 (test/alloy-steamfitter-wording).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "blueprint/tests/admin-gallery-and-cite/cite-actions.spec.ts",
+    "title": "dark theme › CITE Actions › New MSEL CITE Action Fans Out Across All Teams And Moves",
+    "reason": "The MSEL page has no CITE Actions section to open (failed the same way in the Aspire run).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "blueprint/tests/admin-gallery-and-cite/cite-actions.spec.ts",
+    "title": "light theme › CITE Actions › New MSEL CITE Action Fans Out Across All Teams And Moves",
+    "reason": "The MSEL page has no CITE Actions section to open (failed the same way in the Aspire run).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "blueprint/tests/admin-gallery-and-cite/cite-duties.spec.ts",
+    "title": "dark theme › CITE Duties › New MSEL CITE Duty Fans Out Across All Teams",
+    "reason": "The MSEL page has no CITE Duties section to open (failed the same way in the Aspire run).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "blueprint/tests/admin-gallery-and-cite/cite-duties.spec.ts",
+    "title": "light theme › CITE Duties › New MSEL CITE Duty Fans Out Across All Teams",
+    "reason": "The MSEL page has no CITE Duties section to open (failed the same way in the Aspire run).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "blueprint/tests/data-fields-and-options/data-option-list-dialog.spec.ts",
+    "title": "dark theme › Data Fields and Options › From the grid’s Options cell, options can be browsed but not changed",
+    "reason": "Test out of date with the :main image: it expects the TypeError alert the Options cell used to raise, which :main no longer shows.",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "blueprint/tests/data-fields-and-options/data-option-list-dialog.spec.ts",
+    "title": "light theme › Data Fields and Options › From the grid’s Options cell, options can be browsed but not changed",
+    "reason": "Test out of date with the :main image: it expects the TypeError alert the Options cell used to raise, which :main no longer shows.",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "blueprint/tests/error-handling-and-validation/unauthorized-action-handling.spec.ts",
+    "title": "Error Handling and Validation › Unauthorized Action Handling › User without permissions is shown no privileged controls",
+    "reason": "A user without permissions is still shown the BUILD mission card (failed the same way in the Aspire run).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "blueprint/tests/integration-with-crucible-services/api-integration-blueprint-api-endpoints.spec.ts",
+    "title": "dark theme › Integration with Crucible Services › API Integration - Blueprint API Endpoints",
+    "reason": "Without an xAPI LRS, GET xapi/viewed/msel answers 200 with no body and GET msels/{id}/scoringmodel answers 204, and the test requires every response to be JSON. Passed in the Aspire run.",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "blueprint/tests/integration-with-crucible-services/api-integration-blueprint-api-endpoints.spec.ts",
+    "title": "light theme › Integration with Crucible Services › API Integration - Blueprint API Endpoints",
+    "reason": "Without an xAPI LRS, GET xapi/viewed/msel answers 200 with no body and GET msels/{id}/scoringmodel answers 204, and the test requires every response to be JSON. Passed in the Aspire run.",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "blueprint/tests/player-applications/player-application-teams.spec.ts",
+    "title": "dark theme › Player Application Teams › Search the available MSEL teams",
+    "reason": "Searching the available MSEL teams times out on the team list in the dark theme (failed in the Aspire run).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "blueprint/tests/reordering/data-field-drag-reorder.spec.ts",
+    "title": "dark theme › Data Fields Drag and Drop Reordering › Dragging a data field to a new position reorders the list and persists",
+    "reason": "Dragging a data field does not persist the new order in the dark theme (failed in the Aspire run).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "blueprint/tests/scenario-events-management/scenario-event-color-coding.spec.ts",
+    "title": "light theme › Scenario Events Management › Scenario Event Color Coding",
+    "reason": "Scenario event rows are not given their highlight color (failed in the Aspire run).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "blueprint/tests/search-and-filtering/advanced-search-with-multiple-criteria.spec.ts",
+    "title": "dark theme › Search and Filtering › Advanced Search with Multiple Criteria",
+    "reason": "Combining search criteria returns no events in the dark theme (failed in the Aspire run).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "blueprint/tests/teams-and-organizations-management/delete-team.spec.ts",
+    "title": "dark theme › Teams and Organizations Management › Delete Team",
+    "reason": "Test out of date with the :main image: the Delete Team confirmation uses the standard Cancel / Delete buttons, not NO.",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "blueprint/tests/teams-and-organizations-management/delete-team.spec.ts",
+    "title": "light theme › Teams and Organizations Management › Delete Team",
+    "reason": "Test out of date with the :main image: the Delete Team confirmation uses the standard Cancel / Delete buttons, not NO.",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "cite/tests/performance/memory-usage-extended-session.spec.ts",
+    "title": "dark theme › Performance › Memory Usage - Extended Session",
+    "reason": "The 'Move N of M' label does not appear during the extended session in the dark theme (failed in the Aspire run).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "console/tests/accessibility/theme-contrast-compliance.spec.ts",
+    "title": "dark theme › Responsive Design and Accessibility › Dark Theme switch contrast (WCAG 1.4.11)",
+    "reason": "Dark theme contrast is below WCAG AA (primary-colored labels and the Dark Theme switch track); failed the same way in the Aspire run.",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "console/tests/accessibility/theme-contrast-compliance.spec.ts",
+    "title": "dark theme › Responsive Design and Accessibility › Primary and on-primary text contrast (WCAG 1.4.3)",
+    "reason": "Dark theme contrast is below WCAG AA (primary-colored labels and the Dark Theme switch track); failed the same way in the Aspire run.",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "gallery/tests/edge-cases/download-upload-roundtrip.spec.ts",
+    "title": "dark theme › Edge Cases and Negative Testing › Exhibit Download Upload Round Trip",
+    "reason": "Test out of date with the :main image: Gallery.Api PR 96 names an uploaded copy \"<name> - <user>\", so the round-tripped name differs.",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "gallery/tests/edge-cases/download-upload-roundtrip.spec.ts",
+    "title": "light theme › Edge Cases and Negative Testing › Exhibit Download Upload Round Trip",
+    "reason": "Test out of date with the :main image: Gallery.Api PR 96 names an uploaded copy \"<name> - <user>\", so the round-tripped name differs.",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "gallery/tests/edge-cases/non-existent-resources.spec.ts",
+    "title": "dark theme › Edge Cases and Negative Testing › Navigation to Non-Existent Resources",
+    "reason": "Test out of date with the :main image: the unmatched-route message now reads \"Error NG04002: 'invalid-route'\" instead of the full Angular router text.",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "gallery/tests/edge-cases/non-existent-resources.spec.ts",
+    "title": "light theme › Edge Cases and Negative Testing › Navigation to Non-Existent Resources",
+    "reason": "Test out of date with the :main image: the unmatched-route message now reads \"Error NG04002: 'invalid-route'\" instead of the full Angular router text.",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "gallery/tests/exhibits/delete-exhibit.spec.ts",
+    "title": "dark theme › Exhibit Management › Delete Exhibit",
+    "reason": "Test out of date with the :main image: the delete confirmation now names the exhibit (\"Delete Exhibit ...\"), so getByText(\"Delete Exhibit\") matches the title and the message.",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "gallery/tests/exhibits/delete-exhibit.spec.ts",
+    "title": "light theme › Exhibit Management › Delete Exhibit",
+    "reason": "Test out of date with the :main image: the delete confirmation now names the exhibit (\"Delete Exhibit ...\"), so getByText(\"Delete Exhibit\") matches the title and the message.",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "gallery/tests/exhibits/null-name-card-teams-panel.spec.ts",
+    "title": "light theme › Exhibit Management › Searching Card Teams tolerates a team or card with no name",
+    "reason": "Searching Card Teams does not list every team when a team or card has no name (failed in the Aspire run).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "gameboard/tests/admin/delete-challenge.spec.ts",
+    "title": "Admin - Challenges › Delete Challenge (Spec) from Game",
+    "reason": "Adding a challenge spec to a just-created game answers 400 \"Couldn't find resource\" (failed in the Aspire run).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "player/tests/accessibility/color-contrast.spec.ts",
+    "title": "dark theme › Responsive Design and Accessibility › Color Contrast",
+    "reason": "Test out of date with the :main image: Player.Ui PR 758 gave the top-bar view title a tooltip, so getByText matches the title and its aria-describedby message (strict mode violation).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "player/tests/accessibility/color-contrast.spec.ts",
+    "title": "light theme › Responsive Design and Accessibility › Color Contrast",
+    "reason": "Test out of date with the :main image: Player.Ui PR 758 gave the top-bar view title a tooltip, so getByText matches the title and its aria-describedby message (strict mode violation).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "player/tests/accessibility/screen-reader.spec.ts",
+    "title": "dark theme › Responsive Design and Accessibility › Screen Reader Compatibility",
+    "reason": "Test out of date with the :main image: Player.Ui PR 758 gave the top-bar view title a tooltip, so getByText matches the title and its aria-describedby message (strict mode violation).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "player/tests/accessibility/screen-reader.spec.ts",
+    "title": "light theme › Responsive Design and Accessibility › Screen Reader Compatibility",
+    "reason": "Test out of date with the :main image: Player.Ui PR 758 gave the top-bar view title a tooltip, so getByText matches the title and its aria-describedby message (strict mode violation).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "player/tests/accessibility/theme-contrast-compliance.spec.ts",
+    "title": "dark theme › Responsive Design and Accessibility › Primary and on-primary text contrast (WCAG 1.4.3)",
+    "reason": "Dark theme primary-colored button labels are below WCAG 1.4.3 contrast (failed the same way in the Aspire run).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "player/tests/errors/non-existent-view.spec.ts",
+    "title": "light theme › Error Handling and Edge Cases › Navigate to Non-Existent View",
+    "reason": "Opening a view id that does not exist shows no 'View Not Found' heading (failed in the Aspire run).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "player/tests/home/navigate-to-view.spec.ts",
+    "title": "dark theme › Home Page - My Views › Navigate to View",
+    "reason": "Test out of date with the :main image: Player.Ui PR 758 gave the top-bar view title a tooltip, so getByText matches the title and its aria-describedby message (strict mode violation).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "player/tests/home/navigate-to-view.spec.ts",
+    "title": "light theme › Home Page - My Views › Navigate to View",
+    "reason": "Test out of date with the :main image: Player.Ui PR 758 gave the top-bar view title a tooltip, so getByText matches the title and its aria-describedby message (strict mode violation).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "player/tests/performance/view-player-load-time.spec.ts",
+    "title": "dark theme › Performance › Page Load Performance - View Player",
+    "reason": "Test out of date with the :main image: Player.Ui PR 758 gave the top-bar view title a tooltip, so getByText matches the title and its aria-describedby message (strict mode violation).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "player/tests/performance/view-player-load-time.spec.ts",
+    "title": "light theme › Performance › Page Load Performance - View Player",
+    "reason": "Test out of date with the :main image: Player.Ui PR 758 gave the top-bar view title a tooltip, so getByText matches the title and its aria-describedby message (strict mode violation).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "player/tests/view-details/view-basic-info.spec.ts",
+    "title": "dark theme › View Details › View Basic Information",
+    "reason": "Test out of date with the :main image: Player.Ui PR 758 gave the top-bar view title a tooltip, so getByText matches the title and its aria-describedby message (strict mode violation).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "player/tests/view-details/view-basic-info.spec.ts",
+    "title": "light theme › View Details › View Basic Information",
+    "reason": "Test out of date with the :main image: Player.Ui PR 758 gave the top-bar view title a tooltip, so getByText matches the title and its aria-describedby message (strict mode violation).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "player/tests/view-player/applications-list.spec.ts",
+    "title": "dark theme › View Player Interface › View Player Sidebar - Applications List",
+    "reason": "Test out of date with the :main image: Player.Ui PR 758 gave the top-bar view title a tooltip, so getByText matches the title and its aria-describedby message (strict mode violation).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "player/tests/view-player/applications-list.spec.ts",
+    "title": "light theme › View Player Interface › View Player Sidebar - Applications List",
+    "reason": "Test out of date with the :main image: Player.Ui PR 758 gave the top-bar view title a tooltip, so getByText matches the title and its aria-describedby message (strict mode violation).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "playerVm/tests/accessibility/theme-contrast-compliance.spec.ts",
+    "title": "dark theme › Responsive Design and Accessibility › Primary and on-primary text contrast (WCAG 1.4.3)",
+    "reason": "Dark theme primary-colored button labels are below WCAG 1.4.3 contrast (failed the same way in the Aspire run).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "playerVm/tests/usage-reporting/usage-reporting.spec.ts",
+    "title": "light theme › VM Usage Reporting › A console session that has ended appears in the report",
+    "reason": "A console session that has ended does not appear in the usage report (failed in the Aspire run).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "steamfitter/tests/scenario-templates-management/create-new-scenario-template.spec.ts",
+    "title": "light theme › Scenario Templates Management › Create a new scenario template",
+    "reason": "The new scenario template dialog does not keep the typed description (failed in the Aspire run).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "steamfitter/tests/ui-responsiveness-and-accessibility/theme-contrast-compliance.spec.ts",
+    "title": "dark theme › UI Responsiveness and Accessibility › Primary and on-primary text contrast (WCAG 1.4.3)",
+    "reason": "Dark theme primary-colored button labels are below WCAG 1.4.3 contrast (failed the same way in the Aspire run).",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "topomojo/tests/admin/admin-create-apikey.spec.ts",
+    "title": "Admin Panel › Admin - Create API Key",
+    "reason": "Test depends on leftover data: on a fresh database the admin page has no Create/New button for its loose selector to find. Passed in the Aspire run against a long-lived database.",
+    "added": "2026-11-11"
+  }
+]
