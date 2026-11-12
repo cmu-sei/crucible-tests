@@ -3,30 +3,29 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 /**
- * Render regression issue body for a single app.
+ * Decide the regression-issue action for a single app of a weekly run.
  *
  * Usage:
  *   node --no-warnings scripts/report-regressions.mjs \
  *     --app <app> \
  *     --first <first-eval.json> \
- *     --confirm <confirm-eval.json> \
- *     --current-digests <digests.json> \
- *     --last-clean-digests <digests.json> \
+ *     [--confirm <confirm-eval.json>] \
+ *     [--current-digests <digests.json>] \
+ *     [--last-clean-digests <digests.json>] \
  *     --run-url <url> \
  *     --repo <owner/repo>
  *
- * Outputs JSON to stdout: { action: "open"|"recurrence"|"none", title?: string, body?: string }
- * Exit 0 in all cases.
+ * --first is the path the app's first-pass evaluation should be at; a missing file means
+ * the app was in the matrix but left no evaluation, which counts as "suite did not run".
+ *
+ * Outputs JSON to stdout (see planRegressionReport in lib/ci-regressions.mjs):
+ *   { action: "recovered"|"did-not-run"|"regression"|"none", status, summary,
+ *     title?, issueBody?, recurrenceBody?, recoveredBody? }
+ * Exits 0 unless the arguments are wrong or an existing file cannot be parsed.
  */
 
 import { readFileSync, existsSync } from 'fs';
-import {
-  confirmedRegressions,
-  digestDiff,
-  renderRegressionIssue,
-  renderRecurrenceComment,
-  mentionFor,
-} from './lib/ci-regressions.mjs';
+import { planRegressionReport } from './lib/ci-regressions.mjs';
 
 // Parse CLI args
 const args = process.argv.slice(2);
@@ -55,39 +54,13 @@ if (!app || !firstPath || !runUrl || !repo) {
   process.exit(1);
 }
 
-// Read evaluations
-const first = JSON.parse(readFileSync(firstPath, 'utf8'));
-const confirm = confirmPath && existsSync(confirmPath) ? JSON.parse(readFileSync(confirmPath, 'utf8')) : null;
+const readJson = (path) => (path && existsSync(path) ? JSON.parse(readFileSync(path, 'utf8')) : null);
 
-// Compute confirmed regressions
-const keys = confirmedRegressions(first, confirm);
+const plan = planRegressionReport(app, readJson(firstPath), readJson(confirmPath), {
+  currentDigests: readJson(currentDigestsPath) || {},
+  lastCleanDigests: readJson(lastCleanDigestsPath),
+  runUrl,
+  repo,
+});
 
-if (keys.length === 0) {
-  // No confirmed regressions
-  process.stdout.write(JSON.stringify({ action: 'none' }));
-  process.exit(0);
-}
-
-// Read digests
-const currentDigests = currentDigestsPath && existsSync(currentDigestsPath)
-  ? JSON.parse(readFileSync(currentDigestsPath, 'utf8'))
-  : {};
-const lastCleanDigests = lastCleanDigestsPath && existsSync(lastCleanDigestsPath)
-  ? JSON.parse(readFileSync(lastCleanDigestsPath, 'utf8'))
-  : null;
-
-const diff = digestDiff(currentDigests, lastCleanDigests);
-const mention = mentionFor(repo);
-const ctx = { runUrl, mention, hasLastClean: lastCleanDigests !== null };
-
-// Render both issue and recurrence bodies
-// The shell script will choose which to use based on whether an issue exists
-const issue = renderRegressionIssue(app, keys, diff, ctx);
-const recurrence = renderRecurrenceComment(keys, diff, { runUrl });
-
-process.stdout.write(JSON.stringify({
-  action: 'regression',
-  title: issue.title,
-  issueBody: issue.body,
-  recurrenceBody: recurrence,
-}));
+process.stdout.write(JSON.stringify(plan));
