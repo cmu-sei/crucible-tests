@@ -204,6 +204,10 @@ Weekly runs (and manual dispatches on `main`) that find new failures automatical
 
 The job summary of the `Report regressions` job says, per app, whether new failures did not reproduce, whether the confirming rerun crashed (the failures stay unconfirmed and no issue is filed), or whether the suite did not run.
 
+### Service Restart on Stall
+
+If a service with an HTTP readiness probe (APIs, UIs, topomojo-api, gameboard-api) is running but not ready for 90 seconds (configurable via `WAIT_STALL_RESTART_SECONDS`), `wait.sh` restarts it once and continues polling within the overall timeout. This handles transient startup stalls without extending the timeout. Set `WAIT_STALL_RESTART_SECONDS=0` to disable restarts. Services that rely only on container healthchecks (postgres, keycloak-config) are never restarted.
+
 ### Reproduce a CI failure locally
 
 The CI stack runs anywhere with Docker and a [crucible-development](https://github.com/cmu-sei/crucible-development) checkout, without the devcontainer or Aspire:
