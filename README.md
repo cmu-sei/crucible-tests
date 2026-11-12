@@ -204,44 +204,48 @@ Weekly runs that find new failures automatically open or update GitHub issues to
 
 ### Known Failures vs. Skip Lists
 
-Two JSON files control CI behavior for tests that cannot run or are expected to fail:
+Two JSON files control CI behavior for tests that are expected to fail or cannot run. Both are keyed by spec file and full test title, and a test is never on both.
+
+- **`ci/known-failures.json`**: tests known to be broken, because of an app bug or because the test has not yet been updated for the `:main` apps. They **still run in CI**, and their failures do not block the workflow.
+- **`ci/skip-in-ci.json`**: tests that are fine but need infrastructure CI does not provide. They are **never started in CI**.
 
 #### `ci/known-failures.json`
 
-Documents app bugs. Tests on this list **still run in CI** but do not block the workflow when they fail. Each entry includes:
+Each entry includes:
 
-- `spec` — the spec file path relative to the repo root
-- `title` — the full test title (including `describe` block prefixes, joined with ` › `)
-- `issue` — a GitHub issue URL or short description of the bug
+- `file`: the spec file path relative to the repo root
+- `title`: the full test title, including `describe` block prefixes, joined with ` › `
+- `reason`: what is broken, starting with its category: `App bug:`, `Test out of date with :main:`, or `Test bug:`
+- `tracking` (optional): a link to the issue or PR that tracks the fix
+- `added`: the date the entry was added (`YYYY-MM-DD`)
 
 When a known failure starts passing, CI leaves a sticky comment on the PR reminding you to remove the entry. The comment lists all now-passing tests grouped by app, shows the reason and tracking link from each list entry, and includes a JSON block with the exact entries to delete. CI never edits the list itself — you must remove the entries manually. On the next run after removal, the comment updates to indicate the issue is resolved. Fork PRs and non-PR runs do not post comments; those runs report now-passing tests only in the job summary.
 
 To add a known failure:
 
-1. Confirm the test fails due to a documented app bug (not test code or missing CI infrastructure)
-2. Add an entry to `ci/known-failures.json` with the exact spec path and title
-3. Open or reference a GitHub issue for the underlying app bug
+1. Confirm the test is broken by an app bug, by an app change the test has not caught up with, or by a bug in the test itself (not missing CI infrastructure)
+2. Add an entry to `ci/known-failures.json` with the exact spec path and title, and a `reason` that starts with its category
+3. Link the issue or PR that tracks the fix in `tracking`, when one exists
 
 #### `ci/skip-in-ci.json`
 
-Lists tests that need infrastructure CI does not provide. Tests on this list **never run in CI**. Each entry includes:
+Each entry includes `file`, `title` (or `*` when every test in the file needs the infrastructure), `reason`, `added`, and `requires`: the infrastructure the test needs. `requires` is one of:
 
-- `spec` — the spec file path
-- `title` — the full test title
-- `requires` — what the test needs (e.g., `"docker exec"`, `"live hypervisor"`, `"VM console access"`)
+- `terraform`: Caster Terraform plan/apply, or installed Terraform versions
+- `gitea`: Caster's Gitea module source
+- `hypervisor`: a vSphere or Proxmox hypervisor behind the VM API
+- `vm-console`: live VM console connections
+- `gameboard-deploy`: Gameboard challenge deployment through TopoMojo
+- `moodle`: Moodle and its plugins (`docker exec`, plugin sources)
+- `angular-dev-build`: Angular development-build debug APIs (the `:main` images are production builds)
+- `xapi-lrs`: an xAPI learning record store
 
-Examples of infrastructure CI cannot provide:
-
-- Moodle plugin installation via `docker exec`
-- Caster Terraform plan/apply to live cloud resources
-- VM console connections and hypervisor API calls
-- Gameboard challenge deployment and scoring engine interaction
-- Angular development-build debug APIs (the `:main` images are production builds)
+Adding that infrastructure to CI later means removing the entries that name it.
 
 To add a skip entry:
 
-1. Confirm the test needs infrastructure unavailable in GitHub Actions (not an app bug)
-2. Add an entry to `ci/skip-in-ci.json` with the exact spec path, title, and `requires` field
+1. Confirm the test needs infrastructure unavailable in GitHub Actions, and that it passes where that infrastructure exists (not an app bug)
+2. Add an entry to `ci/skip-in-ci.json` with the exact spec path, title, and `requires` value; add a new `requires` value to `VALID_REQUIRES` in `scripts/lib/ci-results.mjs` only for a new kind of gap
 3. Never add an entry to both lists — a test is either skipped or allowed to fail, never both
 
 ### Validation

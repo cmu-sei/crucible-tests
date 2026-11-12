@@ -1,5 +1,19 @@
 [
   {
+    "file": "blueprint/tests/integration-with-crucible-services/api-integration-blueprint-api-endpoints.spec.ts",
+    "title": "dark theme › Integration with Crucible Services › API Integration - Blueprint API Endpoints",
+    "requires": "xapi-lrs",
+    "reason": "Needs an xAPI LRS: without one, GET xapi/viewed/msel answers 200 with no body and GET msels/{id}/scoringmodel answers 204, and the test requires every response to be JSON. Passed in the Aspire run.",
+    "added": "2026-11-11"
+  },
+  {
+    "file": "blueprint/tests/integration-with-crucible-services/api-integration-blueprint-api-endpoints.spec.ts",
+    "title": "light theme › Integration with Crucible Services › API Integration - Blueprint API Endpoints",
+    "requires": "xapi-lrs",
+    "reason": "Needs an xAPI LRS: without one, GET xapi/viewed/msel answers 200 with no body and GET msels/{id}/scoringmodel answers 204, and the test requires every response to be JSON. Passed in the Aspire run.",
+    "added": "2026-11-11"
+  },
+  {
     "file": "blueprint/tests/integration-with-crucible-services/caster-integration-push-and-remove.spec.ts",
     "title": "Caster Integration › A MSEL team named Admin takes the place of Player's Admin team",
     "requires": "terraform",

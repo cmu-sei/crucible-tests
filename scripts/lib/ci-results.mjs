@@ -9,7 +9,7 @@
 import { existsSync } from 'fs';
 import { join } from 'path';
 
-const VALID_REQUIRES = ['terraform', 'gitea', 'hypervisor', 'vm-console', 'gameboard-deploy', 'moodle', 'angular-dev-build'];
+const VALID_REQUIRES = ['terraform', 'gitea', 'hypervisor', 'vm-console', 'gameboard-deploy', 'moodle', 'angular-dev-build', 'xapi-lrs'];
 
 /**
  * Generate normalized test key from file path and title path.
