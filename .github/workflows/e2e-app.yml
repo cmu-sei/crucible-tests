@@ -30,14 +30,16 @@ on:
       DOCKERHUB_PASSWORD:
         required: false
 
-permissions:
-  contents: read
+# Nothing by default; the job grants what it needs (and never more than its caller grants).
+permissions: {}
 
 jobs:
   run:
     name: e2e (${{ inputs.app }})
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    permissions:
+      contents: read
     env:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
 
@@ -84,6 +86,12 @@ jobs:
         env:
           APP_NAME: ${{ inputs.app }}
         run: ci/stack/up.sh "$APP_NAME"
+
+      # Every image is pulled by now, so drop the Docker Hub credentials before any test
+      # code runs. Runs after a failed start too.
+      - name: Log out of Docker Hub
+        if: always() && env.DOCKERHUB_USERNAME != ''
+        run: docker logout
 
       - name: Record image digests
         run: ci/stack/digests.sh >> "$GITHUB_STEP_SUMMARY"

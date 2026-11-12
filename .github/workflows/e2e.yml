@@ -20,18 +20,25 @@ on:
         type: string
         default: ''
 
+# A PR gets one group, and a newer push to it cancels the older run. Every other run
+# (push, schedule, dispatch) gets a group of its own, keyed by run id: a shared group
+# keeps only one pending run and replaces it, which would drop a merge's push run or let
+# a push or dispatch replace the weekly run. So those runs never queue behind, cancel
+# or replace each other.
 concurrency:
-  group: e2e-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.event_name == 'pull_request' && format('e2e-pr-{0}', github.event.pull_request.number) || format('e2e-{0}-{1}', github.event_name, github.run_id) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-permissions:
-  contents: read
+# Nothing by default; each job grants what it needs.
+permissions: {}
 
 jobs:
   plan:
     name: Plan
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    permissions:
+      contents: read
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
       has_runs: ${{ steps.plan.outputs.has_runs }}
@@ -86,6 +93,9 @@ jobs:
     name: E2E
     needs: plan
     if: needs.plan.outputs.has_runs == 'true'
+    # A called workflow gets at most what its calling job grants.
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
@@ -94,13 +104,18 @@ jobs:
       app: ${{ matrix.app }}
       specs: ${{ matrix.specs }}
       full: ${{ github.event_name == 'schedule' }}
-    secrets: inherit
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
 
   e2e-result:
     name: E2E Result
     runs-on: ubuntu-24.04
     needs: [plan, e2e]
     if: always()
+    timeout-minutes: 10
+    permissions:
+      contents: read
 
     steps:
       - name: Check out repository
@@ -116,7 +131,15 @@ jobs:
     name: PR Comment
     runs-on: ubuntu-24.04
     needs: [plan, e2e]
-    if: always() && github.event_name == 'pull_request' && needs.plan.outputs.has_runs == 'true' && github.event.pull_request.head.repo.full_name == github.repository
+    # !cancelled(): a cancelled run (for example, superseded by a newer push) has partial
+    # artifacts and must not touch the comment. Dependabot PRs get a read-only token.
+    if: >-
+      !cancelled()
+      && github.event_name == 'pull_request'
+      && needs.plan.outputs.has_runs == 'true'
+      && github.event.pull_request.head.repo.full_name == github.repository
+      && github.actor != 'dependabot[bot]'
+    timeout-minutes: 10
     permissions:
       contents: read
       pull-requests: write
@@ -148,22 +171,40 @@ jobs:
             --run-url "$RUN_URL" \
             --sha "$SHA" > body.md
 
+      # Nothing now passing only means "resolved" when every app job succeeded; after a
+      # failed job some evaluations are missing, so the comment is left as it is.
       - name: Post or update comment
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          E2E_RESULT: ${{ needs.e2e.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SHA: ${{ github.sha }}
         run: |
           if [[ -s body.md ]]; then
             bash ci/pr-comment.sh "$PR_NUMBER" body.md
+          elif [[ "$E2E_RESULT" == "success" ]]; then
+            node --no-warnings scripts/render-pr-comment.mjs --resolved \
+              --run-url "$RUN_URL" \
+              --sha "$SHA" > resolved.md
+            bash ci/pr-comment.sh "$PR_NUMBER" --resolve resolved.md
           else
-            bash ci/pr-comment.sh "$PR_NUMBER" -
+            echo "E2E result is $E2E_RESULT: leaving any existing comment untouched"
           fi
 
   collect:
     name: Collect new failures
     runs-on: ubuntu-24.04
-    needs: e2e
-    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    needs: [plan, e2e]
+    # Issues track main only: a dispatch from another branch reports in its summary only.
+    if: >-
+      !cancelled()
+      && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+      && github.ref == 'refs/heads/main'
+      && needs.plan.outputs.has_runs == 'true'
+    timeout-minutes: 10
+    permissions:
+      contents: read
     outputs:
       confirm_matrix: ${{ steps.build_matrix.outputs.matrix }}
       has_confirms: ${{ steps.build_matrix.outputs.has_confirms }}
@@ -232,7 +273,12 @@ jobs:
   confirm:
     name: Confirm
     needs: collect
-    if: always() && needs.collect.outputs.has_confirms == 'true'
+    if: >-
+      !cancelled()
+      && github.ref == 'refs/heads/main'
+      && needs.collect.outputs.has_confirms == 'true'
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.collect.outputs.confirm_matrix) }}
@@ -242,13 +288,20 @@ jobs:
       specs: ${{ matrix.specs }}
       full: false
       confirm: true
-    secrets: inherit
+    secrets:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
 
   regressions:
     name: Report regressions
     runs-on: ubuntu-24.04
-    needs: [e2e, confirm]
-    if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    needs: [plan, e2e, collect, confirm]
+    if: >-
+      !cancelled()
+      && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+      && github.ref == 'refs/heads/main'
+      && needs.plan.outputs.has_runs == 'true'
+    timeout-minutes: 15
     permissions:
       contents: read
       issues: write
@@ -289,7 +342,9 @@ jobs:
           # Find the most recent successful run of e2e.yml that was a full weekly run
           # (schedule event, or workflow_dispatch with empty apps input)
           runs=$(gh run list \
+            --repo "$REPO" \
             --workflow e2e.yml \
+            --branch main \
             --status success \
             --limit 50 \
             --json databaseId,event,createdAt)
@@ -330,106 +385,77 @@ jobs:
         if: steps.last_clean.outputs.last_clean_id != ''
         env:
           GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ steps.last_clean.outputs.last_clean_id }}
         run: |
-          run_id="${{ steps.last_clean.outputs.last_clean_id }}"
           mkdir -p artifacts/last-clean
           for app in alloy blueprint caster cite console gallery gameboard player playerVm steamfitter topomojo; do
-            gh run download "$run_id" \
+            gh run download "$RUN_ID" \
+              --repo "$REPO" \
               --name "e2e-digests-$app" \
-              --dir artifacts/last-clean || true
+              --dir artifacts/last-clean || echo "::warning::No e2e-digests-$app artifact in run $RUN_ID"
           done
         continue-on-error: true
 
+      # One step per run, one app at a time. An app whose report or gh call fails is
+      # flagged and skipped so the others are still reported; the step fails at the end.
       - name: Report regressions for each app
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           REPO: ${{ github.repository }}
+          MATRIX: ${{ needs.plan.outputs.matrix }}
         run: |
-          for app in alloy blueprint caster cite console gallery gameboard player playerVm steamfitter topomojo; do
-            first_eval="artifacts/e2e-eval-$app/ci-evaluation.json"
-            confirm_eval="artifacts/e2e-eval-confirm-$app/ci-evaluation.json"
-            current_digests="artifacts/e2e-digests-$app/digests.json"
-            last_clean_digests="artifacts/last-clean/e2e-digests-$app/digests.json"
-
-            # Skip if first eval doesn't exist (app didn't run)
-            if [[ ! -f "$first_eval" ]]; then
-              echo "Skipping $app: no evaluation found"
-              continue
-            fi
-
-            # Check if app ran clean (ok && !didNotRun && no newFailures)
-            eval_status=$(node --no-warnings -p "
-              const fs = require('fs');
-              const e = JSON.parse(fs.readFileSync('$first_eval', 'utf8'));
-              JSON.stringify({
-                ok: e.ok || false,
-                didNotRun: e.didNotRun || false,
-                newFailuresCount: (e.newFailures || []).length
-              });
-            ")
-
-            is_ok=$(echo "$eval_status" | jq -r '.ok')
-            did_not_run=$(echo "$eval_status" | jq -r '.didNotRun')
-            new_failures=$(echo "$eval_status" | jq -r '.newFailuresCount')
-
-            if [[ "$is_ok" == "true" && "$did_not_run" == "false" && "$new_failures" == "0" ]]; then
-              # App ran clean, close any open regression issue
-              node --no-warnings -p "
-                const { renderRecoveredComment } = require('./scripts/lib/ci-regressions.mjs');
-                renderRecoveredComment('$app', { runUrl: '$RUN_URL' });
-              " > "recovered-$app.txt"
-              bash ci/regression-issue.sh "$app" --recovered "recovered-$app.txt"
-              continue
-            fi
-
-            # If app didn't run or crashed, skip it (leave issue alone)
-            if [[ "$did_not_run" == "true" ]]; then
-              echo "$app: did not run, skipping regression check"
-              continue
-            fi
-
-            # App has failures, check for confirmed regressions
-            args=(
+          # Report one app. Runs inside `if`, where bash -e does not apply, so every
+          # step that can fail returns explicitly.
+          report_app() {
+            local app="$1" result action
+            # Every app in the matrix is reported, even with no evaluation: report-regressions.mjs
+            # treats a missing first-pass evaluation as "suite did not run".
+            local args=(
               --app "$app"
-              --first "$first_eval"
+              --first "artifacts/e2e-eval-$app/ci-evaluation.json"
+              --confirm "artifacts/e2e-eval-confirm-$app/ci-evaluation.json"
+              --current-digests "artifacts/e2e-digests-$app/digests.json"
               --run-url "$RUN_URL"
               --repo "$REPO"
             )
-
-            if [[ -f "$confirm_eval" ]]; then
-              args+=(--confirm "$confirm_eval")
+            if [[ -f "artifacts/last-clean/e2e-digests-$app/digests.json" ]]; then
+              args+=(--last-clean-digests "artifacts/last-clean/e2e-digests-$app/digests.json")
             fi
 
-            if [[ -f "$current_digests" ]]; then
-              args+=(--current-digests "$current_digests")
+            result=$(node --no-warnings scripts/report-regressions.mjs "${args[@]}") || return 1
+            action=$(jq -r '.action' <<<"$result") || return 1
+            jq -r '.summary' <<<"$result" >> "$GITHUB_STEP_SUMMARY" || return 1
+            echo "$app: $(jq -r '.status' <<<"$result") -> $action"
+
+            case "$action" in
+              recovered)
+                jq -r '.recoveredBody' <<<"$result" > "recovered-$app.md" || return 1
+                bash ci/regression-issue.sh "$app" --recovered "recovered-$app.md" || return 1
+                ;;
+              regression|did-not-run)
+                printf '%s' "$result" > "issue-$app.json" || return 1
+                bash ci/regression-issue.sh "$app" "issue-$app.json" || return 1
+                ;;
+              none)
+                ;;
+              *)
+                echo "Unknown action: $action" >&2
+                return 1
+                ;;
+            esac
+          }
+
+          failed=()
+          for app in $(jq -r '.include[].app' <<<"$MATRIX"); do
+            if ! report_app "$app"; then
+              echo "::error::Could not report regressions for $app"
+              failed+=("$app")
             fi
-
-            if [[ -f "$last_clean_digests" ]]; then
-              args+=(--last-clean-digests "$last_clean_digests")
-            fi
-
-            # Generate regression report
-            result=$(node --no-warnings scripts/report-regressions.mjs "${args[@]}")
-            action=$(echo "$result" | jq -r '.action')
-
-            if [[ "$action" == "none" ]]; then
-              echo "$app: no confirmed regressions"
-              {
-                echo "## $app: Unconfirmed"
-                echo "New failures did not reproduce on confirming rerun."
-                echo ""
-              } >> "$GITHUB_STEP_SUMMARY"
-              continue
-            fi
-
-            # Write issue body
-            echo "$result" > "issue-$app.json"
-            bash ci/regression-issue.sh "$app" "issue-$app.json"
-
-            {
-              echo "## $app: Regression reported"
-              echo "See issue for details."
-              echo ""
-            } >> "$GITHUB_STEP_SUMMARY"
           done
+
+          if [[ ${#failed[@]} -gt 0 ]]; then
+            echo "::error::Regression reporting failed for: ${failed[*]}"
+            exit 1
+          fi
