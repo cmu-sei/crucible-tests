@@ -180,13 +180,13 @@ End-to-end tests run automatically in GitHub Actions on pull requests, pushes to
 - **Pull requests to main** — only specs affected by changed files
 - **Pushes to main** — only specs affected by the pushed commits
 - **Weekly schedule** (Mondays at 06:00 UTC) — the full suite for all apps
-- **Manual dispatch** — the full suite, optionally filtered to specific apps
+- **Manual dispatch** — the full suite, optionally filtered to specific apps. A dispatch on `main` also opens, updates and closes regression issues, the same as the weekly run; a dispatch from any other branch reports in its job summary only
 
 The planner analyzes the git diff to determine which specs need to run. A change to shared code (fixtures, helpers, or configuration) triggers tests for every app that imports it. When no specs are affected (e.g., a docs-only PR), the workflow completes successfully without running any tests.
 
 ### Matrix Strategy
 
-CI runs one job per application, never the full stack on a single runner. Each job provisions only the services that app needs: its UI, API, and shared infrastructure (Keycloak, Postgres). This keeps jobs fast and isolated — a Blueprint failure does not block Player.
+CI runs one job per application, never the full stack on a single runner. Each job provisions only the services that app's tests need: its UI and API, the UIs and APIs of the apps its tests reach into (for example, the Console slice also starts Player and the VM API and UI), and shared infrastructure (Keycloak, Postgres). `ci/slices.json` lists each slice. This keeps jobs fast and isolated — a Blueprint failure does not block Player.
 
 ### Job Summaries
 
@@ -200,7 +200,22 @@ The `E2E Result` job aggregates these and serves as the single required check. I
 
 ### Regression Issues
 
-Weekly runs that find new failures automatically open or update GitHub issues to notify `@cmu-sei/crucible-code-owners`. A failure is confirmed by rerunning just the failing specs; only tests that fail both times become a regression. Each app gets one issue (labeled `e2e-regression`), and the issue body shows which `:main` image digests changed since the last clean weekly run. The issue closes automatically when the app runs clean again.
+Weekly runs (and manual dispatches on `main`) that find new failures automatically open or update GitHub issues to notify `@cmu-sei/crucible-code-owners`. A failure is confirmed by rerunning just the failing specs; only tests that fail both times become a regression. When an app's suite does not run at all (the stack fails to start, global setup throws, or the job leaves no evaluation), CI opens or updates the same issue with a "suite did not run" body and the error messages. Each app gets one issue (labeled `e2e-regression`), and the issue body shows which `:main` image digests changed since the last clean weekly run. The issue closes automatically when the app runs clean again; a run in which the suite did not run never closes it.
+
+The job summary of the `Report regressions` job says, per app, whether new failures did not reproduce, whether the confirming rerun crashed (the failures stay unconfirmed and no issue is filed), or whether the suite did not run.
+
+### Reproduce a CI failure locally
+
+The CI stack runs anywhere with Docker and a [crucible-development](https://github.com/cmu-sei/crucible-development) checkout, without the devcontainer or Aspire:
+
+```bash
+ci/stack/prepare.sh /path/to/crucible-development   # certificates, realm, UI settings
+ci/stack/up.sh <app>                                 # pull and start that app's slice
+CRUCIBLE_TARGET=ci CI=true CRUCIBLE_BROWSERS=chromium npx playwright test <app>/tests/...
+docker compose -f ci/stack/compose.yaml down -v      # stop the stack and drop its volumes
+```
+
+Use the same spec paths the job ran (its summary lists them), or `<app>/tests/` for the whole app.
 
 ### Known Failures vs. Skip Lists
 
@@ -219,7 +234,7 @@ Each entry includes:
 - `tracking` (optional): a link to the issue or PR that tracks the fix
 - `added`: the date the entry was added (`YYYY-MM-DD`)
 
-When a known failure starts passing, CI leaves a sticky comment on the PR reminding you to remove the entry. The comment lists all now-passing tests grouped by app, shows the reason and tracking link from each list entry, and includes a JSON block with the exact entries to delete. CI never edits the list itself — you must remove the entries manually. On the next run after removal, the comment updates to indicate the issue is resolved. Fork PRs and non-PR runs do not post comments; those runs report now-passing tests only in the job summary.
+When a known failure starts passing, CI leaves a sticky comment on the PR reminding you to remove the entry. The comment lists all now-passing tests grouped by app, shows the reason and tracking link from each list entry, and includes a JSON block with the exact entries to delete. CI never edits the list itself — you must remove the entries manually. On the next run after removal in which every app job succeeds, the comment updates to indicate the issue is resolved; a failed or cancelled run leaves it as it is. Fork PRs and non-PR runs do not post comments; those runs report now-passing tests only in the job summary.
 
 To add a known failure:
 
