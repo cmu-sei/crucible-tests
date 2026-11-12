@@ -23,9 +23,12 @@ test.describe('Authentication', () => {
     await expect(page.locator('a:has-text("Log out"), button:has-text("Log out")').first()).toBeHidden({ timeout: 30000 });
 
     // 4. Attempt to access a protected route — must prompt for login again.
-    // Wait for any ongoing navigation to settle first.
+    // The end-session redirect back to Gameboard can still be landing, and it aborts a
+    // goto that starts under it (net::ERR_ABORTED), so retry the goto until it sticks.
     await page.waitForLoadState('domcontentloaded').catch(() => {});
-    await page.goto(Services.Gameboard.UI + '/admin', { waitUntil: 'domcontentloaded' });
+    await expect(async () => {
+      await page.goto(Services.Gameboard.UI + '/admin', { waitUntil: 'domcontentloaded' });
+    }).toPass({ timeout: 15000 });
     await expect(page).toHaveURL(/\/login\?redirectTo=/);
     await expect(page.locator('button:has-text("Login"), button:has-text("Log in")').first()).toBeVisible({ timeout: 15000 });
   });
