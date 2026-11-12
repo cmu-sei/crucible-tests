@@ -3,8 +3,9 @@
 
 import { defineConfig, devices } from '@playwright/test';
 import { loadCrucibleEnv } from './load-env';
+import { loadCiSkip, ciSkipFilters } from './ci-skip';
 
-// Load environment based on CRUCIBLE_TARGET (aspire | minikube). Defaults to .env.
+// Load environment based on CRUCIBLE_TARGET (aspire | minikube | ci). Defaults to .env.
 loadCrucibleEnv();
 
 /**
@@ -12,6 +13,12 @@ loadCrucibleEnv();
  * Supports testing multiple applications: Blueprint, Player, CITE, Gameboard, TopoMojo, Steamfitter, Moodle, etc.
  * See https://playwright.dev/docs/test-configuration
  */
+
+// Apply CI skip list when CRUCIBLE_TARGET=ci
+const ciSkip = process.env.CRUCIBLE_TARGET === 'ci'
+  ? ciSkipFilters(loadCiSkip())
+  : { testIgnore: [], grepInvert: undefined };
+
 export default defineConfig({
   testDir: './',
   testMatch: '**/tests/**/*.spec.ts',
@@ -22,7 +29,11 @@ export default defineConfig({
   // discovery to 0 tests for the entire suite, not just the worktree.
   // The lint fixtures in `scripts/__fixtures__/wait-antipatterns/tests/` are deliberate bad examples
   // (fixed sleeps, networkidle, test.setTimeout) used by check-wait-antipatterns.mjs and must not run as tests.
-  testIgnore: ['**/.claude/**', '**/node_modules/**', '**/scripts/**'],
+  // When CRUCIBLE_TARGET=ci, also skip tests from ci/skip-in-ci.json.
+  testIgnore: ['**/.claude/**', '**/node_modules/**', '**/scripts/**', ...ciSkip.testIgnore],
+
+  // When CRUCIBLE_TARGET=ci, exclude single-test skip entries via grepInvert
+  ...(ciSkip.grepInvert && { grepInvert: ciSkip.grepInvert }),
 
   // Authenticate every app in provision-targets.ts (those the run's path
   // filters include) once before the suite, concurrently, and save their browser
