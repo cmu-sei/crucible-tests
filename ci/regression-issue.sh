@@ -5,10 +5,11 @@
 # Upsert regression issue for a specific app.
 #
 # Usage:
-#   regression-issue.sh <app> <body-file|-recovered>
+#   regression-issue.sh <app> <body-file>
+#   regression-issue.sh <app> --recovered <body-file>
 #
-# When body-file is '-recovered', adds a recovered comment and closes the issue, or does nothing if no issue exists.
-# When body-file is a path, creates a new issue or adds a recurrence comment to the existing one.
+# When --recovered is specified, adds the recovered comment from body-file and closes the issue, or does nothing if no issue exists.
+# Otherwise, body-file contains JSON with {action, title, body}; creates a new issue or adds a recurrence comment.
 #
 # Environment:
 #   GH_TOKEN or GITHUB_TOKEN: GitHub token with issues: write
@@ -19,13 +20,14 @@ set -euo pipefail
 
 LABEL='e2e-regression'
 
-if [[ $# -ne 2 ]]; then
-  echo "Usage: regression-issue.sh <app> <body-file|-recovered>" >&2
+if [[ $# -lt 2 || $# -gt 3 ]]; then
+  echo "Usage: regression-issue.sh <app> <body-file> | regression-issue.sh <app> --recovered <body-file>" >&2
   exit 1
 fi
 
 APP="$1"
 BODY_ARG="$2"
+BODY_FILE_ARG="${3:-}"
 
 # Ensure gh is available
 if ! command -v gh &> /dev/null; then
@@ -55,10 +57,21 @@ EXISTING_ISSUE=$(gh issue list --repo "$REPO" --label "$LABEL" --state open --js
 EXISTING_ISSUE="${EXISTING_ISSUE// /}"  # Trim whitespace
 
 # Determine action
-if [[ "$BODY_ARG" == "-recovered" ]]; then
+if [[ "$BODY_ARG" == "--recovered" ]]; then
   # Recovered
+  if [[ -z "$BODY_FILE_ARG" ]]; then
+    echo "Error: --recovered requires a body file path" >&2
+    exit 1
+  fi
+
+  if [[ ! -f "$BODY_FILE_ARG" ]]; then
+    echo "Error: Body file not found: $BODY_FILE_ARG" >&2
+    exit 1
+  fi
+
   if [[ -n "$EXISTING_ISSUE" ]]; then
     ACTION="recover"
+    BODY_FILE="$BODY_FILE_ARG"
   else
     ACTION="none"
   fi
@@ -75,6 +88,8 @@ else
     echo "Error: Body file is empty" >&2
     exit 1
   fi
+
+  BODY_FILE="$BODY_ARG"
 
   if [[ -n "$EXISTING_ISSUE" ]]; then
     ACTION="recurrence"
@@ -102,17 +117,17 @@ if [[ "${REGRESSION_ISSUE_DRY_RUN:-}" == "1" ]]; then
 else
   case "$ACTION" in
     create)
-      # Parse title and body from JSON
-      TITLE=$(jq -r '.title' < "$BODY_ARG")
-      BODY=$(jq -r '.body' < "$BODY_ARG")
+      # Parse title and issue body from JSON
+      TITLE=$(jq -r '.title' < "$BODY_FILE")
+      BODY=$(jq -r '.issueBody' < "$BODY_FILE")
 
       # Create issue
       echo "$BODY" | gh issue create --repo "$REPO" --title "$TITLE" --label "$LABEL" --body-file - > /dev/null
       echo "Created regression issue for $APP"
       ;;
     recurrence)
-      # Parse body from JSON
-      BODY=$(jq -r '.body' < "$BODY_ARG")
+      # Parse recurrence body from JSON
+      BODY=$(jq -r '.recurrenceBody' < "$BODY_FILE")
 
       # Add comment
       echo "$BODY" | gh issue comment "$EXISTING_ISSUE" --repo "$REPO" --body-file - > /dev/null
@@ -120,7 +135,7 @@ else
       ;;
     recover)
       # Add recovered comment and close
-      RECOVERED_COMMENT=$(cat "$BODY_ARG")
+      RECOVERED_COMMENT=$(cat "$BODY_FILE")
       echo "$RECOVERED_COMMENT" | gh issue comment "$EXISTING_ISSUE" --repo "$REPO" --body-file - > /dev/null
       gh issue close "$EXISTING_ISSUE" --repo "$REPO" > /dev/null
       echo "Closed issue #$EXISTING_ISSUE as recovered"

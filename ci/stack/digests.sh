@@ -4,7 +4,7 @@
 
 # Prints a markdown table of the image digest behind each container of the CI stack,
 # so a run records exactly which :main builds it tested.
-# Also writes test-results/digests.json with { "service": "image@digest" }.
+# Also writes ci-artifacts/digests.json with { "service": "image@digest" }.
 #
 # Usage: ci/stack/digests.sh [--json <path>] >> "$GITHUB_STEP_SUMMARY"
 
@@ -19,12 +19,12 @@ if [[ "${1:-}" == "--json" && -n "${2:-}" ]]; then
   JSON_PATH="$2"
 fi
 
-# Default JSON path
+# Default JSON path (outside test-results which Playwright cleans)
 if [[ -z "$JSON_PATH" ]]; then
-  JSON_PATH="test-results/digests.json"
+  JSON_PATH="ci-artifacts/digests.json"
 fi
 
-# Ensure test-results directory exists
+# Ensure directory exists
 mkdir -p "$(dirname "$JSON_PATH")"
 
 echo "| service | image | digest |"

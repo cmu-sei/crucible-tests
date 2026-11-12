@@ -79,3 +79,11 @@ jobs:
       # or was skipped; fail otherwise. This is the one check marked as required.
       - name: Test result gate
         run: bash ci/test-result-gate.sh
+
+      # Test PR comment shell script logic
+      - name: Test PR comment script
+        run: bash ci/test-pr-comment.sh
+
+      # Test regression issue shell script logic
+      - name: Test regression issue script
+        run: bash ci/test-regression-issue.sh

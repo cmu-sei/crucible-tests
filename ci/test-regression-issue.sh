@@ -4,7 +4,7 @@
 
 # Test regression-issue.sh by stubbing gh CLI.
 # Verifies the four branches: create, recurrence, recover, none.
-# Also checks label creation logic.
+# Tests both dry-run and real execution modes.
 
 set -euo pipefail
 
@@ -18,21 +18,18 @@ GH_LOG="$TEMP_DIR/gh.log"
 
 cat > "$GH_STUB" << 'EOF'
 #!/usr/bin/env bash
-echo "$@" >> "${GH_LOG}"
+# Log all calls
+echo "$*" >> "${GH_LOG}"
 
-# Simulate gh api responses
+# Simulate gh responses
 if [[ "$1" == "issue" && "$2" == "list" ]]; then
-  # Build JSON response
   if [[ "${EXISTING_ISSUE:-}" == "1" ]]; then
     JSON='[{"number": 456, "body": "<!-- crucible-tests:e2e-regression:cite -->\nOld content"}]'
   else
     JSON='[]'
   fi
 
-  # If --jq is present, pipe through jq
   if [[ "$*" =~ --jq ]]; then
-    # Extract jq expression
-    JQ_EXPR=""
     for ((i=1; i<=$#; i++)); do
       if [[ "${!i}" == "--jq" ]]; then
         j=$((i+1))
@@ -45,7 +42,6 @@ if [[ "$1" == "issue" && "$2" == "list" ]]; then
     echo "$JSON"
   fi
 elif [[ "$1" == "label" && "$2" == "list" ]]; then
-  # Simulate label check
   if [[ "${LABEL_EXISTS:-}" == "1" ]]; then
     echo '[{"name": "e2e-regression"}]'
   else
@@ -56,32 +52,34 @@ EOF
 
 chmod +x "$GH_STUB"
 
-# Create jq stub (in case it's not available)
-if ! command -v jq &> /dev/null; then
-  cat > "$TEMP_DIR/jq" << 'EOF'
+# Create jq stub
+cat > "$TEMP_DIR/jq" << 'EOF'
 #!/usr/bin/env node
-// Minimal jq stub for testing
 const fs = require('fs');
 const input = fs.readFileSync(0, 'utf-8');
 
-const arg = process.argv[2];
-if (arg === '-r') {
-  const selector = process.argv[3];
-  const obj = JSON.parse(input);
-  if (selector === '.title') {
-    console.log(obj.title);
-  } else if (selector === '.body') {
-    console.log(obj.body);
+const args = process.argv.slice(2);
+if (args[0] === '-r') {
+  const selector = args[1];
+  try {
+    const obj = JSON.parse(input);
+    if (selector === '.title') {
+      console.log(obj.title || '');
+    } else if (selector === '.issueBody') {
+      console.log(obj.issueBody || obj.body || '');
+    } else if (selector === '.recurrenceBody') {
+      console.log(obj.recurrenceBody || '');
+    }
+  } catch (e) {
+    // If not JSON, just output empty
   }
 }
 EOF
-  chmod +x "$TEMP_DIR/jq"
-fi
+chmod +x "$TEMP_DIR/jq"
 
 # Export environment for regression-issue.sh
 export PATH="$TEMP_DIR:$PATH"
 export GH_REPO="owner/repo"
-export REGRESSION_ISSUE_DRY_RUN=1
 export GH_LOG
 
 # Test cases
@@ -92,21 +90,22 @@ test_case() {
   local desc="$1"
   local existing="$2"
   local label_exists="$3"
-  local body_file="$4"
-  local expected="$5"
+  local is_dry_run="$4"
+  local call_args="$5"
+  local expected="$6"
 
   > "$GH_LOG"
   export EXISTING_ISSUE="$existing"
   export LABEL_EXISTS="$label_exists"
 
-  # Create body file if not "-recovered"
-  if [[ "$body_file" != "-recovered" ]]; then
-    echo '{"title": "E2E regression: cite", "body": "Test content"}' > "$TEMP_DIR/body.json"
-    body_file="$TEMP_DIR/body.json"
+  if [[ "$is_dry_run" == "1" ]]; then
+    export REGRESSION_ISSUE_DRY_RUN=1
+  else
+    unset REGRESSION_ISSUE_DRY_RUN
   fi
 
   local output
-  output=$("$SCRIPT_DIR/regression-issue.sh" cite "$body_file" 2>&1) || true
+  output=$(eval "$SCRIPT_DIR/regression-issue.sh cite $call_args" 2>&1) || true
 
   if echo "$output" | grep -q "$expected"; then
     echo "✓ $desc"
@@ -119,20 +118,21 @@ test_case() {
   fi
 }
 
-# Test 1: No existing issue, non-empty body → create
-test_case "create new issue" "0" "1" "body" "Would create issue with label e2e-regression"
+# Prepare test body files
+echo '{"title": "E2E regression: cite", "issueBody": "Test issue body", "recurrenceBody": "Test recurrence body"}' > "$TEMP_DIR/body.json"
+echo "Passing again; closing." > "$TEMP_DIR/recovered.txt"
 
-# Test 2: Existing issue, non-empty body → recurrence
-test_case "add recurrence comment" "1" "1" "body" "Would add recurrence comment to issue #456"
+# Dry-run tests
+test_case "DRY-RUN: create new issue" "0" "1" "1" "$TEMP_DIR/body.json" "Would create issue"
+test_case "DRY-RUN: add recurrence comment" "1" "1" "1" "$TEMP_DIR/body.json" "Would add recurrence comment to issue #456"
+test_case "DRY-RUN: recover and close" "1" "1" "1" "--recovered $TEMP_DIR/recovered.txt" "Would add recovered comment and close issue #456"
+test_case "DRY-RUN: no action when no issue and recovered" "0" "1" "1" "--recovered $TEMP_DIR/recovered.txt" "No action needed"
 
-# Test 3: Existing issue, -recovered → recover and close
-test_case "recover and close" "1" "1" "-recovered" "Would add recovered comment and close issue #456"
-
-# Test 4: No existing issue, -recovered → none
-test_case "no action when no issue and recovered" "0" "1" "-recovered" "No action needed"
-
-# Test 5: Label creation check
-test_case "label does not exist" "0" "0" "body" "Would create issue"
+# Real execution tests - these verify the script logic and gh call patterns
+test_case "REAL: create new issue" "0" "1" "0" "$TEMP_DIR/body.json" "Created regression issue"
+test_case "REAL: add recurrence comment" "1" "1" "0" "$TEMP_DIR/body.json" "Added recurrence comment to issue #456"
+test_case "REAL: recover and close" "1" "1" "0" "--recovered $TEMP_DIR/recovered.txt" "Closed issue #456 as recovered"
+test_case "REAL: no action when no issue and recovered" "0" "1" "0" "--recovered $TEMP_DIR/recovered.txt" "No action needed"
 
 # Report
 echo ""

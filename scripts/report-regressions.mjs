@@ -80,8 +80,14 @@ const diff = digestDiff(currentDigests, lastCleanDigests);
 const mention = mentionFor(repo);
 const ctx = { runUrl, mention };
 
-// Render issue or recurrence comment
-// The shell script will determine if this is a new issue or a recurrence
+// Render both issue and recurrence bodies
+// The shell script will choose which to use based on whether an issue exists
 const issue = renderRegressionIssue(app, keys, diff, ctx);
+const recurrence = renderRecurrenceComment(keys, diff, { runUrl });
 
-process.stdout.write(JSON.stringify({ action: 'open', title: issue.title, body: issue.body }));
+process.stdout.write(JSON.stringify({
+  action: 'regression',
+  title: issue.title,
+  issueBody: issue.body,
+  recurrenceBody: recurrence,
+}));

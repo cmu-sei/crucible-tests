@@ -219,7 +219,7 @@ jobs:
             echo "matrix={\"include\":[]}" >> "$GITHUB_OUTPUT"
             echo "has_confirms=false" >> "$GITHUB_OUTPUT"
           else
-            matrix=$(printf '%s\n' "${apps[@]}" | jq -s '{include: .}')
+            matrix=$(printf '%s\n' "${apps[@]}" | jq -cs '{include: .}')
             echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
             echo "has_confirms=true" >> "$GITHUB_OUTPUT"
           fi
@@ -277,6 +277,7 @@ jobs:
         id: last_clean
         env:
           GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
         run: |
           # Find the most recent successful run of e2e.yml that was a full weekly run
           # (schedule event, or workflow_dispatch with empty apps input)
@@ -287,15 +288,17 @@ jobs:
             --json databaseId,event,createdAt)
 
           last_clean_id=""
-          for id in $(echo "$runs" | jq -r '.[] | select(.event == "schedule") | .databaseId'); do
+          for id in $(echo "$runs" | jq -r '.[] | select(.event == "schedule" or .event == "workflow_dispatch") | .databaseId'); do
             # Exclude the current run
             if [[ "$id" == "${{ github.run_id }}" ]]; then continue; fi
 
             # Check if this run has digest artifacts for all apps
             # A successful full run should have digests for each app
+            artifacts=$(gh api "repos/$REPO/actions/runs/$id/artifacts" --jq '.artifacts[].name')
+
             has_all=true
             for app in alloy blueprint caster cite console gallery gameboard player playerVm steamfitter topomojo; do
-              if ! gh run view "$id" --json artifacts --jq '.artifacts[] | select(.name == "e2e-digests-'"$app"'")' | grep -q .; then
+              if ! echo "$artifacts" | grep -q "^e2e-digests-$app$"; then
                 has_all=false
                 break
               fi
@@ -306,17 +309,6 @@ jobs:
               break
             fi
           done
-
-          if [[ -z "$last_clean_id" ]]; then
-            # Try workflow_dispatch runs (may have been filtered, so just check for success)
-            for id in $(echo "$runs" | jq -r '.[] | select(.event == "workflow_dispatch") | .databaseId'); do
-              if [[ "$id" == "${{ github.run_id }}" ]]; then continue; fi
-
-              # For dispatch, we can't easily check inputs, so accept any successful run with digests
-              last_clean_id="$id"
-              break
-            done
-          fi
 
           echo "last_clean_id=$last_clean_id" >> "$GITHUB_OUTPUT"
 
@@ -358,17 +350,34 @@ jobs:
               continue
             fi
 
-            # Check if app ran clean (no newFailures)
-            new_failures=$(node --no-warnings -p "
+            # Check if app ran clean (ok && !didNotRun && no newFailures)
+            eval_status=$(node --no-warnings -p "
               const fs = require('fs');
               const e = JSON.parse(fs.readFileSync('$first_eval', 'utf8'));
-              (e.newFailures || []).length;
+              JSON.stringify({
+                ok: e.ok || false,
+                didNotRun: e.didNotRun || false,
+                newFailuresCount: (e.newFailures || []).length
+              });
             ")
 
-            if [[ "$new_failures" == "0" ]]; then
+            is_ok=$(echo "$eval_status" | jq -r '.ok')
+            did_not_run=$(echo "$eval_status" | jq -r '.didNotRun')
+            new_failures=$(echo "$eval_status" | jq -r '.newFailuresCount')
+
+            if [[ "$is_ok" == "true" && "$did_not_run" == "false" && "$new_failures" == "0" ]]; then
               # App ran clean, close any open regression issue
-              echo "Passing again in [this run]($RUN_URL); closing." > recovered.txt
-              bash ci/regression-issue.sh "$app" -recovered || true
+              node --no-warnings -p "
+                const { renderRecoveredComment } = require('./scripts/lib/ci-regressions.mjs');
+                renderRecoveredComment('$app', { runUrl: '$RUN_URL' });
+              " > "recovered-$app.txt"
+              bash ci/regression-issue.sh "$app" --recovered "recovered-$app.txt"
+              continue
+            fi
+
+            # If app didn't run or crashed, skip it (leave issue alone)
+            if [[ "$did_not_run" == "true" ]]; then
+              echo "$app: did not run, skipping regression check"
               continue
             fi
 
@@ -398,9 +407,11 @@ jobs:
 
             if [[ "$action" == "none" ]]; then
               echo "$app: no confirmed regressions"
-              echo "## $app: Unconfirmed" >> "$GITHUB_STEP_SUMMARY"
-              echo "New failures did not reproduce on confirming rerun." >> "$GITHUB_STEP_SUMMARY"
-              echo "" >> "$GITHUB_STEP_SUMMARY"
+              {
+                echo "## $app: Unconfirmed"
+                echo "New failures did not reproduce on confirming rerun."
+                echo ""
+              } >> "$GITHUB_STEP_SUMMARY"
               continue
             fi
 
@@ -408,7 +419,9 @@ jobs:
             echo "$result" > "issue-$app.json"
             bash ci/regression-issue.sh "$app" "issue-$app.json"
 
-            echo "## $app: Regression reported" >> "$GITHUB_STEP_SUMMARY"
-            echo "See issue for details." >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
+            {
+              echo "## $app: Regression reported"
+              echo "See issue for details."
+              echo ""
+            } >> "$GITHUB_STEP_SUMMARY"
           done

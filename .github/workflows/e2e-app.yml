@@ -127,7 +127,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: e2e-${{ inputs.app }}
+          name: ${{ inputs.confirm && format('e2e-confirm-{0}', inputs.app) || format('e2e-{0}', inputs.app) }}
           path: |
             playwright-report/
             test-results/
@@ -147,7 +147,7 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-digests-${{ inputs.app }}
-          path: test-results/digests.json
+          path: ci-artifacts/digests.json
           retention-days: 90
 
       - name: Clean up
