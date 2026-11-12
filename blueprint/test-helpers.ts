@@ -651,17 +651,19 @@ export function sharedMselName(label: string, slot: number): string {
 
 /**
  * Deterministic, per-test name for a child record of a shared MSEL. Unique across the two
- * theme runs and across `--repeat-each` copies (which may run concurrently on another worker).
+ * theme runs, across workers running the same file at once (the other browser project, or
+ * a `--repeat-each` copy) via `parallelIndex`, and across `--repeat-each` copies that run
+ * one after another on the same worker.
  * Scenario-event text must be unique stack-wide because the grid shows other MSELs' events
  * (see `findScenarioEventRow`), so `base` must be specific to the spec file.
  */
 export function sharedChildName(
   base: string,
-  testInfo: { repeatEachIndex: number },
+  testInfo: { parallelIndex: number; repeatEachIndex: number },
   theme?: string
 ): string {
   // Closing delimiter so `-r1` is not a substring of `-r10`.
-  return `${base}${theme ? `-${theme}` : ''}-r${testInfo.repeatEachIndex}-`;
+  return `${base}${theme ? `-${theme}` : ''}-w${testInfo.parallelIndex}-r${testInfo.repeatEachIndex}-`;
 }
 
 /**
