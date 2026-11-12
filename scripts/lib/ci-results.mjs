@@ -121,8 +121,8 @@ export function evaluate(report, known, skip, opts) {
     return result;
   }
 
-  // Track which known entries were matched
-  const matchedKnown = new Set();
+  // Track which list entries were matched
+  const matchedEntries = new Set();
 
   // Process each test
   for (const test of tests) {
@@ -147,14 +147,14 @@ export function evaluate(report, known, skip, opts) {
         result.skipLeaks.push(key);
       } else if (knownEntry) {
         result.knownFailures.push(key);
-        matchedKnown.add(knownEntry);
+        matchedEntries.add(knownEntry);
       } else {
         result.newFailures.push(key);
       }
     } else if (status === 'expected') {
       if (knownEntry) {
         result.nowPassing.push(key);
-        matchedKnown.add(knownEntry);
+        matchedEntries.add(knownEntry);
       }
     } else if (status === 'flaky') {
       result.flaky.push(key);
@@ -162,7 +162,7 @@ export function evaluate(report, known, skip, opts) {
 
     // Check for skip leaks (skipped test should be on skip list)
     if (status === 'skipped' && skipEntry) {
-      matchedKnown.add(skipEntry);
+      matchedEntries.add(skipEntry);
     } else if (status !== 'skipped' && skipEntry) {
       // Test ran but should have been skipped
       if (!result.skipLeaks.some((k) => k.file === key.file && k.title === key.title)) {
@@ -176,7 +176,7 @@ export function evaluate(report, known, skip, opts) {
     const testedFiles = new Set(tests.map((t) => t.file));
     for (const entry of known) {
       const entryApp = entry.file.split('/')[0];
-      if (entryApp === app && !matchedKnown.has(entry)) {
+      if (entryApp === app && !matchedEntries.has(entry)) {
         // Check if any test from this file ran
         if (entry.title === '*') {
           if (!testedFiles.has(entry.file)) {
@@ -251,8 +251,8 @@ export function lintLists(known, skip) {
       errors.push(`Known entry has invalid date format: ${entry.file} :: ${entry.title}`);
     }
 
-    // Check file exists (only for non-wildcard)
-    if (entry.title !== '*' && !existsSync(entry.file)) {
+    // Check file exists
+    if (!existsSync(entry.file)) {
       errors.push(`Known entry references nonexistent file: ${entry.file}`);
     }
 

@@ -250,6 +250,16 @@ const CASES = [
     (r) => r.length === 1 && r[0].includes('requires'),
   ],
   [
+    'lint: wildcard known entry with nonexistent file → error',
+    () => lintLists([knownEntry('nope.spec.ts', '*')], []),
+    (r) => r.length === 1 && r[0].includes('nope.spec.ts'),
+  ],
+  [
+    'lint: wildcard skip entry with nonexistent file → error',
+    () => lintLists([], [skipEntry('nope.spec.ts', '*', 'gitea')]),
+    (r) => r.length === 1 && r[0].includes('nope.spec.ts'),
+  ],
+  [
     'lint: entry on both lists → error',
     () => {
       const file = 'alloy/tests/accessibility-and-usability/color-contrast-compliance.spec.ts';
