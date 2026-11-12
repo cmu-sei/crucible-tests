@@ -134,13 +134,13 @@
   {
     "file": "player/tests/errors/non-existent-view.spec.ts",
     "title": "dark theme › Error Handling and Edge Cases › Navigate to Non-Existent View",
-    "reason": "App bug: Opening a view that does not exist runs the failed lookup twice and opens two View Not Found bottom sheets, so the heading is briefly duplicated (strict mode violation); intermittent in both themes, failed in the Aspire run and in a fork CI run.",
+    "reason": "App bug: Intermittent. Opening a view that does not exist runs the failed lookup twice and opens two View Not Found bottom sheets, so the heading is briefly duplicated (strict mode violation). Seen in both themes: light failed in the Aspire run (2026-11-10), dark failed in fork CI run 43160946595, and both passed in fork CI run 43254238270.",
     "added": "2026-11-11"
   },
   {
     "file": "player/tests/errors/non-existent-view.spec.ts",
     "title": "light theme › Error Handling and Edge Cases › Navigate to Non-Existent View",
-    "reason": "App bug: Opening a view that does not exist runs the failed lookup twice and opens two View Not Found bottom sheets, so the heading is briefly duplicated (strict mode violation); intermittent in both themes, failed in the Aspire run and in a fork CI run.",
+    "reason": "App bug: Intermittent. Opening a view that does not exist runs the failed lookup twice and opens two View Not Found bottom sheets, so the heading is briefly duplicated (strict mode violation). Seen in both themes: light failed in the Aspire run (2026-11-10), dark failed in fork CI run 43160946595, and both passed in fork CI run 43254238270.",
     "added": "2026-11-11"
   },
   {
@@ -200,7 +200,7 @@
   {
     "file": "steamfitter/tests/scenario-templates-management/create-new-scenario-template.spec.ts",
     "title": "light theme › Scenario Templates Management › Create a new scenario template",
-    "reason": "App bug: The new scenario template dialog does not keep the typed description (failed in the Aspire run).",
+    "reason": "App bug: Intermittent. The new scenario template dialog does not always keep the typed description. Failed in the Aspire run (2026-11-10), was flaky in 2 of 3 single-spec fork CI runs, and passed in fork CI run 43254238270.",
     "added": "2026-11-11"
   },
   {

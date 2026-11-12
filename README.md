@@ -234,7 +234,7 @@ Each entry includes:
 
 - `file`: the spec file path relative to the repo root
 - `title`: the full test title, including `describe` block prefixes, joined with ` › `
-- `reason`: what is broken, starting with its category: `App bug:`, `Test out of date with :main:`, or `Test bug:`
+- `reason`: what is broken, starting with its category: `App bug:`, `Test out of date with :main:`, or `Test bug:`. If the failure only happens in some runs, follow the category with `Intermittent.` and note where it failed and passed, for example `App bug: Intermittent. <what is broken>. Failed in …; passed in …`. An intermittent entry that passes in one run is expected to keep its entry, so leave it in place even when the now-passing comment lists it.
 - `tracking` (optional): a link to the issue or PR that tracks the fix
 - `added`: the date the entry was added (`YYYY-MM-DD`)
 
