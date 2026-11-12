@@ -44,12 +44,14 @@ fi
 EXISTING_ID=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate --jq ".[] | select(.body | contains(\"$MARKER\")) | .id" | head -n 1 || true)
 EXISTING_ID="${EXISTING_ID// /}"  # Trim whitespace
 
+RESOLVED_TEXT='All known failures previously reported as passing on this PR have been removed from the list, or no longer pass.'
+
 # Determine action
 if [[ "$BODY_ARG" == "-" ]]; then
   # Resolved text
   if [[ -n "$EXISTING_ID" ]]; then
     ACTION="update"
-    BODY="$MARKER\n\nAll known failures previously reported as passing on this PR have been removed from the list, or no longer pass."
+    BODY="$MARKER"$'\n\n'"$RESOLVED_TEXT"
   else
     ACTION="none"
   fi
@@ -66,7 +68,7 @@ else
     # Empty body means no nowPassing items
     if [[ -n "$EXISTING_ID" ]]; then
       ACTION="resolve"
-      BODY="$MARKER\n\nAll known failures previously reported as passing on this PR have been removed from the list, or no longer pass."
+      BODY="$MARKER"$'\n\n'"$RESOLVED_TEXT"
     else
       ACTION="none"
     fi
