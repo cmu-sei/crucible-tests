@@ -58,6 +58,30 @@ jobs:
       - name: Check run-filter parsing
         run: npm run check:run-filters
 
+      # The evaluator's self-check, plus lintLists() on the real
+      # ci/known-failures.json and ci/skip-in-ci.json: a test on both lists, an
+      # unknown `requires`, a missing spec file or a duplicate entry fails here.
+      # See scripts/check-ci-results.mjs.
+      - name: Check CI results evaluator and lists
+        run: npm run check:ci-results
+
+      # Checks that CRUCIBLE_TARGET=ci really leaves skip-listed tests out, and
+      # fails on a skip entry that matches no discovered test (stale or renamed).
+      # See scripts/check-ci-skip.mjs.
+      - name: Check skip-in-CI wiring and stale entries
+        run: npm run check:ci-skip
+
+      # Table-driven self-checks of the E2E planner (changed files -> matrix),
+      # the sticky PR comment renderer and the weekly regression report.
+      - name: Check CI planner
+        run: npm run check:ci-affected
+
+      - name: Check PR comment renderer
+        run: npm run check:ci-pr-comment
+
+      - name: Check regression report
+        run: npm run check:ci-regressions
+
       # Loads every spec and fixture. Catches syntax errors, unresolved imports,
       # renamed exports and duplicate test titles, and fails outright if zero
       # tests are discovered - which is what a broken testMatch or a spec moved
@@ -87,3 +111,9 @@ jobs:
       # Test regression issue shell script logic
       - name: Test regression issue script
         run: bash ci/test-regression-issue.sh
+
+      # Test wait.sh against throwaway busybox services: a crashing service fails
+      # at once, a stalled one is restarted once, and a timeout reports each
+      # pending service. Uses its own compose project.
+      - name: Test stack wait script
+        run: bash ci/stack/test-wait.sh
