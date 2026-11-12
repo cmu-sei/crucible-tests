@@ -17,14 +17,14 @@
  * Appends summary to $GITHUB_STEP_SUMMARY when that variable is set.
  */
 
-import { readFileSync, writeFileSync, appendFileSync } from 'fs';
+import { readFileSync, writeFileSync, appendFileSync, mkdirSync } from 'fs';
 import { dirname, join } from 'path';
 import { evaluate, renderSummary } from './lib/ci-results.mjs';
 
 // Parse CLI args
 const args = process.argv.slice(2);
 let resultsPath, knownPath, skipPath, app;
-const fullApps = [];
+let full = false;
 
 for (let i = 0; i < args.length; i++) {
   if (args[i] === '--results' && i + 1 < args.length) {
@@ -36,9 +36,12 @@ for (let i = 0; i < args.length; i++) {
   } else if (args[i] === '--app' && i + 1 < args.length) {
     app = args[++i];
   } else if (args[i] === '--full') {
-    if (app) fullApps.push(app);
+    full = true;
   }
 }
+
+// --full may come before or after --app, so resolve it once parsing is done.
+const fullApps = full && app ? [app] : [];
 
 if (!resultsPath || !knownPath || !skipPath || !app) {
   console.error('Usage: evaluate-ci-results.mjs --results <path> --known <path> --skip <path> --app <app> [--full]');
@@ -81,7 +84,10 @@ const output = {
 };
 
 // Write ci-evaluation.json alongside results file
+// The results directory is missing when Playwright never started, and that is
+// exactly the run that must still leave a didNotRun evaluation behind.
 const evalPath = join(dirname(resultsPath), 'ci-evaluation.json');
+mkdirSync(dirname(evalPath), { recursive: true });
 writeFileSync(evalPath, JSON.stringify(output, null, 2) + '\n');
 console.log(`Wrote evaluation to ${evalPath}`);
 

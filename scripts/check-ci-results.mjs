@@ -8,7 +8,9 @@
  * Usage: node --no-warnings scripts/check-ci-results.mjs
  */
 
-import { readFileSync } from 'fs';
+import { readFileSync, writeFileSync, mkdtempSync, mkdirSync, rmSync, existsSync } from 'fs';
+import { tmpdir } from 'os';
+import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { evaluate, lintLists, collectTests } from './lib/ci-results.mjs';
@@ -311,5 +313,66 @@ for (const [description, testFn, checkFn] of CASES) {
   }
 }
 
-console.log(`${CASES.length - failures}/${CASES.length} cases passed`);
+// CLI cases: run evaluate-ci-results.mjs itself against files in a temp dir.
+const cliScript = join(__dirname, 'evaluate-ci-results.mjs');
+const tmp = mkdtempSync(join(tmpdir(), 'check-ci-results-'));
+const runCli = (args) => {
+  const res = spawnSync(process.execPath, ['--no-warnings', cliScript, ...args], {
+    encoding: 'utf8',
+    env: { ...process.env, GITHUB_STEP_SUMMARY: '' },
+  });
+  return { status: res.status, out: res.stdout + res.stderr };
+};
+writeFileSync(join(tmp, 'empty.json'), '[]');
+const staleKnown = join(tmp, 'stale-known.json');
+writeFileSync(staleKnown, JSON.stringify([
+  { file: 'gameboard/tests/never-ran.spec.ts', title: '*', reason: 'test', added: '2026-11-01' },
+]));
+
+const CLI_CASES = [
+  [
+    'CLI with a missing test-results/ dir → exit 1, writes didNotRun evaluation and "did not run" summary',
+    () => {
+      const resultsPath = join(tmp, 'missing', 'test-results', 'results.json');
+      const r = runCli(['--results', resultsPath, '--known', join(tmp, 'empty.json'), '--skip', join(tmp, 'empty.json'), '--app', 'gallery']);
+      const evalPath = join(tmp, 'missing', 'test-results', 'ci-evaluation.json');
+      const evaluation = existsSync(evalPath) ? JSON.parse(readFileSync(evalPath, 'utf8')) : null;
+      return { ...r, evaluation };
+    },
+    (r) => r.status === 1 && r.evaluation?.didNotRun === true && r.evaluation?.ok === false &&
+      r.out.includes('Suite did not run'),
+  ],
+  [
+    'CLI with --full before --app → stale entries still reported',
+    () => {
+      const resultsPath = join(tmp, 'full-first', 'results.json');
+      rmSync(join(tmp, 'full-first'), { recursive: true, force: true });
+      mkdirSync(join(tmp, 'full-first'), { recursive: true });
+      writeFileSync(resultsPath, JSON.stringify(sampleReport));
+      runCli(['--results', resultsPath, '--known', staleKnown, '--skip', join(tmp, 'empty.json'), '--full', '--app', 'gameboard']);
+      return JSON.parse(readFileSync(join(tmp, 'full-first', 'ci-evaluation.json'), 'utf8'));
+    },
+    (r) => r.staleEntries.some((e) => e.file === 'gameboard/tests/never-ran.spec.ts'),
+  ],
+];
+
+for (const [description, testFn, checkFn] of CLI_CASES) {
+  try {
+    const result = testFn();
+    if (!checkFn(result)) {
+      failures++;
+      console.log(`FAIL ${description}`);
+      console.log(`     Result: ${JSON.stringify(result, null, 2).slice(0, 400)}...`);
+    } else {
+      console.log(`ok   ${description}`);
+    }
+  } catch (err) {
+    failures++;
+    console.log(`FAIL ${description}: ${err.message}`);
+  }
+}
+rmSync(tmp, { recursive: true, force: true });
+
+const total = CASES.length + CLI_CASES.length;
+console.log(`${total - failures}/${total} cases passed`);
 process.exit(failures ? 1 : 0);
