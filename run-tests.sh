@@ -152,6 +152,36 @@ probe_url() {
     curl "${curl_flags[@]}" "$url" > /dev/null 2>&1
 }
 
+# Check Caster's module source: the Gitea that serves the test module catalog.
+#
+# caster-api is configured with the Gitea repository as a module source whether or
+# not Gitea is running, so with Gitea down Caster still reports a configured source
+# and every module listing hangs on the git fetch. That surfaces as 10s API timeouts
+# across the module specs instead of "Gitea is down", so check it up front: Gitea
+# answers its health check, and the catalog repository the specs read exists.
+#
+# Unset GITEA_URL (e.g. the minikube target) skips the check rather than probing a
+# bogus localhost port. Prints its own result lines; returns non-zero on failure.
+check_caster_module_source() {
+    [ -z "$GITEA_URL" ] && return 0
+    local ok=0
+    if curl -s -o /dev/null --max-time 10 -f "$GITEA_URL/api/healthz"; then
+        print_success "Gitea, Caster's module source ($GITEA_URL)"
+    else
+        print_error "Gitea (Caster's module source) not accessible at $GITEA_URL"
+        echo "    Start it with Launch__Gitea=true, or start the 'gitea' and 'gitea-seed' resources in the Aspire dashboard."
+        return 1
+    fi
+    if curl -s -o /dev/null --max-time 10 -f "$GITEA_URL/api/v1/repos/$GITEA_CATALOG_REPO"; then
+        print_success "Caster test module catalog ($GITEA_CATALOG_REPO)"
+    else
+        print_error "Caster test module catalog $GITEA_CATALOG_REPO not found in Gitea"
+        echo "    Publish it with: caster/module-catalog/publish.sh"
+        ok=1
+    fi
+    return $ok
+}
+
 # Check if services are running
 # Usage: check_services [app ...]
 # With no args, checks Keycloak + Aspire only.
@@ -204,6 +234,12 @@ check_services() {
             fi
         fi
     done
+
+    # Caster's specs also need its module source. A run with no app named runs every
+    # app's specs, Caster's included, so it needs the check too.
+    if [ $# -eq 0 ] || [[ " $* " == *" caster "* ]]; then
+        check_caster_module_source || all_ok=false
+    fi
 
     echo ""
 
@@ -383,6 +419,7 @@ load_target_env
 # Resolve infrastructure URLs (with defaults)
 KEYCLOAK_URL="${KEYCLOAK_URL:-https://localhost:8443}"
 ASPIRE_DASHBOARD_URL="${ASPIRE_DASHBOARD_URL:-https://localhost:17088}"
+GITEA_CATALOG_REPO="${GITEA_CATALOG_REPO:-crucible/crucible-terraform-modules}"
 
 # Determine which app(s) to health-check
 TARGET_APP=""

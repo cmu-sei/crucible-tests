@@ -1,7 +1,7 @@
 // Copyright 2026 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
-import { test as base, Page } from '@playwright/test';
+import { test as base, Locator, Page } from '@playwright/test';
 import { Services, serviceUrlPattern, oidcStorageKey, authenticateWithKeycloak } from '../shared-fixtures';
 
 /**
@@ -36,7 +36,7 @@ export async function authenticateTopoMojoWithKeycloak(
     // TopoMojo shows a landing page with a login button - look for it
     // Race condition: check for both login button (unauthenticated) and auth content (authenticated)
     const loginButton = page.getByRole('button', { name: 'identity provider' });
-    const authenticatedButton = page.locator('button:has-text("Admin"), button:has-text("Logout")');
+    const authenticatedButton = topomojoNavLink(page, 'Logout');
 
     // Wait for either login button or authenticated content to appear
     try {
@@ -84,12 +84,24 @@ export async function authenticateTopoMojoWithKeycloak(
     console.log(`Still on OIDC callback URL, waiting for redirect...`);
   }
 
-  // Wait for authenticated app content to appear (not the landing page)
-  // Look for authenticated elements like Admin/Logout buttons or navigation
-  const authenticatedContent = page.locator('button:has-text("Admin"), button:has-text("Logout"), navigation, searchbox, [role="searchbox"]');
-  await authenticatedContent.first().waitFor({ state: 'visible', timeout: 30000 });
+  // Wait for authenticated app content to appear (not the landing page): the top bar
+  // only offers Logout once the user is signed in.
+  await topomojoNavLink(page, 'Logout').waitFor({ state: 'visible', timeout: 30000 });
 
   console.log(`Successfully authenticated and returned to TopoMojo`);
+}
+
+/**
+ * A link in TopoMojo's top bar. Home, About, Admin (admins only), Observe (observers
+ * who are not admins) and Logout (any signed-in user) are all links: topomojo-ui #85
+ * turned Admin, Observe and Logout from buttons into links, so look them up by the
+ * link role rather than as buttons.
+ */
+export function topomojoNavLink(
+  page: Page,
+  name: 'Home' | 'About' | 'Admin' | 'Observe' | 'Logout'
+): Locator {
+  return page.locator('nav.navbar').getByRole('link', { name, exact: true });
 }
 
 /**

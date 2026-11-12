@@ -5,7 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, CITE_THEMES, setCiteTheme } from '../../fixtures';
-import { navigateToAdminSection, deleteTeamTypeByName } from '../../test-helpers';
+import { navigateToAdminSection, deleteTeamTypeByName, waitForDialogOpen } from '../../test-helpers';
 
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Administration - Team Types`, () => {
@@ -17,12 +17,12 @@ for (const theme of CITE_THEMES) {
 
       await navigateToAdminSection(page, 'Team Types');
 
-      const addButton = page.getByRole('button', { name: 'Add TeamType' });
+      const addButton = page.getByRole('button', { name: 'Add Team Type' });
       await expect(addButton).toBeVisible({ timeout: 10000 });
       await addButton.click();
 
       const dialog = page.getByRole('dialog');
-      await expect(dialog).toBeVisible({ timeout: 5000 });
+      await waitForDialogOpen(dialog);
 
       const nameField = dialog.getByRole('textbox').first();
       await nameField.fill(TEST_TEAM_TYPE);

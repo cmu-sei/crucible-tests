@@ -22,13 +22,12 @@ import { openExhibitTeamsPanel, teamRowShortNames, teamRowFullNames } from './nu
  * Team Management — sorting the Exhibit Teams list by Full Name with a null-name team
  * present.
  *
- * Pending upstream: `admin-teams`' sort comparator must guard a null `name`. This spec
- * asserts the guarded behaviour, so it fails until that change reaches the Gallery UI build
- * under test.
+ * Regression test for the null guard in `admin-teams`' sort comparator, which keeps a team
+ * with a null `name` from throwing and emptying the list, without dropping that team.
  *
  * `Team.Name` is nullable in the API (`Gallery.Api.Data/Models/Team.cs`) and the
  * generated Angular client types it `string | null | undefined`, so a team really can
- * carry a null name. `admin-teams.component.ts`'s `sortTeams()` compares
+ * carry a null name. `admin-teams.component.ts`'s `sortTeams()` used to compare
  * `a.name.toLowerCase() < b.name.toLowerCase()` unguarded in its `case 'name'`, which
  * throws `TypeError: Cannot read properties of null (reading 'toLowerCase')` the moment
  * such a team reaches the comparator.

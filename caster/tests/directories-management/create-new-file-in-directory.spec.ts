@@ -16,7 +16,7 @@ for (const theme of CASTER_THEMES) {
       await expect(page.getByText('My Projects')).toBeVisible();
 
       await page.locator('button:has(.mdi-plus-circle)').click();
-      await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
+      await expect(page.getByRole('dialog', { name: 'Add Project' })).toBeVisible();
       await page.getByRole('textbox', { name: 'Name' }).fill(`File Test Project ${uniqueSuffix}`);
       await page.getByRole('button', { name: 'Save' }).click();
       await expectCasterProjectOpen(page, `File Test Project ${uniqueSuffix}`);
@@ -26,7 +26,7 @@ for (const theme of CASTER_THEMES) {
       if (projectId) cleanupCasterProject(projectId);
 
       await page.getByText('Add Directory').first().click();
-      await expect(page.getByRole('dialog', { name: 'Create New Directory?' })).toBeVisible();
+      await expect(page.getByRole('dialog', { name: 'Add Directory' })).toBeVisible();
       await page.getByRole('textbox', { name: 'Name' }).fill('File-Directory');
       await page.getByRole('button', { name: 'Save' }).click();
       await expect(page.getByRole('button', { name: 'File-Directory' })).toBeVisible({ timeout: 10000 });
@@ -39,7 +39,7 @@ for (const theme of CASTER_THEMES) {
       await page.getByText('Add File').click();
 
       // expect: A file creation dialog is displayed
-      await expect(page.getByRole('dialog', { name: 'Create New File?' })).toBeVisible({ timeout: 5000 });
+      await expect(page.getByRole('dialog', { name: 'Add File' })).toBeVisible({ timeout: 5000 });
 
       // 3. Enter 'main.tf' as the filename
       const fileNameInput = page.getByRole('textbox', { name: 'Name' });

@@ -4,7 +4,7 @@
 // spec: topomojo/topomojo-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, topomojoNavLink } from '../../fixtures';
 
 test.describe('Admin Panel', () => {
   test('Admin - Template Browser', async ({ topomojoAuthenticatedPage: page }) => {
@@ -31,12 +31,12 @@ test.describe('Admin Panel', () => {
       await page.waitForLoadState('domcontentloaded');
     }
 
-    // Wait for Admin button to be visible (confirms authentication)
-    const adminButton = page.getByRole('button', { name: 'Admin' });
-    await expect(adminButton).toBeVisible({ timeout: 10000 });
+    // Wait for Admin link to be visible (confirms authentication)
+    const adminLink = topomojoNavLink(page, 'Admin');
+    await expect(adminLink).toBeVisible({ timeout: 10000 });
 
     // 2. Navigate to admin panel
-    await adminButton.click();
+    await adminLink.click();
     await page.waitForLoadState('domcontentloaded');
 
     // 3. Click on 'Templates' link in admin navigation

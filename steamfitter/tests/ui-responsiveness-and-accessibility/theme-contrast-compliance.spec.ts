@@ -7,6 +7,7 @@
 import type { Locator, Page } from '@playwright/test';
 import { test, expect, Services, setSteamfitterTheme, STEAMFITTER_THEMES } from '../../fixtures';
 import { navigateToAdminSection } from '../../test-helpers';
+import { expectFaviconInTopBarColor } from '../../../theme-helpers';
 
 /**
  * Accessibility — real WCAG contrast on the Steamfitter home page and an admin
@@ -284,6 +285,9 @@ for (const theme of STEAMFITTER_THEMES) {
       const toolbar = page.locator('app-topbar mat-toolbar.toolbar');
       await expect(toolbar).toHaveCSS('background-color', hexToRgb(settings.AppTopBarHexColor!));
       await expect(toolbar).toHaveCSS('color', hexToRgb(settings.AppTopBarHexTextColor!));
+
+      // The favicon is recolored to the top-bar color too.
+      await expectFaviconInTopBarColor(page, settings.AppTopBarHexColor!);
 
       // The home logo keeps the top-bar pair too: the shape in the top-bar color on
       // a disc of the top-bar text color.

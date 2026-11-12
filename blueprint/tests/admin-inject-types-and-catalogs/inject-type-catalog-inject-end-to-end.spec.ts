@@ -390,7 +390,7 @@ for (const theme of BLUEPRINT_THEMES) {
       // 17. Navigate to Inject Types and delete the inject type
 
       await navigateTo('Inject Types');
-      await deleteAllMatching(new RegExp(`^Delete ${INJECT_TYPE_NAME} injectType`));
+      await deleteAllMatching(new RegExp(`^Delete ${INJECT_TYPE_NAME}$`));
 
       // expect: The inject type no longer appears in the list
       await expect(page.locator(`text=${INJECT_TYPE_NAME}`).first()).not.toBeVisible({ timeout: 10000 });

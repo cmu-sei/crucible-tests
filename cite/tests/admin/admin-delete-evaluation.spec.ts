@@ -5,7 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, seedCompleteEvaluation, cleanupCompleteEvaluation, CITE_THEMES, setCiteTheme } from '../../fixtures';
-import { navigateToAdminSection, waitForAdminListLoad } from '../../test-helpers';
+import { navigateToAdminSection, waitForAdminListLoad, waitForDialogOpen } from '../../test-helpers';
 
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Administration - Evaluations`, () => {
@@ -54,9 +54,9 @@ for (const theme of CITE_THEMES) {
       await deleteButton.click();
 
       // 6. Confirm deletion in dialog
-      const confirmDialog = page.getByRole('dialog', { name: 'Delete this evaluation?' });
-      await expect(confirmDialog).toBeVisible({ timeout: 10000 });
-      const yesButton = confirmDialog.getByRole('button', { name: 'Yes' });
+      const confirmDialog = page.getByRole('dialog', { name: 'Delete Evaluation' });
+      await waitForDialogOpen(confirmDialog, 10000);
+      const yesButton = confirmDialog.getByRole('button', { name: 'Delete' });
       await yesButton.click();
       await expect(confirmDialog).not.toBeVisible({ timeout: 5000 });
       await page.waitForTimeout(1000);

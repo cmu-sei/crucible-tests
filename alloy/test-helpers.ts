@@ -17,7 +17,17 @@ export async function alloyIsDarkTheme(page: Page): Promise<boolean> {
 }
 
 /**
- * Put the Alloy UI into the requested theme via the top-bar "Admin User" menu's
+ * The top-bar user-menu button. It is labelled with the signed-in user's name, so this
+ * finds it by position rather than by "Admin User": a spec signed in as a seeded user
+ * has no such button, and on the admin page `name: 'Admin User'` also matches every
+ * Event Template whose "Edit: <name> - Admin User" title carries the creator's name.
+ */
+export function alloyUserMenuButton(page: Page): Locator {
+  return page.locator('.user-text').getByRole('button');
+}
+
+/**
+ * Put the Alloy UI into the requested theme via the top-bar user menu's
  * "Dark Theme" switch, then wait until <body> reflects the change.
  *
  * Alloy persists the selected theme through @cmusei/crucible-common's auth store
@@ -37,7 +47,7 @@ export async function applyAlloyTheme(page: Page, theme: AlloyTheme): Promise<vo
     return;
   }
 
-  await page.getByRole('button', { name: 'Admin User' }).click();
+  await alloyUserMenuButton(page).click();
   const toggle = page.getByRole('switch', { name: 'Dark Theme' });
   await toggle.waitFor({ state: 'visible', timeout: 10000 });
   await toggle.click();

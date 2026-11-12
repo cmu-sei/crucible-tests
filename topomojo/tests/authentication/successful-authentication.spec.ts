@@ -5,7 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect } from '@playwright/test';
-import { Services, serviceUrlPattern } from '../../fixtures';
+import { Services, serviceUrlPattern, topomojoNavLink } from '../../fixtures';
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -62,10 +62,10 @@ test.describe('Authentication and Authorization', () => {
     // expect: TopoMojo home page displays
     await page.waitForLoadState('domcontentloaded');
 
-    // expect: User is authenticated - Admin and Logout buttons are visible
-    const adminButton = page.getByRole('button', { name: 'Admin' });
-    await expect(adminButton).toBeVisible({ timeout: 30000 });
-    const logoutButton = page.getByRole('button', { name: 'Logout' });
-    await expect(logoutButton).toBeVisible({ timeout: 10000 });
+    // expect: User is authenticated - Admin and Logout links are visible
+    const adminLink = topomojoNavLink(page, 'Admin');
+    await expect(adminLink).toBeVisible({ timeout: 30000 });
+    const logoutLink = topomojoNavLink(page, 'Logout');
+    await expect(logoutLink).toBeVisible({ timeout: 10000 });
   });
 });

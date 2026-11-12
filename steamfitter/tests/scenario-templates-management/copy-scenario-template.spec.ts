@@ -47,7 +47,7 @@ for (const theme of STEAMFITTER_THEMES) {
           response.ok(),
         { timeout: 15000 }
       );
-      await respondToConfirmDialog(page, true);
+      await respondToConfirmDialog(page, true, 'Copy');
       await copyResponse.catch(() => {});
 
       // expect: A new template whose name begins with the original's name appears

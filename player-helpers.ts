@@ -168,6 +168,56 @@ async function playerCall<T = any>(
   }
 }
 
+export interface PlayerFile {
+  id: string;
+  name: string;
+}
+
+/**
+ * Upload a file to a view, assigned to the given teams, as the view's Files page does. Pair every call with
+ * {@link deleteFile}.
+ */
+export async function uploadViewFile(
+  token: string,
+  viewId: string,
+  teamIds: string[],
+  file: { name: string; mimeType: string; content: string }
+): Promise<PlayerFile> {
+  const base = Services.Player.API.replace(/\/$/, '');
+  const form = new FormData();
+  form.append('viewId', viewId);
+  for (const teamId of teamIds) form.append('teamIds', teamId);
+  form.append('ToUpload', new Blob([file.content], { type: file.mimeType }), file.name);
+  const ctx = await newContext();
+  try {
+    const res = await ctx.post(`${base}/api/files`, {
+      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      multipart: form,
+    });
+    const text = await res.text();
+    if (!res.ok()) {
+      throw new Error(`uploadViewFile failed for ${file.name} (${res.status()}): ${text}`);
+    }
+    const answer = JSON.parse(text) as PlayerFile[];
+    const uploaded = answer.find((f) => f.name === file.name);
+    if (!uploaded) {
+      // the API may have renamed it; leave nothing behind
+      for (const f of answer) await deleteFile(token, f.id);
+      throw new Error(`uploadViewFile: ${file.name} is not in the upload's answer: ${text}`);
+    }
+    return uploaded;
+  } finally {
+    await ctx.dispose();
+  }
+}
+
+export async function deleteFile(token: string, fileId: string): Promise<void> {
+  const r = await playerCall(token, `/api/files/${fileId}`, { method: 'DELETE' });
+  if (!r.ok && r.status !== 404) {
+    console.warn(`deleteFile failed for ${fileId} (${r.status}): ${r.text}`);
+  }
+}
+
 export interface PlayerView {
   id: string;
   name: string;

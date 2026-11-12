@@ -301,15 +301,9 @@ for (const theme of BLUEPRINT_THEMES) {
 
         // A MSEL role on its own grants no reads: MselViewRequirement also wants the user in a unit
         // attached to the MSEL (or on one of its teams). So the user joins such a unit once the
-        // sign-in has created their Blueprint record.
-        //
-        // Pending upstream: the page decides from whichever one of the user's MSEL roles it finds
-        // first and treats Evaluator alone as able to view and edit, while the API refuses every
-        // read to an Evaluator alone and lets a checkbox be ticked only by an Owner or by an
-        // Evaluator who is also an Editor or Approver. Owner is the single role both sides agree
-        // may tick, so it stands in for the evaluator here. When the page follows the API's rules,
-        // add an Evaluator-plus-Editor step.
-        test('Access follows the MSEL role: none, Editor, then Owner', async ({ browser }) => {
+        // sign-in has created their Blueprint record. Evaluator is the assessing role: on its own
+        // it lets the user read the MSEL and tick its checkboxes.
+        test('Access follows the MSEL role: none, Editor, then Evaluator', async ({ browser }) => {
           seeded = await seedAssessorMsel(token);
           kcToken = await getKeycloakAdminToken();
           kcUser = await createKeycloakUser(kcToken, { username: tempUsername('bp-assessor'), password });
@@ -351,15 +345,20 @@ for (const theme of BLUEPRINT_THEMES) {
           await expect(page.getByText('Access Denied')).toHaveCount(0);
           await expect(first.getByRole('checkbox')).toBeDisabled();
 
-          // expect: an Owner can tick them
+          // expect: with Evaluator as their only role, the user can still open the page and tick them
           await removeUserMselRole(token, editor.id);
-          await addUserMselRole(token, seeded.mselId, kcUser.id, 'Owner');
+          await addUserMselRole(token, seeded.mselId, kcUser.id, 'Evaluator');
           await page.reload();
           const checkbox = eventRow(page, seeded.firstNote).getByRole('checkbox');
           await expect(checkbox).toBeEnabled({ timeout: 30000 });
+          await expect(page.getByText('Access Denied')).toHaveCount(0);
           await checkbox.click();
           await expect(checkbox).toBeChecked();
+          // expect: the tick is saved server-side and survives a reload
           await expect.poll(() => observedValue(token, seeded!.firstEventId, seeded!.mselId)).toBe('true');
+          await page.reload();
+          await expect(eventRow(page, seeded.firstNote).getByRole('checkbox')).toBeChecked({ timeout: 30000 });
+          await expect(eventRow(page, seeded.secondNote).getByRole('checkbox')).not.toBeChecked();
         });
       });
     }

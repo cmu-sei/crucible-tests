@@ -21,9 +21,9 @@ import { openExhibitTeamsPanel, teamRowShortNames, teamRowFullNames } from './nu
 /**
  * Team Management — searching the Exhibit Teams list with a null-valued team present.
  *
- * Pending upstream: `admin-teams`' filter predicate must guard a null `name` and a null
- * `shortName`. This spec asserts the guarded behaviour, so it fails until that change reaches
- * the Gallery UI build under test.
+ * Regression test for the null guards in `admin-teams`' filter predicate, which keep a
+ * team with a null `name` or a null `shortName` from throwing and emptying the list, while
+ * still letting that team match on its non-null field.
  *
  * `getFilteredTeams()`'s predicate in `admin-teams.component.ts` used to read
  * `a.shortName.toLowerCase().includes(...) || a.name.toLowerCase().includes(...)` with

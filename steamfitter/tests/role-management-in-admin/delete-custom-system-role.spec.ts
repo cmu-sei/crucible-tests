@@ -53,7 +53,8 @@ for (const theme of STEAMFITTER_THEMES) {
 
       const confirmDialog = page.getByRole('dialog', { name: 'Delete Role' });
       await expect(confirmDialog).toBeVisible({ timeout: 5000 });
-      await confirmDialog.getByRole('button', { name: 'Delete' }).click();
+      await expect(confirmDialog).toContainText(`Are you sure that you want to delete ${ROLE_NAME}?`);
+      await confirmDialog.getByRole('button', { name: 'Delete', exact: true }).click();
       await deleteResponse;
 
       // The role's column header should no longer be present.

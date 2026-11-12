@@ -18,14 +18,14 @@ for (const theme of CASTER_THEMES) {
       await page.reload();
 
       await page.locator('[mattooltip="Add New Project"]').click();
-      const projectDialog = page.getByRole('dialog', { name: 'Create New Project?' });
+      const projectDialog = page.getByRole('dialog', { name: 'Add Project' });
       await expect(projectDialog).toBeVisible();
       await projectDialog.getByRole('textbox', { name: 'Name' }).fill(projectName);
       await projectDialog.getByRole('button', { name: 'Save' }).click();
       await expectCasterProjectOpen(page, projectName);
 
       await page.getByTitle('Add New Directory').click();
-      const dirDialog = page.getByRole('dialog', { name: 'Create New Directory?' });
+      const dirDialog = page.getByRole('dialog', { name: 'Add Directory' });
       await expect(dirDialog).toBeVisible();
       await dirDialog.getByRole('textbox', { name: 'Name' }).fill('Lock-WS-Dir');
       await dirDialog.getByRole('button', { name: 'Save' }).click();
@@ -35,7 +35,7 @@ for (const theme of CASTER_THEMES) {
       await page.getByRole('button', { name: 'WORKSPACES' }).click();
 
       await page.getByText('Add Workspace').click();
-      const wsDialog = page.getByRole('dialog', { name: 'Create New Workspace?' });
+      const wsDialog = page.getByRole('dialog', { name: 'Add Workspace' });
       await expect(wsDialog).toBeVisible();
       // Workspace names must match pattern: ^[a-zA-Z0-9-_.]+$ (no spaces allowed)
       await wsDialog.getByRole('textbox', { name: 'Name' }).fill('Lock_Workspace');

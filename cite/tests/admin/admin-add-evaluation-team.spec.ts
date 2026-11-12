@@ -12,7 +12,7 @@ import {
   CITE_THEMES,
   setCiteTheme,
 } from '../../fixtures';
-import { navigateToAdminSection, waitForAdminListLoad } from '../../test-helpers';
+import { navigateToAdminSection, waitForAdminListLoad, waitForDialogOpen } from '../../test-helpers';
 
 /**
  * Adds a team through the evaluation's inline Teams panel — the UI path, not the API.
@@ -69,7 +69,7 @@ for (const theme of CITE_THEMES) {
       await addTeamButton.click();
 
       const teamDialog = page.locator('mat-dialog-container');
-      await expect(teamDialog).toBeVisible({ timeout: 5000 });
+      await waitForDialogOpen(teamDialog);
       await teamDialog.getByRole('textbox').first().fill(teamName);
       await teamDialog.getByRole('textbox').nth(1).fill(teamShortName);
       await teamDialog.getByRole('combobox', { name: 'Team Type' }).click();

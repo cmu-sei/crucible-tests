@@ -5,7 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, CITE_THEMES, setCiteTheme } from '../../fixtures';
-import { navigateToAdminSection, deleteGroupByName } from '../../test-helpers';
+import { navigateToAdminSection, deleteGroupByName, waitForDialogOpen } from '../../test-helpers';
 
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Administration - Groups`, () => {
@@ -23,8 +23,8 @@ for (const theme of CITE_THEMES) {
       const addButton = page.locator('button[mattooltip="Add New Group"]');
       await addButton.click();
 
-      const dialog = page.getByRole('dialog', { name: 'Create New Group?' });
-      await expect(dialog).toBeVisible({ timeout: 5000 });
+      const dialog = page.getByRole('dialog', { name: 'Add Group' });
+      await waitForDialogOpen(dialog);
 
       const nameField = dialog.getByRole('textbox', { name: 'Name' });
       await nameField.fill(TEST_GROUP_NAME);
