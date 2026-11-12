@@ -169,6 +169,8 @@ By default the number of parallel workers comes from `playwright.config.ts` (2 o
 
 Most authenticated specs run once per theme, under describe blocks titled `light theme › ...` and `dark theme › ...`. Use `--theme light|dark` to run just one of those variants; it works by excluding the other theme's titles (`--grep-invert`), so tests that aren't theme-parameterized (e.g. Gameboard, Moodle, TopoMojo) still run. It combines with `--filter` and with every command, including `quick`, `ui`, `headed` and `debug`.
 
+**Note:** Real test titles use ` › ` as the separator and may contain smart quotes. The CI lists below use ` > ` (with spaces around it) and straight quotes only, for easier editing and pasting. CI matches entries to tests regardless of which form the real title uses.
+
 **Supported applications:** `alloy`, `blueprint`, `caster`, `cite`, `gallery`, `gameboard`, `keycloak`, `moodle`, `player`, `steamfitter`, `topomojo`
 
 ## CI
@@ -233,7 +235,7 @@ Two JSON files control CI behavior for tests that are expected to fail or cannot
 Each entry includes:
 
 - `file`: the spec file path relative to the repo root
-- `title`: the full test title, including `describe` block prefixes, joined with ` › `
+- `title`: the full test title, including `describe` block prefixes, joined with ` > ` (note: ` > ` with spaces, not ` › `); use straight quotes only (`'` and `"`), not smart quotes
 - `reason`: what is broken, starting with its category: `App bug:`, `Test out of date with :main:`, or `Test bug:`. If the failure only happens in some runs, follow the category with `Intermittent.`, for example `App bug: Intermittent. <what is broken>.` An intermittent entry that passes in one run is expected to keep its entry, so leave it in place even when the now-passing comment lists it.
 - `tracking` (optional): a link to the issue or PR that tracks the fix
 - `added`: the date the entry was added (`YYYY-MM-DD`)

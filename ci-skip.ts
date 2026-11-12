@@ -36,6 +36,9 @@ export function loadCiSkip(): SkipEntry[] {
 /**
  * Convert skip entries into Playwright config filters.
  * Returns { testIgnore, grepInvert } to merge into the config.
+ *
+ * Entries are written in canonical form (` > ` separator, straight quotes),
+ * but must match Playwright's real grep strings (` › ` separator, possibly smart quotes).
  */
 export function ciSkipFilters(entries: SkipEntry[]): {
   testIgnore: string[];
@@ -50,12 +53,19 @@ export function ciSkipFilters(entries: SkipEntry[]): {
       testIgnore.push(entry.file);
     } else {
       // Single-test skip: build a grepInvert pattern
-      // The grep target string is: file + " › " + joined title path
-      // We need to match the exact test, anchored at the end
+      // The entry title is canonical (` > ` separator, straight quotes).
+      // The grep target string from Playwright is: file + " › " + joined title path.
+      // Split on ` > `, escape each segment, then join with a pattern that accepts
+      // ` › `, ` > `, or a single space (Playwright's grep joins with spaces; describe
+      // titles may contain `›`). Inside each segment, `'` matches `[''']` and `"` matches `["""]`.
       const escapedFile = escapeRegex(entry.file);
-      const titleSegments = entry.title.split(' › ').map(escapeRegex);
-      // Join with a pattern that matches either ` › ` or ` ` (for titles containing ` › `)
-      const titlePattern = titleSegments.join('(?: › | )');
+      const titleSegments = entry.title.split(' > ').map((seg) => {
+        // Escape regex chars, then replace straight quotes with character classes
+        const escaped = escapeRegex(seg);
+        return escaped.replace(/'/g, "[''']").replace(/"/g, '["""]');
+      });
+      // Join with a pattern that matches ` › `, ` > `, or a single space
+      const titlePattern = titleSegments.join('(?: › | > | )');
       // Anchor at the end so we don't match extensions of this title
       grepAlternatives.push(`${escapedFile}.*${titlePattern}$`);
     }

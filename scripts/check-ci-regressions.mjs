@@ -29,9 +29,9 @@ const ctx = {
 };
 
 // Sample test keys
-const A = { file: 'cite/tests/a.spec.ts', title: 'Test A › Should work' };
-const B = { file: 'cite/tests/b.spec.ts', title: 'Test B › Should work' };
-const C = { file: 'gallery/tests/c.spec.ts', title: 'Test C › Should work' };
+const A = { file: 'cite/tests/a.spec.ts', title: 'Test A > Should work' };
+const B = { file: 'cite/tests/b.spec.ts', title: 'Test B > Should work' };
+const C = { file: 'gallery/tests/c.spec.ts', title: 'Test C > Should work' };
 
 // Evaluation builders for the weekly-run classification cases
 const evalOf = (over = {}) => ({ ok: true, didNotRun: false, globalErrors: [], newFailures: [], ...over });

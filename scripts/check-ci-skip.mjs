@@ -79,15 +79,24 @@ function discoverTests(env) {
 
 /**
  * Check if a test matches a skip entry.
+ * Entry uses canonical form (` > ` separator, straight quotes),
+ * but test titles from Playwright use ` › ` and may have smart quotes.
  */
 function matches(test, entry) {
   if (test.file !== entry.file) return false;
   if (entry.title === '*') return true;
 
-  // Normalize whitespace
-  const testTitle = test.title.replace(/\s+/g, ' ');
-  const entryTitle = entry.title.replace(/\s+/g, ' ');
-  return testTitle === entryTitle;
+  // Canonicalize both titles: replace › with >, smart quotes with straight, collapse whitespace
+  const canonicalize = (title) => {
+    return title
+      .replace(/›/g, ' > ')
+      .replace(/['']/g, "'")
+      .replace(/[""]/g, '"')
+      .replace(/\s+/g, ' ')
+      .trim();
+  };
+
+  return canonicalize(test.title) === canonicalize(entry.title);
 }
 
 const sampleListPath = join(root, 'scripts/__fixtures__/ci-skip/sample.json');

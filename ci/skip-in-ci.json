@@ -1,28 +1,28 @@
 [
   {
     "file": "blueprint/tests/integration-with-crucible-services/api-integration-blueprint-api-endpoints.spec.ts",
-    "title": "dark theme › Integration with Crucible Services › API Integration - Blueprint API Endpoints",
+    "title": "dark theme > Integration with Crucible Services > API Integration - Blueprint API Endpoints",
     "requires": "xapi-lrs",
     "reason": "Needs an xAPI LRS: without one, GET xapi/viewed/msel answers 200 with no body and GET msels/{id}/scoringmodel answers 204, and the test requires every response to be JSON. Passed in the Aspire run.",
     "added": "2026-11-11"
   },
   {
     "file": "blueprint/tests/integration-with-crucible-services/api-integration-blueprint-api-endpoints.spec.ts",
-    "title": "light theme › Integration with Crucible Services › API Integration - Blueprint API Endpoints",
+    "title": "light theme > Integration with Crucible Services > API Integration - Blueprint API Endpoints",
     "requires": "xapi-lrs",
     "reason": "Needs an xAPI LRS: without one, GET xapi/viewed/msel answers 200 with no body and GET msels/{id}/scoringmodel answers 204, and the test requires every response to be JSON. Passed in the Aspire run.",
     "added": "2026-11-11"
   },
   {
     "file": "blueprint/tests/integration-with-crucible-services/caster-integration-push-and-remove.spec.ts",
-    "title": "Caster Integration › A MSEL team named Admin takes the place of Player's Admin team",
+    "title": "Caster Integration > A MSEL team named Admin takes the place of Player's Admin team",
     "requires": "terraform",
     "reason": "Push runs a Caster Terraform plan and apply; CI has no Terraform.",
     "added": "2026-11-11"
   },
   {
     "file": "blueprint/tests/integration-with-crucible-services/caster-integration-push-and-remove.spec.ts",
-    "title": "Caster Integration › Push deploys a Caster workspace with each team on its variable, and Remove destroys it",
+    "title": "Caster Integration > Push deploys a Caster workspace with each team on its variable, and Remove destroys it",
     "requires": "terraform",
     "reason": "Push runs a Caster Terraform plan and apply; CI has no Terraform.",
     "added": "2026-11-11"
@@ -36,14 +36,14 @@
   },
   {
     "file": "caster/tests/api-rules/directory-rules.spec.ts",
-    "title": "API Rules › Directories › Terraform Version Must Be One Caster Can Run",
+    "title": "API Rules > Directories > Terraform Version Must Be One Caster Can Run",
     "requires": "terraform",
     "reason": "Needs installed Terraform versions (GET terraform/versions); CI has no Terraform binaries.",
     "added": "2026-11-11"
   },
   {
     "file": "caster/tests/api-rules/edit-ownership-rules.spec.ts",
-    "title": "API Rules › Edit Ownership › Design Module Edits Ignore The Design ID In The Body",
+    "title": "API Rules > Edit Ownership > Design Module Edits Ignore The Design ID In The Body",
     "requires": "gitea",
     "reason": "Needs a module from the Gitea module source (requirePrecondition throws under CI).",
     "added": "2026-11-11"
@@ -64,28 +64,28 @@
   },
   {
     "file": "caster/tests/modules-management/view-module-source-sync-failures.spec.ts",
-    "title": "dark theme › Modules Management › Update Modules From An Unknown Module ID",
+    "title": "dark theme > Modules Management > Update Modules From An Unknown Module ID",
     "requires": "gitea",
     "reason": "Needs a configured module source (requirePrecondition throws under CI when GET modules/sources is empty).",
     "added": "2026-11-11"
   },
   {
     "file": "caster/tests/modules-management/view-module-source-sync-failures.spec.ts",
-    "title": "light theme › Modules Management › Update Modules From An Unknown Module ID",
+    "title": "light theme > Modules Management > Update Modules From An Unknown Module ID",
     "requires": "gitea",
     "reason": "Needs a configured module source (requirePrecondition throws under CI when GET modules/sources is empty).",
     "added": "2026-11-11"
   },
   {
     "file": "caster/tests/projects-management/export-and-import-project.spec.ts",
-    "title": "dark theme › Projects Management › Export And Import A Project With Its Settings",
+    "title": "dark theme > Projects Management > Export And Import A Project With Its Settings",
     "requires": "terraform",
     "reason": "Sets the directory Terraform version from GET terraform/versions; CI has no Terraform binaries.",
     "added": "2026-11-11"
   },
   {
     "file": "caster/tests/projects-management/export-and-import-project.spec.ts",
-    "title": "light theme › Projects Management › Export And Import A Project With Its Settings",
+    "title": "light theme > Projects Management > Export And Import A Project With Its Settings",
     "requires": "terraform",
     "reason": "Sets the directory Terraform version from GET terraform/versions; CI has no Terraform binaries.",
     "added": "2026-11-11"

@@ -12,12 +12,25 @@ import { join } from 'path';
 const VALID_REQUIRES = ['terraform', 'gitea', 'hypervisor', 'vm-console', 'gameboard-deploy', 'moodle', 'angular-dev-build', 'xapi-lrs'];
 
 /**
+ * Convert a title string to canonical form: ` > ` separator, straight quotes only.
+ * Replaces `›` with ` > `, smart quotes with straight quotes, collapses whitespace, and trims.
+ */
+export function canonicalTitle(title) {
+  return title
+    .replace(/›/g, ' > ')
+    .replace(/[‘’]/g, "'")  // ' ' → '
+    .replace(/[“”]/g, '"')  // " " → "
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
  * Generate normalized test key from file path and title path.
- * Collapses whitespace runs to single spaces.
+ * Uses canonical title form: ` > ` separator, straight quotes only.
  */
 export function testKey(file, titlePath) {
-  const joinedTitle = titlePath.join(' › ').replace(/\s+/g, ' ');
-  return `${file} :: ${joinedTitle}`;
+  const joinedTitle = titlePath.join(' > ');
+  return `${file} :: ${canonicalTitle(joinedTitle)}`;
 }
 
 /**
@@ -67,14 +80,14 @@ export function collectTests(report) {
 
 /**
  * Check if a test matches a list entry.
- * Handles '*' wildcards and whitespace normalization.
+ * Handles '*' wildcards and canonical title comparison.
  */
 function matches(testFile, testTitlePath, entryFile, entryTitle) {
   if (testFile !== entryFile) return false;
   if (entryTitle === '*') return true;
 
-  const testTitle = testTitlePath.join(' › ').replace(/\s+/g, ' ');
-  const normalizedEntryTitle = entryTitle.replace(/\s+/g, ' ');
+  const testTitle = canonicalTitle(testTitlePath.join(' > '));
+  const normalizedEntryTitle = canonicalTitle(entryTitle);
   return testTitle === normalizedEntryTitle;
 }
 
@@ -127,7 +140,7 @@ export function evaluate(report, known, skip, opts) {
   // Process each test
   for (const test of tests) {
     const { file, titlePath, status } = test;
-    const key = { file, title: titlePath.join(' › ') };
+    const key = { file, title: canonicalTitle(titlePath.join(' > ')) };
 
     // Update counts
     if (status === 'expected') result.counts.expected++;
@@ -239,6 +252,26 @@ export function lintLists(known, skip) {
   const knownKeys = new Set();
   const skipKeys = new Set();
 
+  // Helper to check for non-canonical characters in any string field
+  const checkCanonicalChars = (obj, listName, entryKey) => {
+    // U+2018, U+2019, U+201C, U+201D (smart quotes only, not straight ' or ")
+    const smartQuotePattern = /[‘’“”]/;
+    for (const [field, value] of Object.entries(obj)) {
+      if (typeof value === 'string') {
+        if (value.includes('›')) {
+          errors.push(
+            `${listName} entry ${entryKey} field "${field}" contains ›; use > with spaces instead`
+          );
+        }
+        if (smartQuotePattern.test(value)) {
+          errors.push(
+            `${listName} entry ${entryKey} field "${field}" contains smart quotes; use straight quotes instead`
+          );
+        }
+      }
+    }
+  };
+
   // Check known entries
   for (const entry of known) {
     if (!entry.file || !entry.title || !entry.reason || !entry.added) {
@@ -246,9 +279,14 @@ export function lintLists(known, skip) {
       continue;
     }
 
+    const entryKey = `${entry.file} :: ${entry.title}`;
+
+    // Check for non-canonical characters
+    checkCanonicalChars(entry, 'Known', entryKey);
+
     // Check date format
     if (!/^\d{4}-\d{2}-\d{2}$/.test(entry.added)) {
-      errors.push(`Known entry has invalid date format: ${entry.file} :: ${entry.title}`);
+      errors.push(`Known entry has invalid date format: ${entryKey}`);
     }
 
     // Check file exists
@@ -259,7 +297,7 @@ export function lintLists(known, skip) {
     // Check for duplicates
     const key = `${entry.file}::${entry.title}`;
     if (knownKeys.has(key)) {
-      errors.push(`Duplicate known entry: ${entry.file} :: ${entry.title}`);
+      errors.push(`Duplicate known entry: ${entryKey}`);
     }
     knownKeys.add(key);
   }
@@ -271,16 +309,21 @@ export function lintLists(known, skip) {
       continue;
     }
 
+    const entryKey = `${entry.file} :: ${entry.title}`;
+
+    // Check for non-canonical characters
+    checkCanonicalChars(entry, 'Skip', entryKey);
+
     // Check requires value
     if (!VALID_REQUIRES.includes(entry.requires)) {
       errors.push(
-        `Skip entry has invalid requires value "${entry.requires}": ${entry.file} :: ${entry.title}`
+        `Skip entry has invalid requires value "${entry.requires}": ${entryKey}`
       );
     }
 
     // Check date format
     if (!/^\d{4}-\d{2}-\d{2}$/.test(entry.added)) {
-      errors.push(`Skip entry has invalid date format: ${entry.file} :: ${entry.title}`);
+      errors.push(`Skip entry has invalid date format: ${entryKey}`);
     }
 
     // Check file exists
@@ -291,7 +334,7 @@ export function lintLists(known, skip) {
     // Check for duplicates
     const key = `${entry.file}::${entry.title}`;
     if (skipKeys.has(key)) {
-      errors.push(`Duplicate skip entry: ${entry.file} :: ${entry.title}`);
+      errors.push(`Duplicate skip entry: ${entryKey}`);
     }
     skipKeys.add(key);
   }

@@ -35,7 +35,7 @@ const CASES = [
           nowPassing: [
             {
               file: 'gallery/tests/test.spec.ts',
-              title: 'Test › Works',
+              title: 'Test > Works',
               reason: 'App bug #123',
               tracking: 'https://github.com/org/repo/issues/123',
             },
@@ -48,7 +48,7 @@ const CASES = [
       if (typeof r !== 'string') return false;
       if (!r.startsWith(MARKER)) return false;
       if (!r.includes('ci/known-failures.json')) return false;
-      if (!r.includes('`gallery/tests/test.spec.ts :: Test › Works`')) return false;
+      if (!r.includes('`gallery/tests/test.spec.ts :: Test > Works`')) return false;
       if (!r.includes(ctx.runUrl)) return false;
       // Check for JSON block and parse it
       const jsonMatch = r.match(/```json\n([\s\S]*?)\n```/);
@@ -60,7 +60,7 @@ const CASES = [
         const entry = parsed[0];
         return (
           entry.file === 'gallery/tests/test.spec.ts' &&
-          entry.title === 'Test › Works' &&
+          entry.title === 'Test > Works' &&
           entry.reason === 'App bug #123' &&
           entry.tracking === 'https://github.com/org/repo/issues/123'
         );

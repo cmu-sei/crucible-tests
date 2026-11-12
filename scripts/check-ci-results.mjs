@@ -13,7 +13,7 @@ import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { evaluate, lintLists, collectTests } from './lib/ci-results.mjs';
+import { evaluate, lintLists, collectTests, canonicalTitle } from './lib/ci-results.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, '..');
@@ -59,7 +59,7 @@ const CASES = [
       r.newFailures.some(
         (f) =>
           f.file === 'alloy/tests/error-handling-and-validation/data-type-validation.spec.ts' &&
-          f.title === 'light theme › Error Handling and Validation › Data Type Validation'
+          f.title === 'light theme > Error Handling and Validation > Data Type Validation'
       ),
   ],
   [
@@ -68,11 +68,11 @@ const CASES = [
       const known = [
         knownEntry(
           'alloy/tests/error-handling-and-validation/data-type-validation.spec.ts',
-          'light theme › Error Handling and Validation › Data Type Validation'
+          'light theme > Error Handling and Validation > Data Type Validation'
         ),
         knownEntry(
           'gameboard/tests/admin/delete-challenge.spec.ts',
-          'Admin - Challenges › Delete Challenge (Spec) from Game'
+          'Admin - Challenges > Delete Challenge (Spec) from Game'
         ),
       ];
       return evaluate(sampleReport, known, [], { fullApps: [], app: 'alloy' });
@@ -96,7 +96,7 @@ const CASES = [
       const known = [
         knownEntry(
           'alloy/tests/error-handling-and-validation/data-type-validation.spec.ts',
-          'light theme ›  Error Handling  and Validation › Data  Type Validation'
+          'light theme >  Error Handling  and Validation > Data  Type Validation'
         ),
         knownEntry('gameboard/tests/admin/delete-challenge.spec.ts', '*'),
       ];
@@ -110,7 +110,7 @@ const CASES = [
       const known = [
         knownEntry(
           'alloy/tests/accessibility-and-usability/color-contrast-compliance.spec.ts',
-          'Accessibility and Usability › Color Contrast Compliance'
+          'Accessibility and Usability > Color Contrast Compliance'
         ),
         // Also add the unexpected tests so they don't block
         knownEntry('alloy/tests/error-handling-and-validation/data-type-validation.spec.ts', '*'),
@@ -266,7 +266,7 @@ const CASES = [
     () => {
       const file = 'alloy/tests/accessibility-and-usability/color-contrast-compliance.spec.ts';
       return lintLists(
-        [knownEntry(file, 'a › b')],
+        [knownEntry(file, 'a > b')],
         [skipEntry(file, '*', 'gitea')]
       );
     },
@@ -293,6 +293,90 @@ const CASES = [
           t.titlePath.join(' › ') === 'Admin - Challenges › Delete Challenge (Spec) from Game' &&
           t.status === 'unexpected'
       ),
+  ],
+
+  // canonicalTitle() and matching cases
+  [
+    'canonicalTitle converts › to >, straight quotes, collapses spaces',
+    () => canonicalTitle('a ›  b’s “c”'),
+    (r) => r === "a > b's \"c\"",
+  ],
+  [
+    'report with › describe title matches canonical entry',
+    () => {
+      // Simulate a report test whose describe title uses ` › ` (like theme-helpers do)
+      const reportWithTheme = {
+        suites: [
+          {
+            title: 'alloy/tests/theme-test.spec.ts',
+            file: 'alloy/tests/theme-test.spec.ts',
+            column: 0,
+            line: 0,
+            specs: [],
+            suites: [
+              {
+                title: 'light theme › Suite',
+                file: 'alloy/tests/theme-test.spec.ts',
+                line: 10,
+                column: 6,
+                specs: [
+                  {
+                    title: 'the grid\'s cell',
+                    ok: false,
+                    tags: [],
+                    tests: [
+                      {
+                        timeout: 120000,
+                        annotations: [],
+                        expectedStatus: 'passed',
+                        projectId: 'chromium',
+                        projectName: 'chromium',
+                        results: [],
+                        status: 'unexpected',
+                      },
+                    ],
+                    id: 'test-1',
+                    file: 'alloy/tests/theme-test.spec.ts',
+                    line: 11,
+                    column: 7,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+      const known = [
+        knownEntry('alloy/tests/theme-test.spec.ts', 'light theme > Suite > the grid\'s cell'),
+      ];
+      return evaluate(reportWithTheme, known, [], { fullApps: [], app: 'alloy' });
+    },
+    (r) => r.knownFailures.length === 1 && r.ok === true,
+  ],
+  [
+    'lintLists errors on title containing ›',
+    () => {
+      const known = [knownEntry('alloy/tests/accessibility-and-usability/color-contrast-compliance.spec.ts', 'a › b')];
+      return lintLists(known, []);
+    },
+    (r) => r.length === 1 && r[0].includes('›') && r[0].includes('use > with spaces'),
+  ],
+  [
+    'lintLists errors on reason containing smart quote',
+    () => {
+      const known = [{ ...knownEntry('alloy/tests/accessibility-and-usability/color-contrast-compliance.spec.ts', 'test'), reason: 'it\u2019s broken' }];
+      return lintLists(known, []);
+    },
+    (r) => r.length === 1 && r[0].includes('smart quotes') && r[0].includes('straight quotes'),
+  ],
+  [
+    'real lists lint clean after conversion',
+    () => {
+      const known = JSON.parse(readFileSync(join(rootDir, 'ci/known-failures.json'), 'utf8'));
+      const skip = JSON.parse(readFileSync(join(rootDir, 'ci/skip-in-ci.json'), 'utf8'));
+      return lintLists(known, skip);
+    },
+    (r) => r.length === 0,
   ],
 ];
 
