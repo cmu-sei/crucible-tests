@@ -1,0 +1,190 @@
+{
+  "config": {
+    "rootDir": "/tests",
+    "projects": [
+      {
+        "id": "chromium",
+        "name": "chromium"
+      }
+    ]
+  },
+  "suites": [
+    {
+      "title": "alloy/tests/accessibility-and-usability/color-contrast-compliance.spec.ts",
+      "file": "alloy/tests/accessibility-and-usability/color-contrast-compliance.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Accessibility and Usability",
+          "file": "alloy/tests/accessibility-and-usability/color-contrast-compliance.spec.ts",
+          "line": 11,
+          "column": 6,
+          "specs": [
+            {
+              "title": "Color Contrast Compliance",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "status": "passed",
+                      "duration": 3857
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "test-1",
+              "file": "alloy/tests/accessibility-and-usability/color-contrast-compliance.spec.ts",
+              "line": 12,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "alloy/tests/error-handling-and-validation/data-type-validation.spec.ts",
+      "file": "alloy/tests/error-handling-and-validation/data-type-validation.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "light theme › Error Handling and Validation",
+          "file": "alloy/tests/error-handling-and-validation/data-type-validation.spec.ts",
+          "line": 12,
+          "column": 8,
+          "specs": [
+            {
+              "title": "Data Type Validation",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "status": "failed",
+                      "duration": 2000
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "test-2",
+              "file": "alloy/tests/error-handling-and-validation/data-type-validation.spec.ts",
+              "line": 23,
+              "column": 9
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "gameboard/tests/admin/delete-challenge.spec.ts",
+      "file": "gameboard/tests/admin/delete-challenge.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Admin - Challenges",
+          "file": "gameboard/tests/admin/delete-challenge.spec.ts",
+          "line": 20,
+          "column": 6,
+          "specs": [
+            {
+              "title": "Delete Challenge (Spec) from Game",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "status": "failed",
+                      "duration": 6821
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "test-3",
+              "file": "gameboard/tests/admin/delete-challenge.spec.ts",
+              "line": 35,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "cite/tests/scoring/manual-scoring.spec.ts",
+      "file": "cite/tests/scoring/manual-scoring.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Scoring",
+          "file": "cite/tests/scoring/manual-scoring.spec.ts",
+          "line": 10,
+          "column": 6,
+          "specs": [
+            {
+              "title": "Manual Scoring",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 120000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "status": "skipped",
+                      "duration": 0
+                    }
+                  ],
+                  "status": "skipped"
+                }
+              ],
+              "id": "test-4",
+              "file": "cite/tests/scoring/manual-scoring.spec.ts",
+              "line": 11,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-11-10T17:58:41.239Z",
+    "duration": 100000,
+    "expected": 1,
+    "skipped": 1,
+    "unexpected": 2,
+    "flaky": 0
+  }
+}
