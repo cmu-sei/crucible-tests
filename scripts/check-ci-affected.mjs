@@ -8,7 +8,7 @@
 
 import { existsSync } from 'fs';
 import { execSync } from 'child_process';
-import { affectedRuns, buildImportGraph, toMatrix, parseAppsFilter } from './lib/ci-affected.mjs';
+import { affectedRuns, buildImportGraph, extractRelativeImports, toMatrix, parseAppsFilter } from './lib/ci-affected.mjs';
 
 const APPS = ['alloy', 'blueprint', 'caster', 'cite', 'console', 'gallery', 'gameboard', 'player', 'playerVm', 'steamfitter', 'topomojo'];
 
@@ -33,8 +33,26 @@ const CASES = [
     name: 'player-helpers.ts change',
     changed: [{ path: 'player-helpers.ts', status: 'M' }],
     lists: { listChangedFiles: [], skip: [] },
-    // Will be computed from real import graph
-    expected: { full: false, runs: null, dropped: [] }, // null = compute from graph
+    // Hard-coded on purpose: console reaches player-helpers.ts only through
+    // playerVm/vm-helpers.ts, whose import spans several lines. Deriving this
+    // from the graph under test would hide exactly that kind of miss.
+    expected: {
+      full: false,
+      runs: ['console', 'player', 'playerVm', 'steamfitter'].map(app => ({ app, specs: [] })),
+      dropped: [],
+    },
+  },
+  {
+    name: 'Deleted non-spec file under an app (whole app plus importers)',
+    changed: [{ path: 'playerVm/vm-helpers.ts', status: 'D' }],
+    lists: { listChangedFiles: [], skip: [] },
+    expected: { full: false, runs: [{ app: 'console', specs: [] }, { app: 'playerVm', specs: [] }], dropped: [] },
+  },
+  {
+    name: 'Deleted fixtures file (whole app)',
+    changed: [{ path: 'cite/fixtures.ts', status: 'D' }],
+    lists: { listChangedFiles: [], skip: [] },
+    expected: { full: false, runs: [{ app: 'cite', specs: [] }], dropped: [] },
   },
   {
     name: 'shared-fixtures.ts change (Full)',
@@ -170,25 +188,38 @@ const APPS_FILTER_CASES = [
   },
 ];
 
+// extractRelativeImports cases: [name, source, fromPath, expected sorted imports]
+const IMPORT_CASES = [
+  {
+    name: 'Multi-line named import',
+    source: "import {\n  createTeam,\n  createView,\n} from '../player-helpers';\n",
+    from: 'playerVm/vm-helpers.ts',
+    expected: ['player-helpers.ts'],
+  },
+  {
+    name: 'Multi-line import type and re-export',
+    source: "import type {\n  A,\n} from './a';\nexport {\n  b,\n} from \"../b.ts\";\n",
+    from: 'cite/sub/x.ts',
+    expected: ['cite/b.ts', 'cite/sub/a.ts'],
+  },
+  {
+    name: 'Side-effect and dynamic imports',
+    source: "import './setup';\nconst m = await import('../lazy');\n",
+    from: 'gallery/tests/x.spec.ts',
+    expected: ['gallery/lazy.ts', 'gallery/tests/setup.ts'],
+  },
+  {
+    name: 'Package imports and non-import statements ignored',
+    source: "import { test } from '@playwright/test';\nexport const x = 1;\nconst y = 'from ./nope';\n",
+    from: 'alloy/fixtures.ts',
+    expected: [],
+  },
+];
+
 // Build import graph once for all tests
 console.log('Building import graph...');
 const graph = buildImportGraph('.');
 console.log(`Import graph has ${graph.size} entries\n`);
-
-// Compute expected results for player-helpers case
-const playerHelpersCase = CASES.find(c => c.name === 'player-helpers.ts change');
-const playerHelpersImporters = graph.get('player-helpers.ts') || new Set();
-const playerHelpersApps = new Set();
-for (const importer of playerHelpersImporters) {
-  const app = importer.split('/')[0];
-  if (APPS.includes(app)) {
-    playerHelpersApps.add(app);
-  }
-}
-playerHelpersCase.expected.runs = Array.from(playerHelpersApps)
-  .sort()
-  .map(app => ({ app, specs: [] }));
-console.log(`player-helpers.ts importers: ${Array.from(playerHelpersApps).sort().join(', ')}\n`);
 
 let failures = 0;
 
@@ -218,6 +249,20 @@ for (const testCase of CASES) {
     for (const problem of problems) {
       console.log(`  ${problem}`);
     }
+  } else {
+    console.log(`ok   ${name}`);
+  }
+}
+
+// Run extractRelativeImports tests
+console.log();
+for (const { name, source, from, expected } of IMPORT_CASES) {
+  const got = Array.from(extractRelativeImports(source, from)).sort();
+  if (JSON.stringify(got) !== JSON.stringify(expected)) {
+    failures++;
+    console.log(`FAIL ${name}`);
+    console.log(`  got: ${JSON.stringify(got)}`);
+    console.log(`  expected: ${JSON.stringify(expected)}`);
   } else {
     console.log(`ok   ${name}`);
   }
@@ -311,6 +356,6 @@ if (!existsSync(slicesPath)) {
   }
 }
 
-const totalCases = CASES.length + MATRIX_CASES.length + APPS_FILTER_CASES.length;
+const totalCases = CASES.length + IMPORT_CASES.length + MATRIX_CASES.length + APPS_FILTER_CASES.length;
 console.log(`\n${totalCases - failures}/${totalCases} cases passed`);
 process.exit(failures ? 1 : 0);

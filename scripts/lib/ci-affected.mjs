@@ -80,16 +80,31 @@ export function buildImportGraph(rootDir) {
 /**
  * Extract relative imports from TypeScript source.
  * Resolves './x' and '../x' imports, with or without '.ts' extension.
+ * Handles `import`/`export ... from` statements that span several lines,
+ * side-effect imports (`import './x'`) and dynamic imports (`import('./x')`).
+ *
+ * @param {string} content - TypeScript source
+ * @param {string} fromPath - Repo-relative path of the importing file
+ * @returns {Set<string>} Repo-relative paths of the imported files
  */
-function extractRelativeImports(content, fromPath) {
+export function extractRelativeImports(content, fromPath) {
   const imports = new Set();
   const dir = fromPath.split('/').slice(0, -1).join('/');
 
-  // Match import/export statements with relative paths
-  const importRegex = /(?:import|export).*?from\s+['"](\.[^'"]+)['"]/g;
-  let match;
-  while ((match = importRegex.exec(content)) !== null) {
-    const importPath = match[1];
+  // [^;]*? crosses newlines, so a named-import list split over several lines still
+  // reaches its `from` clause; stopping at `;` keeps it inside one statement.
+  const patterns = [
+    /^\s*(?:import|export)\b[^;]*?\bfrom\s*['"](\.[^'"]+)['"]/gm,
+    /^\s*import\s*['"](\.[^'"]+)['"]/gm,
+    /\bimport\s*\(\s*['"](\.[^'"]+)['"]\s*\)/g,
+  ];
+  const specifiers = [];
+  for (const pattern of patterns) {
+    let match;
+    while ((match = pattern.exec(content)) !== null) specifiers.push(match[1]);
+  }
+
+  for (const importPath of specifiers) {
     let resolved = importPath;
 
     // Resolve relative to current file's directory
@@ -169,11 +184,11 @@ export function affectedRuns(changed, graph, lists) {
       return result;
     }
 
-    // Skip deleted files
-    if (status === 'D') continue;
-
-    // Rule 2: Spec files
+    // Rule 2: Spec files. A deleted spec has nothing left to run; any other
+    // deleted file under <app>/ falls through to rule 3, since its importers
+    // may now break.
     if (path.match(/^([^/]+)\/tests\/.*\.spec\.ts$/)) {
+      if (status === 'D') continue;
       const app = path.split('/')[0];
       if (APPS.includes(app)) {
         if (!affectedApps.has(app)) affectedApps.set(app, new Set());
