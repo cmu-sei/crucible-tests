@@ -309,10 +309,12 @@ export function parseAppsFilter(appsArg, fullMode, validApps) {
 export function toMatrix(result) {
   const include = [];
 
-  // Always use result.runs, regardless of full flag.
-  // The full flag just indicates this is a full run (for reporting),
-  // but the actual list of apps comes from result.runs.
-  for (const run of result.runs) {
+  // A full run with no explicit runs (affectedRuns hit a full trigger) means
+  // every app. A full run with runs (the CLI's --full [--apps]) uses them as is.
+  const runs = result.full && result.runs.length === 0
+    ? APPS.map(app => ({ app, specs: [] }))
+    : result.runs;
+  for (const run of runs) {
     const specs = run.specs.length === 0 ? `${run.app}/tests/` : run.specs.join(' ');
     include.push({ app: run.app, specs });
   }

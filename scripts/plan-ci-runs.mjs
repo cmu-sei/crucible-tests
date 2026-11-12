@@ -100,7 +100,7 @@ if (full) {
       // Compare base vs head versions
       let baseList = [];
       try {
-        const baseContent = execFileSync('git', ['show', `${base}:${listPath}`], { encoding: 'utf8' });
+        const baseContent = execFileSync('git', ['show', `${base}:${listPath}`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
         baseList = JSON.parse(baseContent);
       } catch {
         // Base file doesn't exist, treat as empty

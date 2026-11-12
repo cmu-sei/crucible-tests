@@ -124,6 +124,11 @@ const MATRIX_CASES = [
     input: { full: true, runs: [{ app: 'cite', specs: [] }, { app: 'player', specs: [] }], dropped: [] },
     expected: { include: [{ app: 'cite', specs: 'cite/tests/' }, { app: 'player', specs: 'player/tests/' }] },
   },
+  {
+    name: 'toMatrix with a full trigger and no runs expands to every app',
+    input: { full: true, runs: [], dropped: [] },
+    expected: { include: ['alloy', 'blueprint', 'caster', 'cite', 'console', 'gallery', 'gameboard', 'player', 'playerVm', 'steamfitter', 'topomojo'].map(app => ({ app, specs: `${app}/tests/` })) },
+  },
 ];
 
 // parseAppsFilter test
