@@ -294,7 +294,8 @@ jobs:
 
             # Check if this run has digest artifacts for all apps
             # A successful full run should have digests for each app
-            artifacts=$(gh api "repos/$REPO/actions/runs/$id/artifacts" --jq '.artifacts[].name')
+            # Use --paginate to get all artifacts (default page size 30, full run has 33+)
+            artifacts=$(gh api --paginate "repos/$REPO/actions/runs/$id/artifacts" --jq '.artifacts[].name')
 
             has_all=true
             for app in alloy blueprint caster cite console gallery gameboard player playerVm steamfitter topomojo; do
