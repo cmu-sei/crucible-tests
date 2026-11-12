@@ -25,11 +25,9 @@ function escapeTableCell(text) {
  * @returns {string | null} Markdown content or null if no nowPassing items
  */
 export function renderNowPassingComment(evals, ctx) {
-  // Filter out e2e-eval-confirm-* artifacts (Task 8 will add these later)
-  const filteredEvals = evals.filter((e) => !e.app.startsWith('e2e-eval-confirm-'));
-
-  // Aggregate all nowPassing items
-  const allNowPassing = filteredEvals.flatMap((e) =>
+  // Aggregate all nowPassing items. Confirming-rerun evaluations are dropped by
+  // render-pr-comment.mjs, which can tell them apart by artifact directory name.
+  const allNowPassing = evals.flatMap((e) =>
     e.nowPassing.map((item) => ({ ...item, app: e.app }))
   );
 

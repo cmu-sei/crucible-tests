@@ -8,7 +8,14 @@
  * Usage: node --no-warnings scripts/check-ci-pr-comment.mjs
  */
 
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+import { spawnSync } from 'child_process';
 import { renderNowPassingComment, renderResolvedComment, MARKER } from './lib/ci-pr-comment.mjs';
+
+const renderScript = join(dirname(fileURLToPath(import.meta.url)), 'render-pr-comment.mjs');
 
 const ctx = { runUrl: 'https://github.com/org/repo/actions/runs/12345', sha: 'abc1234567890123456789012345678901234567' };
 
@@ -136,35 +143,34 @@ const CASES = [
     (r) => typeof r === 'string' && r.startsWith(MARKER),
   ],
   [
-    'renderNowPassingComment ignores e2e-eval-confirm-* artifacts',
+    'renderResolvedComment → real newline after MARKER and the run link',
+    () => renderResolvedComment(ctx),
+    (r) => r.startsWith(MARKER + '\n\n') && !r.includes('\\n') && r.includes(`(${ctx.runUrl})`),
+  ],
+  [
+    'render-pr-comment.mjs ignores e2e-eval-confirm-<app>/ directories',
     () => {
-      const evals = [
-        {
-          app: 'e2e-eval-confirm-cite',
-          nowPassing: [{ file: 'cite/tests/test.spec.ts', title: 'Test', reason: 'reason' }],
-        },
-        {
-          app: 'cite',
-          nowPassing: [{ file: 'cite/tests/test2.spec.ts', title: 'Test2', reason: 'reason2' }],
-        },
-      ];
-      return renderNowPassingComment(evals, ctx);
-    },
-    (r) => {
-      if (typeof r !== 'string') return false;
-      // Should only include cite, not e2e-eval-confirm-cite
-      if (r.includes('e2e-eval-confirm-cite')) return false;
-      if (!r.includes('`cite/tests/test2.spec.ts :: Test2`')) return false;
-      // Check JSON block has only one entry
-      const jsonMatch = r.match(/```json\n([\s\S]*?)\n```/);
-      if (!jsonMatch) return false;
+      const dir = mkdtempSync(join(tmpdir(), 'check-ci-pr-comment-'));
       try {
-        const parsed = JSON.parse(jsonMatch[1]);
-        return Array.isArray(parsed) && parsed.length === 1 && parsed[0].file === 'cite/tests/test2.spec.ts';
-      } catch {
-        return false;
+        const write = (name, nowPassing) => {
+          mkdirSync(join(dir, name));
+          // A confirming rerun records the same app name as the first pass.
+          writeFileSync(join(dir, name, 'ci-evaluation.json'), JSON.stringify({ app: 'cite', nowPassing }));
+        };
+        write('e2e-eval-cite', [{ file: 'cite/tests/first.spec.ts', title: 'First', reason: 'r1' }]);
+        write('e2e-eval-confirm-cite', [{ file: 'cite/tests/confirm.spec.ts', title: 'Confirm', reason: 'r2' }]);
+        const res = spawnSync(process.execPath, ['--no-warnings', renderScript, '--dir', dir, '--run-url', ctx.runUrl, '--sha', ctx.sha], { encoding: 'utf8' });
+        return { status: res.status, out: res.stdout };
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
       }
     },
+    (r) => r.status === 0 && r.out.includes('`cite/tests/first.spec.ts :: First`') && !r.out.includes('confirm.spec.ts'),
+  ],
+  [
+    'render-pr-comment.mjs --resolved → prints the resolved body',
+    () => spawnSync(process.execPath, ['--no-warnings', renderScript, '--resolved', '--run-url', ctx.runUrl, '--sha', ctx.sha], { encoding: 'utf8' }),
+    (r) => r.status === 0 && r.stdout.trimEnd() === renderResolvedComment(ctx),
   ],
 ];
 

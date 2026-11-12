@@ -5,27 +5,40 @@
 # Upsert sticky PR comment for nowPassing tests.
 #
 # Usage:
-#   pr-comment.sh <pr-number> <body-file|->
+#   pr-comment.sh <pr-number> <body-file>
+#   pr-comment.sh <pr-number> --resolve <resolved-body-file>
 #
-# When body-file is '-', updates existing comment to resolved text, or does nothing if no comment exists.
-# When body-file is a path, creates or updates the comment with the file contents.
+# With a body file, creates the comment or updates the existing one. An empty body
+# file means nothing is now passing, and the comment is left as it is.
+# With --resolve, updates the existing comment to the given resolved body (rendered by
+# `scripts/render-pr-comment.mjs --resolved`), or does nothing if no comment exists.
+#
+# A failed comment lookup fails the script: guessing "no comment" would post a duplicate.
 #
 # Environment:
 #   GH_TOKEN or GITHUB_TOKEN: GitHub token with pull-requests: write
 #   GH_REPO or GITHUB_REPOSITORY: owner/repo
-#   PR_COMMENT_DRY_RUN: if set, print action instead of executing
+#   PR_COMMENT_DRY_RUN: if set to 1, print action instead of executing
 
 set -euo pipefail
 
 MARKER='<!-- crucible-tests:e2e-now-passing -->'
 
-if [[ $# -ne 2 ]]; then
-  echo "Usage: pr-comment.sh <pr-number> <body-file|->" >&2
+usage() {
+  echo "Usage: pr-comment.sh <pr-number> <body-file> | pr-comment.sh <pr-number> --resolve <body-file>" >&2
   exit 1
-fi
+}
 
-PR_NUMBER="$1"
-BODY_ARG="$2"
+PR_NUMBER="${1:-}"
+MODE="upsert"
+if [[ $# -eq 2 ]]; then
+  BODY_FILE="$2"
+elif [[ $# -eq 3 && "$2" == "--resolve" ]]; then
+  MODE="resolve"
+  BODY_FILE="$3"
+else
+  usage
+fi
 
 # Ensure gh is available
 if ! command -v gh &> /dev/null; then
@@ -40,48 +53,35 @@ if [[ -z "$REPO" ]]; then
   exit 1
 fi
 
-# Find existing comment by marker
-EXISTING_ID=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate --jq ".[] | select(.body | contains(\"$MARKER\")) | .id" | head -n 1 || true)
-EXISTING_ID="${EXISTING_ID// /}"  # Trim whitespace
+if [[ ! -f "$BODY_FILE" ]]; then
+  echo "Error: Body file not found: $BODY_FILE" >&2
+  exit 1
+fi
+BODY_CONTENT=$(cat "$BODY_FILE")
 
-RESOLVED_TEXT='All known failures previously reported as passing on this PR have been removed from the list, or no longer pass.'
+# Find the existing comment by marker. --paginate runs the --jq filter once per page,
+# so each page yields at most one id; keep the first line. A failed gh call aborts here.
+EXISTING_ID=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" --paginate \
+  --jq "[.[] | select(.body | contains(\"$MARKER\")) | .id] | first // empty")
+EXISTING_ID="${EXISTING_ID%%$'\n'*}"
 
 # Determine action
-if [[ "$BODY_ARG" == "-" ]]; then
-  # Resolved text
+if [[ "$MODE" == "resolve" ]]; then
+  if [[ -z "$BODY_CONTENT" ]]; then
+    echo "Error: Resolved body file is empty" >&2
+    exit 1
+  fi
   if [[ -n "$EXISTING_ID" ]]; then
-    ACTION="update"
-    BODY="$MARKER"$'\n\n'"$RESOLVED_TEXT"
+    ACTION="resolve"
   else
     ACTION="none"
   fi
+elif [[ -z "$BODY_CONTENT" ]]; then
+  ACTION="none"
+elif [[ -n "$EXISTING_ID" ]]; then
+  ACTION="update"
 else
-  # Read body from file
-  if [[ ! -f "$BODY_ARG" ]]; then
-    echo "Error: Body file not found: $BODY_ARG" >&2
-    exit 1
-  fi
-
-  BODY_CONTENT=$(cat "$BODY_ARG")
-
-  if [[ -z "$BODY_CONTENT" ]]; then
-    # Empty body means no nowPassing items
-    if [[ -n "$EXISTING_ID" ]]; then
-      ACTION="resolve"
-      BODY="$MARKER"$'\n\n'"$RESOLVED_TEXT"
-    else
-      ACTION="none"
-    fi
-  else
-    # Non-empty body
-    if [[ -n "$EXISTING_ID" ]]; then
-      ACTION="update"
-      BODY="$BODY_CONTENT"
-    else
-      ACTION="create"
-      BODY="$BODY_CONTENT"
-    fi
-  fi
+  ACTION="create"
 fi
 
 # Execute or dry-run
@@ -103,11 +103,11 @@ if [[ "${PR_COMMENT_DRY_RUN:-}" == "1" ]]; then
 else
   case "$ACTION" in
     create)
-      echo "$BODY" | gh api -X POST "repos/$REPO/issues/$PR_NUMBER/comments" -F body=@- > /dev/null
+      gh api -X POST "repos/$REPO/issues/$PR_NUMBER/comments" -F body=@"$BODY_FILE" > /dev/null
       echo "Created PR comment"
       ;;
     update|resolve)
-      echo "$BODY" | gh api -X PATCH "repos/$REPO/issues/comments/$EXISTING_ID" -F body=@- > /dev/null
+      gh api -X PATCH "repos/$REPO/issues/comments/$EXISTING_ID" -F body=@"$BODY_FILE" > /dev/null
       echo "Updated PR comment"
       ;;
     none)
