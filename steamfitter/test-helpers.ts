@@ -233,10 +233,17 @@ export async function clickContextMenuItem(page: Page, name: string): Promise<vo
 
 /**
  * Confirm or cancel the CrucibleDialogService confirmation dialog (delete/copy/
- * create-scenario/start/end prompts). The dialog renders as a `role="dialog"` whose
- * buttons follow the standard Crucible wording: the action's verb ("Delete", "Copy",
- * "Create", "Start", "End", "Execute") and "Cancel". Confirming names the verb the
- * prompt is expected to offer, so a prompt for the wrong action does not pass.
+ * create-scenario/start/end/execute prompts). The dialog renders as a `role="dialog"`.
+ * Delete prompts offer "Delete" and "Cancel". The other prompts offer their action's
+ * verb ("Copy", "Create", "Start", "End", "Execute", "Stop") and "Cancel". Confirming
+ * names the button the prompt is expected to offer, so a prompt for the wrong action
+ * does not pass.
+ *
+ * Pending upstream: cmu-sei/Steamfitter.Ui#776 gives the non-delete prompts the
+ * crucible-common defaults, "Yes" and "No", so until it merges a non-delete confirm
+ * also accepts "Yes". Once it merges, callers pass 'Yes' for those prompts and the
+ * fallback goes. Every cancelled prompt in the suite is a delete prompt, so Cancel
+ * stays exact.
  *
  * @param page - Playwright Page object
  * @param confirm - true to accept with `confirmText`, false to dismiss with Cancel
@@ -247,7 +254,11 @@ export async function respondToConfirmDialog(page: Page, confirm: false): Promis
 export async function respondToConfirmDialog(page: Page, confirm: boolean, confirmText?: string): Promise<void> {
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible({ timeout: 5000 });
-  const button = dialog.getByRole('button', { name: confirm ? confirmText : 'Cancel', exact: true });
+  let name: string | RegExp = 'Cancel';
+  if (confirm) {
+    name = confirmText === 'Delete' ? 'Delete' : new RegExp(`^(${confirmText}|Yes)$`);
+  }
+  const button = dialog.getByRole('button', { name, exact: true });
   await expect(button).toBeVisible({ timeout: 5000 });
   await button.click();
   await expect(dialog).not.toBeVisible({ timeout: 10000 });

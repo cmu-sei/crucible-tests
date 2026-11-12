@@ -264,8 +264,8 @@ export async function deleteEventTemplatesByPattern(page: Page, searchTerm: stri
  * The caller is responsible for cleaning up the template after the test.
  * Assumes the page is already authenticated and on the admin Event Templates page.
  *
- * As of Alloy.ui PR #711, "Add Event Template" opens a "Create New Event
- * Template" dialog with an empty form instead of inserting a default "New Event
+ * As of Alloy.ui PR #711, the "Add Event Template" button opens the dialog of
+ * the same name with an empty form instead of inserting a default "New Event
  * Template" row. The template is only POSTed when Save is clicked, so we fill
  * the form (name + duration are required), save it, and wait for the UI to show
  * the created row. The UI state is the stable contract these tests need; a
@@ -282,7 +282,7 @@ export async function createTestEventTemplate(
   await ensureOnAdminPage(page);
 
   // Click Add Event Template to open the create dialog (no API call yet).
-  const createDialog = page.getByRole('dialog', { name: 'Create New Event Template' });
+  const createDialog = page.getByRole('dialog', { name: 'Add Event Template' });
   await page.getByRole('button', { name: 'Add Event Template' }).click();
   await waitForDialogOpen(createDialog);
 

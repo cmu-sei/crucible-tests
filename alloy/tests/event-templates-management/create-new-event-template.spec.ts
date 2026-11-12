@@ -34,10 +34,10 @@ for (const theme of ALLOY_THEMES) {
       await page.goto(`${Services.Alloy.UI}/admin`);
       await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
 
-      // 2. Click 'Add Event Template' to open the "Create New Event Template" dialog.
+      // 2. Click 'Add Event Template' to open the dialog of the same name.
       //    As of Alloy.ui PR #711 this opens an empty form; the template is only
       //    POSTed when Save is clicked (no default "New Event Template" row anymore).
-      const createDialog = page.getByRole('dialog', { name: 'Create New Event Template' });
+      const createDialog = page.getByRole('dialog', { name: 'Add Event Template' });
       await page.getByRole('button', { name: 'Add Event Template' }).click();
       await expect(createDialog).toBeVisible();
 
