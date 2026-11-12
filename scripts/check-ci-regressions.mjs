@@ -131,6 +131,24 @@ const CASES = [
       r.recoveredBody === undefined,
   ],
   [
+    'planRegressionReport: did not run with no current digests → says none were recorded, not "no image changed"',
+    () => planRegressionReport('cite', null, null, {
+      ...planCtx,
+      currentDigests: {},
+      lastCleanDigests: { 'cite-api': 'cmusei/cite-api:main@sha256:aaa' },
+    }),
+    (r) => r.issueBody.includes('This run recorded no image digests') && !r.issueBody.includes('No image digest changed'),
+  ],
+  [
+    'planRegressionReport: did not run with unchanged digests → says no image changed',
+    () => planRegressionReport('cite', null, null, {
+      ...planCtx,
+      currentDigests: { 'cite-api': 'cmusei/cite-api:main@sha256:aaa' },
+      lastCleanDigests: { 'cite-api': 'cmusei/cite-api:main@sha256:aaa' },
+    }),
+    (r) => r.issueBody.includes('No image digest changed') && !r.issueBody.includes('recorded no image digests'),
+  ],
+  [
     'planRegressionReport: regression → regression issue and recurrence body',
     () => planRegressionReport('cite', evalOf({ ok: false, newFailures: [A] }), evalOf({ ok: false, newFailures: [A] }), planCtx),
     (r) => r.action === 'regression' && r.issueBody.includes(`${A.file} :: ${A.title}`) && r.recurrenceBody.includes('Recurrence'),

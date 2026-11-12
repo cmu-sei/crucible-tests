@@ -93,7 +93,10 @@ jobs:
         if: always() && env.DOCKERHUB_USERNAME != ''
         run: docker logout
 
+      # Also after a failed start: the images that were pulled are what a "suite did not
+      # run" issue compares with the last clean weekly run.
       - name: Record image digests
+        if: always()
         run: ci/stack/digests.sh >> "$GITHUB_STEP_SUMMARY"
 
       - name: Run tests

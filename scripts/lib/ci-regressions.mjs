@@ -62,8 +62,9 @@ export function mentionFor(repo) {
  * @param {string} app - App name
  * @param {Array<{file: string, title: string}>} keys - Failing test keys
  * @param {Array<{service: string, from: string|null, to: string}>} diff - Image digest changes
- * @param {{runUrl: string, mention: string, hasLastClean?: boolean}} ctx - hasLastClean: an
- *   earlier clean weekly run was found, so an empty diff means no image changed
+ * @param {{runUrl: string, mention: string, hasLastClean?: boolean, hasCurrentDigests?: boolean}} ctx -
+ *   hasLastClean: an earlier clean weekly run was found, so an empty diff means no image
+ *   changed; hasCurrentDigests false: this run recorded no digests to compare
  * @returns {{title: string, body: string}}
  */
 export function renderRegressionIssue(app, keys, diff, ctx) {
@@ -83,7 +84,7 @@ export function renderRegressionIssue(app, keys, diff, ctx) {
   }
 
   lines.push('');
-  imagesSection(lines, diff, ctx.hasLastClean, '## Changed images since last clean weekly run');
+  imagesSection(lines, diff, ctx, '## Changed images since last clean weekly run');
   lines.push('');
   lines.push(`[Run](${ctx.runUrl})`);
   lines.push('');
@@ -201,13 +202,19 @@ export function classifyWeeklyRun(first, confirm) {
   return { ...result, status: confirmUsable ? 'notReproduced' : 'confirmCrashed' };
 }
 
-function imagesSection(lines, diff, hasLastClean, heading) {
+// ctx.hasCurrentDigests === false: this run recorded no digests (for example, the stack
+// failed before digests.sh ran), so an empty diff says nothing about what changed.
+function imagesSection(lines, diff, ctx, heading) {
   lines.push(heading);
   lines.push('');
   if (diff.length === 0) {
-    lines.push(hasLastClean
-      ? 'No image digest changed since the last clean weekly run.'
-      : 'no earlier clean run to compare');
+    if (ctx.hasCurrentDigests === false) {
+      lines.push('This run recorded no image digests, so there is nothing to compare.');
+    } else {
+      lines.push(ctx.hasLastClean
+        ? 'No image digest changed since the last clean weekly run.'
+        : 'no earlier clean run to compare');
+    }
     return;
   }
   lines.push('| Service | From | To |');
@@ -264,7 +271,7 @@ export function renderDidNotRunIssue(app, info, diff, ctx) {
   lines.push('');
   didNotRunDetails(lines, info);
   lines.push('');
-  imagesSection(lines, diff, ctx.hasLastClean, '## Changed images since last clean weekly run');
+  imagesSection(lines, diff, ctx, '## Changed images since last clean weekly run');
   lines.push('');
   lines.push(`[Run](${ctx.runUrl})`);
   return { title: `E2E regression: ${app}`, body: lines.join('\n') };
@@ -286,7 +293,7 @@ export function renderDidNotRunComment(info, diff, ctx) {
   didNotRunDetails(lines, info);
   if (diff.length > 0) {
     lines.push('');
-    imagesSection(lines, diff, true, '### Image changes since last clean weekly run');
+    imagesSection(lines, diff, { hasLastClean: true }, '### Image changes since last clean weekly run');
   }
   return lines.join('\n');
 }
@@ -334,7 +341,12 @@ export function planRegressionReport(app, first, confirm, ctx) {
   }
 
   const diff = digestDiff(ctx.currentDigests || {}, ctx.lastCleanDigests);
-  const renderCtx = { runUrl: ctx.runUrl, mention: mentionFor(ctx.repo), hasLastClean: ctx.lastCleanDigests != null };
+  const renderCtx = {
+    runUrl: ctx.runUrl,
+    mention: mentionFor(ctx.repo),
+    hasLastClean: ctx.lastCleanDigests != null,
+    hasCurrentDigests: Object.keys(ctx.currentDigests || {}).length > 0,
+  };
 
   if (classification.status === 'didNotRun') {
     const issue = renderDidNotRunIssue(app, classification, diff, renderCtx);
