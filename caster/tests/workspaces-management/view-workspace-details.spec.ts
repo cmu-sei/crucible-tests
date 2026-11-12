@@ -8,7 +8,8 @@ import {
   test,
   expect,
   openCasterDirectory,
-  seedCasterProjectPageFree,
+  seedCasterSharedProjectPageFree,
+  casterSharedProjectName,
   seedCasterDirectoryPageFree,
   seedCasterWorkspacePageFree,
   deleteCasterProjectPageFree,
@@ -22,8 +23,8 @@ test.describe('Workspaces Management › View Workspace Details', () => {
   const directoryName = 'WS-Detail-Dir';
   const workspaceName = 'Detail_Workspace';
 
-  test.beforeAll(async () => {
-    projectId = await seedCasterProjectPageFree('E2E Shared Project [view-workspace-details]');
+  test.beforeAll(async ({}, workerInfo) => {
+    projectId = await seedCasterSharedProjectPageFree(casterSharedProjectName('view-workspace-details', workerInfo));
     directoryId = await seedCasterDirectoryPageFree(projectId, directoryName);
     await seedCasterWorkspacePageFree(directoryId, workspaceName);
   });

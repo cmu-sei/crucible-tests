@@ -4,15 +4,15 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, seedCasterProjectPageFree, seedCasterDirectoryPageFree, deleteCasterProjectPageFree, setCasterTheme, CASTER_THEMES, Services } from '../../fixtures';
+import { test, expect, seedCasterSharedProjectPageFree, casterSharedProjectName, seedCasterDirectoryPageFree, deleteCasterProjectPageFree, setCasterTheme, CASTER_THEMES, Services } from '../../fixtures';
 
 test.describe('Error Handling and Validation', () => {
   let projectId: string;
   let directoryId: string;
 
-  test.beforeAll(async () => {
-    const projectName = 'E2E Shared Project [terraform-syntax-error-handling]';
-    projectId = await seedCasterProjectPageFree(projectName);
+  test.beforeAll(async ({}, workerInfo) => {
+    const projectName = casterSharedProjectName('terraform-syntax-error-handling', workerInfo);
+    projectId = await seedCasterSharedProjectPageFree(projectName);
     directoryId = await seedCasterDirectoryPageFree(projectId, 'TF-Error-Dir');
   });
 

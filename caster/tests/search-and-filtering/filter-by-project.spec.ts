@@ -4,7 +4,7 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, seedCasterProjectPageFree, deleteCasterProjectPageFree, CASTER_THEMES, setCasterTheme, Services } from '../../fixtures';
+import { test, expect, seedCasterSharedProjectPageFree, casterSharedProjectName, deleteCasterProjectPageFree, CASTER_THEMES, setCasterTheme, Services } from '../../fixtures';
 
 test.describe('Search and Filtering', () => {
   let alphaProjectId: string;
@@ -12,11 +12,11 @@ test.describe('Search and Filtering', () => {
   let alphaProjectName: string;
   let betaProjectName: string;
 
-  test.beforeAll(async () => {
-    alphaProjectName = 'E2E Shared Project [filter-by-project-alpha]';
-    betaProjectName = 'E2E Shared Project [filter-by-project-beta]';
-    alphaProjectId = await seedCasterProjectPageFree(alphaProjectName);
-    betaProjectId = await seedCasterProjectPageFree(betaProjectName);
+  test.beforeAll(async ({}, workerInfo) => {
+    alphaProjectName = casterSharedProjectName('filter-by-project-alpha', workerInfo);
+    betaProjectName = casterSharedProjectName('filter-by-project-beta', workerInfo);
+    alphaProjectId = await seedCasterSharedProjectPageFree(alphaProjectName);
+    betaProjectId = await seedCasterSharedProjectPageFree(betaProjectName);
   });
 
   test.afterAll(async () => {

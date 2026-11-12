@@ -8,7 +8,8 @@ import {
   test,
   expect,
   openCasterDirectory,
-  seedCasterProjectPageFree,
+  seedCasterSharedProjectPageFree,
+  casterSharedProjectName,
   seedCasterDirectoryPageFree,
   deleteCasterProjectPageFree,
   casterApi,
@@ -22,8 +23,8 @@ test.describe('Variables Management › Create New Variable', () => {
   const directoryName = 'Var-Create-Dir';
   let workspaceId: string | null;
 
-  test.beforeAll(async () => {
-    projectId = await seedCasterProjectPageFree('E2E Shared Project [create-new-variable]');
+  test.beforeAll(async ({}, workerInfo) => {
+    projectId = await seedCasterSharedProjectPageFree(casterSharedProjectName('create-new-variable', workerInfo));
     directoryId = await seedCasterDirectoryPageFree(projectId, directoryName);
   });
 

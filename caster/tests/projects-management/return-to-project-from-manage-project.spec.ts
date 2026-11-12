@@ -10,15 +10,17 @@ import {
   Services,
   CASTER_THEMES,
   setCasterTheme,
-  seedCasterProjectPageFree,
+  seedCasterSharedProjectPageFree,
+  casterSharedProjectName,
   deleteCasterProjectPageFree,
 } from '../../fixtures';
 
 let projectId: string;
-const projectName = 'E2E Shared Project [return-to-project-from-manage-project]';
+let projectName: string;
 
-test.beforeAll(async () => {
-  projectId = await seedCasterProjectPageFree(projectName);
+test.beforeAll(async ({}, workerInfo) => {
+  projectName = casterSharedProjectName('return-to-project-from-manage-project', workerInfo);
+  projectId = await seedCasterSharedProjectPageFree(projectName);
 });
 
 test.afterAll(async () => {

@@ -10,19 +10,26 @@ import {
   expect,
   CASTER_THEMES,
   setCasterTheme,
-  seedCasterProjectPageFree,
+  seedCasterSharedProjectPageFree,
+  casterSharedProjectName,
   deleteCasterProjectPageFree,
 } from '../../fixtures';
 
 let matchingProjectId: string;
 let otherProjectId: string;
-const stamp = 'search-and-filter-projects';
-const matchingName = `E2E Searchable Project [${stamp}]`;
-const otherName = `E2E Unrelated Project [${stamp}]`;
+// `E2E Shared Project [search-and-filter-projects] [w<n>]`: the shared-project prefix keeps
+// both projects in the teardown purge, and the worker slot keeps the other browser's copies
+// (same file, another worker) out of this worker's search results.
+let stamp: string;
+let matchingName: string;
+let otherName: string;
 
-test.beforeAll(async () => {
-  matchingProjectId = await seedCasterProjectPageFree(matchingName);
-  otherProjectId = await seedCasterProjectPageFree(otherName);
+test.beforeAll(async ({}, workerInfo) => {
+  stamp = casterSharedProjectName('search-and-filter-projects', workerInfo);
+  matchingName = `${stamp} Searchable`;
+  otherName = `${stamp} Unrelated`;
+  matchingProjectId = await seedCasterSharedProjectPageFree(matchingName);
+  otherProjectId = await seedCasterSharedProjectPageFree(otherName);
 });
 
 test.afterAll(async () => {

@@ -8,7 +8,8 @@ import {
   test,
   expect,
   openCasterDirectory,
-  seedCasterProjectPageFree,
+  seedCasterSharedProjectPageFree,
+  casterSharedProjectName,
   seedCasterDirectoryPageFree,
   deleteCasterProjectPageFree,
   casterApi,
@@ -22,8 +23,8 @@ test.describe('Variables Management › Environment Variables vs Terraform Varia
   const directoryName = 'Var-Types-Dir';
   let workspaceId: string | null;
 
-  test.beforeAll(async () => {
-    projectId = await seedCasterProjectPageFree('E2E Shared Project [environment-vs-terraform-variables]');
+  test.beforeAll(async ({}, workerInfo) => {
+    projectId = await seedCasterSharedProjectPageFree(casterSharedProjectName('environment-vs-terraform-variables', workerInfo));
     directoryId = await seedCasterDirectoryPageFree(projectId, directoryName);
   });
 

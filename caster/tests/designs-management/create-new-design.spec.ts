@@ -4,7 +4,7 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, seedCasterProjectPageFree, seedCasterDirectoryPageFree, deleteCasterProjectPageFree, deleteCasterDesignPageFree, CASTER_THEMES, setCasterTheme, Services } from '../../fixtures';
+import { test, expect, seedCasterSharedProjectPageFree, casterSharedProjectName, seedCasterDirectoryPageFree, deleteCasterProjectPageFree, deleteCasterDesignPageFree, CASTER_THEMES, setCasterTheme, Services } from '../../fixtures';
 
 test.describe('Designs Management', () => {
   let projectId: string;
@@ -12,9 +12,9 @@ test.describe('Designs Management', () => {
   const dirName = 'Designs-Dir';
   let designId: string | null = null;
 
-  test.beforeAll(async () => {
-    const projectName = 'E2E Shared Project [create-new-design]';
-    projectId = await seedCasterProjectPageFree(projectName);
+  test.beforeAll(async ({}, workerInfo) => {
+    const projectName = casterSharedProjectName('create-new-design', workerInfo);
+    projectId = await seedCasterSharedProjectPageFree(projectName);
     directoryId = await seedCasterDirectoryPageFree(projectId, dirName);
   });
 

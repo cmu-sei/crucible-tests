@@ -13,7 +13,8 @@ import {
   CASTER_THEMES,
   setCasterTheme,
   openCasterDirectory,
-  seedCasterProjectPageFree,
+  seedCasterSharedProjectPageFree,
+  casterSharedProjectName,
   seedCasterDirectoryPageFree,
   seedCasterWorkspacePageFree,
   deleteCasterProjectPageFree,
@@ -83,8 +84,8 @@ test.describe('Workspaces Management › View Workspace Topology', () => {
   const directoryName = 'Topology_Dir';
   let workspaceId: string | null = null;
 
-  test.beforeAll(async () => {
-    projectId = await seedCasterProjectPageFree('E2E Shared Project [view-workspace-topology]');
+  test.beforeAll(async ({}, workerInfo) => {
+    projectId = await seedCasterSharedProjectPageFree(casterSharedProjectName('view-workspace-topology', workerInfo));
     directoryId = await seedCasterDirectoryPageFree(projectId, directoryName);
   });
 

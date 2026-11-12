@@ -4,15 +4,15 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, seedCasterProjectPageFree, deleteCasterProjectPageFree, CASTER_THEMES, setCasterTheme, Services } from '../../fixtures';
+import { test, expect, seedCasterSharedProjectPageFree, casterSharedProjectName, deleteCasterProjectPageFree, CASTER_THEMES, setCasterTheme, Services } from '../../fixtures';
 
 test.describe('Users and Permissions Management', () => {
   let projectId: string;
   let projectName: string;
 
-  test.beforeAll(async () => {
-    projectName = 'E2E Shared Project [project-level-user-permissions]';
-    projectId = await seedCasterProjectPageFree(projectName);
+  test.beforeAll(async ({}, workerInfo) => {
+    projectName = casterSharedProjectName('project-level-user-permissions', workerInfo);
+    projectId = await seedCasterSharedProjectPageFree(projectName);
   });
 
   test.afterAll(async () => {

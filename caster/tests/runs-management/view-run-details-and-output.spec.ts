@@ -9,7 +9,8 @@ import {
   expect,
   CASTER_THEMES,
   setCasterTheme,
-  seedCasterProjectPageFree,
+  seedCasterSharedProjectPageFree,
+  casterSharedProjectName,
   seedCasterDirectoryPageFree,
   deleteCasterProjectPageFree,
   Services,
@@ -17,11 +18,12 @@ import {
 
 let projectId: string;
 let directoryId: string;
-const projectName = 'E2E Shared Project [view-run-details-and-output]';
+let projectName: string;
 const directoryName = 'SharedDirectory';
 
-test.beforeAll(async () => {
-  projectId = await seedCasterProjectPageFree(projectName);
+test.beforeAll(async ({}, workerInfo) => {
+  projectName = casterSharedProjectName('view-run-details-and-output', workerInfo);
+  projectId = await seedCasterSharedProjectPageFree(projectName);
   directoryId = await seedCasterDirectoryPageFree(projectId, directoryName);
 });
 

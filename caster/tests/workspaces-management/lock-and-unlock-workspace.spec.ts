@@ -10,7 +10,8 @@ import {
   casterApi,
   openCasterDirectory,
   seedCasterFile,
-  seedCasterProjectPageFree,
+  seedCasterSharedProjectPageFree,
+  casterSharedProjectName,
   seedCasterDirectoryPageFree,
   seedCasterWorkspacePageFree,
   deleteCasterProjectPageFree,
@@ -32,8 +33,8 @@ test.describe('Workspaces Management › Lock and Unlock Workspace', () => {
   const directoryName = 'WS-Lock-Dir';
   let workspaceId: string | null = null;
 
-  test.beforeAll(async () => {
-    projectId = await seedCasterProjectPageFree('E2E Shared Project [lock-and-unlock-workspace]');
+  test.beforeAll(async ({}, workerInfo) => {
+    projectId = await seedCasterSharedProjectPageFree(casterSharedProjectName('lock-and-unlock-workspace', workerInfo));
     directoryId = await seedCasterDirectoryPageFree(projectId, directoryName);
   });
 

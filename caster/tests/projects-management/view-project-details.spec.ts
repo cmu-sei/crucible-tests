@@ -9,16 +9,18 @@ import {
   expect,
   CASTER_THEMES,
   setCasterTheme,
-  seedCasterProjectPageFree,
+  seedCasterSharedProjectPageFree,
+  casterSharedProjectName,
   deleteCasterProjectPageFree,
   Services,
 } from '../../fixtures';
 
 let projectId: string;
-const projectName = 'E2E Shared Project [view-project-details]';
+let projectName: string;
 
-test.beforeAll(async () => {
-  projectId = await seedCasterProjectPageFree(projectName);
+test.beforeAll(async ({}, workerInfo) => {
+  projectName = casterSharedProjectName('view-project-details', workerInfo);
+  projectId = await seedCasterSharedProjectPageFree(projectName);
 });
 
 test.afterAll(async () => {

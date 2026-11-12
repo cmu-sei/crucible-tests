@@ -4,15 +4,15 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, seedCasterProjectPageFree, deleteCasterProjectPageFree, CASTER_THEMES, setCasterTheme } from '../../fixtures';
+import { test, expect, Services, seedCasterSharedProjectPageFree, casterSharedProjectName, deleteCasterProjectPageFree, CASTER_THEMES, setCasterTheme } from '../../fixtures';
 
 test.describe('Performance and Optimization', () => {
   let projectId: string;
   let projectName: string;
 
-  test.beforeAll(async () => {
-    projectName = 'E2E Shared Project [long-running-operation-handling]';
-    projectId = await seedCasterProjectPageFree(projectName);
+  test.beforeAll(async ({}, workerInfo) => {
+    projectName = casterSharedProjectName('long-running-operation-handling', workerInfo);
+    projectId = await seedCasterSharedProjectPageFree(projectName);
   });
 
   test.afterAll(async () => {

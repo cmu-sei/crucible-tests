@@ -4,15 +4,15 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, seedCasterProjectPageFree, deleteCasterProjectPageFree, CASTER_THEMES, setCasterTheme, Services } from '../../fixtures';
+import { test, expect, seedCasterSharedProjectPageFree, casterSharedProjectName, deleteCasterProjectPageFree, CASTER_THEMES, setCasterTheme, Services } from '../../fixtures';
 
 test.describe('Search and Filtering', () => {
   let projectId: string;
   let projectName: string;
 
-  test.beforeAll(async () => {
-    projectName = 'E2E Shared Project [global-search-functionality]';
-    projectId = await seedCasterProjectPageFree(projectName);
+  test.beforeAll(async ({}, workerInfo) => {
+    projectName = casterSharedProjectName('global-search-functionality', workerInfo);
+    projectId = await seedCasterSharedProjectPageFree(projectName);
   });
 
   test.afterAll(async () => {

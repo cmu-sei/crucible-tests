@@ -1,7 +1,7 @@
 // Copyright 2026 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
-import { test as base, Locator, Page, expect } from '@playwright/test';
+import { test as base, Locator, Page, WorkerInfo, expect } from '@playwright/test';
 import {
   Services,
   serviceUrlPattern,
@@ -328,15 +328,56 @@ async function deleteCasterRoleByName(page: Page, roleName: string): Promise<num
 
 /**
  * Name prefix of the file-level shared projects Caster specs seed in `beforeAll`
- * (`E2E Shared Project [<file>]`). Deliberately narrower than "E2E Shared": Blueprint's
+ * (see {@link casterSharedProjectName}). Deliberately narrower than "E2E Shared": Blueprint's
  * run-level `E2E Shared Blueprint Caster Templates` project lives in Caster too and
  * must survive a Caster purge that runs while Blueprint specs still use it.
  */
 const CASTER_SHARED_PROJECT_PREFIX = 'E2E Shared Project [';
 
 /**
+ * `E2E Shared Project [<label>] [w<parallelIndex>]`: the name of a project a spec file seeds
+ * in `beforeAll` and shares between its tests. `label` is the spec file's name (plus a suffix
+ * when the file seeds more than one).
+ *
+ * The file name alone is not enough: the chromium and firefox projects, or `--repeat-each`
+ * copies, run the same file on two workers at once, and both would create the same project.
+ * `parallelIndex` is unique among live workers and stable across a worker restart, so the
+ * restarted worker's {@link seedCasterSharedProjectPageFree} replaces its predecessor's copy.
+ */
+export function casterSharedProjectName(label: string, workerInfo: Pick<WorkerInfo, 'parallelIndex'>): string {
+  return `${CASTER_SHARED_PROJECT_PREFIX}${label}] [w${workerInfo.parallelIndex}]`;
+}
+
+/**
+ * Create a file-level shared project (named by {@link casterSharedProjectName}, or starting
+ * with it) and return its ID. Any project with the same name is deleted first: only this
+ * worker slot uses the name, so a match is a leftover from a worker that died before its
+ * `afterAll`, and keeping it would put two rows with the same name in the projects list.
+ */
+export async function seedCasterSharedProjectPageFree(name: string): Promise<string> {
+  if (!name.startsWith(CASTER_SHARED_PROJECT_PREFIX)) {
+    throw new Error(`Shared project "${name}" must start with "${CASTER_SHARED_PROJECT_PREFIX}" so teardown purges it`);
+  }
+  const res = await casterApiPageFree<Array<{ id: string; name: string }>>('GET', 'projects');
+  if (res.status !== 200 || !Array.isArray(res.body)) {
+    throw new Error(`GET /api/projects returned ${res.status}`);
+  }
+  for (const stale of res.body.filter((project) => project.name === name)) {
+    await deleteCasterProjectPageFree(stale.id);
+  }
+  return seedCasterProjectPageFree(name);
+}
+
+/**
+ * Names `search-and-filter-projects.spec.ts` used before it moved under
+ * {@link CASTER_SHARED_PROJECT_PREFIX}. Still purged so a stack that holds leftovers from
+ * those runs is cleaned up.
+ */
+const LEGACY_CASTER_PROJECT_PREFIXES = ['E2E Searchable Project [', 'E2E Unrelated Project ['];
+
+/**
  * Global-teardown safety net: delete every Caster project named
- * {@link CASTER_SHARED_PROJECT_PREFIX}, i.e. the file-level projects of a spec whose
+ * {@link CASTER_SHARED_PROJECT_PREFIX} (or a legacy prefix), i.e. the file-level projects of a spec whose
  * worker died before its `afterAll`. Best effort: one failed DELETE is logged and the
  * rest still go. Uses the same saved-state token as the page-free seeders.
  */
@@ -345,7 +386,9 @@ export async function purgeAllCasterTestData(): Promise<void> {
   if (res.status !== 200 || !Array.isArray(res.body)) {
     throw new Error(`GET /api/projects returned ${res.status}`);
   }
-  const leftovers = res.body.filter((project) => project.name?.startsWith(CASTER_SHARED_PROJECT_PREFIX));
+  const leftovers = res.body.filter((project) =>
+    [CASTER_SHARED_PROJECT_PREFIX, ...LEGACY_CASTER_PROJECT_PREFIXES].some((prefix) => project.name?.startsWith(prefix))
+  );
   const purged: string[] = [];
   for (const project of leftovers) {
     const del = await casterApiPageFree('DELETE', `projects/${project.id}`).catch((error) => {
