@@ -5,7 +5,7 @@
 // seed: seed.spec.ts
 
 import { APIRequestContext, request as pwRequest } from '@playwright/test';
-import { test, expect, Services, GALLERY_THEMES, setGalleryTheme } from '../../fixtures';
+import { test, expect, Services, GALLERY_THEMES, setGalleryTheme, apiGetAdminUserId } from '../../fixtures';
 import { getUserToken } from '../../../keycloak-admin';
 
 /**
@@ -60,13 +60,7 @@ async function post<T>(api: APIRequestContext, path: string, data: unknown): Pro
  * | C      | ...Coll1        | alpha       | 2nd     |
  */
 async function seedSortableExhibits(api: APIRequestContext): Promise<SortFixture> {
-  const users: Array<{ id: string; name: string }> = await (
-    await api.get(`${Services.Gallery.API}/api/users`)
-  ).json();
-  const admin = users.find((u) => u.name?.toLowerCase().includes('admin'));
-  if (!admin) {
-    throw new Error('Admin user not found in the Gallery database');
-  }
+  const adminUserId = await apiGetAdminUserId();
 
   const stamp = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
   const namePrefix = `ZZSortEx ${stamp}`;
@@ -106,7 +100,7 @@ async function seedSortableExhibits(api: APIRequestContext): Promise<SortFixture
       exhibitId: exhibit.id,
     });
     teamIds.push(team.id);
-    await post(api, '/api/teamusers', { teamId: team.id, userId: admin.id, isObserver: false });
+    await post(api, '/api/teamusers', { teamId: team.id, userId: adminUserId, isObserver: false });
   }
 
   return { collectionIds, exhibitIds, teamIds, namePrefix, names };

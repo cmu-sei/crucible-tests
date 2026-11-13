@@ -16,6 +16,7 @@ import {
   Services,
   GALLERY_THEMES,
   setGalleryTheme,
+  apiGetAdminUserId,
 } from '../../fixtures';
 import { getUserToken } from '../../../keycloak-admin';
 
@@ -131,16 +132,7 @@ for (const theme of GALLERY_THEMES) {
         const exhibit = await apiCreateExhibit(collection.id, `Share Exhibit ${stamp}`);
         created.exhibitId = exhibit.id;
 
-        const admin = await (async () => {
-          const users: Array<{ id: string; name: string }> = await (
-            await api.get(`${Services.Gallery.API}/api/users`)
-          ).json();
-          const found = users.find((u) => u.name?.toLowerCase().includes('admin'));
-          if (!found) {
-            throw new Error('Admin user not found in the Gallery database');
-          }
-          return found;
-        })();
+        const adminUserId = await apiGetAdminUserId();
 
         // The share target. A Gallery user row is enough — it never authenticates.
         const targetUserId = crypto.randomUUID();
@@ -161,7 +153,7 @@ for (const theme of GALLERY_THEMES) {
         created.teamBId = teamB.id;
         created.teamBName = teamB.name;
 
-        await postJson(api, '/api/teamusers', { teamId: teamA.id, userId: admin.id, isObserver: false });
+        await postJson(api, '/api/teamusers', { teamId: teamA.id, userId: adminUserId, isObserver: false });
         await postJson(api, '/api/teamusers', {
           teamId: teamB.id,
           userId: targetUserId,
