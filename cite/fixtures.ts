@@ -14,7 +14,7 @@ import {
   ensureAuthenticatedShell,
 } from '../shared-fixtures';
 import { authStatePath } from '../auth-paths';
-import { cachedUserToken, sharedRequestContext } from '../api-cache';
+import { cachedUserToken, jwtSub, sharedRequestContext } from '../api-cache';
 import { acquireAuthLock, freshAuthStatePath, releaseAuthLock } from '../auth-state';
 import { getUserToken } from '../keycloak-admin';
 import { poolUsers, PoolUser } from '../user-pool';
@@ -509,7 +509,9 @@ export async function seedTeamMembership(
 }
 
 /**
- * Get the admin user's ID from the CITE API by looking for a user named "Admin User".
+ * The CITE user id of the `admin` account the API token belongs to: the token's `sub`.
+ * Matching on display name is unreliable because the realm has several users whose
+ * names contain "admin". The users request also confirms CITE has a record for it.
  */
 export async function getCurrentUserId(): Promise<string> {
   const seeded = readCiteSeedFile();
@@ -529,10 +531,11 @@ export async function getCurrentUserId(): Promise<string> {
     }
 
     const users: Array<{ id: string; name: string }> = await response.json();
-    const adminUser = users.find(u => u.name === 'Admin User' || u.name.toLowerCase().includes('admin'));
+    const sub = jwtSub(token);
+    const adminUser = users.find(u => u.id === sub);
 
     if (!adminUser) {
-      throw new Error('Could not find admin user in users list');
+      throw new Error(`The token's user (${sub}) is not in the CITE users list`);
     }
 
     return adminUser.id;
