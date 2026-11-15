@@ -26,7 +26,7 @@ for (const theme of CASTER_THEMES) {
       await page.locator('mat-list-item').filter({ hasText: 'Roles' }).click();
       await expect(page).toHaveURL(/section=Roles/);
 
-      await page.locator('mat-list-item').filter({ hasText: 'Groups' }).click();
+      await page.locator('mat-list-item').filter({ has: page.getByText('Groups', { exact: true }) }).click();
       await expect(page).toHaveURL(/section=Groups/);
 
       // expect: The sidebar remains visible during navigation

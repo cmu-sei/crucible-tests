@@ -6,23 +6,41 @@
 
 import { test, expect, Services, CASTER_THEMES, setCasterTheme } from '../../fixtures';
 
+// The switch is global: run the light and dark variants one after the other, never at once.
+test.describe.configure({ mode: 'serial' });
+
 for (const theme of CASTER_THEMES) {
   test.describe(`${theme} theme › Global Workspace Settings`, () => {
     test('Enable Disable Workspace Operations', async ({ casterAuthenticatedPage: page }) => {
       await setCasterTheme(page, theme);
 
       await page.goto(Services.Caster.UI + '/admin?section=Workspaces');
-      await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible({ timeout: 10000 });
 
       const disableToggle = page.getByRole('switch', { name: 'Disable Workspace Operations' });
-      await expect(disableToggle).toBeVisible();
+      const banner = page.getByRole('status').filter({ hasText: 'Workspace operations are disabled' });
+      await expect(disableToggle).toBeEnabled({ timeout: 10000 });
+      await expect(disableToggle).not.toBeChecked();
+      await expect(banner).toBeHidden();
 
-      // 2. Toggle on
-      await disableToggle.click();
+      try {
+        // 2. Toggle on
+        // expect: the switch moves once the API has made the change, and a banner says what that stops
+        await disableToggle.click();
+        await expect(disableToggle).toBeChecked();
+        await expect(banner).toBeVisible();
 
-      // 4. Toggle back off
-      await disableToggle.click();
-      await expect(disableToggle).toBeVisible();
+        // 4. Toggle back off
+        // expect: the switch is off again and the banner is gone
+        await disableToggle.click();
+        await expect(disableToggle).not.toBeChecked();
+        await expect(banner).toBeHidden();
+      } finally {
+        // Workspace operations are global: never leave them disabled for other specs.
+        if (await disableToggle.isChecked()) {
+          await disableToggle.click();
+          await expect(disableToggle).not.toBeChecked();
+        }
+      }
     });
   });
 }

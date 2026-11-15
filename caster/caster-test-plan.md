@@ -279,18 +279,18 @@ Exceptions, which run once:
   2. Click "Return to Project"
     - expect: The project itself opens (`/projects/<id>`), not the project list
 
-#### 3.9. Return From Project Memberships In Administration
+#### 3.9. Open Project Memberships In Place In Administration
 
 **File:** `tests/projects-management/return-to-project-from-manage-project.spec.ts`
 
 **Steps:**
   1. Open Administration → Projects and search for the project
-    - expect: One matching row
-  2. Click the project's name
-    - expect: Its memberships open in place, still under `/admin`
-    - expect: The way back is labelled "Return", not "Return to Project"
-  3. Click "Return"
-    - expect: The project list is shown again
+    - expect: One matching row, collapsed
+  2. Click the project's row
+    - expect: Its memberships open under the row, still under `/admin`
+    - expect: No project title and no "Return" or "Return to Project" button, since the row already names the project
+  3. Click the row again
+    - expect: The memberships close and the project list is unchanged
 
 #### 3.10. Export And Import A Project With Its Settings
 
@@ -1374,18 +1374,16 @@ accessibility contract is covered separately by 17.7.
 
 **File:** `tests/search-and-filtering/filter-by-status.spec.ts`
 
+Administration → Workspaces lists active runs with their status as a plain word, and its
+Search matches it. There is no separate status dropdown.
+
 **Steps:**
-  1. Navigate to Runs list
-    - expect: Runs list is displayed with various statuses
-  2. Locate the Status filter dropdown
-    - expect: Status filter is available
-  3. Select 'Applied' status
-    - expect: The list filters to show only runs with 'Applied' status
-    - expect: Other statuses are hidden
-  4. Select 'Failed' status
-    - expect: The list filters to show only failed runs
-  5. Clear the filter
-    - expect: All runs are displayed again
+  1. Navigate to Administration → Workspaces
+    - expect: The active runs table has a Status column
+  2. Search for 'Applied'
+    - expect: An applied run is no longer active, so the table says `No active runs match "Applied"`
+  3. Click Clear Search
+    - expect: The search box is empty
 
 #### 13.4. Advanced Filtering with Multiple Criteria
 
@@ -1557,8 +1555,7 @@ Workspaces settings.
 
 **Steps:**
   1. Navigate to Administration → Workspaces
-    - expect: The Settings heading is shown
-    - expect: The 'Disable Workspace Operations' switch is available
+    - expect: The 'Disable Workspace Operations' switch is shown at the end of the toolbar and is enabled for the admin
 
 #### 15.8. File Names Cannot Leave The Working Directory
 
@@ -2323,29 +2320,25 @@ afterwards because it persists per user.
 **Steps:**
   1. Navigate to Admin section and click on Workspaces in the sidebar
     - expect: Workspaces admin page loads at http://localhost:4310/admin?section=Workspaces
-    - expect: Settings section is visible at the top of the page
-    - expect: Toggle switch for Disable Workspace Operations is displayed
-    - expect: Active Runs section is visible below settings
+    - expect: The toolbar has Search, the paginator and, at the end, the Disable Workspace Operations switch
+    - expect: The active runs table is below the toolbar
 
 #### 22.2. Enable Disable Workspace Operations
 
 **File:** `tests/global-workspace-settings/enable-disable-operations.spec.ts`
 
 **Steps:**
+The switch is global, so the light and dark variants run serially, and the spec always
+switches operations back on, even when an assertion fails.
+
+**Steps:**
   1. Navigate to Workspaces admin section
-    - expect: Workspace settings are visible
-    - expect: Disable Workspace Operations toggle is in OFF state (operations enabled)
-  2. Click the Disable Workspace Operations toggle switch
-    - expect: Toggle switches to ON state
-    - expect: Setting is saved
-    - expect: Success notification may appear
-  3. Navigate to a project workspace and attempt to create a plan run
-    - expect: Run creation is prevented or disabled
-    - expect: Appropriate message indicates workspace operations are globally disabled
-  4. Return to Workspaces admin and toggle Disable Workspace Operations back to OFF
-    - expect: Toggle switches to OFF state
-    - expect: Workspace operations are re-enabled globally
-    - expect: Users can now perform plan, apply, and destroy operations normally
+    - expect: Disable Workspace Operations switch is OFF (operations enabled) and no banner is shown
+  2. Click the Disable Workspace Operations switch
+    - expect: The switch turns ON once the API has made the change
+    - expect: A banner above the table says Workspace operations are disabled and what that stops
+  3. Click the switch again
+    - expect: The switch turns OFF and the banner is gone
 
 #### 22.3. View Active Runs Globally
 
@@ -2354,10 +2347,8 @@ afterwards because it persists per user.
 **Steps:**
   1. Navigate to Workspaces admin section
     - expect: Workspaces admin page loads
-  2. Scroll to the Active Runs section
-    - expect: Active Runs heading is displayed
     - expect: Table shows currently running or queued runs across all workspaces
-    - expect: Columns include: createdAt, isDestroy, status, workspaceId, actions
+    - expect: Columns are: Open action, Workspace, Project, Type, Status, Started By, Started
     - expect: Search textbox is available
     - expect: Pagination controls show items per page dropdown and navigation buttons
     - expect: If no active runs exist, appropriate message is shown
@@ -2367,33 +2358,26 @@ afterwards because it persists per user.
 **File:** `tests/global-workspace-settings/search-active-runs.spec.ts`
 
 **Steps:**
-  1. Navigate to Workspaces admin section with active runs
-    - expect: Active Runs table is visible with multiple runs
+  1. Navigate to Workspaces admin section
     - expect: Search textbox is displayed
-  2. Enter a search term (e.g., workspace ID or status) in the search box
-    - expect: The runs table filters to show matching runs
-    - expect: Search works across run details
-    - expect: Results update in real-time
-  3. Clear the search box
-    - expect: All active runs are displayed again
-    - expect: Filter is removed
+  2. Enter a search term no run matches
+    - expect: The table says `No active runs match "<term>"`
+  3. Click Clear Search
+    - expect: The search box is empty and the no-match message is gone
 
 #### 22.5. Sort Active Runs
 
 **File:** `tests/global-workspace-settings/sort-active-runs.spec.ts`
 
 **Steps:**
-  1. Navigate to Workspaces admin section - Active Runs
-    - expect: Active Runs table is visible with sortable columns
-  2. Click on the createdAt column header button
-    - expect: Runs are sorted by creation date
-    - expect: Sort indicator shows sort direction (newest or oldest first)
-  3. Click on the createdAt column header again
-    - expect: Sort direction reverses
-    - expect: Runs are now sorted in opposite order
-  4. Click on the status column header
-    - expect: Runs are sorted alphabetically by status
-    - expect: Sort indicator shows direction
+  1. Navigate to Workspaces admin section
+    - expect: Active runs table is visible with sortable columns
+  2. Click the Started column header
+    - expect: The column is sorted ascending (`aria-sort`)
+  3. Click the Started column header again
+    - expect: The column is sorted descending
+  4. Click the Status column header
+    - expect: Status is sorted ascending and Started is no longer sorted
 
 #### 22.6. Paginate Active Runs
 
@@ -2422,16 +2406,9 @@ afterwards because it persists per user.
 **File:** `tests/global-workspace-settings/actions-on-active-runs.spec.ts`
 
 **Steps:**
-  1. Navigate to Workspaces admin section with active runs
-    - expect: Active Runs table is visible
-    - expect: Actions column shows available actions for each run
-  2. Click on an action button for a running operation (e.g., Cancel)
-    - expect: Action dialog or confirmation appears
-    - expect: User can confirm the action
-  3. Confirm the action
-    - expect: Action is performed on the run (e.g., run is cancelled)
-    - expect: Success notification is displayed
-    - expect: Run status updates in the table or run is removed if completed
+  1. Navigate to Workspaces admin section
+    - expect: Each run row starts with Open for its Workspace, or a disabled Open with the reason when the viewer can't read the Project
+    - expect: With no active runs, the table says "No runs are queued, planning or applying right now"
 
 ### 23. API Rules
 

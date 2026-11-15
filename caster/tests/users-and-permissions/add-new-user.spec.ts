@@ -83,16 +83,16 @@ for (const theme of CASTER_THEMES) {
       await expect(createButton).toBeEnabled();
 
       // 5. Select a Role in the modal
-      // expect: The seeded system roles are offered alongside the "None Locally" default.
+      // expect: The seeded system roles are offered after the "None Locally" default.
       // Assigning the role here is new behavior — the old inline row created the user
       // with no role and required a second edit in the table to set one.
+      // The list holds every system role, so other roles (left by a user or another
+      // spec) may follow the seeded ones; only the default and the seeded roles are pinned.
       await dialog.getByRole('combobox', { name: 'Role' }).click();
-      await expect(page.getByRole('option')).toHaveText([
-        'None Locally',
-        'Observer',
-        'Content Developer',
-        'Administrator',
-      ]);
+      await expect(page.getByRole('option').first()).toHaveText('None Locally');
+      for (const role of ['Observer', 'Content Developer', 'Administrator']) {
+        await expect(page.getByRole('option', { name: role, exact: true })).toBeVisible();
+      }
       await page.getByRole('option', { name: 'Observer', exact: true }).click();
       await expect(dialog.getByRole('combobox', { name: 'Role' })).toContainText('Observer');
 
