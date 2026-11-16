@@ -40,6 +40,17 @@ export function jwtExp(token: string): number | null {
   }
 }
 
+/**
+ * The `sub` claim of a JWT: the Keycloak user id, which the Crucible APIs use as the
+ * user's id. Throws when the token has no `sub`. Signature is not verified.
+ */
+export function jwtSub(token: string): string {
+  const segment = token.split('.')[1] ?? '';
+  const claims = JSON.parse(Buffer.from(segment, 'base64url').toString('utf8'));
+  if (typeof claims.sub !== 'string') throw new Error('Token has no sub claim');
+  return claims.sub;
+}
+
 // Tests capture a token in beforeEach and reuse it in afterEach, so a served token must
 // outlive a whole test, including a test.slow() one: 3 x the 120 000 ms per-test
 // timeout (playwright.config.ts).

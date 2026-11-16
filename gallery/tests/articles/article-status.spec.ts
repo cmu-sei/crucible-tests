@@ -16,6 +16,7 @@ import {
   GALLERY_THEMES,
   setGalleryTheme,
   clickRowAction,
+  apiGetAdminUserId,
 } from '../../fixtures';
 
 /**
@@ -264,11 +265,7 @@ for (const theme of GALLERY_THEMES) {
       });
       expect(exhibit.status, 'seed exhibit').toBe(201);
 
-      const users = await galleryApi('get', '/api/users');
-      const adminUser = (users.body as Array<{ id: string; name?: string }>).find((u) =>
-        u.name?.toLowerCase().includes('admin')
-      );
-      expect(adminUser, 'admin user exists in the Gallery database').toBeTruthy();
+      const adminUserId = await apiGetAdminUserId();
 
       const team = await galleryApi('post', '/api/teams', {
         name: `Article Status Team ${unique}`,
@@ -281,7 +278,7 @@ for (const theme of GALLERY_THEMES) {
         (
           await galleryApi('post', '/api/teamusers', {
             teamId: team.body.id,
-            userId: adminUser!.id,
+            userId: adminUserId,
             isObserver: false,
           })
         ).status,

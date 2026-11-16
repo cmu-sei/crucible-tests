@@ -10,7 +10,7 @@ import {
   ensureAuthenticatedShell,
 } from '../shared-fixtures';
 import { authStatePath } from '../auth-paths';
-import { cachedUserToken, sharedRequestContext } from '../api-cache';
+import { cachedUserToken, jwtSub, sharedRequestContext } from '../api-cache';
 import { freshAuthStatePath } from '../auth-state';
 
 /**
@@ -655,7 +655,11 @@ export async function apiCreateTeam(
   }
 }
 
-/** The Gallery user id of the `admin` account, read from `GET /api/users`. */
+/**
+ * The Gallery user id of the `admin` account the API token belongs to: the token's
+ * `sub`. Matching on display name is unreliable because the realm has several users
+ * whose names contain "admin". The users request also confirms Gallery has a record.
+ */
 // Worker-level cache for admin user ID (read-only, fetched once per worker)
 const adminUserIdCache = new Map<number, string>();
 
@@ -674,9 +678,10 @@ export async function apiGetAdminUserId(workerIndex: number = 0): Promise<string
       throw new Error(`Failed to list users: ${response.status()} ${await response.text()}`);
     }
     const users: Array<{ id: string; name: string }> = await response.json();
-    const admin = users.find(u => u.name?.toLowerCase().includes('admin'));
+    const sub = jwtSub(token);
+    const admin = users.find(u => u.id === sub);
     if (!admin) {
-      throw new Error('Admin user not found in the Gallery database');
+      throw new Error(`The token's user (${sub}) is not in the Gallery database`);
     }
     adminUserIdCache.set(workerIndex, admin.id);
     return admin.id;
