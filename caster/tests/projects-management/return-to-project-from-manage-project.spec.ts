@@ -56,7 +56,7 @@ for (const theme of CASTER_THEMES) {
       await expect(page.getByText('Add Directory').filter({ visible: true })).toBeVisible();
     });
 
-    test('Return From Project Memberships In Administration', async ({ casterAuthenticatedPage: page }) => {
+    test('Open Project Memberships In Place In Administration', async ({ casterAuthenticatedPage: page }) => {
       await setCasterTheme(page, theme);
 
       // 1. Find the project in Administration → Projects
@@ -64,22 +64,28 @@ for (const theme of CASTER_THEMES) {
       await page.getByRole('textbox', { name: 'Search' }).fill(projectName);
       const row = page.getByRole('row').filter({ hasText: projectName });
       await expect(row).toHaveCount(1);
+      await expect(row).toHaveAttribute('aria-expanded', 'false');
 
-      // 2. Open its memberships in place
-      await row.locator('mat-cell p', { hasText: projectName }).click();
+      // 2. Click the row
+      await row.getByRole('cell', { name: projectName, exact: true }).click();
 
-      // expect: the memberships, still inside Administration, with the shorter "Return"
-      await expect(page.getByRole('heading', { level: 1, name: projectName })).toBeVisible();
+      // expect: its memberships open under the row, still inside Administration
+      await expect(row).toHaveAttribute('aria-expanded', 'true');
+      const memberships = page.getByText('Memberships', { exact: true });
+      await expect(memberships).toBeVisible();
       await expect(page).toHaveURL(/\/admin/);
+
+      // expect: the row already names the project, so there's no title and no way back to leave by
+      await expect(page.getByRole('heading', { level: 1, name: projectName })).toHaveCount(0);
       await expect(page.getByRole('button', { name: 'Return to Project' })).toHaveCount(0);
-      const back = page.getByRole('button', { name: 'Return', exact: true });
-      await expect(back).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Return', exact: true })).toHaveCount(0);
 
-      // 3. Return
-      await back.click();
+      // 3. Click the row again
+      await row.getByRole('cell', { name: projectName, exact: true }).click();
 
-      // expect: back on the project list
-      await expect(page.getByRole('heading', { level: 1, name: projectName })).toBeHidden();
+      // expect: the memberships close, and the project list is unchanged
+      await expect(row).toHaveAttribute('aria-expanded', 'false');
+      await expect(memberships).toBeHidden();
       await expect(page.getByRole('button', { name: 'Add New Project' })).toBeVisible();
     });
   });

@@ -12,10 +12,11 @@ for (const theme of CASTER_THEMES) {
       await setCasterTheme(page, theme);
 
       await page.goto(Services.Caster.UI + '/admin?section=Workspaces');
-      await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible({ timeout: 10000 });
 
+      // expect: the 'Disable Workspace Operations' switch is available
       const disableToggle = page.getByRole('switch', { name: 'Disable Workspace Operations' });
-      await expect(disableToggle).toBeVisible();
+      await expect(disableToggle).toBeVisible({ timeout: 10000 });
+      await expect(disableToggle).toBeEnabled();
     });
   });
 }

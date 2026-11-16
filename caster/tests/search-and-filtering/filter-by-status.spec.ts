@@ -12,14 +12,16 @@ for (const theme of CASTER_THEMES) {
       await setCasterTheme(page, theme);
 
       await page.goto(Services.Caster.UI + '/admin?section=Workspaces');
-      await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible({ timeout: 10000 });
-      await expect(page.getByRole('heading', { name: 'Active Runs' })).toBeVisible();
 
+      await expect(page.getByRole('columnheader', { name: 'Status', exact: true })).toBeVisible({ timeout: 10000 });
+
+      // Statuses are plain words, so Search filters by them
       const searchBox = page.getByRole('textbox', { name: 'Search' });
-      if (await searchBox.isVisible({ timeout: 3000 }).catch(() => false)) {
-        await searchBox.fill('Applied');
-        await searchBox.clear();
-      }
+      await searchBox.fill('Applied');
+      // expect: an active run is never Applied, so nothing matches
+      await expect(page.getByRole('cell', { name: 'No active runs match "Applied"' })).toBeVisible();
+      await page.getByRole('button', { name: 'Clear Search' }).click();
+      await expect(searchBox).toHaveValue('');
     });
   });
 }
