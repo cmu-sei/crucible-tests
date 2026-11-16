@@ -12,12 +12,21 @@ for (const theme of CASTER_THEMES) {
       await setCasterTheme(page, theme);
 
       await page.goto(Services.Caster.UI + '/admin?section=Workspaces');
-      await expect(page.getByRole('heading', { name: 'Active Runs' })).toBeVisible({ timeout: 10000 });
 
-      await expect(page.getByRole('button', { name: 'Actions' })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Created At' })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'status' })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Workspace ID' })).toBeVisible();
+      await expect(page.getByRole('columnheader', { name: 'Workspace', exact: true })).toBeVisible({ timeout: 10000 });
+
+      // expect: each run row has an Open action, enabled or disabled with a reason
+      const runRows = page.locator('tr.element-row');
+      const count = await runRows.count();
+      for (let i = 0; i < count; i++) {
+        await expect(runRows.nth(i).getByRole('cell').first().getByRole('link', { name: /^Open / })
+          .or(runRows.nth(i).getByRole('button', { name: /^Open .* \(not available\)$/ }))).toBeVisible();
+      }
+
+      // expect: with no runs, the table says so
+      if (count === 0) {
+        await expect(page.getByRole('cell', { name: 'No runs are queued, planning or applying right now' })).toBeVisible();
+      }
     });
   });
 }

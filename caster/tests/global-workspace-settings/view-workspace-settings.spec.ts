@@ -13,9 +13,13 @@ for (const theme of CASTER_THEMES) {
 
       await page.goto(Services.Caster.UI + '/admin?section=Workspaces');
 
-      await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible({ timeout: 10000 });
-      await expect(page.getByRole('switch', { name: 'Disable Workspace Operations' })).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'Active Runs' })).toBeVisible();
+      // expect: the toolbar ends with the Disable Workspace Operations switch
+      await expect(page.getByRole('switch', { name: 'Disable Workspace Operations' })).toBeVisible({ timeout: 10000 });
+
+      // expect: the active runs table is below the toolbar
+      await expect(page.getByRole('textbox', { name: 'Search' })).toBeVisible();
+      await expect(page.getByRole('columnheader', { name: 'Workspace', exact: true })).toBeVisible();
+      await expect(page.getByRole('columnheader', { name: 'Status', exact: true })).toBeVisible();
     });
   });
 }
