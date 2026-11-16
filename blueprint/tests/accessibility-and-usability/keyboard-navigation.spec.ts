@@ -97,10 +97,10 @@ for (const theme of BLUEPRINT_THEMES) {
       await expect(buildCard).toBeVisible({ timeout: 30000 });
 
       // 2. Tab from the top of the page.
-      //    expect: the card is reached (the mission cards' positive tabindexes, JOIN 1 to
-      //    ASSESS 4, put them before the topbar).
+      //    expect: the card is reached. The mission cards use tabindex="0", so they come in page
+      //    order, after the topbar's controls.
       let reached = false;
-      for (let step = 0; step < 5 && !reached; step++) {
+      for (let step = 0; step < 40 && !reached; step++) {
         await page.keyboard.press('Tab');
         reached = await buildCard.evaluate((el) => el === document.activeElement);
       }
@@ -108,7 +108,7 @@ for (const theme of BLUEPRINT_THEMES) {
 
       // 3. Press Enter, then Space, on the focused card.
       // Pending upstream: the dashboard's mission cards are `<div class="mission-card"
-      // role="button" tabindex="…">` with only a `(click)` binding, so neither Enter nor Space
+      // role="button" tabindex="0">` with only a `(click)` binding, so neither Enter nor Space
       // activates them (WCAG 2.1.1) — a keyboard user can focus BUILD but cannot open it. (The
       // capability cards above them do handle Enter.) The listener below
       // records any click the key presses synthesise; a native button dispatches that click
