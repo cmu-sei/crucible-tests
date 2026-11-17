@@ -60,12 +60,19 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           EVENT_BEFORE: ${{ github.event.before }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
           HEAD_SHA: ${{ github.sha }}
           APPS_INPUT: ${{ inputs.apps }}
         run: |
           case "$EVENT_NAME" in
             pull_request)
-              node --no-warnings scripts/plan-ci-runs.mjs --base "$PR_BASE_SHA" --head "$HEAD_SHA"
+              # A dependency bump can break any app, and Dependabot PRs can be
+              # auto-merged, so they always run the whole suite.
+              if [[ "$PR_AUTHOR" == "dependabot[bot]" ]]; then
+                node --no-warnings scripts/plan-ci-runs.mjs --full
+              else
+                node --no-warnings scripts/plan-ci-runs.mjs --base "$PR_BASE_SHA" --head "$HEAD_SHA"
+              fi
               ;;
             push)
               # A new branch has no before; after a force push the old tip is not in this
