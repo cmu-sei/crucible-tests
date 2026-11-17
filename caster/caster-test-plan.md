@@ -1288,54 +1288,52 @@ accessibility contract is covered separately by 17.7.
 **File:** `tests/pools-management/view-pools-list.spec.ts`
 
 **Steps:**
-  1. Navigate to http://localhost:4310/pools
-    - expect: Pools page loads successfully
-    - expect: Pools list is displayed
-    - expect: Each pool shows: name, description
-    - expect: If no pools exist, an appropriate empty state is shown
+  1. Seed a pool with a unique name through the API, then navigate to http://localhost:4310/admin?section=VLANs
+    - expect: The Pools tab is selected
+    - expect: The Pools tab has a Search box, and Add New Pool and About pools buttons in the actions column header
+    - expect: The table has Pool Name, Default, Partitions and VLANs In Use columns
+    - expect: The seeded pool's row has no Default mark and shows "-" for Partitions and VLANs In Use until it is opened
+    - expect: The row's Delete and Rename buttons are enabled
 
 #### 12.2. Create New Pool
 
 **File:** `tests/pools-management/create-new-pool.spec.ts`
 
 **Steps:**
-  1. Navigate to Pools section
-    - expect: Pools list is visible
-  2. Click 'Create Pool' or 'Add Pool' button
-    - expect: A pool creation dialog is displayed
-  3. Enter 'Test Pool' in the Name field
-    - expect: Name field accepts input
-  4. Enter pool description
-    - expect: Description field accepts input
-  5. Click 'Save' or 'Create' button
-    - expect: The pool is created successfully
-    - expect: A success notification is displayed
-    - expect: The new pool appears in the pools list
+  1. Navigate to the VLANs admin section
+    - expect: The Pools table is visible
+  2. Click Add New Pool
+    - expect: The pool is created straight away, with no dialog (POST returns 201)
+    - expect: The API names it "New Pool", and it is not the default pool
+    - expect: An "Added New Pool" notification is displayed
+    - expect: A "New Pool" row is listed
 
 #### 12.3. View Pool Details
 
 **File:** `tests/pools-management/view-pool-details.spec.ts`
 
 **Steps:**
-  1. Navigate to Pools section
-    - expect: Pools list is visible
-  2. Click on a pool name
-    - expect: Pool detail view is displayed
-    - expect: Pool properties are shown: name, description
-    - expect: Associated resources or workspaces may be listed
+  1. Seed a pool through the API and navigate to the VLANs admin section
+    - expect: The pool's row is closed (aria-expanded is false)
+  2. Click the pool's row
+    - expect: The row opens its partitions in place, under the row
+    - expect: An Add New Partition button is shown
+    - expect: All of the new pool's VLANs are listed as not in any partition, with a Show button
+    - expect: The row now counts 0 partitions and "0 / <n>" VLANs in use
+  3. Click the row again
+    - expect: The partitions close
 
 #### 12.4. Delete Pool
 
 **File:** `tests/pools-management/delete-pool.spec.ts`
 
 **Steps:**
-  1. Navigate to Pools section
-    - expect: Pools list is visible
-  2. Click delete icon for a specific pool
-    - expect: A confirmation dialog appears
-  3. Click 'Confirm' or 'Delete'
-    - expect: The pool is deleted successfully
-    - expect: A success notification is displayed
+  1. Seed a pool through the API and navigate to the VLANs admin section
+    - expect: The pool is listed
+  2. Click the row's "Delete <pool name>" button
+    - expect: A Delete Pool dialog asks "Are you sure that you want to delete <pool name>?"
+  3. Click Delete
+    - expect: A "Deleted <pool name>" notification is displayed
     - expect: The pool is removed from the list
 
 ### 13. Search and Filtering
@@ -1895,64 +1893,55 @@ afterwards because it persists per user.
 **File:** `tests/vlans-management/view-vlan-pools.spec.ts`
 
 **Steps:**
-  1. Navigate to Admin section and click on VLANs in the sidebar
-    - expect: VLANs page loads at http://localhost:4310/admin?section=VLANs
+  1. Seed a pool through the API and navigate to http://localhost:4310/admin?section=VLANs
     - expect: Two tabs are visible: Pools and Projects
     - expect: Pools tab is selected by default
-    - expect: Pools section displays heading and action buttons
-    - expect: If no pools exist, an appropriate empty state is shown
+  2. Type the pool's name in Search
+    - expect: The table narrows to the matching pool
+  3. Type a name that matches no pool
+    - expect: The table shows 'No data matching the filter "<text>"'
+  4. Click Clear
+    - expect: Search is empty and the pool is listed again
 
 #### 19.2. Create VLAN Pool
 
 **File:** `tests/vlans-management/create-vlan-pool.spec.ts`
 
 **Steps:**
-  1. Navigate to VLANs admin section - Pools tab
-    - expect: Pools section is visible with create button
-  2. Click the create/add pool button
-    - expect: A pool creation dialog is displayed
-  3. Enter pool name and VLAN range details in the form
-    - expect: Form fields accept input
-    - expect: VLAN range validation is applied
-  4. Click Save or Create button
-    - expect: The VLAN pool is created successfully
-    - expect: A success notification is displayed
-    - expect: The new pool appears in the pools list
+  1. Navigate to the VLANs admin section and click Add New Pool
+    - expect: The pool is created (POST returns 201) and an "Added <name>" notification is displayed
+  2. Fetch the pool from the API and reload the page
+    - expect: The API returns the pool
+    - expect: The pool is still listed after the reload
 
 #### 19.3. Edit VLAN Pool
 
 **File:** `tests/vlans-management/edit-vlan-pool.spec.ts`
 
 **Steps:**
-  1. Navigate to VLANs admin section - Pools tab with existing pools
-    - expect: Pools list is visible with at least one pool
-  2. Click on a pool or its edit icon
-    - expect: Pool edit dialog is displayed
-    - expect: Form fields are populated with current pool values
-  3. Modify pool details such as name or VLAN range
-    - expect: Fields accept new values
-  4. Click Save button
-    - expect: The pool is updated successfully
-    - expect: A success notification is displayed
-    - expect: Updated values are reflected in the pools list
+  1. Seed a pool through the API and navigate to the VLANs admin section
+    - expect: The pool is listed
+  2. Click the row's Rename button
+    - expect: A "Rename <pool name>" dialog opens with Name filled in with the current name
+    - expect: Save is disabled until the name changes
+  3. Enter a new name and click Save
+    - expect: A "Renamed <old> to <new>" notification is displayed
+    - expect: The row shows the new name and the old name is gone
+    - expect: Renaming does not open the pool's row
 
 #### 19.4. Delete VLAN Pool
 
 **File:** `tests/vlans-management/delete-vlan-pool.spec.ts`
 
 **Steps:**
-  1. Navigate to VLANs admin section - Pools tab
-    - expect: Pools list is visible
-  2. Click delete icon for a specific pool
-    - expect: A confirmation dialog appears asking to confirm deletion
-  3. Click Cancel in the confirmation dialog
+  1. Seed a pool through the API and navigate to the VLANs admin section
+    - expect: The pool is listed
+  2. Click the row's "Delete <pool name>" button and answer No
     - expect: Dialog closes
-    - expect: Pool is not deleted
-  4. Click delete icon again and click Confirm
-    - expect: The pool is deleted successfully
-    - expect: A success notification is displayed
+    - expect: Pool is not deleted, and its row stays closed
+  3. Click the delete button again and click Delete
+    - expect: A "Deleted <pool name>" notification is displayed
     - expect: The pool is removed from the list
-    - expect: If pool is in use by projects, appropriate error message is shown preventing deletion
 
 #### 19.5. View Project VLAN Assignments
 
@@ -1989,18 +1978,17 @@ afterwards because it persists per user.
 **File:** `tests/vlans-management/vlan-permissions-enforcement.spec.ts`
 
 **Steps:**
-  1. Log in as a user with ViewVLANs but not ManageVLANs permission
-    - expect: User is authenticated with limited VLAN permissions
-  2. Navigate to VLANs admin section
-    - expect: VLANs page is accessible
-    - expect: Pools and project assignments are visible
-    - expect: User can view but not modify VLANs
-  3. Attempt to create a new VLAN pool
-    - expect: Create button is disabled or hidden
-    - expect: Clicking it shows permission error if accessible
-  4. Attempt to edit or delete an existing pool
-    - expect: Edit and delete buttons are disabled or hidden
-    - expect: Appropriate permission denied message appears if attempted
+  1. Seed a pool through the API, and remove ManageVLANs (keeping ViewVLANs) from the user's GET /api/permissions/mine response
+    - expect: The real response included ManageVLANs
+  2. Navigate to the VLANs admin section
+    - expect: Add New Pool is disabled
+    - expect: The pool's Delete and Rename buttons are disabled
+  3. Click the disabled Rename button
+    - expect: No dialog opens and the row stays closed
+  4. Click the pool's row
+    - expect: The partitions open for viewing, with Add New Partition disabled
+  5. Click the Projects tab
+    - expect: The Projects tab is selected
 
 ### 20. Roles and Permissions Management
 

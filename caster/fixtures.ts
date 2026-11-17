@@ -703,6 +703,33 @@ export async function deleteCasterGroup(page: Page, name: string): Promise<void>
   await dialog.waitFor({ state: 'detached', timeout: 10000 });
 }
 
+/**
+ * Navigate to the admin VLANs section and wait for the Pools table to render.
+ */
+export async function gotoCasterVlansAdmin(page: Page): Promise<void> {
+  await page.goto(Services.Caster.UI + '/admin?section=VLANs');
+  await page
+    .getByRole('columnheader', { name: 'Pool Name' })
+    .waitFor({ state: 'visible', timeout: 20000 });
+}
+
+/**
+ * The Pools-table row for exactly this pool name. The row's actions cell is named
+ * "<name> actions" and its partitions row "<name> partitions", so only an exact
+ * cell match picks out the pool itself (see casterGroupCell).
+ */
+export function casterPoolRow(page: Page, name: string): Locator {
+  return page
+    .getByRole('tabpanel', { name: 'Pools' })
+    .getByRole('row')
+    .filter({ has: page.getByRole('cell', { name, exact: true }) });
+}
+
+/** A unique pool name: the UI names every pool it adds "New Pool", so specs that need a row of their own seed one. */
+export function casterPoolName(label: string, theme: string, repeatEachIndex: number): string {
+  return `E2E Pool ${label} ${theme} ${repeatEachIndex} ${Date.now().toString(36)}`;
+}
+
 /** A Caster API response: the status code and the parsed JSON body (null when there is none). */
 export interface CasterApiResponse<T = any> {
   status: number;
@@ -748,6 +775,11 @@ async function casterCreate<T = any>(page: Page, path: string, data: unknown): P
 /** Create a project through the API and return its ID. Register it with `cleanupCasterProject`. */
 export async function seedCasterProject(page: Page, name: string): Promise<string> {
   return (await casterCreate(page, 'projects', { name })).id;
+}
+
+/** Create a VLAN pool through the API and return its ID. Register it with `cleanupCasterPool`. */
+export async function seedCasterPool(page: Page, name: string): Promise<string> {
+  return (await casterCreate(page, 'vlans/pools', { name })).id;
 }
 
 /** Create a directory through the API and return its ID. */
