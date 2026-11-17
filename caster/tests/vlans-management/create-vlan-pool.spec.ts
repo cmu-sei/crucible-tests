@@ -4,34 +4,41 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, CASTER_THEMES, setCasterTheme } from '../../fixtures';
+import {
+  test,
+  expect,
+  CASTER_THEMES,
+  setCasterTheme,
+  gotoCasterVlansAdmin,
+  casterPoolRow,
+  casterApi,
+} from '../../fixtures';
 
 for (const theme of CASTER_THEMES) {
   test.describe(`${theme} theme › VLANs Management`, () => {
     test('Create VLAN Pool', async ({ casterAuthenticatedPage: page, cleanupCasterPool }) => {
       await setCasterTheme(page, theme);
+      await gotoCasterVlansAdmin(page);
 
-      await page.goto(Services.Caster.UI + '/admin?section=VLANs');
-      await expect(page.getByRole('heading', { name: 'Pools' })).toBeVisible({ timeout: 10000 });
-
-      // Intercept the POST response so we can capture the new pool's ID for cleanup
-      const poolResponsePromise = page.waitForResponse(
-        resp => resp.url().includes('/api/vlans/pools') && resp.request().method() === 'POST'
+      const created = page.waitForResponse(
+        (resp) => resp.url().includes('/api/vlans/pools') && resp.request().method() === 'POST',
       );
+      await page.getByRole('button', { name: 'Add New Pool' }).click();
 
-      // Click the create/add pool button (+ icon) — this immediately creates a pool via API
-      const addButton = page.getByRole('tabpanel', { name: 'Pools' }).getByRole('button').first();
-      await addButton.click();
-
-      const poolResponse = await poolResponsePromise;
-      expect(poolResponse.status()).toBe(201);
-
-      const pool = await poolResponse.json();
-      // Register the created pool for teardown deletion
+      const response = await created;
+      expect(response.status()).toBe(201);
+      const pool = await response.json();
       cleanupCasterPool(pool.id);
+      await expect(page.getByText(`Added ${pool.name}`)).toBeVisible();
 
-      // Verify at least one pool with the returned name appears in the list
-      await expect(page.getByText(pool.name).first()).toBeVisible();
+      // The pool is saved, not just shown: it is still listed after a reload.
+      const fetched = await casterApi(page, 'GET', `vlans/pools/${pool.id}`);
+      expect(fetched.status).toBe(200);
+      expect(fetched.body).toMatchObject({ id: pool.id, name: pool.name });
+
+      await page.reload();
+      await page.getByRole('columnheader', { name: 'Pool Name' }).waitFor({ state: 'visible', timeout: 20000 });
+      await expect(casterPoolRow(page, pool.name).first()).toBeVisible();
     });
   });
 }
