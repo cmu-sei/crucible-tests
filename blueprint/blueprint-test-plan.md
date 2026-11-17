@@ -495,15 +495,28 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
     - expect: The 'Add a Move' dialog pre-fills Move Number 1
     - expect: The move is listed as move 1 and no ordering warning is shown
   2. Add a second move
-    - expect: The dialog pre-fills Move Number 2 and the latest existing start offset
-    - expect: '** The moves are not in ascending start time order!' is shown, because both moves start at the same time
-  3. Edit Move 2, set 'Minutes from Start' to 30, and click 'Save'
-    - expect: The ordering warning disappears and the new offset is saved
-  4. Search for move 1's description, then clear the search
+    - expect: The dialog pre-fills Move Number 2 and a start one hour after move 1, so no warning is shown
+  3. Edit Move 2 and set 'Hours from Start' to 0
+    - expect: The move saves, and 'Move 1 and Move 2 start at the same time.' is shown
+  4. Edit Move 2 and set 'Minutes from Start' to 30
+    - expect: The warning disappears and the new offset is saved
+  5. Search for move 1's description, then clear the search
     - expect: Only move 1 is listed, then both moves are listed again
-  5. Click 'Delete Move 1', answer 'No', then repeat and answer 'Yes'
+  6. Click 'Delete Move 1', answer 'No', then repeat and answer 'Yes'
     - expect: The confirmation reads 'Are you sure that you want to delete <description>?'
     - expect: Declining keeps the move; confirming removes only move 1
+
+#### 4.10. Push Requires Valid Moves
+
+**File:** `blueprint/tests/msel-info-pages/msel-moves.spec.ts`
+
+**Steps:**
+  1. Give a MSEL two moves with the same start time and a scenario event before the first move
+    - expect: Both are saved
+  2. Push integrations through the API
+    - expect: The push is refused with a 409 naming 'Move 1 and Move 2 start at the same time.' and the event that is in no move
+  3. Open the Info tab, then the Moves tab
+    - expect: Both list the same problems
 
 ### 5. Contributors Management
 
