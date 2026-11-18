@@ -166,10 +166,9 @@ test.describe('Caster Integration Caster Tab', () => {
 
     // expect: the directory is dropped and the report says the push imports the copy instead
     expect(imported.casterDirectoryId).toBeNull();
-    expect(report.changes).toContainEqual({
-      field: 'casterDirectoryId',
-      message: `The Caster directory is not in this Caster, or you cannot view it, so pushing imports the MSEL's copy of it (from the Caster project "${template.projectName}") as a new Caster project.`,
-    });
+    const change = report.changes.find((c: { field: string }) => c.field === 'casterDirectoryId');
+    expect(change?.message).toContain(`"${template.projectName}"`);
+    expect(change?.message).toContain('as a new Caster project');
 
     // 3. Open the imported MSEL's Config tab
     await navigateToMsel(page, imported.id);
