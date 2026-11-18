@@ -82,6 +82,7 @@ interface ApiOpts {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
   body?: any;
   query?: Record<string, string | number | boolean | undefined>;
+  headers?: Record<string, string>;
 }
 
 async function tmCall<T = any>(
@@ -100,7 +101,7 @@ async function tmCall<T = any>(
   {
     const res = await ctx.fetch(url.toString(), {
       method: opts.method ?? 'GET',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${token}`, ...opts.headers },
       data: opts.body,
     });
     const text = await res.text();
@@ -202,6 +203,66 @@ export async function deleteWorkspace(token: string, workspaceId: string): Promi
   const r = await tmCall(token, `/api/workspace/${workspaceId}`, { method: 'DELETE' });
   if (!r.ok && r.status !== 404) {
     console.warn(`deleteWorkspace(${workspaceId}) returned ${r.status}`);
+  }
+}
+
+/**
+ * Replace a workspace's markdown document. The API binds the body as a JSON string,
+ * so the markdown is sent JSON-encoded.
+ */
+export async function setWorkspaceDocument(token: string, workspaceId: string, markdown: string): Promise<void> {
+  const r = await tmCall(token, `/api/document/${workspaceId}`, {
+    method: 'PUT',
+    body: JSON.stringify(markdown),
+    headers: { 'Content-Type': 'application/json' },
+  });
+  if (!r.ok) {
+    throw new Error(`setWorkspaceDocument(${workspaceId}) failed (${r.status}): ${r.text}`);
+  }
+}
+
+/** Read a workspace's markdown document ('' when it has none). */
+export async function getWorkspaceDocument(token: string, workspaceId: string): Promise<string> {
+  const r = await tmCall<string>(token, `/api/document/${workspaceId}`);
+  if (!r.ok) {
+    throw new Error(`getWorkspaceDocument(${workspaceId}) failed (${r.status}): ${r.text}`);
+  }
+  // The API returns the markdown as text/plain, so it is in `text`, not parsed JSON.
+  return typeof r.data === 'string' ? r.data : r.text;
+}
+
+export interface TopoMojoUser {
+  id: string;
+  name: string;
+  role: string;
+}
+
+/**
+ * Create a TopoMojo user record directly (admin only), the way the admin user
+ * browser's "create" link does. No Keycloak account is involved. Pair every call
+ * with `deleteTopoMojoUser` in teardown.
+ */
+export async function createTopoMojoUser(token: string, name: string): Promise<TopoMojoUser> {
+  const r = await tmCall<TopoMojoUser>(token, '/api/user', { method: 'POST', body: { name } });
+  if (!r.ok || !r.data?.id) {
+    throw new Error(`createTopoMojoUser(${name}) failed (${r.status}): ${r.text}`);
+  }
+  return r.data;
+}
+
+export async function getTopoMojoUser(token: string, userId: string): Promise<TopoMojoUser> {
+  const r = await tmCall<TopoMojoUser>(token, `/api/user/${userId}`);
+  if (!r.ok || !r.data) {
+    throw new Error(`getTopoMojoUser(${userId}) failed (${r.status}): ${r.text}`);
+  }
+  return r.data;
+}
+
+/** Tolerates 404 so teardown is safe to call unconditionally. */
+export async function deleteTopoMojoUser(token: string, userId: string): Promise<void> {
+  const r = await tmCall(token, `/api/user/${userId}`, { method: 'DELETE' });
+  if (!r.ok && r.status !== 404) {
+    console.warn(`deleteTopoMojoUser(${userId}) returned ${r.status}: ${r.text}`);
   }
 }
 
