@@ -15,6 +15,15 @@ import {
 
 // The document editor shares edits between everyone who has the workspace open: each
 // edit goes to the TopoMojo hub over SignalR and is applied to the other open editors.
+// The editor also autosaves 5 s after an edit, and the API broadcasts the saved text, which
+// replaces the document in every other open editor. Answer the save in the browser without
+// passing it to the API, so text can only reach the other window as a live edit.
+async function keepSavesFromTheApi(page: Page) {
+  await page.context().route('**/api/document/*', (route) =>
+    route.request().method() === 'PUT' ? route.fulfill({ status: 200 }) : route.continue(),
+  );
+}
+
 async function openDocument(page: Page, workspaceId: string) {
   await page.goto(`${Services.TopoMojo.UI}/topo/${workspaceId}/document`, { waitUntil: 'domcontentloaded' });
   // The editor unlocks (Save replaces the lock icon) 5 s after the document has loaded
@@ -35,6 +44,8 @@ test.describe('Real-time Updates and Notifications', () => {
     const token = await getTopoMojoAdminToken();
     workspaceId = (await createWorkspace(token, { name: `E2E Realtime Document ${Date.now()}` })).id;
     await setWorkspaceDocument(token, workspaceId, '# Shared notes\n\nFirst line.\n');
+
+    await keepSavesFromTheApi(page);
 
     // 1. Open the workspace document in two browser windows for the same user
     // expect: Both windows show the same document
@@ -80,6 +91,8 @@ test.describe('Real-time Updates and Notifications', () => {
     workspaceId = (await createWorkspace(await getTopoMojoAdminToken(), {
       name: `E2E Realtime Empty Document ${Date.now()}`,
     })).id;
+
+    await keepSavesFromTheApi(page);
 
     // 1. Open the empty workspace document in two browser windows
     const first = await openDocument(page, workspaceId);

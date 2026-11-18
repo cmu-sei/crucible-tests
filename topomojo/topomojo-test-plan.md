@@ -956,12 +956,10 @@ This updated test plan covers recent feature additions including: configurable b
   2. Search for a new user and view its details
     - expect: User details form opens
     - expect: The role buttons show the current role (User) as active
-  3. Change the role to Creator
+  3. Change the role to Creator (the change saves as soon as it is clicked)
     - expect: Role selection accepts changes
     - expect: Role change updates the user's role (checked through the API)
-  4. Save changes
-    - expect: User role is updated
-    - expect: Changes are reflected in user list
+    - expect: Changes are reflected in user list (the row takes the creator highlight)
 
 #### 8.5. Admin - User Role Badge and IDP Conflict Warning
 

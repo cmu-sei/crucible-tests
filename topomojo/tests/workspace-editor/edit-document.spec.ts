@@ -38,8 +38,8 @@ test.describe('Workspace Editor', () => {
 
     // 2. Enter document content with markdown
     // expect: Editor accepts text input. Typed rather than inserted in one go: Playwright's
-    // insertText lands twice in Monaco under Firefox. Monaco auto-closes the opening quote
-    // and the closing one types over it, so the text ends up as written.
+    // insertText lands twice in Monaco under Firefox. The text has no brackets, which
+    // Monaco's markdown mode would auto-close, so it ends up exactly as written.
     const heading = `Lab Instructions ${Date.now()}`;
     const markdown = [
       `# ${heading}`,
@@ -85,7 +85,6 @@ test.describe('Workspace Editor', () => {
 
     // expect: Content persists
     const stored = await getWorkspaceDocument(await getTopoMojoAdminToken(), workspaceId!);
-    expect(stored).toContain(`# ${heading}`);
-    expect(stored).toContain('| web | 10.0.0.5 |');
+    expect(stored).toBe(markdown);
   });
 });
