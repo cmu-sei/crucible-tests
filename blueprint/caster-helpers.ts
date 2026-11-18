@@ -21,7 +21,7 @@ import path from 'path';
 import { Services } from '../shared-fixtures';
 import { cachedToken, sharedRequestContext } from '../api-cache';
 import { freshSavedAccessToken } from '../auth-state';
-import { blueprintCall, tempBlueprintName } from './test-helpers';
+import { blueprintCall, isTempBlueprintName, tempBlueprintName } from './test-helpers';
 
 /**
  * Acquire a Caster-scoped bearer token from the pre-authenticated `caster.ui` state,
@@ -127,9 +127,15 @@ export async function createCasterTemplate(
   token: string,
   files: Array<{ name: string; content: string }> = VARIABLES_ONLY_TEMPLATE
 ): Promise<CasterTemplate> {
-  const projectId = await createCasterProject(token, tempBlueprintName('TestBP-Caster'));
+  const projectId = await createCasterProject(token, tempBlueprintName(CASTER_TEMPLATE_PREFIX));
   return { projectId, directoryId: await createCasterDirectory(token, projectId, 'template', files) };
 }
+
+/**
+ * Prefix of the Caster projects a spec seeds for itself, and of those an import of their copy makes (the import
+ * names the project after the copy's). `deleteBlueprintSeed` purges any left behind.
+ */
+const CASTER_TEMPLATE_PREFIX = 'TestBP-Caster';
 
 /** The shared file `createNestedCasterTemplate`'s root directory holds. */
 export const ROOT_SHARED_FILE = { name: 'providers.tf', content: '# shared by every directory below\nterraform {}\n' };
@@ -148,11 +154,17 @@ export async function createNestedCasterTemplate(
   token: string,
   files: Array<{ name: string; content: string }> = VARIABLES_ONLY_TEMPLATE
 ): Promise<NestedCasterTemplate> {
-  const projectName = tempBlueprintName('TestBP-Caster');
+  const projectName = tempBlueprintName(CASTER_TEMPLATE_PREFIX);
   const projectId = await createCasterProject(token, projectName);
-  const rootDirectoryId = await createCasterDirectory(token, projectId, 'root', [ROOT_SHARED_FILE]);
-  const directoryId = await createCasterDirectory(token, projectId, 'range', files, rootDirectoryId);
-  return { projectId, projectName, rootDirectoryId, directoryId };
+  try {
+    const rootDirectoryId = await createCasterDirectory(token, projectId, 'root', [ROOT_SHARED_FILE]);
+    const directoryId = await createCasterDirectory(token, projectId, 'range', files, rootDirectoryId);
+    return { projectId, projectName, rootDirectoryId, directoryId };
+  } catch (error) {
+    // the caller never gets the project to delete, so a failed seed deletes its own
+    await deleteCasterTemplate(token, { projectId, directoryId: '' });
+    throw error;
+  }
 }
 
 async function createCasterProject(token: string, name: string): Promise<string> {
@@ -266,11 +278,27 @@ export async function ensureCasterTemplate(): Promise<BlueprintSeed> {
   return seed;
 }
 
-/** Delete the run's Caster project and the seed file. Called from global-teardown. */
+/**
+ * Delete the run's Caster project and the seed file, and any Caster project a spec seeded for itself and left
+ * behind (a crashed test, or a seed that failed after its project was made). Called from global-teardown, after
+ * every Blueprint test has finished.
+ */
 export async function deleteBlueprintSeed(): Promise<void> {
   const seed = readBlueprintSeed();
-  await deleteSharedCasterProjects(await getCasterToken(), seed?.casterProjectId);
+  const token = await getCasterToken();
+  await deleteSharedCasterProjects(token, seed?.casterProjectId);
   fs.rmSync(blueprintSeedPath(), { force: true });
+
+  const projects = await casterCall<any[]>(token, '/api/projects');
+  const leftovers = (projects.ok ? projects.data ?? [] : []).filter(
+    p => p.name?.startsWith(`${CASTER_TEMPLATE_PREFIX}-`) && isTempBlueprintName(p.name)
+  );
+  for (const project of leftovers) {
+    await deleteCasterTemplate(token, { projectId: project.id, directoryId: '' });
+  }
+  if (leftovers.length > 0) {
+    console.log(`[global-teardown] Blueprint: purged ${leftovers.length} leftover Caster project(s)`);
+  }
 }
 
 /**
@@ -298,11 +326,11 @@ export async function getCasterDirectory(token: string, directoryId: string): Pr
   return r.data;
 }
 
-/** The names of a Caster directory's own files, leaving out its workspaces' files. */
-export async function getCasterDirectoryFileNames(token: string, directoryId: string): Promise<string[]> {
-  const r = await casterCall<any[]>(token, `/api/directories/${directoryId}/files`);
+/** A Caster directory's own files by name, with their contents, leaving out its workspaces' files. */
+export async function getCasterDirectoryFiles(token: string, directoryId: string): Promise<Record<string, string>> {
+  const r = await casterCall<any[]>(token, `/api/directories/${directoryId}/files?includeContent=true`);
   if (!r.ok) throw new Error(`list Caster files of ${directoryId} failed (${r.status}): ${r.text}`);
-  return r.data.filter(f => !f.workspaceId).map(f => f.name as string).sort();
+  return Object.fromEntries(r.data.filter(f => !f.workspaceId).map(f => [f.name as string, f.content as string]));
 }
 
 /** Delete the Caster project a directory belongs to, such as one an import created. Safe on a missing id. */

@@ -21,13 +21,14 @@ import {
   deleteCasterTemplate,
   deleteCasterProjectOfDirectory,
   getCasterDirectory,
-  getCasterDirectoryFileNames,
+  getCasterDirectoryFiles,
   downloadMselJson,
   importMselJson,
   getMselCasterCopy,
   captureMselCasterCopy,
   NestedCasterTemplate,
   ROOT_SHARED_FILE,
+  VARIABLES_ONLY_TEMPLATE,
 } from '../../caster-helpers';
 import { setMselIntegrationState, clearMselIntegrationState } from '../../db-helpers';
 
@@ -208,8 +209,13 @@ test.describe('Caster Integration Caster Tab', () => {
     const directory = await getCasterDirectory(casterToken, importedDirectoryId!);
     expect(directory.name).toBe('range');
     expect(directory.projectId).not.toBe(template.projectId);
-    expect(await getCasterDirectoryFileNames(casterToken, importedDirectoryId!)).toEqual(['terraform.tfvars', 'variables.tf']);
-    expect(await getCasterDirectoryFileNames(casterToken, directory.parentId)).toEqual([ROOT_SHARED_FILE.name]);
+    // the files arrive whole, both the directory's and the shared file above it
+    expect(await getCasterDirectoryFiles(casterToken, importedDirectoryId!)).toEqual(
+      Object.fromEntries(VARIABLES_ONLY_TEMPLATE.map(f => [f.name, f.content]))
+    );
+    expect(await getCasterDirectoryFiles(casterToken, directory.parentId)).toEqual({
+      [ROOT_SHARED_FILE.name]: ROOT_SHARED_FILE.content,
+    });
     await expect(page.getByText('The push creates a workspace in the linked directory.')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Import into Caster' })).toBeDisabled();
   });
