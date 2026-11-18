@@ -223,12 +223,12 @@ export async function setWorkspaceDocument(token: string, workspaceId: string, m
 
 /** Read a workspace's markdown document ('' when it has none). */
 export async function getWorkspaceDocument(token: string, workspaceId: string): Promise<string> {
-  const r = await tmCall<string>(token, `/api/document/${workspaceId}`);
+  const r = await tmCall(token, `/api/document/${workspaceId}`);
   if (!r.ok) {
     throw new Error(`getWorkspaceDocument(${workspaceId}) failed (${r.status}): ${r.text}`);
   }
-  // The API returns the markdown as text/plain, so it is in `text`, not parsed JSON.
-  return typeof r.data === 'string' ? r.data : r.text;
+  // The API returns the markdown as text/plain.
+  return r.text;
 }
 
 export interface TopoMojoUser {
