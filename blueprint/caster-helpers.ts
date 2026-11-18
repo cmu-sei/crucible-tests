@@ -131,6 +131,30 @@ export async function createCasterTemplate(
   return { projectId, directoryId: await createCasterDirectory(token, projectId, 'template', files) };
 }
 
+/** The shared file `createNestedCasterTemplate`'s root directory holds. */
+export const ROOT_SHARED_FILE = { name: 'providers.tf', content: '# shared by every directory below\nterraform {}\n' };
+
+export interface NestedCasterTemplate extends CasterTemplate {
+  projectName: string;
+  rootDirectoryId: string;
+}
+
+/**
+ * Create a Caster project whose `range` directory, holding `files`, sits below a `root` directory
+ * holding `ROOT_SHARED_FILE`. A workspace in `range` runs with both directories' files, so a MSEL's
+ * copy of `range` has to carry `root` too. Pair with `deleteCasterTemplate`.
+ */
+export async function createNestedCasterTemplate(
+  token: string,
+  files: Array<{ name: string; content: string }> = VARIABLES_ONLY_TEMPLATE
+): Promise<NestedCasterTemplate> {
+  const projectName = tempBlueprintName('TestBP-Caster');
+  const projectId = await createCasterProject(token, projectName);
+  const rootDirectoryId = await createCasterDirectory(token, projectId, 'root', [ROOT_SHARED_FILE]);
+  const directoryId = await createCasterDirectory(token, projectId, 'range', files, rootDirectoryId);
+  return { projectId, projectName, rootDirectoryId, directoryId };
+}
+
 async function createCasterProject(token: string, name: string): Promise<string> {
   const project = await casterCall<any>(token, '/api/projects', { method: 'POST', body: { name } });
   if (!project.ok) throw new Error(`create Caster project failed (${project.status}): ${project.text}`);
@@ -141,11 +165,12 @@ async function createCasterDirectory(
   token: string,
   projectId: string,
   name: string,
-  files: Array<{ name: string; content: string }>
+  files: Array<{ name: string; content: string }>,
+  parentId?: string
 ): Promise<string> {
   const directory = await casterCall<any>(token, '/api/directories', {
     method: 'POST',
-    body: { name, projectId },
+    body: { name, projectId, parentId },
   });
   if (!directory.ok) throw new Error(`create Caster directory failed (${directory.status}): ${directory.text}`);
 
@@ -266,6 +291,29 @@ export async function deleteCasterTemplate(token: string, template?: CasterTempl
   }
 }
 
+/** Fetch a Caster directory. */
+export async function getCasterDirectory(token: string, directoryId: string): Promise<any> {
+  const r = await casterCall<any>(token, `/api/directories/${directoryId}`);
+  if (!r.ok) throw new Error(`getCasterDirectory(${directoryId}) failed (${r.status}): ${r.text}`);
+  return r.data;
+}
+
+/** The names of a Caster directory's own files, leaving out its workspaces' files. */
+export async function getCasterDirectoryFileNames(token: string, directoryId: string): Promise<string[]> {
+  const r = await casterCall<any[]>(token, `/api/directories/${directoryId}/files`);
+  if (!r.ok) throw new Error(`list Caster files of ${directoryId} failed (${r.status}): ${r.text}`);
+  return r.data.filter(f => !f.workspaceId).map(f => f.name as string).sort();
+}
+
+/** Delete the Caster project a directory belongs to, such as one an import created. Safe on a missing id. */
+export async function deleteCasterProjectOfDirectory(token: string, directoryId?: string | null): Promise<void> {
+  if (!directoryId) return;
+  const directory = await casterCall<any>(token, `/api/directories/${directoryId}`);
+  if (directory.status === 404) return;
+  if (!directory.ok) throw new Error(`getCasterDirectory(${directoryId}) failed (${directory.status}): ${directory.text}`);
+  await deleteCasterTemplate(token, { projectId: directory.data.projectId, directoryId });
+}
+
 /** Fetch a Caster workspace, or `null` once it has been deleted. */
 export async function getCasterWorkspace(token: string, workspaceId: string): Promise<any | null> {
   const r = await casterCall<any>(token, `/api/workspaces/${workspaceId}`);
@@ -321,6 +369,44 @@ export async function tryUpdateTeam(
     method: 'PUT',
     body: { ...current.data, ...changes },
   });
+}
+
+/**
+ * The MSEL's JSON file as the API exports it. Downloading a MSEL that links a Caster directory
+ * stores a fresh copy of the directory in the MSEL first, which the file carries as `CasterExport`.
+ */
+export async function downloadMselJson(token: string, mselId: string): Promise<any> {
+  const r = await blueprintCall<any>(token, `/api/msels/${mselId}/json`);
+  if (!r.ok) throw new Error(`download MSEL ${mselId} failed (${r.status}): ${r.text}`);
+  return JSON.parse(r.text);
+}
+
+/** Import a MSEL JSON file through the API, as the MSEL list's Upload json file does. Returns the import report. */
+export async function importMselJson(token: string, file: unknown): Promise<any> {
+  const base = Services.Blueprint.API.replace(/\/$/, '');
+  const ctx = await sharedRequestContext();
+  const res = await ctx.fetch(`${base}/api/msels/json/import`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    multipart: {
+      ToUpload: { name: 'msel.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(file)) },
+    },
+  });
+  const text = await res.text();
+  if (!res.ok()) throw new Error(`import MSEL JSON failed (${res.status()}): ${text}`);
+  return JSON.parse(text);
+}
+
+/** The copy of its Caster directory a MSEL carries; 204 when it has none. */
+export async function getMselCasterCopy(token: string, mselId: string) {
+  return blueprintCall<any>(token, `/api/msels/${mselId}/caster/export`);
+}
+
+/** Store a copy of the MSEL's linked Caster directory, as Store a Copy Now does. */
+export async function captureMselCasterCopy(token: string, mselId: string): Promise<any> {
+  const r = await blueprintCall<any>(token, `/api/msels/${mselId}/caster/export`, { method: 'POST' });
+  if (!r.ok) throw new Error(`copy the Caster directory of MSEL ${mselId} failed (${r.status}): ${r.text}`);
+  return r.data;
 }
 
 /** Start a push. Returns the response so a refused push can be asserted. */
