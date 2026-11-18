@@ -37,8 +37,9 @@ test.describe('Workspace Editor', () => {
     await expect(saveButton).toBeVisible({ timeout: 20000 });
 
     // 2. Enter document content with markdown
-    // expect: Editor accepts text input. insertText adds the text as one edit, the way a
-    // paste does, so Monaco's auto-closing of quotes and brackets doesn't alter it.
+    // expect: Editor accepts text input. Typed rather than inserted in one go: Playwright's
+    // insertText lands twice in Monaco under Firefox. Monaco auto-closes the opening quote
+    // and the closing one types over it, so the text ends up as written.
     const heading = `Lab Instructions ${Date.now()}`;
     const markdown = [
       `# ${heading}`,
@@ -55,7 +56,7 @@ test.describe('Workspace Editor', () => {
       '',
     ].join('\n');
     await editor.locator('.view-lines').click();
-    await page.keyboard.insertText(markdown);
+    await page.keyboard.type(markdown);
     await expect(editor.locator('.view-lines')).toContainText(heading);
 
     // expect: Markdown formatting works. The preview toggle renders the text the way
