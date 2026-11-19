@@ -312,6 +312,10 @@ console.log();
     'cite/tests/x.spec.ts': "const m = await import('../../gallery/seed-helpers');\n",
     'gallery/seed-helpers.ts': "export { seed } from '../seed-core';\n",
     'seed-core.ts': 'export const seed = 1;\n',
+    // A chain of lazy loads: the spec reaches console/b.ts only through caster/a.ts's.
+    'player/tests/y.spec.ts': "const a = await import('../../caster/a');\n",
+    'caster/a.ts': "export const b = () => import('../console/b');\n",
+    'console/b.ts': 'export const b = 1;\n',
   };
   try {
     for (const [path, content] of Object.entries(files)) {
@@ -336,6 +340,11 @@ console.log();
     const lazySpecDep = plan('seed-core.ts');
     if (JSON.stringify(lazySpecDep) !== JSON.stringify(['cite', 'gallery'])) {
       problems.push(`seed-core.ts: ${JSON.stringify(lazySpecDep)} !== ["cite","gallery"]`);
+    }
+    // One dynamic edge never carries another, so the spec's app is not planned.
+    const lazyChain = plan('console/b.ts');
+    if (JSON.stringify(lazyChain) !== JSON.stringify(['caster', 'console'])) {
+      problems.push(`console/b.ts: ${JSON.stringify(lazyChain)} !== ["caster","console"]`);
     }
     if (problems.length > 0) {
       failures++;
