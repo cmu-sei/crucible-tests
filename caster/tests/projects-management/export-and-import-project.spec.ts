@@ -25,6 +25,19 @@ import {
  */
 const FINDER_ARCHIVE = path.join(__dirname, 'data', 'finder-compressed.zip');
 
+/** Non-ASCII text that a charset or tar-header bug would mangle: accents, an em dash, CJK, combining marks and an emoji. */
+const NON_ASCII_TF =
+  '# régime — 日本語 ünïcödé\n' +
+  'resource "terraform_data" "unicode" {\n' +
+  '  input = "naïve café — 日本語 🚀 e\u0301"\n' +
+  '}\n';
+
+/** The archive formats the Export dialog's Archive Type combobox offers: its option label and the file extension. */
+const ARCHIVE_FORMATS = [
+  { label: 'Zip', extension: 'zip' },
+  { label: 'Tgz', extension: 'tgz' },
+];
+
 /** Open a project's Import dialog, import an archive, and dismiss the result. */
 async function importArchive(page: Page, projectId: string, projectName: string, archive: string): Promise<void> {
   await page.goto(`${Services.Caster.UI}/projects/${projectId}`);
@@ -103,6 +116,50 @@ for (const theme of CASTER_THEMES) {
       const workspaces = (await casterApi<any[]>(page, 'GET', `directories/${imported.id}/workspaces`)).body;
       expect(workspaces).toEqual([expect.objectContaining({ name: 'pinned', terraformVersion, parallelism: 3 })]);
     });
+
+    for (const format of ARCHIVE_FORMATS) {
+      test(`Round Trip Non-ASCII File Content As ${format.label}`, async ({
+        casterAuthenticatedPage: page,
+        cleanupCasterProject,
+      }, testInfo) => {
+        await setCasterTheme(page, theme);
+        const suffix = Date.now();
+
+        const sourceName = `Unicode Source ${format.extension} ${suffix}`;
+        const sourceId = await seedCasterProject(page, sourceName);
+        cleanupCasterProject(sourceId);
+        const directoryId = await seedCasterDirectory(page, sourceId, 'Unicode-Dir');
+        await seedCasterFile(page, directoryId, 'unicode.tf', NON_ASCII_TF);
+
+        // 1. Export the project in this format
+        await page.goto(`${Services.Caster.UI}/projects/${sourceId}`);
+        await page.getByText('Export Project', { exact: true }).filter({ visible: true }).click();
+        const exportDialog = page.getByRole('dialog', { name: `Export Project: ${sourceName}` });
+        const archiveType = exportDialog.getByRole('combobox', { name: 'Archive Type' });
+        await archiveType.click();
+        await page.getByRole('option', { name: format.label, exact: true }).click();
+        await expect(archiveType).toHaveText(format.label);
+        const download = page.waitForEvent('download');
+        await exportDialog.getByRole('button', { name: 'Export' }).click();
+        const archive = testInfo.outputPath(`${sourceName}.${format.extension}`);
+        await (await download).saveAs(archive);
+
+        // 2. Import it into a new, empty project
+        const targetName = `Unicode Target ${format.extension} ${suffix}`;
+        const targetId = await seedCasterProject(page, targetName);
+        cleanupCasterProject(targetId);
+        await importArchive(page, targetId, targetName, archive);
+
+        // expect: the file arrives with exactly the bytes written, not mojibake or a truncated tail
+        const imported = await directoryByName(page, targetId, 'Unicode-Dir');
+        expect(imported).toBeTruthy();
+        const files = (await casterApi<any[]>(page, 'GET', `directories/${imported.id}/files`)).body;
+        expect(files.map((f) => f.name)).toEqual(['unicode.tf']);
+        const file = (await casterApi(page, 'GET', `files/${files[0].id}`)).body;
+        expect(Buffer.from(file.content, 'utf8').equals(Buffer.from(NON_ASCII_TF, 'utf8'))).toBe(true);
+        expect(file.content).toBe(NON_ASCII_TF);
+      });
+    }
 
     test('Import A Folder Compressed In macOS Finder', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
       await setCasterTheme(page, theme);
