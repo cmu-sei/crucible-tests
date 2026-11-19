@@ -315,6 +315,18 @@ Exceptions, which run once:
     - expect: "Import Successful", not a 500 (the dialog does not yet show the result's warning about the GIF)
     - expect: The directory holds main.tf only; no `__MACOSX` directory, no `._` or .DS_Store files, and the binary GIF is dropped
 
+#### 3.12. Round Trip Non-ASCII File Content In Each Archive Format
+
+**File:** `tests/projects-management/export-and-import-project.spec.ts`
+
+**Steps:**
+  1. For each format in the Export dialog's Archive Type combobox (Zip, Tgz), seed a project with a directory and a .tf file whose comment and string literal hold non-ASCII text (accents, an em dash, Japanese, a combining mark, an emoji)
+  2. Choose the format in the sidebar's Export Project dialog and export
+    - expect: An archive downloads
+  3. Import the archive into a new, empty project from Import Project
+    - expect: "Import Successful"
+    - expect: The directory holds the one file, and its content read through the API is byte-identical to what was written
+
 ### 4. Directories Management
 
 **Seed:** `tests/seed.spec.ts`
