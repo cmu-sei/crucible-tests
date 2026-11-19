@@ -21,7 +21,7 @@ for (const theme of CASTER_THEMES) {
           (resp) => resp.url().includes('/api/projects') && resp.request().method() === 'POST' && resp.status() === 201
         );
         await page.locator('button[mattooltip="Add New Project"]').click();
-        await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
+        await expect(page.getByRole('dialog', { name: 'Add Project' })).toBeVisible();
         await page.getByRole('textbox', { name: 'Name' }).fill(name);
         await page.getByRole('button', { name: 'Save' }).click();
         const response = await responsePromise;
@@ -45,7 +45,7 @@ for (const theme of CASTER_THEMES) {
 
       // The app allows duplicate project names - the dialog closes and a second project appears.
       // Wait for the dialog to close, confirming the save was accepted.
-      const dialog = page.getByRole('dialog', { name: 'Create New Project?' });
+      const dialog = page.getByRole('dialog', { name: 'Add Project' });
       await expect(dialog).toBeHidden({ timeout: 10000 });
 
       // Verify both projects exist in the list

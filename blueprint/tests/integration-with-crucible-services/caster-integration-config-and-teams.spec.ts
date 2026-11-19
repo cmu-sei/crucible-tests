@@ -19,6 +19,7 @@ import {
   getCasterToken,
   createCasterTemplate,
   deleteCasterTemplate,
+  sharedCasterTemplate,
   tryUpdateTeam,
   CasterTemplate,
 } from '../../caster-helpers';
@@ -27,12 +28,24 @@ test.describe('Caster Integration', () => {
   let token: string;
   let casterToken: string;
   let template: CasterTemplate | undefined;
+  let ownTemplate: CasterTemplate | undefined;
   let mselId: string | undefined;
+
+  // The run's shared template, which global-setup seeds and no test changes: a push writes
+  // into a workspace of its own MSEL and Remove deletes it. Only when setup could not seed
+  // it does this file create (and delete) its own.
+  test.beforeAll(async () => {
+    template = sharedCasterTemplate('variablesOnly') ?? undefined;
+    if (!template) template = ownTemplate = await createCasterTemplate(await getCasterToken());
+  });
+
+  test.afterAll(async () => {
+    if (ownTemplate) await deleteCasterTemplate(await getCasterToken(), ownTemplate);
+  });
 
   test.beforeEach(async () => {
     token = await getBlueprintToken();
     casterToken = await getCasterToken();
-    template = await createCasterTemplate(casterToken);
   });
 
   test.afterEach(async () => {
@@ -41,9 +54,7 @@ test.describe('Caster Integration', () => {
     } catch (err) {
       console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
     }
-    await deleteCasterTemplate(casterToken, template);
     mselId = undefined;
-    template = undefined;
   });
 
   test('The Config tab holds Push until Caster has Player and a directory', async ({ blueprintAuthenticatedPage: page }) => {

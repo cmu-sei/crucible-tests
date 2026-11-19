@@ -5,7 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, seedTeamType, apiDeleteTeamType, CITE_THEMES, setCiteTheme } from '../../fixtures';
-import { navigateToAdminSection, waitForAdminListLoad } from '../../test-helpers';
+import { navigateToAdminSection, waitForAdminListLoad, waitForDialogOpen } from '../../test-helpers';
 
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Administration - Team Types`, () => {
@@ -30,7 +30,6 @@ for (const theme of CITE_THEMES) {
       if (await searchBox.isVisible({ timeout: 2000 }).catch(() => false)) {
         await searchBox.clear();
         await searchBox.fill(teamTypeName);
-        await page.waitForTimeout(1000);
       }
 
       const typeRow = page.locator('tbody tr').filter({ hasText: teamTypeName }).first();
@@ -42,7 +41,7 @@ for (const theme of CITE_THEMES) {
       await editButton.click();
 
       const editDialog = page.getByRole('dialog');
-      await expect(editDialog).toBeVisible({ timeout: 5000 });
+      await waitForDialogOpen(editDialog);
 
       // 4. Edit the name
       const editNameField = editDialog.getByRole('textbox').first();
@@ -58,13 +57,11 @@ for (const theme of CITE_THEMES) {
       await expect(editSaveButton).toBeEnabled({ timeout: 5000 });
       await editSaveButton.click();
       await expect(editDialog).not.toBeVisible({ timeout: 10000 });
-      await page.waitForTimeout(1000);
 
       // 6. Verify the edit is reflected in the list
       if (await searchBox.isVisible({ timeout: 2000 }).catch(() => false)) {
         await searchBox.clear();
         await searchBox.fill(EDITED_TEAM_TYPE);
-        await page.waitForTimeout(1000);
       }
 
       const editedRow = page.locator('tbody tr').filter({ hasText: EDITED_TEAM_TYPE }).first();

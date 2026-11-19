@@ -11,8 +11,7 @@
  * and builds them on these.
  */
 
-import { createHash } from 'crypto';
-import { expect, Locator, Page, TestInfo } from '@playwright/test';
+import { expect, Locator, Page, WorkerInfo } from '@playwright/test';
 
 // ---------------------------------------------------------------------------
 // Theme state
@@ -63,17 +62,18 @@ export function themedUrl(baseUrl: string, path: string, theme: Theme): string {
 // ---------------------------------------------------------------------------
 
 /**
- * `<baseName> [<project>-w<worker>-r<retry>-<hash>]`, where the hash covers the
- * file and full title path. The title path includes the `light theme ›` /
- * `dark theme ›` describe prefix, so the two theme variants of a spec never share
- * a seeded name.
+ * `<baseName> [w<parallelIndex>]`: the name of a record seeded once per Playwright
+ * worker and shared by every test that worker runs.
+ *
+ * `parallelIndex` is the worker's slot (`0..workers-1`), unique among the workers
+ * alive at any moment across every project (so a chromium and a firefox worker never
+ * share a name) and stable when a worker restarts after a failure. Deterministic on
+ * purpose: the restarted worker's seeder clears its predecessor's exact-name copy
+ * before it creates its own, and a leftover from a crashed run is recognisable by its
+ * prefix (global-teardown purges `<baseName> [`).
  */
-export function seededName(baseName: string, testInfo: TestInfo): string {
-  const seed = createHash('sha1')
-    .update(`${testInfo.project.name}:${testInfo.file}:${testInfo.titlePath.join(' > ')}:${testInfo.retry}`)
-    .digest('hex')
-    .slice(0, 8);
-  return `${baseName} [${testInfo.project.name}-w${testInfo.workerIndex}-r${testInfo.retry}-${seed}]`;
+export function seededName(baseName: string, workerInfo: Pick<WorkerInfo, 'parallelIndex'>): string {
+  return `${baseName} [w${workerInfo.parallelIndex}]`;
 }
 
 // ---------------------------------------------------------------------------
@@ -215,4 +215,26 @@ export function hexToRgb(hex: string): string {
   const h = hex.replace('#', '');
   const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
   return `rgb(${r}, ${g}, ${b})`;
+}
+
+/**
+ * Wait for `CrucibleFaviconService` to swap the page's `<link rel="icon">` for its
+ * recolored copy (a `data:` or `blob:` URL), then assert that SVG fills with the
+ * top-bar color. Fails while the app still points at a static `.ico`, which the
+ * service leaves alone.
+ */
+export async function expectFaviconInTopBarColor(page: Page, topBarHex: string): Promise<void> {
+  const icon = page.locator('link[rel~="icon"]');
+  await expect(icon, 'favicon should be replaced by its recolored SVG').toHaveAttribute(
+    'href',
+    /^(data|blob):/,
+    { timeout: 10000 }
+  );
+  const svg = await page.evaluate(async () => {
+    const href = (document.querySelector('link[rel~="icon"]') as HTMLLinkElement).href;
+    return (await fetch(href)).text();
+  });
+  expect(svg.toUpperCase(), 'favicon SVG should fill with the top-bar color').toContain(
+    `FILL:${topBarHex.toUpperCase()}`
+  );
 }

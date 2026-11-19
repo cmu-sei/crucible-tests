@@ -4,8 +4,9 @@
 // spec: alloy/alloy-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../fixtures';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
+import { alloyUserMenuButton } from '../../test-helpers';
 
 test.describe('Accessibility and Usability', () => {
   test('Color Contrast Compliance', async ({ page }) => {
@@ -21,7 +22,7 @@ test.describe('Accessibility and Usability', () => {
 
     // Verify both light and dark themes render correctly
     // Open user menu
-    await page.getByRole('button', { name: 'Admin User' }).click();
+    await alloyUserMenuButton(page).click();
     await expect(page.getByRole('switch', { name: 'Dark Theme' })).toBeVisible();
 
     // Switch to dark theme
@@ -36,7 +37,7 @@ test.describe('Accessibility and Usability', () => {
     await expect(page.getByRole('table')).toBeVisible();
 
     // Switch back to light mode
-    await page.getByRole('button', { name: 'Admin User' }).click();
+    await alloyUserMenuButton(page).click();
     await page.getByRole('switch', { name: 'Dark Theme' }).click();
     await expect(page.getByRole('switch', { name: 'Dark Theme' })).not.toBeChecked();
   });

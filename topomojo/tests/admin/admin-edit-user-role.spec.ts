@@ -17,27 +17,24 @@ test.describe('Admin Panel', () => {
     const hasUsers = await usersLink.isVisible({ timeout: 10000 }).catch(() => false);
     if (hasUsers) {
       await usersLink.click();
-      await page.waitForTimeout(1000);
+
+      // expect: User list displays
+      // 2. Click on a user or view user details
+      const userRows = page.locator('tr, mat-row, [class*="user-row"], [class*="list-item"]');
+      await expect(userRows.first()).toBeVisible();
     }
 
-    // expect: User list displays
-    // 2. Click on a user or view user details
     const userRows = page.locator('tr, mat-row, [class*="user-row"], [class*="list-item"]');
     const userCount = await userRows.count();
 
     if (userCount > 0) {
       await userRows.first().click();
-      await page.waitForTimeout(500);
 
       // expect: User details form opens
       // expect: User role badge is displayed showing current role
       const roleSelector = page.locator('mat-select, select, [class*="role"], [class*="appRole"]').first();
+      await expect(roleSelector).toBeVisible();
       const hasRole = await roleSelector.isVisible({ timeout: 5000 }).catch(() => false);
-
-      if (hasRole) {
-        // expect: Role selection is available
-        await expect(roleSelector).toBeVisible();
-      }
     }
   });
 });

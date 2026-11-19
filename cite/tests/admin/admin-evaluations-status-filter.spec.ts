@@ -28,7 +28,7 @@ for (const theme of CITE_THEMES) {
         await options.first().click();
       }
 
-      await page.waitForTimeout(500);
+      // Rule applied: removed fixed sleep
     });
   });
 }

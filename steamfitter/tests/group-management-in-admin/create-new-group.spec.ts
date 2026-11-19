@@ -10,7 +10,7 @@ import { navigateToAdminSection } from '../../test-helpers';
 
 /**
  * A new group is created from the Groups section via the "Add New Group" button, which
- * opens a NameDialog ("Create New Group?"). This spec creates a uniquely-named group
+ * opens a NameDialog ("Add Group"). This spec creates a uniquely-named group
  * through the UI, then confirms its row appears in the table. Cleanup is by API prefix.
  */
 for (const theme of STEAMFITTER_THEMES) {
@@ -30,7 +30,7 @@ for (const theme of STEAMFITTER_THEMES) {
 
       await page.locator('button[mattooltip="Add New Group"]').click();
 
-      const dialog = page.getByRole('dialog', { name: 'Create New Group?' });
+      const dialog = page.getByRole('dialog', { name: 'Add Group' });
       await expect(dialog).toBeVisible({ timeout: 5000 });
 
       await dialog.getByRole('textbox', { name: 'Name' }).fill(GROUP_NAME);

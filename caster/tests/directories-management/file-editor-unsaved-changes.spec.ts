@@ -106,7 +106,6 @@ test.describe('Directories Management', () => {
     const rename = await casterApi(page, 'POST', `files/${fileId}/actions/rename`, { name: 'renamed.tf' });
     expect(rename.status).toBe(200);
     await expect(page.getByRole('button', { name: 'Close renamed.tf' })).toBeVisible();
-    await page.waitForLoadState('networkidle');
 
     expect(reloads).toEqual([]);
     await expect.poll(() => casterEditorContent(page)).toBe('variable "a" {}\nvariable "draft" {}');

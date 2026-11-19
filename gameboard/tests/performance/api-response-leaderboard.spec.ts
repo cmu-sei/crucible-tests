@@ -14,7 +14,7 @@ import {
   CreatedGame,
   CreatedSponsor,
 } from '../../api-helpers';
-import { gbConnect, seedScoreboardPlayers, cleanupSeededScoreboard } from '../../db-helpers';
+import { seedScoreboardPlayers, cleanupSeededScoreboard } from '../../db-helpers';
 import { APIRequestContext, request as playwrightRequest } from '@playwright/test';
 
 // Benchmarks the scoreboard endpoint response time with a realistic 50-team
@@ -34,37 +34,27 @@ test.describe('Performance', () => {
     });
   });
 
-  test.afterEach(async () => {
-    const client = await gbConnect();
-    try {
-      await cleanupSeededScoreboard(client, game.id);
-    } finally {
-      await client.end();
-    }
+  test.afterEach(async ({ gbDb: client }) => {
+    await cleanupSeededScoreboard(client, game.id);
     if (game) await deleteGame(token, game.id);
     if (sponsor) await deleteSponsor(token, sponsor.id);
   });
 
-  test('API Response Time - Leaderboard Updates', async ({ gameboardAuthenticatedPage: page }) => {
-    const client = await gbConnect();
-    try {
-      await seedScoreboardPlayers(client, game.id, sponsor.id, 50);
-    } finally {
-      await client.end();
-    }
+  test('API Response Time - Leaderboard Updates', async ({ gameboardAuthenticatedPage: page, gbDb: client }) => {
+    await seedScoreboardPlayers(client, game.id, sponsor.id, 50);
 
     const ctx: APIRequestContext = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
     try {
       // Warm-up.
       await ctx.fetch(`${Services.Gameboard.API}/api/game/${game.id}/score`, {
         headers: { Authorization: `Bearer ${token}` },
-        timeout: 60000,
+        timeout: 30000,
       });
 
       const start = Date.now();
       const res = await ctx.fetch(`${Services.Gameboard.API}/api/game/${game.id}/score`, {
         headers: { Authorization: `Bearer ${token}` },
-        timeout: 60000,
+        timeout: 30000,
       });
       const elapsed = Date.now() - start;
       expect(res.ok()).toBe(true);
@@ -74,7 +64,7 @@ test.describe('Performance', () => {
       await ctx.dispose();
     }
 
-    await page.goto(Services.Gameboard.UI + '/admin/dashboard', { waitUntil: 'networkidle' });
+    await page.goto(Services.Gameboard.UI + '/admin/dashboard', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
   });
 });

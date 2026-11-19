@@ -6,6 +6,8 @@
 
 import { test, expect, Services, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import { getBlueprintToken, tempBlueprintName,
+  createInjectType,
+  createUnit,
   acquireAdminCatalogLock,
   releaseAdminCatalogLock,
 } from '../../test-helpers';
@@ -32,12 +34,18 @@ for (const theme of BLUEPRINT_THEMES) {
     let UNIT_SHORT_NAME: string;
     let INJECT_NAME: string;
 
-    test.beforeEach(() => {
+    test.beforeEach(async () => {
       CATALOG_NAME = tempBlueprintName('CreateCat');
       INJECT_TYPE_NAME = tempBlueprintName('CreateCatIT');
       UNIT_NAME = tempBlueprintName('CreateCatUnit');
       UNIT_SHORT_NAME = UNIT_NAME.slice(-8);
       INJECT_NAME = tempBlueprintName('CreateCatInj');
+      // Preconditions over the API, inside the lock the first beforeEach took (every create
+      // broadcasts to open admin pages). The catalog itself is created through its dialog —
+      // that is what this spec tests.
+      const token = await getBlueprintToken();
+      await createInjectType(token, { name: INJECT_TYPE_NAME });
+      await createUnit(token, { name: UNIT_NAME, shortName: UNIT_SHORT_NAME });
     });
 
     // Cleanup runs in afterEach (not inline at the end of the test body) so a mid-test
@@ -85,62 +93,7 @@ for (const theme of BLUEPRINT_THEMES) {
         ).toBeVisible({ timeout: 5000 });
       };
 
-      // ── Step 1: Create a prerequisite Inject Type ────────────────────────────
-
-      await navigateTo('Inject Types');
-
-      const addInjectTypeButton = page.locator(
-        'button[title*="Add"], button[aria-label*="Add"]'
-      ).first();
-      await expect(addInjectTypeButton).toBeVisible({ timeout: 5000 });
-      await addInjectTypeButton.click();
-
-      const injectTypeNameField = page.locator(
-        'input[formControlName="name"], input[placeholder*="Name"]'
-      ).first();
-      await expect(injectTypeNameField).toBeVisible({ timeout: 5000 });
-      await injectTypeNameField.fill(INJECT_TYPE_NAME);
-
-      // Description is also required for the Save button to become enabled
-      const injectTypeDescField = page.locator(
-        'input[formControlName="description"], input[placeholder*="Description"], textarea[placeholder*="Description"]'
-      ).first();
-      await expect(injectTypeDescField).toBeVisible({ timeout: 5000 });
-      await injectTypeDescField.fill('Test inject type description');
-
-      const injectTypeSaveButton = page.locator(
-        'button:has-text("Save"), button[type="submit"]'
-      ).first();
-      await expect(injectTypeSaveButton).toBeEnabled({ timeout: 5000 });
-      await injectTypeSaveButton.click();
-
-      await expect(page.locator(`text=${INJECT_TYPE_NAME}`).first()).toBeVisible({ timeout: 10000 });
-
-      // ── Step 2: Create Unit ──────────────────────────────────────────────────
-
-      await navigateTo('Units');
-
-      const addUnitButton = page.locator(
-        'button[title*="Add"], button[aria-label*="Add"]'
-      ).first();
-      await expect(addUnitButton).toBeVisible({ timeout: 5000 });
-      await addUnitButton.click();
-
-      const unitNameField = page.locator('input[placeholder*="Name (required)"]').first();
-      await expect(unitNameField).toBeVisible({ timeout: 5000 });
-      await unitNameField.fill(UNIT_NAME);
-
-      const unitShortNameField = page.locator('input[placeholder*="Short Name"]').first();
-      await expect(unitShortNameField).toBeVisible({ timeout: 5000 });
-      await unitShortNameField.fill(UNIT_SHORT_NAME);
-
-      const unitSaveButton = page.locator(
-        'button:has-text("Save"), button[type="submit"]'
-      ).first();
-      await expect(unitSaveButton).toBeEnabled({ timeout: 5000 });
-      await unitSaveButton.click();
-
-      await expect(page.locator(`text=${UNIT_NAME}`).first()).toBeVisible({ timeout: 10000 });
+      // ── Step 1/2: the Inject Type and Unit were seeded in beforeEach ────────
 
       // ── Step 3: Create Catalog ───────────────────────────────────────────────
 
@@ -264,7 +217,7 @@ for (const theme of BLUEPRINT_THEMES) {
         await expect(
           catalogUnits.getByRole('button', { name: `Remove ${UNIT_SHORT_NAME} from this catalog` })
         ).toBeVisible({ timeout: 3000 });
-      }).toPass({ timeout: 45000 });
+      }).toPass({ timeout: 30000 });
 
       // ── Step 8: Expand "Injects" section and add an inject to the catalog ────
 
@@ -287,7 +240,7 @@ for (const theme of BLUEPRINT_THEMES) {
         await newInjectMenuItem.click({ timeout: 3000 });
 
         await expect(page.locator('input[title="The Name of the Inject"]')).toBeVisible({ timeout: 3000 });
-      }).toPass({ timeout: 45000 });
+      }).toPass({ timeout: 30000 });
 
       // Only one dialog is open at a time, but scope to it explicitly (via the inject
       // dialog's own "title" attributes, which uniquely identify its fields) rather than
@@ -326,7 +279,7 @@ for (const theme of BLUEPRINT_THEMES) {
         await expect(injectList.getByRole('cell', { name: INJECT_NAME, exact: true })).toBeVisible({
           timeout: 3000,
         });
-      }).toPass({ timeout: 45000 });
+      }).toPass({ timeout: 30000 });
 
       // Cleanup happens in afterEach (via the API) so a mid-test failure still cleans up.
     });

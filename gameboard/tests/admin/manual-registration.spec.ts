@@ -53,7 +53,7 @@ test.describe('Admin - Users', () => {
     expect(player.teamId).toBeTruthy();
 
     // UI sanity check — admin area still reachable.
-    await page.goto(Services.Gameboard.UI + '/admin/registrar/players', { waitUntil: 'networkidle' });
+    await page.goto(Services.Gameboard.UI + '/admin/registrar/players', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
   });
 });

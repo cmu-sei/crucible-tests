@@ -4,13 +4,13 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, seededPrimaryViewName, findPlayerHomeViewLink, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
+import { test, expect, Services, findPlayerHomeViewLink, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
 
 for (const theme of PLAYER_THEMES) {
   test.describe(`${theme} theme › User Presence`, () => {
-    test('User Presence Page Access', async ({ playerAuthenticatedPage: page }) => {
+    test('User Presence Page Access', async ({ playerAuthenticatedPage: page, seededViews }) => {
       await setPlayerTheme(page, theme);
-      const primaryViewName = seededPrimaryViewName();
+      const primaryViewName = seededViews.primary.name;
 
       // 1. Navigate to user presence route /view/:id/presence
       const viewLink = await findPlayerHomeViewLink(page, primaryViewName);

@@ -19,7 +19,7 @@ test.describe('Authentication and Authorization', () => {
     // expect: The application redirects to the Keycloak authentication page.
     // The Angular OIDC client may attempt silent renewal (iframe) first, so allow
     // a generous window for the full redirect to Keycloak.
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 70000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 30000 });
 
     // 2. Enter username 'admin'
     const usernameField = page.locator('#username');

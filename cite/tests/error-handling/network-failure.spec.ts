@@ -23,7 +23,8 @@ for (const theme of CITE_THEMES) {
       // expect: Application detects network failure
       // expect: Error message is displayed to user
       // expect: Application remains stable
-      await page.waitForTimeout(3000);
+      // Anchor on CITE shell (app structure loads even with network failure)
+      await expect(page.locator('app-root mat-toolbar')).toBeVisible({ timeout: 10000 });
       const body = page.locator('body');
       await expect(body).toBeVisible();
 

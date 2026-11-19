@@ -15,7 +15,7 @@ for (const theme of CASTER_THEMES) {
       await expect(page.getByText('My Projects')).toBeVisible();
 
       await page.locator('button:has(.mdi-plus-circle)').click();
-      await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
+      await expect(page.getByRole('dialog', { name: 'Add Project' })).toBeVisible();
       await page.getByRole('textbox', { name: 'Name' }).fill(`Delete File Project ${uniqueSuffix}`);
       await page.getByRole('button', { name: 'Save' }).click();
       await expectCasterProjectOpen(page, `Delete File Project ${uniqueSuffix}`);
@@ -25,7 +25,7 @@ for (const theme of CASTER_THEMES) {
       if (projectId) cleanupCasterProject(projectId);
 
       await page.getByText('Add Directory').first().click();
-      await expect(page.getByRole('dialog', { name: 'Create New Directory?' })).toBeVisible();
+      await expect(page.getByRole('dialog', { name: 'Add Directory' })).toBeVisible();
       await page.getByRole('textbox', { name: 'Name' }).fill('Delete-File-Dir');
       await page.getByRole('button', { name: 'Save' }).click();
       await expect(page.getByRole('button', { name: 'Delete-File-Dir' })).toBeVisible({ timeout: 10000 });

@@ -116,7 +116,7 @@ for (const theme of BLUEPRINT_THEMES) {
       const confirm = page.getByRole('dialog');
       //    expect: the confirmation names the unit.
       await expect(confirm).toContainText(`delete ${renamed}?`);
-      await confirm.getByRole('button', { name: 'No', exact: true }).click();
+      await confirm.getByRole('button', { name: 'Cancel', exact: true }).click();
       await expect(confirm).toBeHidden();
       await expect(renamedRow).toHaveCount(1);
 
@@ -124,7 +124,7 @@ for (const theme of BLUEPRINT_THEMES) {
       const deleted = page.waitForResponse(
         (r) => r.url().includes(`/api/units/${createdIds[0]}`) && r.request().method() === 'DELETE'
       );
-      await confirm.getByRole('button', { name: 'Yes', exact: true }).click();
+      await confirm.getByRole('button', { name: 'Delete', exact: true }).click();
       expect((await deleted).ok()).toBe(true);
       //    expect: the row is gone.
       await expect(renamedRow).toHaveCount(0, { timeout: 15000 });

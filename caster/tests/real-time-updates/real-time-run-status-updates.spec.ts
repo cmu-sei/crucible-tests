@@ -19,7 +19,7 @@ for (const theme of CASTER_THEMES) {
       await expect(page.getByText('My Projects')).toBeVisible();
 
       await page.getByText('My Projects').locator('..').locator('button').click();
-      await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
+      await expect(page.getByRole('dialog', { name: 'Add Project' })).toBeVisible();
       await page.getByRole('textbox', { name: 'Name' }).fill('RT Run Status Project');
       await page.getByRole('button', { name: 'Save' }).click();
       await expectCasterProjectOpen(page, 'RT Run Status Project');

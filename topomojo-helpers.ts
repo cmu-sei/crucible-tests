@@ -13,8 +13,8 @@
  * public OIDC client accepts password grants against the `crucible` realm.
  */
 
-import { APIRequestContext, request as playwrightRequest } from '@playwright/test';
 import { Services } from './shared-fixtures';
+import { cachedUserToken, sharedRequestContext } from './api-cache';
 export const TOPOMOJO_API_CANDIDATES = [
   process.env.TOPOMOJO_API_URL?.replace(/\/$/, ''),
   Services.TopoMojo.API,
@@ -22,14 +22,10 @@ export const TOPOMOJO_API_CANDIDATES = [
 
 let _resolvedTopoApi: string | null = null;
 
-async function newContext(): Promise<APIRequestContext> {
-  return playwrightRequest.newContext({ ignoreHTTPSErrors: true });
-}
-
 export async function resolveTopoApiBase(): Promise<string> {
   if (_resolvedTopoApi) return _resolvedTopoApi;
-  const ctx = await newContext();
-  try {
+  const ctx = await sharedRequestContext();
+  {
     for (const candidate of TOPOMOJO_API_CANDIDATES) {
       try {
         // Unauthenticated ping should at least return a non-network-error HTTP code.
@@ -40,8 +36,6 @@ export async function resolveTopoApiBase(): Promise<string> {
         }
       } catch { /* try next */ }
     }
-  } finally {
-    await ctx.dispose();
   }
   throw new Error(`Could not reach TopoMojo API at any of: ${TOPOMOJO_API_CANDIDATES.join(', ')}`);
 }
@@ -55,8 +49,14 @@ export async function getTopoMojoAdminToken(
   username: string = 'admin',
   password: string = 'admin'
 ): Promise<string> {
-  const ctx = await newContext();
-  try {
+  return cachedUserToken('crucible', 'topomojo.ui', username, 'openid profile topomojo', () =>
+    fetchTopoMojoToken(username, password)
+  );
+}
+
+async function fetchTopoMojoToken(username: string, password: string): Promise<string> {
+  const ctx = await sharedRequestContext();
+  {
     const keycloak = Services.Keycloak.replace(/\/$/, '');
     const res = await ctx.post(
       `${keycloak}/realms/crucible/protocol/openid-connect/token`,
@@ -75,8 +75,6 @@ export async function getTopoMojoAdminToken(
     }
     const data = await res.json();
     return data.access_token as string;
-  } finally {
-    await ctx.dispose();
   }
 }
 
@@ -98,8 +96,8 @@ async function tmCall<T = any>(
       if (v !== undefined) url.searchParams.append(k, String(v));
     }
   }
-  const ctx = await newContext();
-  try {
+  const ctx = await sharedRequestContext();
+  {
     const res = await ctx.fetch(url.toString(), {
       method: opts.method ?? 'GET',
       headers: { Authorization: `Bearer ${token}` },
@@ -109,8 +107,6 @@ async function tmCall<T = any>(
     let data: any;
     try { data = text ? JSON.parse(text) : undefined; } catch { /* non-JSON */ }
     return { ok: res.ok(), status: res.status(), data, text };
-  } finally {
-    await ctx.dispose();
   }
 }
 

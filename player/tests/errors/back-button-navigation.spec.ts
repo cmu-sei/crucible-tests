@@ -7,7 +7,6 @@
 import {
   test,
   expect,
-  seededPrimaryViewName,
   findPlayerHomeViewLink,
   clickWithoutOverlayInterference,
   PLAYER_THEMES,
@@ -16,9 +15,9 @@ import {
 
 for (const theme of PLAYER_THEMES) {
   test.describe(`${theme} theme › Error Handling and Edge Cases`, () => {
-    test('Browser Back Button Navigation', async ({ playerAuthenticatedPage: page }) => {
+    test('Browser Back Button Navigation', async ({ playerAuthenticatedPage: page, seededViews }) => {
       await setPlayerTheme(page, theme);
-      const primaryViewName = seededPrimaryViewName();
+      const primaryViewName = seededViews.primary.name;
 
       // 1. Navigate through multiple pages (home -> view -> admin)
       // Start on home page

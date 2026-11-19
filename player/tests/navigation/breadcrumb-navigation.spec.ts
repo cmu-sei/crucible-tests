@@ -4,13 +4,13 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern, seededPrimaryViewName, findAdminViewButton, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, findAdminViewButton, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
 
 for (const theme of PLAYER_THEMES) {
   test.describe(`${theme} theme › Navigation`, () => {
-    test('Breadcrumb Navigation', async ({ playerAuthenticatedPage: page }) => {
+    test('Breadcrumb Navigation', async ({ playerAuthenticatedPage: page, seededViews }) => {
       await setPlayerTheme(page, theme);
-      const primaryViewName = seededPrimaryViewName();
+      const primaryViewName = seededViews.primary.name;
 
       // 1. Navigate to a nested page (e.g., admin view edit)
       await page.getByRole('button', { name: 'Menu' }).click();

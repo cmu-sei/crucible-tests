@@ -17,7 +17,6 @@ test.describe('Admin Panel', () => {
     const hasUsers = await usersLink.isVisible({ timeout: 10000 }).catch(() => false);
     if (hasUsers) {
       await usersLink.click();
-      await page.waitForTimeout(1000);
     }
 
     // expect: User list displays with role information
@@ -35,10 +34,10 @@ test.describe('Admin Panel', () => {
 
       if (hasWarning) {
         await warningIndicator.click();
-        await page.waitForTimeout(500);
 
         // expect: Modal opens explaining the role conflict
         const modal = page.locator('mat-dialog-container, [role="dialog"]').first();
+        await expect(modal).toBeVisible();
         const hasModal = await modal.isVisible({ timeout: 3000 }).catch(() => false);
         if (hasModal) {
           // 4. Close the modal

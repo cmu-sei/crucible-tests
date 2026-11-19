@@ -86,6 +86,34 @@ async function connectBlueprintDatabase(): Promise<Client> {
   return client;
 }
 
+let workerClient: Promise<Client> | undefined;
+
+/**
+ * This worker's one connection, opened on first use and reused for every later query (pg
+ * queues concurrent queries on a client). A connection that errors or ends is dropped, so the
+ * next call reconnects. The worker process exiting closes it.
+ */
+function blueprintDatabase(): Promise<Client> {
+  if (!workerClient) {
+    const connecting = connectBlueprintDatabase().then(
+      (client) => {
+        const drop = () => {
+          if (workerClient === connecting) workerClient = undefined;
+        };
+        client.on('error', drop);
+        client.on('end', drop);
+        return client;
+      },
+      (error) => {
+        workerClient = undefined;
+        throw error;
+      }
+    );
+    workerClient = connecting;
+  }
+  return workerClient;
+}
+
 /** `MselItemStatus` values as Blueprint stores them (Blueprint.Api.Data/Enumerations.cs). */
 const MSEL_STATUS = {
   Pending: 0,
@@ -124,16 +152,12 @@ async function updateMselIntegrationState(
   if (sets.length === 0) return 0;
 
   values.push(mselId);
-  const client = await connectBlueprintDatabase();
-  try {
-    const result = await client.query(
-      `UPDATE msels SET ${sets.join(', ')} WHERE id = $${values.length}`,
-      values
-    );
-    return result.rowCount ?? 0;
-  } finally {
-    await client.end();
-  }
+  const client = await blueprintDatabase();
+  const result = await client.query(
+    `UPDATE msels SET ${sets.join(', ')} WHERE id = $${values.length}`,
+    values
+  );
+  return result.rowCount ?? 0;
 }
 
 /**

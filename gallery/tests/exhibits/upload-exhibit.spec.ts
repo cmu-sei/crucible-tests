@@ -79,7 +79,7 @@ for (const theme of GALLERY_THEMES) {
       const uploadResponsePromise = page.waitForResponse(
         (response) =>
           response.url().includes('/api/exhibits/json') && response.request().method() === 'POST',
-        { timeout: 60000 }
+        { timeout: 30000 }
       );
       const fileChooser = await fileChooserPromise;
       await fileChooser.setFiles(tempPath);
@@ -96,9 +96,9 @@ for (const theme of GALLERY_THEMES) {
       // The import lands in a NEW collection, not the source one.
       expect(uploaded.id).not.toBe(seededExhibit.exhibitId);
       expect(uploaded.collectionId).not.toBe(seededExhibit.collectionId);
-      // privateExhibitCopyAsync keeps the exhibit name and suffixes only the collection
+      // privateExhibitCopyAsync suffixes both the exhibit name and the new collection's
       // name with " - <username>".
-      expect(uploaded.name).toBe(seededExhibit.exhibitName);
+      expect(uploaded.name).toBe(`${seededExhibit.exhibitName} - Admin User`);
 
       // expect: The new exhibit appears in the list.
       // selectFile() calls collectionDataService.setActive('') before uploading, which

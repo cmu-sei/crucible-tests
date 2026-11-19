@@ -16,30 +16,51 @@
 import { test, expect, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import {
   getBlueprintToken,
-  createMsel,
   deleteMsel,
   createRenderableScenarioEvent,
   navigateToMselSection,
   findScenarioEventRow,
-  tempBlueprintName,
+  createSharedRenderableMsel,
+  resetSharedRenderableMsel,
+  type CreatedMsel,
+  sharedChildName,
 } from '../../test-helpers';
 
 const TRANSPARENT = 'rgba(0, 0, 0, 0)';
 
+// One MSEL with the standard DataFields (13 POSTs) is seeded per file and shared by both
+// theme runs. Safe to share: the highlight is stored on the test's own event.
+// Each test seeds its own uniquely named events, and `resetSharedRenderableMsel` removes
+// them (and any extra DataField) in afterEach.
+let shared: CreatedMsel;
+
+test.beforeAll(async ({}, workerInfo) => {
+  shared = await createSharedRenderableMsel(await getBlueprintToken(), 'ColorCoding', workerInfo.parallelIndex);
+});
+
+test.afterAll(async () => {
+  if (shared) await deleteMsel(await getBlueprintToken(), shared.id);
+});
+
 for (const theme of BLUEPRINT_THEMES) {
   test.describe(`${theme} theme › Scenario Events Management`, () => {
+    // Per-test names for this test's own records on the shared MSEL.
+    let child: (base: string) => string;
     let token: string;
     let mselId: string | undefined;
-    const eventText = tempBlueprintName('ColorCoding');
+    let eventText: string;
 
-    test.beforeEach(async () => {
+    test.beforeEach(async ({}, testInfo) => {
+      child = (base: string) => sharedChildName(base, testInfo, theme);
       token = await getBlueprintToken();
-      mselId = (await createMsel(token)).id;
+      mselId = shared.id;
+      eventText = child('TestBP-ColorCoding');
       await createRenderableScenarioEvent(token, mselId, eventText, { deltaSeconds: 300 });
     });
 
     test.afterEach(async () => {
-      if (mselId) await deleteMsel(token, mselId);
+      // Back to "standard DataFields, no events" for the next test on the shared MSEL.
+      await resetSharedRenderableMsel(token, mselId);
     });
 
     test('Scenario Event Color Coding', async ({ blueprintAuthenticatedPage: page }) => {

@@ -44,7 +44,7 @@ for (const theme of STEAMFITTER_THEMES) {
         { timeout: 15000 }
       );
       await groupRow.locator('button:has(mat-icon[fonticon*="trash"])').click();
-      await respondToConfirmDialog(page, true);
+      await respondToConfirmDialog(page, true, 'Delete');
       await deleteResponse;
 
       // The group row should no longer be present.

@@ -546,6 +546,17 @@ This updated test plan covers recent feature additions including: configurable b
     - expect: User is redirected to home page
     - expect: Workspace no longer appears in list
 
+#### 4.15. Workspace Editor - Delete Workspace Removes Document Images
+
+**File:** `topomojo/tests/workspace-editor/delete-workspace-removes-document-images.spec.ts`
+
+**Steps:**
+  1. Through the API, create a workspace, upload a document image, and save a document that references it
+    - expect: The image is served from `/docs/{id}/<file>`
+  2. Delete the workspace through the API
+    - expect: The delete returns 200
+    - expect: `GET /docs/{id}/<file>` returns 404
+
 ### 5. Gamespace Management
 
 **Seed:** `seed.spec.ts`

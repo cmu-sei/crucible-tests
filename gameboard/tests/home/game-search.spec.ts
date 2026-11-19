@@ -5,27 +5,11 @@
 // seed: seed.spec.ts
 
 import { test, expect, Services } from '../../fixtures';
-import { getAdminToken, createGame, deleteGame, CreatedGame } from '../../api-helpers';
 
+// The worker's read-only (published, live) game guarantees at least one card.
 test.describe('Home Page and Game Discovery', () => {
-  let token: string;
-  let game: CreatedGame;
-
-  test.beforeEach(async () => {
-    token = await getAdminToken();
-    game = await createGame(token, {
-      name: `SearchableLive-${Date.now()}`,
-      startOffsetDays: -1,
-      endOffsetDays: 30,
-    });
-  });
-
-  test.afterEach(async () => {
-    if (game) await deleteGame(token, game.id);
-  });
-
-  test('Game Search Functionality', async ({ gameboardAuthenticatedPage: page }) => {
-    await page.goto(Services.Gameboard.UI + '/home', { waitUntil: 'networkidle' });
+  test('Game Search Functionality', async ({ gameboardAuthenticatedPage: page, readOnlyGame: _liveGame }) => {
+    await page.goto(Services.Gameboard.UI + '/home', { waitUntil: 'domcontentloaded' });
 
     const searchBox = page.locator('input[placeholder="Search games..."]').first();
     await expect(searchBox).toBeVisible();
@@ -33,12 +17,10 @@ test.describe('Home Page and Game Discovery', () => {
     // Wait for the seeded card to render — retry-loop since parallel worker
     // creates/deletes can briefly hide our card from the home feed.
     const cards = page.locator('app-game-card');
-    let initialCount = 0;
-    for (let i = 0; i < 12; i++) {
-      initialCount = await cards.count();
-      if (initialCount >= 1) break;
-      await page.waitForTimeout(2500);
-    }
+    await expect
+      .poll(() => cards.count(), { timeout: 30000, intervals: [500, 1000, 2500] })
+      .toBeGreaterThanOrEqual(1);
+    const initialCount = await cards.count();
     expect(initialCount, 'at least the seeded game should render').toBeGreaterThanOrEqual(1);
 
     // Search for a unique string unlikely to match any card fields — card count should drop.

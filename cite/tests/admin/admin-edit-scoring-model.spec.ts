@@ -4,8 +4,8 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, CITE_THEMES, setCiteTheme } from '../../fixtures';
-import { navigateToAdminSection, deleteScoringModelByName, findAdminRowByName } from '../../test-helpers';
+import { test, expect, apiDeleteScoringModelsByName, Services, CITE_THEMES, setCiteTheme } from '../../fixtures';
+import { navigateToAdminSection, findAdminRowByName, waitForDialogOpen } from '../../test-helpers';
 
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Administration - Scoring Models`, () => {
@@ -22,7 +22,7 @@ for (const theme of CITE_THEMES) {
       await addButton.click();
 
       const createDialog = page.getByRole('dialog');
-      await expect(createDialog).toBeVisible({ timeout: 5000 });
+      await waitForDialogOpen(createDialog);
 
       const descField = page.getByRole('textbox', { name: 'Scoring Model Description' });
       await descField.fill(TEST_MODEL_NAME);
@@ -31,7 +31,7 @@ for (const theme of CITE_THEMES) {
       await expect(saveButton).toBeEnabled({ timeout: 5000 });
       await saveButton.click();
       await expect(createDialog).not.toBeVisible({ timeout: 15000 });
-      await page.waitForTimeout(2000);
+      // Rule D: navigateToAdminSection + findAdminRowByName wait for row
 
       // Re-navigate to refresh the list
       await navigateToAdminSection(page, 'Scoring Models');
@@ -44,7 +44,7 @@ for (const theme of CITE_THEMES) {
       await editButton.click();
 
       const editDialog = page.getByRole('dialog');
-      await expect(editDialog).toBeVisible({ timeout: 5000 });
+      await waitForDialogOpen(editDialog);
 
       const editDescField = editDialog.getByRole('textbox', { name: 'Scoring Model Description' });
       await expect(editDescField).toBeVisible({ timeout: 5000 });
@@ -57,8 +57,8 @@ for (const theme of CITE_THEMES) {
       await expect(editDialog).not.toBeVisible({ timeout: 5000 });
     });
 
-    test.afterEach(async ({ citeAuthenticatedPage: page }) => {
-      await deleteScoringModelByName(page, TEST_MODEL_NAME);
+    test.afterEach(async () => {
+      await apiDeleteScoringModelsByName(TEST_MODEL_NAME);
     });
   });
 }

@@ -165,11 +165,121 @@ npx playwright test --project=chromium topomojo/tests/
 
 The script automatically checks that **Keycloak** and the **target application** are reachable before running tests. Use `--no-check` to skip these checks.
 
-By default the number of parallel workers comes from `playwright.config.ts` (1 on CI, 2 locally). Use `--workers <n>` to override it per run — accepting either a count (`4`) or a percentage of CPU cores (`50%`). The flag is ignored for the interactive `ui` and `debug` modes, which Playwright always runs with a single worker. Note that tests share a single Crucible stack, so raising the worker count increases concurrent load on Keycloak and the apps and can surface auth/timing flakiness.
+By default the number of parallel workers comes from `playwright.config.ts` (2 on CI, 4 locally). Use `--workers <n>` to override it per run — accepting either a count (`4`) or a percentage of CPU cores (`50%`). The flag is ignored for the interactive `ui` and `debug` modes, which Playwright always runs with a single worker. Note that tests share a single Crucible stack, so raising the worker count increases concurrent load on Keycloak and the apps and can surface auth/timing flakiness.
 
 Most authenticated specs run once per theme, under describe blocks titled `light theme › ...` and `dark theme › ...`. Use `--theme light|dark` to run just one of those variants; it works by excluding the other theme's titles (`--grep-invert`), so tests that aren't theme-parameterized (e.g. Gameboard, Moodle, TopoMojo) still run. It combines with `--filter` and with every command, including `quick`, `ui`, `headed` and `debug`.
 
+**Note:** Real test titles use ` › ` as the separator and may contain smart quotes. The CI lists below use ` > ` (with spaces around it) and straight quotes only, for easier editing and pasting. CI matches entries to tests regardless of which form the real title uses.
+
 **Supported applications:** `alloy`, `blueprint`, `caster`, `cite`, `gallery`, `gameboard`, `keycloak`, `moodle`, `player`, `steamfitter`, `topomojo`
+
+## CI
+
+End-to-end tests run automatically in GitHub Actions on pull requests, pushes to main, and on a weekly schedule.
+
+### When Tests Run
+
+- **Pull requests to main** — only specs affected by changed files
+- **Pushes to main** — only specs affected by the pushed commits
+- **Weekly schedule** (Mondays at 06:00 UTC) — the full suite for all apps
+- **Manual dispatch** — the full suite, optionally filtered to specific apps. A dispatch on `main` also opens, updates and closes regression issues, the same as the weekly run; a dispatch from any other branch reports in its job summary only
+
+The planner analyzes the git diff to determine which specs need to run. A change to shared code (fixtures, helpers, or configuration) triggers tests for every app that imports it. When no specs are affected (e.g., a docs-only PR), the workflow completes successfully without running any tests.
+
+### Matrix Strategy
+
+CI runs one job per application, never the full stack on a single runner. Each job provisions only the services that app's tests need: its UI and API, the UIs and APIs of the apps its tests reach into (for example, the Console slice also starts Player and the VM API and UI), and shared infrastructure (Keycloak, Postgres). `ci/slices.json` lists each slice. This keeps jobs fast and isolated — a Blueprint failure does not block Player.
+
+### Job Summaries
+
+Each app job uploads a markdown summary showing:
+
+- Which image digests were pulled and tested (`:main` tags from Docker Hub)
+- Test results grouped by passing, known failures, and unexpected failures
+- Suggestions for updating `ci/known-failures.json` when a listed test now passes
+
+The `E2E Result` job aggregates these and serves as the single required check. It passes when all app jobs succeed or are skipped (no affected specs), and fails otherwise.
+
+### Regression Issues
+
+Weekly runs (and manual dispatches on `main`) that find new failures automatically open or update GitHub issues to notify `@cmu-sei/crucible-code-owners`. A failure is confirmed by rerunning just the failing specs; only tests that fail both times become a regression. When an app's suite does not run at all (the stack fails to start, global setup throws, or the job leaves no evaluation), CI opens or updates the same issue with a "suite did not run" body and the error messages. Each app gets one issue (labeled `e2e-regression`), and the issue body shows which `:main` image digests changed since the last clean weekly run. The issue closes automatically when the app runs clean again; a run in which the suite did not run never closes it.
+
+The job summary of the `Report regressions` job says, per app, whether new failures did not reproduce, whether the confirming rerun crashed (the failures stay unconfirmed and no issue is filed), or whether the suite did not run.
+
+### Service Restart on Stall
+
+If a service with an HTTP readiness probe (Keycloak, APIs, UIs, topomojo-api, gameboard-api) is running but not ready for 90 seconds (configurable via `WAIT_STALL_RESTART_SECONDS`), `wait.sh` restarts it once and continues polling within the overall timeout. This handles transient startup stalls without extending the timeout. Set `WAIT_STALL_RESTART_SECONDS=0` to disable restarts. Services that rely only on container healthchecks (postgres, keycloak-config) are never restarted.
+
+### Reproduce a CI failure locally
+
+The CI stack runs anywhere with Docker and a [crucible-development](https://github.com/cmu-sei/crucible-development) checkout, without the devcontainer or Aspire:
+
+```bash
+ci/stack/prepare.sh /path/to/crucible-development   # certificates, realm, UI settings
+ci/stack/up.sh <app>                                 # pull and start that app's slice
+CRUCIBLE_TARGET=ci CI=true CRUCIBLE_BROWSERS=chromium npx playwright test <app>/tests/...
+docker compose -f ci/stack/compose.yaml down -v      # stop the stack and drop its volumes
+```
+
+Use the same spec paths the job ran (its summary lists them), or `<app>/tests/` for the whole app.
+
+### Known Failures vs. Skip Lists
+
+Two JSON files control CI behavior for tests that are expected to fail or cannot run. Both are keyed by spec file and full test title, and a test is never on both.
+
+- **`ci/known-failures.json`**: tests known to be broken, because of an app bug or because the test has not yet been updated for the `:main` apps. They **still run in CI**, and their failures do not block the workflow.
+- **`ci/skip-in-ci.json`**: tests that are fine but need infrastructure CI does not provide. They are **never started in CI**.
+
+#### `ci/known-failures.json`
+
+Each entry includes:
+
+- `file`: the spec file path relative to the repo root
+- `title`: the full test title, including `describe` block prefixes, joined with ` > ` (note: ` > ` with spaces, not ` › `); use straight quotes only (`'` and `"`), not smart quotes
+- `reason`: what is broken, starting with its category: `App bug:`, `Test out of date with :main:`, or `Test bug:`. If the failure only happens in some runs, follow the category with `Intermittent.`, for example `App bug: Intermittent. <what is broken>.` An intermittent entry that passes in one run is expected to keep its entry, so leave it in place even when the now-passing comment lists it.
+- `tracking` (optional): a link to the issue or PR that tracks the fix
+- `added`: the date the entry was added (`YYYY-MM-DD`)
+
+When a known failure starts passing, CI leaves a sticky comment on the PR reminding you to remove the entry. The comment lists all now-passing tests grouped by app, shows the reason and tracking link from each list entry, and includes a JSON block with the exact entries to delete. CI never edits the list itself — you must remove the entries manually. On the next run after removal in which every app job succeeds, the comment updates to indicate the issue is resolved; a failed or cancelled run leaves it as it is. Fork PRs and non-PR runs do not post comments; those runs report now-passing tests only in the job summary.
+
+To add a known failure:
+
+1. Confirm the test is broken by an app bug, by an app change the test has not caught up with, or by a bug in the test itself (not missing CI infrastructure)
+2. Add an entry to `ci/known-failures.json` with the exact spec path and title, and a `reason` that starts with its category
+3. Link the issue or PR that tracks the fix in `tracking`, when one exists
+
+#### `ci/skip-in-ci.json`
+
+Each entry includes `file`, `title` (or `*` when every test in the file needs the infrastructure), `reason`, `added`, and `requires`: the infrastructure the test needs. `requires` is one of:
+
+- `terraform`: Caster Terraform plan/apply, or installed Terraform versions
+- `gitea`: Caster's Gitea module source
+- `hypervisor`: a vSphere or Proxmox hypervisor behind the VM API
+- `vm-console`: live VM console connections
+- `gameboard-deploy`: Gameboard challenge deployment through TopoMojo
+- `moodle`: Moodle and its plugins (`docker exec`, plugin sources)
+- `angular-dev-build`: Angular development-build debug APIs (the `:main` images are production builds)
+- `xapi-lrs`: an xAPI learning record store
+
+Adding that infrastructure to CI later means removing the entries that name it.
+
+To add a skip entry:
+
+1. Confirm the test needs infrastructure unavailable in GitHub Actions, and that it passes where that infrastructure exists (not an app bug)
+2. Add an entry to `ci/skip-in-ci.json` with the exact spec path, title, and `requires` value; add a new `requires` value to `VALID_REQUIRES` in `scripts/lib/ci-results.mjs` only for a new kind of gap
+3. Never add an entry to both lists — a test is either skipped or allowed to fail, never both
+
+### Validation
+
+The `validate.yml` workflow runs static checks on every PR:
+
+- TypeScript type checking
+- Test discovery (ensure all specs are discoverable and have no syntax errors)
+- Self-checks for the skip list, known failures, and planner logic
+- Actionlint on workflow files
+- Docker Compose config validation
+
+These checks catch common mistakes (typos, missing imports, unreachable tests) before the full suite runs.
 
 ## Configuring Service URLs
 

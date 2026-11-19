@@ -28,7 +28,7 @@ test.describe('Home Page and Game Discovery', () => {
   });
 
   test('Game List Grouping - Upcoming Section', async ({ gameboardAuthenticatedPage: page }) => {
-    await page.goto(Services.Gameboard.UI + '/home', { waitUntil: 'networkidle' });
+    await page.goto(Services.Gameboard.UI + '/home', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Upcoming Games' })).toBeVisible();
 
     // After seeding a future game, at least one game card renders on the home page.

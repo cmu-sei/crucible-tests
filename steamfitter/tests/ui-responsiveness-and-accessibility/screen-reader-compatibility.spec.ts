@@ -89,13 +89,13 @@ for (const theme of STEAMFITTER_THEMES) {
     const USER_NAME = `E2E A11y User ${STAMP}`;
     const ROLE_NAME = `E2E A11y Role ${STAMP}`;
 
-    test.beforeEach(async () => {
+    test.beforeAll(async () => {
       await seedGroup(GROUP_NAME);
       await seedUser(USER_NAME);
       await seedSystemRole(ROLE_NAME);
     });
 
-    test.afterEach(async () => {
+    test.afterAll(async () => {
       await deleteGroupsByPrefix(['E2E A11y Group']);
       await deleteUsersByPrefix(['E2E A11y User']);
       await deleteSystemRolesByPrefix(['E2E A11y Role']);
@@ -109,9 +109,11 @@ for (const theme of STEAMFITTER_THEMES) {
       // 1-2. The topbar and the home sections.
       for (const section of ['Scenarios', 'Scenario Templates', 'History'] as const) {
         await navigateToHomeSection(page, section);
-        // expect: The topbar Home link and user menu are labeled
+        // expect: The topbar Home link and user menu are labeled. The menu is named for
+        // the user exactly: a scenario copied from a template is named "<template> - Admin
+        // User", so a substring also matches its row's buttons while one is listed.
         await expect(page.locator('a[title="Home"]').first()).toHaveAccessibleName(/\S/);
-        await expect(page.getByRole('button', { name: /Admin User/ })).toBeVisible({
+        await expect(page.getByRole('button', { name: 'Admin User', exact: true })).toBeVisible({
           timeout: 10000,
         });
         await expectAccessible(page, `Home › ${section}`, 0);
@@ -141,7 +143,7 @@ for (const theme of STEAMFITTER_THEMES) {
       await navigateToAdminSection(page, 'Roles');
       // Each tab is checked inside its own panel, once the tab is selected, so the previous
       // panel's buttons are not counted while the switch animates.
-      for (const tab of ['ScenarioTemplate Roles', 'Scenario Roles', 'Roles']) {
+      for (const tab of ['Scenario Template Roles', 'Scenario Roles', 'Roles']) {
         const tabButton = page.getByRole('tab', { name: tab, exact: true });
         await tabButton.click();
         await expect(tabButton).toHaveAttribute('aria-selected', 'true');

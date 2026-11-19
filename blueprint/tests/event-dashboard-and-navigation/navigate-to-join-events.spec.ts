@@ -14,19 +14,18 @@
 //   2. On the resulting miss it ran a bare `test.skip(); return;`, reporting green while
 //      covering nothing — every run took that branch.
 //
-// The card was genuinely absent as well, because nothing seeded a joinable MSEL. The
-// dashboard renders the Join card behind `@if (joinMselList.length > 0)`
-// (dashboard.component.html), fed by `GET /api/my-join-msels` →
+// The dashboard's JOIN card is always shown, but it only opens /join when the user has a
+// joinable MSEL: it is `disabled-card` and its click is `joinMselList.length > 0 &&
+// gotoUrl('join')` (dashboard.component.html). That list is `GET /api/my-join-msels` →
 // `MselService.GetMyJoinInvitationMselsAsync`, which requires ALL THREE of:
 //   - `msel.Status == Deployed`,
 //   - `msel.PlayerViewId != null`, and
 //   - the current user being on one of that MSEL's teams.
-// `seedJoinableMsel` satisfies all three, so the card renders and the navigation the plan
+// `seedJoinableMsel` satisfies all three, so the card is live and the navigation the plan
 // item describes becomes assertable end to end.
 //
-// Verified live against this stack: with the MSEL seeded, `my-join-msels` returns exactly
-// it, the dashboard shows "Join an Event" / "Access In-Progress Events", clicking it routes
-// to /join, and /join lists the MSEL by name with a "Join <name>" button.
+// With the MSEL seeded, `my-join-msels` returns it, the JOIN card counts it and is enabled,
+// clicking it routes to /join, and /join lists the MSEL by name with a "Join" link.
 
 import { test, expect, Services, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import {
@@ -36,6 +35,8 @@ import {
   listMyJoinMsels,
   deleteMsel,
   tempBlueprintName,
+  dashboardCard,
+  joinPageCard,
 } from '../../test-helpers';
 
 for (const theme of BLUEPRINT_THEMES) {
@@ -70,22 +71,19 @@ for (const theme of BLUEPRINT_THEMES) {
 
     test('Navigate to Join Events', async ({ blueprintAuthenticatedPage: page }) => {
     await applyBlueprintTheme(page, theme);
-      // 1. From Event Dashboard, click on 'Join an Event' card.
+      // 1. From Event Dashboard, click on the JOIN card.
       //
       // The fixture already navigated to the dashboard, but it may have done so before the
       // MSEL was seeded in a retried run, so reload to guarantee the card list is current.
       await page.goto(Services.Blueprint.UI, { waitUntil: 'domcontentloaded' });
 
-      // `.card-container` wraps the dashboard cards; the Join card carries
-      // role="button" + (click)="gotoUrl('join')".
-      const joinCard = page
-        .locator('.card-container mat-card')
-        .filter({ hasText: 'Join an Event' });
+      const joinCard = dashboardCard(page, 'JOIN');
       await expect(joinCard).toBeVisible({ timeout: 30000 });
-      await expect(joinCard).toHaveCount(1);
-      await expect(joinCard.locator('mat-card-subtitle')).toHaveText(
-        'Access In-Progress Events'
-      );
+      await expect(joinCard).toContainText('Active Exercises');
+      // expect: the card is live — its Join Event button is enabled and it is not greyed out,
+      // which it is when there is nothing to join.
+      await expect(joinCard.getByRole('button', { name: 'Join Event' })).toBeEnabled();
+      await expect(joinCard).not.toHaveClass(/disabled-card/);
 
       await joinCard.click();
 
@@ -94,24 +92,22 @@ for (const theme of BLUEPRINT_THEMES) {
 
       // expect: Page displays list of available MSELs to join.
       //
-      // Asserted by the seeded MSEL's UNIQUE name, not by "some mat-card exists" — the old
+      // Asserted by the seeded MSEL's UNIQUE name, not by "some card exists" — the old
       // spec's `mat-card, [class*="msel-list"], ... table tbody tr` would have matched the
       // topbar's own chrome or an unrelated row and passed without the MSEL being listed.
-      const mselCard = page.locator('.card-container mat-card').filter({ hasText: mselName });
+      await expect(page.getByRole('heading', { name: 'Join an Event', level: 1 })).toBeVisible();
+      const mselCard = joinPageCard(page, mselName);
       await expect(mselCard).toBeVisible({ timeout: 30000 });
       await expect(mselCard).toHaveCount(1);
-      await expect(mselCard.locator('mat-card-title')).toHaveText(mselName);
 
       // The card's join affordance is present and identifies the MSEL.
       //
-      // Located by `title="Join {{ msel.name }}"`, NOT by accessible name: this button has
+      // Located by `title="Join {{ msel.name }}"`, NOT by accessible name: this link has
       // visible text ("Join"), and visible text wins over `title` when the accessible name is
-      // computed. So `getByRole('button', { name: 'Join <mselName>' })` matches nothing here —
-      // the "icon buttons carry title, and getByRole still finds them" rule only holds for
-      // buttons with no text content of their own.
-      const joinButton = mselCard.getByTitle(`Join ${mselName}`);
-      await expect(joinButton).toBeVisible();
-      await expect(joinButton).toHaveText('Join');
+      // computed. So `getByRole('link', { name: 'Join <mselName>' })` matches nothing here.
+      const joinLink = mselCard.getByTitle(`Join ${mselName}`);
+      await expect(joinLink).toBeVisible();
+      await expect(joinLink).toHaveText('Join');
 
       // expect: Topbar still displays with navigation back to dashboard.
       const topbar = page.locator('app-topbar mat-toolbar');
@@ -129,9 +125,7 @@ for (const theme of BLUEPRINT_THEMES) {
         { timeout: 20000 }
       );
       // Back on the dashboard, the Join card is showing again — proving the round trip.
-      await expect(
-        page.locator('.card-container mat-card').filter({ hasText: 'Join an Event' })
-      ).toBeVisible({ timeout: 30000 });
+      await expect(dashboardCard(page, 'JOIN')).toBeVisible({ timeout: 30000 });
     });
     });
 }

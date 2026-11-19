@@ -55,7 +55,7 @@ test.describe('Game Details and Registration', () => {
     expect(player.teamId).toBeTruthy();
 
     // UI sanity — detail page renders Unenroll (indicating enrollment worked).
-    await page.goto(`${Services.Gameboard.UI}/game/${game.id}`, { waitUntil: 'networkidle' });
+    await page.goto(`${Services.Gameboard.UI}/game/${game.id}`, { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('button', { name: /Unenroll/i })).toBeVisible({ timeout: 15000 });
   });
 });

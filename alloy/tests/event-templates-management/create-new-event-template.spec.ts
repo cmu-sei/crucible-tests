@@ -4,7 +4,7 @@
 // spec: alloy/alloy-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../fixtures';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
 import { ALLOY_THEMES, applyAlloyTheme, deleteEventTemplateByName, deleteEventTemplatesByPattern, fillFieldAndVerify } from '../../test-helpers';
 
@@ -34,10 +34,10 @@ for (const theme of ALLOY_THEMES) {
       await page.goto(`${Services.Alloy.UI}/admin`);
       await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
 
-      // 2. Click 'Add Event Template' to open the "Create New Event Template" dialog.
+      // 2. Click 'Add Event Template' to open the dialog of the same name.
       //    As of Alloy.ui PR #711 this opens an empty form; the template is only
       //    POSTed when Save is clicked (no default "New Event Template" row anymore).
-      const createDialog = page.getByRole('dialog', { name: 'Create New Event Template' });
+      const createDialog = page.getByRole('dialog', { name: 'Add Event Template' });
       await page.getByRole('button', { name: 'Add Event Template' }).click();
       await expect(createDialog).toBeVisible();
 
@@ -59,13 +59,13 @@ for (const theme of ALLOY_THEMES) {
       await saveButton.click();
 
       // expect: The dialog closes and the template appears in the list
-      await expect(createDialog).not.toBeVisible({ timeout: 60000 });
+      await expect(createDialog).not.toBeVisible({ timeout: 30000 });
 
       // Verify the template is in the list. With parallel tests, SignalR updates
       // may cause the table to re-render; filter to the specific template.
       const searchBox = page.getByRole('textbox', { name: 'Search' });
       await searchBox.fill(uniqueName);
-      await expect(page.getByRole('cell', { name: uniqueName })).toBeVisible({ timeout: 15000 });
+      await expect(page.getByRole('cell', { name: uniqueName, exact: true })).toBeVisible({ timeout: 15000 });
       await searchBox.fill('');
     });
   });

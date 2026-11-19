@@ -20,8 +20,8 @@ for (const theme of CASTER_THEMES) {
       await page.locator('button[mattooltip="Add New Project"]').click();
 
       // expect: A project creation dialog is displayed
-      await expect(page.getByRole('dialog', { name: 'Create New Project?' })).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'Create New Project?' })).toBeVisible();
+      await expect(page.getByRole('dialog', { name: 'Add Project' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Add Project' })).toBeVisible();
 
       // 3. Enter a unique project name in the Name field
       const nameField = page.getByRole('textbox', { name: 'Name' });

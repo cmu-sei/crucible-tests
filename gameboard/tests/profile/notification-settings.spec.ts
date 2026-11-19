@@ -50,7 +50,7 @@ test.describe('Profile', () => {
     }
 
     // UI sanity — admin navigation still works.
-    await page.goto(Services.Gameboard.UI + '/admin/support/settings', { waitUntil: 'networkidle' });
+    await page.goto(Services.Gameboard.UI + '/admin/support/settings', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Support Settings' })).toBeVisible();
   });
 });

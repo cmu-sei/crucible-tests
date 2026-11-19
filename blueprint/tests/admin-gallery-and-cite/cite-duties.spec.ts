@@ -69,7 +69,7 @@ for (const theme of BLUEPRINT_THEMES) {
         await page.getByRole('button', { name: `Delete ${editedName}` }).click();
         const confirm = page.getByRole('dialog').filter({ hasText: 'Delete CITE Duty Template' });
         await expect(confirm).toContainText(`Are you sure that you want to delete ${editedName}?`);
-        await confirm.getByRole('button', { name: 'Yes' }).click();
+        await confirm.getByRole('button', { name: 'Delete' }).click();
         await expect(editedRow).toHaveCount(0);
       } finally {
         for (const t of await listTemplates(token, 'citeDuties')) {
@@ -159,7 +159,7 @@ for (const theme of BLUEPRINT_THEMES) {
         await page
           .getByRole('dialog')
           .filter({ hasText: 'Delete CITE Duty' })
-          .getByRole('button', { name: 'Yes' })
+          .getByRole('button', { name: 'Delete' })
           .click();
         await expect(rows).toHaveCount(0);
       } finally {

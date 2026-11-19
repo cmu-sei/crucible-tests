@@ -4,7 +4,7 @@
 // spec: topomojo/topomojo-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, waitForFirstVisible } from '../../fixtures';
 
 test.describe('Search and Filtering', () => {
   test('Search - Keyboard Shortcut', async ({ topomojoAuthenticatedPage: page }) => {
@@ -14,16 +14,16 @@ test.describe('Search and Filtering', () => {
     await expect(page).toHaveURL(serviceUrlPattern(Services.TopoMojo.UI));
 
     // 2. Press Ctrl+O keyboard shortcut
-    await page.keyboard.press('Control+o');
-    await page.waitForTimeout(500);
-
-    // expect: Search field is focused or sidebar opens
     const searchInput = page.locator('input[type="search"], input[placeholder*="earch"], input:focus').first();
     const sidebar = page.locator('mat-sidenav, mat-drawer, [class*="sidebar"]').first();
 
-    const isSearchFocused = await searchInput.isVisible({ timeout: 3000 }).catch(() => false);
-    const isSidebarOpen = await sidebar.isVisible({ timeout: 3000 }).catch(() => false);
+    await page.keyboard.press('Control+o');
 
-    expect(isSearchFocused || isSidebarOpen).toBe(true);
+    // expect: Search field is focused or sidebar opens
+    const winner = await waitForFirstVisible(page, [
+      { key: 'search', locator: searchInput },
+      { key: 'sidebar', locator: sidebar }
+    ], { timeout: 3000 });
+    expect(winner).not.toBeNull();
   });
 });

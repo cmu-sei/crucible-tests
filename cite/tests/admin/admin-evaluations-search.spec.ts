@@ -18,10 +18,9 @@ for (const theme of CITE_THEMES) {
       await expect(searchField).toBeVisible({ timeout: 5000 });
 
       await searchField.fill('test');
-      await page.waitForTimeout(500);
 
       await searchField.clear();
-      await page.waitForTimeout(500);
+      // Rule A/B: No assertion follows; sleeps removed
     });
   });
 }

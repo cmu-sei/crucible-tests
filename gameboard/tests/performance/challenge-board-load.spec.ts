@@ -4,30 +4,28 @@
 // spec: gameboard/gameboard-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, type SharedWorkspace } from '../../fixtures';
 import {
   getAdminToken, createGame, deleteGame, createSponsor, deleteSponsor,
   setAdminSponsor, enrollAdmin, deletePlayer,
   addChallengeSpecToGame, deleteChallengeSpec,
   CreatedGame, CreatedSponsor,
 } from '../../api-helpers';
-import { getTopoMojoAdminToken, createWorkspace, deleteWorkspace, CreatedWorkspace } from '../../../topomojo-helpers';
-import { gbConnect, seedChallenge } from '../../db-helpers';
+import { seedChallenge } from '../../db-helpers';
 import { APIRequestContext, request as playwrightRequest } from '@playwright/test';
 
 // Seed 20 challenges then benchmark the /api/challenges endpoint.
 test.describe('Performance', () => {
-  let gbToken: string, tmToken: string;
-  let sponsor: CreatedSponsor, game: CreatedGame, workspace: CreatedWorkspace;
+  let gbToken: string;
+  let sponsor: CreatedSponsor, game: CreatedGame, workspace: SharedWorkspace;
   let specId: string, playerId: string, teamId: string;
   let previousSponsorId = 'other';
 
-  test.beforeEach(async () => {
+  test.beforeEach(async ({ sharedWorkspace }) => {
     gbToken = await getAdminToken();
-    tmToken = await getTopoMojoAdminToken();
+    workspace = sharedWorkspace;
     sponsor = await createSponsor(gbToken, `CBL-${Date.now()}`);
     ({ previousSponsorId } = await setAdminSponsor(gbToken, sponsor.id));
-    workspace = await createWorkspace(tmToken, { name: `CBL-WS-${Date.now()}`, audience: 'gameboard' });
     game = await createGame(gbToken, { name: `CBL-${Date.now()}`, startOffsetDays: -1, endOffsetDays: 30 });
     const spec = await addChallengeSpecToGame(gbToken, game.id, { externalId: workspace.id, name: 'CBL' });
     specId = spec.id;
@@ -39,23 +37,17 @@ test.describe('Performance', () => {
     if (playerId) await deletePlayer(gbToken, playerId).catch(() => {});
     if (specId) await deleteChallengeSpec(gbToken, specId).catch(() => {});
     if (game) await deleteGame(gbToken, game.id);
-    if (workspace) await deleteWorkspace(tmToken, workspace.id);
     if (previousSponsorId) await setAdminSponsor(gbToken, previousSponsorId).catch(() => {});
     if (sponsor) await deleteSponsor(gbToken, sponsor.id);
   });
 
-  test('Page Load Performance - Challenge Board', async ({ gameboardAuthenticatedPage: page }) => {
-    const client = await gbConnect();
-    try {
-      for (let i = 0; i < 20; i++) {
-        await seedChallenge(client, {
-          gameId: game.id, specId, playerId, teamId,
-          externalId: workspace.id, name: `CBL-${i}`, points: 100,
-          completed: i % 3 === 0,
-        });
-      }
-    } finally {
-      await client.end();
+  test('Page Load Performance - Challenge Board', async ({ gameboardAuthenticatedPage: page, gbDb: client }) => {
+    for (let i = 0; i < 20; i++) {
+      await seedChallenge(client, {
+        gameId: game.id, specId, playerId, teamId,
+        externalId: workspace.id, name: `CBL-${i}`, points: 100,
+        completed: i % 3 === 0,
+      });
     }
 
     const ctx: APIRequestContext = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
@@ -75,7 +67,7 @@ test.describe('Performance', () => {
       await ctx.dispose();
     }
 
-    await page.goto(Services.Gameboard.UI + '/admin/dashboard', { waitUntil: 'networkidle' });
+    await page.goto(Services.Gameboard.UI + '/admin/dashboard', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
   });
 });

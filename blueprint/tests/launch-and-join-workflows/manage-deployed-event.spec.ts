@@ -136,7 +136,7 @@ for (const theme of BLUEPRINT_THEMES) {
           (r) =>
             r.url().includes(`/api/msels/${mselId}/archive`) &&
             r.request().method() === 'DELETE',
-          { timeout: 60000 }
+          { timeout: 30000 }
         ),
         confirmButton.click(),
       ]);

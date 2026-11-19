@@ -11,29 +11,29 @@ test.describe('File Management', () => {
 
     // 1. Navigate to file browser
     const sidebarToggle = page.locator('button[aria-label="Toggle sidebar"], button:has(mat-icon:text("menu"))').first();
+    const sidebar = page.locator('mat-sidenav, mat-drawer, [class*="sidebar"]').first();
     const hasSidebarToggle = await sidebarToggle.isVisible({ timeout: 10000 }).catch(() => false);
     if (hasSidebarToggle) {
       await sidebarToggle.click();
-      await page.waitForTimeout(500);
+      await expect(sidebar).toBeVisible({ timeout: 5000 });
     }
 
     const workspaceItems = page.locator('[class*="workspace-card"], [class*="item-card"], mat-list-item, [class*="list-item"]');
     const itemCount = await workspaceItems.count();
 
     if (itemCount > 0) {
-      await workspaceItems.first().click();
-      await page.waitForTimeout(2000);
-
       const filesTab = page.locator('mat-tab:has-text("File"), a:has-text("File"), button:has-text("File")').first();
+      await workspaceItems.first().click();
+      await expect(filesTab).toBeVisible({ timeout: 5000 });
+      const fileInput = page.locator('input[type="file"]').first();
       const hasTab = await filesTab.isVisible({ timeout: 5000 }).catch(() => false);
       if (hasTab) {
         await filesTab.click();
-        await page.waitForTimeout(1000);
+        await expect(fileInput).toBeVisible({ timeout: 5000 });
       }
 
       // expect: Upload interface is available
       // 2. Attempt to upload invalid file type
-      const fileInput = page.locator('input[type="file"]').first();
       const hasFileInput = await fileInput.count() > 0;
 
       if (hasFileInput) {

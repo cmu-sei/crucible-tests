@@ -15,7 +15,6 @@ test.describe('Accessibility', () => {
 
     // 2. Press Tab key repeatedly
     await page.keyboard.press('Tab');
-    await page.waitForTimeout(200);
 
     // expect: Focus moves through elements in logical order
     let focusedElement = await page.evaluate(() => {
@@ -27,7 +26,6 @@ test.describe('Accessibility', () => {
     // Tab through several elements
     for (let i = 0; i < 5; i++) {
       await page.keyboard.press('Tab');
-      await page.waitForTimeout(100);
     }
 
     // expect: All interactive elements are reachable

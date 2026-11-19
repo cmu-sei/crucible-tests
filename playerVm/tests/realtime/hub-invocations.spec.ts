@@ -87,7 +87,7 @@ for (const theme of PLAYERVM_THEMES) {
       await gotoPlayerVm(page, `/views/${seeded.viewId}`, theme);
       await expect(
         page.locator('app-vm-list').getByRole('link', { name: seeded.vmName })
-      ).toBeVisible({ timeout: 60000 });
+      ).toBeVisible({ timeout: 30000 });
       await hub.expectCompleted('JoinView', {
         match: (args) => args.includes(seeded.viewId),
         why: 'Nothing below can be a *leave* until the page has joined.',
@@ -105,7 +105,7 @@ for (const theme of PLAYERVM_THEMES) {
       await gotoConsole(page, `/vm/${seeded.vmId}/console`, theme);
       // A seeded VM is `Type=Unknown`, which mounts the same components as vSphere. They never reach a
       // screen, which nothing here depends on - the hub calls are made from `ngOnInit`, not from the console.
-      await expect(page.locator('app-console')).toBeVisible({ timeout: 60000 });
+      await expect(page.locator('app-console')).toBeVisible({ timeout: 30000 });
     };
 
     /**
@@ -202,7 +202,7 @@ for (const theme of PLAYERVM_THEMES) {
         `/user/${userId}/view/${seeded.viewId}/console?teamId=${seeded.teamId}`,
         theme
       );
-      await expect(page.locator('app-user-follow-page')).toHaveCount(1, { timeout: 60000 });
+      await expect(page.locator('app-user-follow-page')).toHaveCount(1, { timeout: 30000 });
 
       // Three arguments, and the hub rejects a team the caller cannot see with a `HubException` - which is
       // exactly the error the client drops on the floor, and which arrives here as the completion's `error`.
@@ -268,7 +268,7 @@ for (const theme of PLAYERVM_THEMES) {
       await authenticateConsoleWithKeycloak(page);
       await gotoConsole(page, `/vm/${seeded.vmId}/console`, theme);
       // The options bar is what connects, and it is deferred on the VM's type being vSphere or Unknown.
-      await expect(page.locator('app-options-bar')).toHaveCount(1, { timeout: 60000 });
+      await expect(page.locator('app-options-bar')).toHaveCount(1, { timeout: 30000 });
 
       await progress.expectCompleted('Join', {
         match: (args) => args.includes(seeded.vmId),

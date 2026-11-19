@@ -4,15 +4,33 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, seedCasterProject, CASTER_THEMES, setCasterTheme } from '../../fixtures';
+import {
+  test,
+  expect,
+  Services,
+  CASTER_THEMES,
+  setCasterTheme,
+  seedCasterSharedProjectPageFree,
+  casterSharedProjectName,
+  deleteCasterProjectPageFree,
+} from '../../fixtures';
+
+let projectId: string;
+let projectName: string;
+
+test.beforeAll(async ({}, workerInfo) => {
+  projectName = casterSharedProjectName('return-to-project-from-manage-project', workerInfo);
+  projectId = await seedCasterSharedProjectPageFree(projectName);
+});
+
+test.afterAll(async () => {
+  await deleteCasterProjectPageFree(projectId);
+});
 
 for (const theme of CASTER_THEMES) {
   test.describe(`${theme} theme › Projects Management`, () => {
-    test('Return To The Project From Manage Project', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+    test('Return To The Project From Manage Project', async ({ casterAuthenticatedPage: page }) => {
       await setCasterTheme(page, theme);
-      const projectName = `Return Project ${Date.now()}`;
-      const projectId = await seedCasterProject(page, projectName);
-      cleanupCasterProject(projectId);
 
       // 1. Open the project, then Manage Project from the user menu
       await page.goto(`${Services.Caster.UI}/projects/${projectId}`);
@@ -38,32 +56,36 @@ for (const theme of CASTER_THEMES) {
       await expect(page.getByText('Add Directory').filter({ visible: true })).toBeVisible();
     });
 
-    test('Return From Project Memberships In Administration', async ({ casterAuthenticatedPage: page, cleanupCasterProject }) => {
+    test('Open Project Memberships In Place In Administration', async ({ casterAuthenticatedPage: page }) => {
       await setCasterTheme(page, theme);
-      const projectName = `Admin Return Project ${Date.now()}`;
-      cleanupCasterProject(await seedCasterProject(page, projectName));
 
       // 1. Find the project in Administration → Projects
       await page.goto(`${Services.Caster.UI}/admin?section=Projects`);
       await page.getByRole('textbox', { name: 'Search' }).fill(projectName);
       const row = page.getByRole('row').filter({ hasText: projectName });
       await expect(row).toHaveCount(1);
+      await expect(row).toHaveAttribute('aria-expanded', 'false');
 
-      // 2. Open its memberships in place
-      await row.locator('mat-cell p', { hasText: projectName }).click();
+      // 2. Click the row
+      await row.getByRole('cell', { name: projectName, exact: true }).click();
 
-      // expect: the memberships, still inside Administration, with the shorter "Return"
-      await expect(page.getByRole('heading', { level: 1, name: projectName })).toBeVisible();
+      // expect: its memberships open under the row, still inside Administration
+      await expect(row).toHaveAttribute('aria-expanded', 'true');
+      const memberships = page.getByText('Memberships', { exact: true });
+      await expect(memberships).toBeVisible();
       await expect(page).toHaveURL(/\/admin/);
+
+      // expect: the row already names the project, so there's no title and no way back to leave by
+      await expect(page.getByRole('heading', { level: 1, name: projectName })).toHaveCount(0);
       await expect(page.getByRole('button', { name: 'Return to Project' })).toHaveCount(0);
-      const back = page.getByRole('button', { name: 'Return', exact: true });
-      await expect(back).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Return', exact: true })).toHaveCount(0);
 
-      // 3. Return
-      await back.click();
+      // 3. Click the row again
+      await row.getByRole('cell', { name: projectName, exact: true }).click();
 
-      // expect: back on the project list
-      await expect(page.getByRole('heading', { level: 1, name: projectName })).toBeHidden();
+      // expect: the memberships close, and the project list is unchanged
+      await expect(row).toHaveAttribute('aria-expanded', 'false');
+      await expect(memberships).toBeHidden();
       await expect(page.getByRole('button', { name: 'Add New Project' })).toBeVisible();
     });
   });

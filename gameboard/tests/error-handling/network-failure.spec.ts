@@ -8,11 +8,24 @@ import { test, expect, Services } from '../../fixtures';
 
 test.describe('Error Handling', () => {
   test('API Error Handling - Network Failure', async ({ gameboardAuthenticatedPage: page }) => {
+    // Load the admin page while the API is reachable. Gameboard's admin guard reads the
+    // signed-in user's roles from the API, so blocking it before the app loads makes the
+    // app send the user to /forbidden — which tests the guard, not error handling.
+    await page.goto(Services.Gameboard.UI + '/admin/dashboard', { waitUntil: 'domcontentloaded' });
+    const adminNav = page.locator('nav').filter({ has: page.getByRole('link', { name: 'Live', exact: true }) });
+    await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible({ timeout: 15000 });
+
     // Block all Gameboard API calls and verify the app does not crash.
     await page.route(Services.Gameboard.API + '/**', (route) => route.abort('failed'));
+    const blocked = page.waitForEvent('requestfailed', {
+      predicate: (request) => request.url().startsWith(Services.Gameboard.API),
+      timeout: 15000,
+    });
 
-    await page.goto(Services.Gameboard.UI + '/admin/overview', { waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(5000);
+    // Navigate within the app, so the next admin page's API calls fail.
+    await adminNav.getByRole('link', { name: 'Live', exact: true }).click();
+    await expect(page).toHaveURL(/\/admin\/overview/);
+    await blocked;
 
     // Even with API calls blocked, the SPA chrome (topbar, admin nav) should still render.
     await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible({ timeout: 15000 });

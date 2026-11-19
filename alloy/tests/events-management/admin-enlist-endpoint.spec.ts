@@ -3,7 +3,8 @@
 
 // spec: alloy/alloy-test-plan.md
 
-import { APIRequestContext, expect, request as playwrightRequest, test } from '@playwright/test';
+import { APIRequestContext, request as playwrightRequest } from '@playwright/test';
+import { test, expect } from '../../fixtures';
 import {
   createKeycloakUser,
   deleteKeycloakUser,
@@ -113,7 +114,7 @@ async function createActiveEvent(
   await expect
     .poll(
       async () => (await apiCall<{ status: string }>(token, `/api/events/${eventId}`)).data?.status,
-      { message: `Alloy event ${eventId} did not become Active`, timeout: 60_000 }
+      { message: `Alloy event ${eventId} did not become Active`, timeout: 30_000 }
     )
     .toBe('Active');
 
@@ -155,39 +156,31 @@ async function deleteEventTemplateMemberships(
 }
 
 test.describe('Alloy admin enlist endpoint', () => {
-  test('requires ManageEvents permission', async () => {
-    const keycloakAdminToken = await getKeycloakAdminToken();
-    const username = tempUsername('alloy-enlist-denied');
-    const user = await createKeycloakUser(keycloakAdminToken, {
-      username,
-      password: 'pw',
-      firstName: 'Denied',
-      lastName: 'User',
-    });
+  // A pool user: the test only needs *a* user without ManageEvents, and writes nothing.
+  test('requires ManageEvents permission', async ({ nonAdminUser: user }) => {
+    const token = await getUserToken(
+      user.username,
+      user.password,
+      'alloy.ui',
+      'openid profile player player-vm alloy caster steamfitter'
+    );
 
-    try {
-      const token = await getUserToken(
-        user.username,
-        user.password,
-        'alloy.ui',
-        'openid profile player player-vm alloy caster steamfitter'
-      );
+    const result = await apiCall(
+      token,
+      `/api/events/${crypto.randomUUID()}/enlist/${crypto.randomUUID()}`,
+      {
+        method: 'POST',
+        body: { userName: 'Blocked User' },
+      }
+    );
 
-      const result = await apiCall(
-        token,
-        `/api/events/${crypto.randomUUID()}/enlist/${crypto.randomUUID()}`,
-        {
-          method: 'POST',
-          body: { userName: 'Blocked User' },
-        }
-      );
-
-      expect(result.status).toBe(403);
-    } finally {
-      await deleteKeycloakUser(keycloakAdminToken, user.id);
-    }
+    expect(result.status).toBe(403);
   });
 
+  // Deliberately NOT a pool user (user-pool.ts): the subject is what enlisting does to an
+  // account Alloy has never seen — it creates the Alloy user with the given name and
+  // then keeps that name on a second enlist. A pooled account may already have an Alloy
+  // row (named from its token), so the first-enlist creation could not be observed.
   test('enlists a specified user and keeps an existing Alloy user name', async () => {
     const keycloakAdminToken = await getKeycloakAdminToken();
     const token = await getAlloyAdminToken();

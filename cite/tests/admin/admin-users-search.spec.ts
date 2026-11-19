@@ -18,10 +18,10 @@ for (const theme of CITE_THEMES) {
       await expect(searchField).toBeVisible({ timeout: 5000 });
 
       await searchField.fill('admin');
-      await page.waitForTimeout(500);
 
+      // Wait for filtered results (Rule B: wait for the filtered row)
       const rows = page.locator('tbody tr');
-      await expect(rows.first()).toBeVisible({ timeout: 5000 });
+      await expect(rows.filter({ hasText: 'admin' }).first()).toBeVisible({ timeout: 5000 });
     });
   });
 }

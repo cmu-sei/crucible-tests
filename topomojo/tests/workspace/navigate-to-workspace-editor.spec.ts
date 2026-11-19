@@ -13,8 +13,13 @@ test.describe('Workspace Management', () => {
     const sidebarToggle = page.locator('button[aria-label="Toggle sidebar"], button:has(mat-icon:text("menu"))').first();
     const hasSidebarToggle = await sidebarToggle.isVisible({ timeout: 10000 }).catch(() => false);
     if (hasSidebarToggle) {
+      // The toggle flips app-workspace-browser's [hidden] binding (sidebar `open`, default
+      // true, persisted in localStorage), so the click's completion signal is the browser
+      // switching to the opposite visibility from before the click.
+      const workspaceBrowser = page.locator('app-workspace-browser');
+      const wasOpen = await workspaceBrowser.isVisible();
       await sidebarToggle.click();
-      await page.waitForTimeout(500);
+      await expect(workspaceBrowser).toBeVisible({ visible: !wasOpen });
     }
 
     // expect: Workspace list displays
@@ -24,10 +29,9 @@ test.describe('Workspace Management', () => {
     if (itemCount > 0) {
       // 2. Click on a workspace card or 'Settings' link when hovering
       await workspaceItems.first().hover();
-      await page.waitForTimeout(300);
 
       const settingsLink = page.locator('a:has-text("Settings"), button:has-text("Settings"), a[href*="/topo/"]').first();
-      const hasSettings = await settingsLink.isVisible({ timeout: 3000 }).catch(() => false);
+      const hasSettings = await settingsLink.waitFor({ state: 'visible', timeout: 3000 }).then(() => true, () => false);
 
       if (hasSettings) {
         await settingsLink.click();
@@ -36,8 +40,6 @@ test.describe('Workspace Management', () => {
       }
 
       // expect: User is navigated to workspace editor page
-      await page.waitForTimeout(2000);
-
       // expect: URL changes to /topo/:id format
       await expect(page).toHaveURL(/\/topo\//, { timeout: 10000 });
 

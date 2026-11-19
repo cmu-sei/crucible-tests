@@ -17,7 +17,6 @@ test.describe('Admin Panel', () => {
     const hasLink = await workspacesLink.isVisible({ timeout: 10000 }).catch(() => false);
     if (hasLink) {
       await workspacesLink.click();
-      await page.waitForTimeout(1000);
     }
 
     // expect: Workspace list displays
@@ -27,20 +26,20 @@ test.describe('Admin Panel', () => {
     if (rowCount > 0) {
       // 2. Click on a workspace to view details
       await workspaceRows.first().click();
-      await page.waitForTimeout(500);
 
       // expect: Workspace details are displayed
       // expect: Delete button is visible
       const deleteButton = page.locator('button:has-text("Delete"), button:has(mat-icon:text("delete"))').first();
+      await expect(deleteButton).toBeVisible();
       const hasDelete = await deleteButton.isVisible({ timeout: 5000 }).catch(() => false);
 
       if (hasDelete) {
         // 3. Click 'Delete' button
         await deleteButton.click();
-        await page.waitForTimeout(500);
 
         // expect: Confirmation dialog appears
         const confirmDialog = page.locator('mat-dialog-container, [role="dialog"]').first();
+        await expect(confirmDialog).toBeVisible();
         const hasDialog = await confirmDialog.isVisible({ timeout: 3000 }).catch(() => false);
 
         if (hasDialog) {

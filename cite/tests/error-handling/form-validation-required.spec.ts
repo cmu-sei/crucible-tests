@@ -5,6 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, CITE_THEMES, setCiteTheme } from '../../fixtures';
+import { waitForDialogOpen } from '../../test-helpers';
 
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Error Handling and Edge Cases`, () => {
@@ -21,7 +22,7 @@ for (const theme of CITE_THEMES) {
       await addButton.click();
 
       const dialog = page.locator('mat-dialog-container, [role="dialog"]').first();
-      await expect(dialog).toBeVisible({ timeout: 5000 });
+      await waitForDialogOpen(dialog);
 
       // 2. Leave required fields empty
       // 3. Attempt to submit form

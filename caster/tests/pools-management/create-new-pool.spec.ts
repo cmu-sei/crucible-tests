@@ -4,39 +4,30 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, CASTER_THEMES, setCasterTheme } from '../../fixtures';
+import { test, expect, CASTER_THEMES, setCasterTheme, gotoCasterVlansAdmin, casterPoolRow } from '../../fixtures';
 
 for (const theme of CASTER_THEMES) {
   test.describe(`${theme} theme › Pools Management`, () => {
     test('Create New Pool', async ({ casterAuthenticatedPage: page, cleanupCasterPool }) => {
       await setCasterTheme(page, theme);
+      await gotoCasterVlansAdmin(page);
 
-      // Intercept the pool creation response so we can register it for cleanup
-      const createdPoolId = page.waitForResponse(
-        (resp) => resp.url().includes('/api/vlans/pools') && resp.request().method() === 'POST' && resp.ok(),
+      // Add New Pool creates the pool straight away, with no dialog; the API names it.
+      const created = page.waitForResponse(
+        (resp) => resp.url().includes('/api/vlans/pools') && resp.request().method() === 'POST',
       );
+      await page.getByRole('button', { name: 'Add New Pool' }).click();
 
-      await page.goto(Services.Caster.UI + '/admin?section=VLANs');
-      await expect(page.getByRole('heading', { name: 'Pools' })).toBeVisible({ timeout: 10000 });
+      const response = await created;
+      expect(response.status()).toBe(201);
+      const pool = await response.json();
+      cleanupCasterPool(pool.id);
+      expect(pool).toMatchObject({ name: 'New Pool', isDefault: false });
 
-      const addButton = page.getByRole('tabpanel', { name: 'Pools' }).getByRole('button').first();
-      await addButton.click();
-
-      const dialog = page.getByRole('dialog');
-      if (await dialog.isVisible({ timeout: 5000 }).catch(() => false)) {
-        const nameInput = page.getByRole('textbox', { name: 'Name' });
-        if (await nameInput.isVisible({ timeout: 3000 }).catch(() => false)) {
-          await nameInput.fill('Test Pool');
-          await page.getByRole('button', { name: 'Save' }).click();
-        }
-      }
-
-      // Wait for the POST response and register the new pool for cleanup
-      const response = await createdPoolId;
-      const body = await response.json();
-      if (body?.id) {
-        cleanupCasterPool(body.id);
-      }
+      await expect(page.getByText('Added New Pool')).toBeVisible();
+      // Other workers may have added a "New Pool" of their own, so only require one.
+      await expect(casterPoolRow(page, 'New Pool').first()).toBeVisible();
+      await expect(page.getByRole('dialog')).toHaveCount(0);
     });
   });
 }
