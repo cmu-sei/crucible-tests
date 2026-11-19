@@ -6,7 +6,9 @@
  * Usage: node --no-warnings scripts/check-ci-affected.mjs
  */
 
-import { existsSync } from 'fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { dirname, join } from 'path';
 import { execSync } from 'child_process';
 import { affectedRuns, buildImportGraph, extractRelativeImports, toMatrix, parseAppsFilter } from './lib/ci-affected.mjs';
 
@@ -61,6 +63,12 @@ const CASES = [
     changed: [{ path: 'topomojo/fixtures.ts', status: 'M' }],
     lists: { listChangedFiles: [], skip: [] },
     expected: { full: false, runs: [{ app: 'topomojo', specs: [] }], dropped: [] },
+  },
+  {
+    name: 'gameboard/fixtures.ts change (not fanned out by the lazy sign-in load)',
+    changed: [{ path: 'gameboard/fixtures.ts', status: 'M' }],
+    lists: { listChangedFiles: [], skip: [] },
+    expected: { full: false, runs: [{ app: 'gameboard', specs: [] }], dropped: [] },
   },
   {
     name: 'Deleted non-spec file under an app (whole app plus importers)',
@@ -288,6 +296,52 @@ for (const { name, source, from, expected } of IMPORT_CASES) {
   }
 }
 
+// Dynamic imports count for the file that makes them, not for that file's importers.
+// Built in a scratch tree so the case doesn't depend on which lazy loads the repo has.
+console.log();
+{
+  const name = 'Dynamic imports plan the importing file only';
+  const root = mkdtempSync(join(tmpdir(), 'ci-affected-'));
+  const files = {
+    // A shared root module lazy-loads one app's code, as provision-targets.ts does.
+    'shared.ts': "export const signIn = () => import('./gameboard/fixtures');\n",
+    'alloy/fixtures.ts': "import { signIn } from '../shared';\n",
+    'gameboard/fixtures.ts': 'export const x = 1;\n',
+    // A spec lazy-loads another app's helper it really depends on.
+    'cite/tests/x.spec.ts': "const m = await import('../../gallery/seed-helpers');\n",
+    'gallery/seed-helpers.ts': 'export const seed = 1;\n',
+  };
+  try {
+    for (const [path, content] of Object.entries(files)) {
+      mkdirSync(join(root, dirname(path)), { recursive: true });
+      writeFileSync(join(root, path), content);
+    }
+    const scratchGraph = buildImportGraph(root);
+    const plan = path =>
+      affectedRuns([{ path, status: 'M' }], scratchGraph, { listChangedFiles: [], skip: [] })
+        .runs.map(r => r.app)
+        .sort();
+    const problems = [];
+    const lazyShared = plan('gameboard/fixtures.ts');
+    if (JSON.stringify(lazyShared) !== JSON.stringify(['gameboard'])) {
+      problems.push(`gameboard/fixtures.ts: ${JSON.stringify(lazyShared)} !== ["gameboard"]`);
+    }
+    const lazySpec = plan('gallery/seed-helpers.ts');
+    if (JSON.stringify(lazySpec) !== JSON.stringify(['cite', 'gallery'])) {
+      problems.push(`gallery/seed-helpers.ts: ${JSON.stringify(lazySpec)} !== ["cite","gallery"]`);
+    }
+    if (problems.length > 0) {
+      failures++;
+      console.log(`FAIL ${name}`);
+      for (const problem of problems) console.log(`  ${problem}`);
+    } else {
+      console.log(`ok   ${name}`);
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
+
 // Run toMatrix tests
 console.log();
 for (const testCase of MATRIX_CASES) {
@@ -376,6 +430,6 @@ if (!existsSync(slicesPath)) {
   }
 }
 
-const totalCases = CASES.length + IMPORT_CASES.length + MATRIX_CASES.length + APPS_FILTER_CASES.length;
+const totalCases = CASES.length + IMPORT_CASES.length + 1 + MATRIX_CASES.length + APPS_FILTER_CASES.length;
 console.log(`\n${totalCases - failures}/${totalCases} cases passed`);
 process.exit(failures ? 1 : 0);

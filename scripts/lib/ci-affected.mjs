@@ -45,6 +45,7 @@ export function buildImportGraph(rootDir) {
   const files = collectTsFiles(rootDir);
   const importMap = new Map(); // path -> Set of files it imports
   const graph = new Map(); // path -> Set of files that import it
+  const dynamicEdges = []; // [importer, imported] for each import('./x')
 
   // First pass: build direct import relationships
   for (const absPath of files) {
@@ -57,6 +58,9 @@ export function buildImportGraph(rootDir) {
     if (!importMap.has(relPath)) importMap.set(relPath, new Set());
     for (const imported of imports) {
       importMap.get(relPath).add(imported);
+    }
+    for (const imported of extractDynamicImports(content, relPath)) {
+      dynamicEdges.push([relPath, imported]);
     }
   }
 
@@ -74,6 +78,16 @@ export function buildImportGraph(rootDir) {
     transitive.set(file, computeTransitiveImporters(file, graph));
   }
 
+  // A dynamic import counts for the file that makes it, but is not passed on to
+  // that file's importers: it loads its module only when the calling code runs.
+  // provision-targets.ts, for example, lazy-loads each app's sign-in code for that
+  // app alone, and every app's fixtures reach provision-targets.ts. Passing those
+  // edges on would make every app depend on the TopoMojo and Gameboard fixtures.
+  for (const [importer, imported] of dynamicEdges) {
+    if (!transitive.has(imported)) transitive.set(imported, new Set());
+    transitive.get(imported).add(importer);
+  }
+
   return transitive;
 }
 
@@ -81,27 +95,38 @@ export function buildImportGraph(rootDir) {
  * Extract relative imports from TypeScript source.
  * Resolves './x' and '../x' imports, with or without '.ts' extension.
  * Handles `import`/`export ... from` statements that span several lines and
- * side-effect imports (`import './x'`).
- *
- * Dynamic imports (`import('./x')`) are ignored. They load a module only when the
- * code that calls them runs: provision-targets.ts, for example, lazy-loads each
- * app's sign-in code for that app alone. Counting them would make every app that
- * reaches provision-targets.ts depend on the TopoMojo and Gameboard fixtures.
+ * side-effect imports (`import './x'`). Dynamic imports (`import('./x')`) are left
+ * to extractDynamicImports, since the import graph treats them differently.
  *
  * @param {string} content - TypeScript source
  * @param {string} fromPath - Repo-relative path of the importing file
  * @returns {Set<string>} Repo-relative paths of the imported files
  */
 export function extractRelativeImports(content, fromPath) {
-  const imports = new Set();
-  const dir = fromPath.split('/').slice(0, -1).join('/');
-
   // [^;]*? crosses newlines, so a named-import list split over several lines still
   // reaches its `from` clause; stopping at `;` keeps it inside one statement.
-  const patterns = [
+  return matchRelativeImports(content, fromPath, [
     /^\s*(?:import|export)\b[^;]*?\bfrom\s*['"](\.[^'"]+)['"]/gm,
     /^\s*import\s*['"](\.[^'"]+)['"]/gm,
-  ];
+  ]);
+}
+
+/**
+ * Extract relative dynamic imports (`import('./x')`) from TypeScript source,
+ * resolved as extractRelativeImports does.
+ *
+ * @param {string} content - TypeScript source
+ * @param {string} fromPath - Repo-relative path of the importing file
+ * @returns {Set<string>} Repo-relative paths of the imported files
+ */
+export function extractDynamicImports(content, fromPath) {
+  return matchRelativeImports(content, fromPath, [/\bimport\s*\(\s*['"](\.[^'"]+)['"]\s*\)/g]);
+}
+
+/** Resolve the relative specifiers that `patterns` capture to repo-relative .ts paths. */
+function matchRelativeImports(content, fromPath, patterns) {
+  const imports = new Set();
+  const dir = fromPath.split('/').slice(0, -1).join('/');
   const specifiers = [];
   for (const pattern of patterns) {
     let match;
