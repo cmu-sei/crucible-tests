@@ -78,14 +78,29 @@ export function buildImportGraph(rootDir) {
     transitive.set(file, computeTransitiveImporters(file, graph));
   }
 
-  // A dynamic import counts for the file that makes it, but is not passed on to
-  // that file's importers: it loads its module only when the calling code runs.
+  // A dynamic import makes the file that contains it depend on the loaded module
+  // and on everything that module imports. It does not make that file's importers
+  // depend on them, because the module loads only when the calling code runs.
   // provision-targets.ts, for example, lazy-loads each app's sign-in code for that
   // app alone, and every app's fixtures reach provision-targets.ts. Passing those
   // edges on would make every app depend on the TopoMojo and Gameboard fixtures.
+  // Membership is checked against the static closure, so one dynamic edge never
+  // carries another file's.
+  const dynamicImporters = new Map(); // path -> files that reach it through a dynamic import
   for (const [importer, imported] of dynamicEdges) {
-    if (!transitive.has(imported)) transitive.set(imported, new Set());
-    transitive.get(imported).add(importer);
+    // The loaded module, plus every file it imports directly or transitively.
+    const reached = [imported];
+    for (const [file, importers] of transitive) {
+      if (importers.has(imported)) reached.push(file);
+    }
+    for (const file of reached) {
+      if (!dynamicImporters.has(file)) dynamicImporters.set(file, new Set());
+      dynamicImporters.get(file).add(importer);
+    }
+  }
+  for (const [file, importers] of dynamicImporters) {
+    if (!transitive.has(file)) transitive.set(file, new Set());
+    for (const importer of importers) transitive.get(file).add(importer);
   }
 
   return transitive;

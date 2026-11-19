@@ -296,11 +296,12 @@ for (const { name, source, from, expected } of IMPORT_CASES) {
   }
 }
 
-// Dynamic imports count for the file that makes them, not for that file's importers.
+// Dynamic imports count for the file that makes them (including what the loaded
+// module imports), not for that file's importers.
 // Built in a scratch tree so the case doesn't depend on which lazy loads the repo has.
 console.log();
 {
-  const name = 'Dynamic imports plan the importing file only';
+  const name = 'Dynamic imports plan the importing file, not its importers';
   const root = mkdtempSync(join(tmpdir(), 'ci-affected-'));
   const files = {
     // A shared root module lazy-loads one app's code, as provision-targets.ts does.
@@ -309,7 +310,8 @@ console.log();
     'gameboard/fixtures.ts': 'export const x = 1;\n',
     // A spec lazy-loads another app's helper it really depends on.
     'cite/tests/x.spec.ts': "const m = await import('../../gallery/seed-helpers');\n",
-    'gallery/seed-helpers.ts': 'export const seed = 1;\n',
+    'gallery/seed-helpers.ts': "export { seed } from '../seed-core';\n",
+    'seed-core.ts': 'export const seed = 1;\n',
   };
   try {
     for (const [path, content] of Object.entries(files)) {
@@ -329,6 +331,11 @@ console.log();
     const lazySpec = plan('gallery/seed-helpers.ts');
     if (JSON.stringify(lazySpec) !== JSON.stringify(['cite', 'gallery'])) {
       problems.push(`gallery/seed-helpers.ts: ${JSON.stringify(lazySpec)} !== ["cite","gallery"]`);
+    }
+    // The spec also depends on what the lazy-loaded module imports.
+    const lazySpecDep = plan('seed-core.ts');
+    if (JSON.stringify(lazySpecDep) !== JSON.stringify(['cite', 'gallery'])) {
+      problems.push(`seed-core.ts: ${JSON.stringify(lazySpecDep)} !== ["cite","gallery"]`);
     }
     if (problems.length > 0) {
       failures++;
