@@ -6,14 +6,12 @@
 import { test, expect, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import {
   getBlueprintToken,
-  createMsel,
   deleteMsel,
   createRenderableScenarioEvent,
   createScenarioEvent,
   listScenarioEvents,
-  seedMselDataFields,
   navigateToMselSection,
-  tempBlueprintName,
+  createSharedRenderableMsel,
 } from '../../test-helpers';
 
 /**
@@ -43,38 +41,43 @@ import {
  * all seeded events reach the DOM, the grid renders within a time budget, and filtering narrows
  * the grid — waiting on the filtered result instead of sleeping 500ms.
  */
+const EVENT_COUNT = 60;
+
+// The 60-event MSEL is seeded once per file and shared by both theme runs (it used to be
+// seeded per test: 13 DataField POSTs plus 60 events each time). Safe to share: the test only
+// renders the grid and filters it client-side, then clears the filter — nothing is written.
+let token: string;
+let mselId: string;
+let UNIQUE_TITLE: string;
+
+test.beforeAll(async ({}, workerInfo) => {
+  token = await getBlueprintToken();
+  // Per worker: the grid also shows other MSELs' events (see `findScenarioEventRow`), so a
+  // concurrent copy of this file must not seed the same searchable text.
+  UNIQUE_TITLE = `ZZUniqueTimelineEvent-w${workerInfo.parallelIndex}`;
+  mselId = (
+    await createSharedRenderableMsel(token, 'TimelinePerf', workerInfo.parallelIndex, {
+      description: 'Seeded to measure timeline rendering.',
+    })
+  ).id;
+
+  for (let i = 0; i < EVENT_COUNT - 1; i++) {
+    await createScenarioEvent(token, mselId, { deltaSeconds: (i + 1) * 60 });
+  }
+  // One event carrying searchable text, so the filter assertion has a known target.
+  await createRenderableScenarioEvent(token, mselId, UNIQUE_TITLE, {
+    deltaSeconds: EVENT_COUNT * 60,
+  });
+});
+
+test.afterAll(async () => {
+  if (mselId) await deleteMsel(await getBlueprintToken(), mselId);
+});
+
 for (const theme of BLUEPRINT_THEMES) {
     test.describe(`${theme} theme › Performance and Optimization`, () => {
-    const EVENT_COUNT = 60;
-    const UNIQUE_TITLE = 'ZZUniqueTimelineEvent';
-
-    let token: string;
-    let mselId: string;
-
     test.beforeEach(async () => {
       token = await getBlueprintToken();
-      const msel = await createMsel(token, {
-        name: tempBlueprintName('TestBP-TimelinePerf'),
-        description: 'Seeded to measure timeline rendering.',
-      });
-      mselId = msel.id;
-
-      await seedMselDataFields(token, mselId);
-      for (let i = 0; i < EVENT_COUNT - 1; i++) {
-        await createScenarioEvent(token, mselId, { deltaSeconds: (i + 1) * 60 });
-      }
-      // One event carrying searchable text, so the filter assertion has a known target.
-      await createRenderableScenarioEvent(token, mselId, UNIQUE_TITLE, {
-        deltaSeconds: EVENT_COUNT * 60,
-      });
-    });
-
-    test.afterEach(async () => {
-      try {
-        if (mselId) await deleteMsel(token, mselId);
-      } catch (err) {
-        console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
-      }
     });
 
     test('Large Timeline Performance', async ({ blueprintAuthenticatedPage: page }) => {
@@ -91,7 +94,7 @@ for (const theme of BLUEPRINT_THEMES) {
       // unlike the MSEL list which is a `<mat-table>` of `<mat-row>`. The template also emits
       // `tr.move-start-row` separator rows, so those are excluded to count only event rows.
       const rows = page.locator('table tbody tr:not(.move-start-row)');
-      await expect(rows).toHaveCount(EVENT_COUNT, { timeout: 60000 });
+      await expect(rows).toHaveCount(EVENT_COUNT, { timeout: 30000 });
       const renderSeconds = (Date.now() - startedAt) / 1000;
 
       // expect: every seeded event is rendered — no silent truncation.

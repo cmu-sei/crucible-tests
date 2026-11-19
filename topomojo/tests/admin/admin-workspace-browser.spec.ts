@@ -4,7 +4,7 @@
 // spec: topomojo/topomojo-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, topomojoNavLink } from '../../fixtures';
 
 test.describe('Admin Panel', () => {
   test('Admin - Workspace Browser', async ({ topomojoAuthenticatedPage: page }) => {
@@ -13,18 +13,18 @@ test.describe('Admin Panel', () => {
     await page.goto(Services.TopoMojo.UI);
     await page.waitForLoadState('domcontentloaded');
 
-    // 2. Wait for Admin button to confirm authentication (fixture already authenticated)
-    // The Admin button only appears after auth state is set - wait generously to avoid race conditions
-    const adminButton = page.getByRole('button', { name: 'Admin' });
+    // 2. Wait for Admin link to confirm authentication (fixture already authenticated)
+    // The Admin link only appears after auth state is set - wait generously to avoid race conditions
+    const adminLink = topomojoNavLink(page, 'Admin');
 
     try {
-      await adminButton.waitFor({ state: 'visible', timeout: 30000 });
+      await adminLink.waitFor({ state: 'visible', timeout: 30000 });
     } catch (error) {
-      throw new Error(`Admin button did not appear within 30 seconds. Current URL: ${page.url()}`);
+      throw new Error(`Admin link did not appear within 30 seconds. Current URL: ${page.url()}`);
     }
 
-    // 3. Click on 'Admin' button in navigation
-    await adminButton.click();
+    // 3. Click on 'Admin' link in navigation
+    await adminLink.click();
     await page.waitForURL(/\/admin/, { timeout: 10000 });
     await page.waitForLoadState('domcontentloaded');
 

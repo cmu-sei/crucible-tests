@@ -5,7 +5,7 @@
 // seed: seed.spec.ts
 
 import { APIRequestContext, request as pwRequest } from '@playwright/test';
-import { test, expect, gotoExhibitSection, Services, GALLERY_THEMES, setGalleryTheme } from '../../fixtures';
+import { test, expect, gotoExhibitSection, Services, GALLERY_THEMES, setGalleryTheme, apiGetAdminUserId } from '../../fixtures';
 import { getUserToken } from '../../../keycloak-admin';
 
 /**
@@ -55,13 +55,7 @@ async function post<T>(api: APIRequestContext, path: string, data: unknown): Pro
 
 /** Seed a wall exhibit with three uniquely-named cards at (0,0), (1,0) and (1,1). */
 async function seedWallExhibit(api: APIRequestContext): Promise<WallFixture> {
-  const users: Array<{ id: string; name: string }> = await (
-    await api.get(`${Services.Gallery.API}/api/users`)
-  ).json();
-  const admin = users.find((u) => u.name?.toLowerCase().includes('admin'));
-  if (!admin) {
-    throw new Error('Admin user not found in the Gallery database');
-  }
+  const adminUserId = await apiGetAdminUserId();
 
   const stamp = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
   const collection = await post<{ id: string }>(api, '/api/collections', {
@@ -79,7 +73,7 @@ async function seedWallExhibit(api: APIRequestContext): Promise<WallFixture> {
     shortName: 'ADVNC',
     exhibitId: exhibit.id,
   });
-  await post(api, '/api/teamusers', { teamId: team.id, userId: admin.id, isObserver: false });
+  await post(api, '/api/teamusers', { teamId: team.id, userId: adminUserId, isObserver: false });
 
   const positions = [
     { move: 0, inject: 0 },

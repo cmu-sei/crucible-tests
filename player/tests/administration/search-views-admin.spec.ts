@@ -4,14 +4,14 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, seededPrimaryViewName, seededSteamfitterViewName, typeIntoSearch, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
+import { test, expect, Services, typeIntoSearch, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
 
 for (const theme of PLAYER_THEMES) {
   test.describe(`${theme} theme › Administration - Views`, () => {
-    test('Search Views in Admin', async ({ playerAuthenticatedPage: page }) => {
+    test('Search Views in Admin', async ({ playerAuthenticatedPage: page, seededViews }) => {
       await setPlayerTheme(page, theme);
-      const primaryViewName = seededPrimaryViewName();
-      const steamfitterViewName = seededSteamfitterViewName();
+      const primaryViewName = seededViews.primary.name;
+      const steamfitterViewName = seededViews.secondary.name;
 
       // 1. Log in as admin and navigate to Administration > Views
       await page.getByRole('button', { name: 'Menu' }).click();

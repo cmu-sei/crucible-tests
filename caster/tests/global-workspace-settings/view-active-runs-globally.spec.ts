@@ -12,13 +12,13 @@ for (const theme of CASTER_THEMES) {
       await setCasterTheme(page, theme);
 
       await page.goto(Services.Caster.UI + '/admin?section=Workspaces');
-      await expect(page.getByRole('heading', { name: 'Active Runs' })).toBeVisible({ timeout: 10000 });
 
-      await expect(page.getByRole('button', { name: 'Created At' })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Destroy' })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'status' })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Workspace ID' })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Actions' })).toBeVisible();
+      // expect: the table lists runs by Workspace and Project, with who started them and when
+      for (const column of ['Workspace', 'Project', 'Type', 'Status', 'Started By', 'Started']) {
+        await expect(page.getByRole('columnheader', { name: column, exact: true })).toBeVisible({ timeout: 10000 });
+      }
+
+      // expect: the toolbar has Search and the paginator
       await expect(page.getByRole('textbox', { name: 'Search' })).toBeVisible();
       await expect(page.getByRole('combobox', { name: 'Items per page:' })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Previous page' })).toBeVisible();

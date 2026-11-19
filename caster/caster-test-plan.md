@@ -279,18 +279,18 @@ Exceptions, which run once:
   2. Click "Return to Project"
     - expect: The project itself opens (`/projects/<id>`), not the project list
 
-#### 3.9. Return From Project Memberships In Administration
+#### 3.9. Open Project Memberships In Place In Administration
 
 **File:** `tests/projects-management/return-to-project-from-manage-project.spec.ts`
 
 **Steps:**
   1. Open Administration → Projects and search for the project
-    - expect: One matching row
-  2. Click the project's name
-    - expect: Its memberships open in place, still under `/admin`
-    - expect: The way back is labelled "Return", not "Return to Project"
-  3. Click "Return"
-    - expect: The project list is shown again
+    - expect: One matching row, collapsed
+  2. Click the project's row
+    - expect: Its memberships open under the row, still under `/admin`
+    - expect: No project title and no "Return" or "Return to Project" button, since the row already names the project
+  3. Click the row again
+    - expect: The memberships close and the project list is unchanged
 
 #### 3.10. Export And Import A Project With Its Settings
 
@@ -622,19 +622,24 @@ Caster has no single-file upload; files reach a directory by importing an archiv
 
 **File:** `tests/workspaces-management/lock-and-unlock-workspace.spec.ts`
 
+Caster has no per-workspace Lock/Unlock control: the workspace view offers only the
+Runs, State and Topology toggles, and the API's workspace lock is an internal mutex
+held while a run executes. The only user-facing workspace switch is the global
+"Disable Workspace Operations" toggle (covered by `global-workspace-settings/`). What a
+user can lock and unlock inside a workspace is the edit lock on the workspace's files,
+which are listed under the workspace in the project sidebar's WORKSPACES section.
+
 **Steps:**
-  1. Navigate to a workspace detail view
-    - expect: Workspace details are displayed
-  2. Click 'Lock Workspace' button (if available)
-    - expect: The workspace is locked
-    - expect: A lock icon or indicator is displayed
-    - expect: New runs cannot be created while locked
-    - expect: A success notification is displayed
-  3. Click 'Unlock Workspace' button
-    - expect: The workspace is unlocked
-    - expect: Lock indicator is removed
-    - expect: Runs can be created again
-    - expect: A success notification is displayed
+  1. Open a project, expand a directory, open the WORKSPACES section and expand a workspace that has a file
+    - expect: The workspace's files are listed with the plain file icon
+  2. Open the file and click 'Edit this file'
+    - expect: The file is locked by the current user ('Finish editing' is shown)
+    - expect: The file shows the file-lock icon in the sidebar
+    - expect: The API reports the file's `lockedById` as set
+  3. Click 'Finish editing'
+    - expect: The lock is released ('Edit this file' is shown again)
+    - expect: The file-lock icon is replaced by the plain file icon
+    - expect: The API reports the file's `lockedById` as null
 
 ### 6. Runs Management (Plan, Apply, Destroy)
 
@@ -1283,54 +1288,52 @@ accessibility contract is covered separately by 17.7.
 **File:** `tests/pools-management/view-pools-list.spec.ts`
 
 **Steps:**
-  1. Navigate to http://localhost:4310/pools
-    - expect: Pools page loads successfully
-    - expect: Pools list is displayed
-    - expect: Each pool shows: name, description
-    - expect: If no pools exist, an appropriate empty state is shown
+  1. Seed a pool with a unique name through the API, then navigate to http://localhost:4310/admin?section=VLANs
+    - expect: The Pools tab is selected
+    - expect: The Pools tab has a Search box, and Add New Pool and About pools buttons in the actions column header
+    - expect: The table has Pool Name, Default, Partitions and VLANs In Use columns
+    - expect: The seeded pool's row has no Default mark and shows "-" for Partitions and VLANs In Use until it is opened
+    - expect: The row's Delete and Rename buttons are enabled
 
 #### 12.2. Create New Pool
 
 **File:** `tests/pools-management/create-new-pool.spec.ts`
 
 **Steps:**
-  1. Navigate to Pools section
-    - expect: Pools list is visible
-  2. Click 'Create Pool' or 'Add Pool' button
-    - expect: A pool creation dialog is displayed
-  3. Enter 'Test Pool' in the Name field
-    - expect: Name field accepts input
-  4. Enter pool description
-    - expect: Description field accepts input
-  5. Click 'Save' or 'Create' button
-    - expect: The pool is created successfully
-    - expect: A success notification is displayed
-    - expect: The new pool appears in the pools list
+  1. Navigate to the VLANs admin section
+    - expect: The Pools table is visible
+  2. Click Add New Pool
+    - expect: The pool is created straight away, with no dialog (POST returns 201)
+    - expect: The API names it "New Pool", and it is not the default pool
+    - expect: An "Added New Pool" notification is displayed
+    - expect: A "New Pool" row is listed
 
 #### 12.3. View Pool Details
 
 **File:** `tests/pools-management/view-pool-details.spec.ts`
 
 **Steps:**
-  1. Navigate to Pools section
-    - expect: Pools list is visible
-  2. Click on a pool name
-    - expect: Pool detail view is displayed
-    - expect: Pool properties are shown: name, description
-    - expect: Associated resources or workspaces may be listed
+  1. Seed a pool through the API and navigate to the VLANs admin section
+    - expect: The pool's row is closed (aria-expanded is false)
+  2. Click the pool's row
+    - expect: The row opens its partitions in place, under the row
+    - expect: An Add New Partition button is shown
+    - expect: All of the new pool's VLANs are listed as not in any partition, with a Show button
+    - expect: The row now counts 0 partitions and "0 / <n>" VLANs in use
+  3. Click the row again
+    - expect: The partitions close
 
 #### 12.4. Delete Pool
 
 **File:** `tests/pools-management/delete-pool.spec.ts`
 
 **Steps:**
-  1. Navigate to Pools section
-    - expect: Pools list is visible
-  2. Click delete icon for a specific pool
-    - expect: A confirmation dialog appears
-  3. Click 'Confirm' or 'Delete'
-    - expect: The pool is deleted successfully
-    - expect: A success notification is displayed
+  1. Seed a pool through the API and navigate to the VLANs admin section
+    - expect: The pool is listed
+  2. Click the row's "Delete <pool name>" button
+    - expect: A Delete Pool dialog asks "Are you sure that you want to delete <pool name>?"
+  3. Click Delete
+    - expect: A "Deleted <pool name>" notification is displayed
     - expect: The pool is removed from the list
 
 ### 13. Search and Filtering
@@ -1369,18 +1372,16 @@ accessibility contract is covered separately by 17.7.
 
 **File:** `tests/search-and-filtering/filter-by-status.spec.ts`
 
+Administration → Workspaces lists active runs with their status as a plain word, and its
+Search matches it. There is no separate status dropdown.
+
 **Steps:**
-  1. Navigate to Runs list
-    - expect: Runs list is displayed with various statuses
-  2. Locate the Status filter dropdown
-    - expect: Status filter is available
-  3. Select 'Applied' status
-    - expect: The list filters to show only runs with 'Applied' status
-    - expect: Other statuses are hidden
-  4. Select 'Failed' status
-    - expect: The list filters to show only failed runs
-  5. Clear the filter
-    - expect: All runs are displayed again
+  1. Navigate to Administration → Workspaces
+    - expect: The active runs table has a Status column
+  2. Search for 'Applied'
+    - expect: An applied run is no longer active, so the table says `No active runs match "Applied"`
+  3. Click Clear Search
+    - expect: The search box is empty
 
 #### 13.4. Advanced Filtering with Multiple Criteria
 
@@ -1545,13 +1546,14 @@ accessibility contract is covered separately by 17.7.
 
 **File:** `tests/error-handling/workspace-lock-enforcement.spec.ts`
 
+Caster has no per-workspace lock a user can set (see 5.7). The workspace lock in the
+API is an internal mutex held while a run executes. The user-facing way to stop
+workspace operations is the global "Disable Workspace Operations" switch in the admin
+Workspaces settings.
+
 **Steps:**
-  1. Lock a workspace
-    - expect: Workspace is locked
-  2. Attempt to create a new run on the locked workspace
-    - expect: An error message is displayed indicating workspace is locked
-    - expect: Run creation is prevented
-    - expect: User is informed they must unlock the workspace first
+  1. Navigate to Administration → Workspaces
+    - expect: The 'Disable Workspace Operations' switch is shown at the end of the toolbar and is enabled for the admin
 
 #### 15.8. File Names Cannot Leave The Working Directory
 
@@ -1891,64 +1893,55 @@ afterwards because it persists per user.
 **File:** `tests/vlans-management/view-vlan-pools.spec.ts`
 
 **Steps:**
-  1. Navigate to Admin section and click on VLANs in the sidebar
-    - expect: VLANs page loads at http://localhost:4310/admin?section=VLANs
+  1. Seed a pool through the API and navigate to http://localhost:4310/admin?section=VLANs
     - expect: Two tabs are visible: Pools and Projects
     - expect: Pools tab is selected by default
-    - expect: Pools section displays heading and action buttons
-    - expect: If no pools exist, an appropriate empty state is shown
+  2. Type the pool's name in Search
+    - expect: The table narrows to the matching pool
+  3. Type a name that matches no pool
+    - expect: The table shows 'No data matching the filter "<text>"'
+  4. Click Clear
+    - expect: Search is empty and the pool is listed again
 
 #### 19.2. Create VLAN Pool
 
 **File:** `tests/vlans-management/create-vlan-pool.spec.ts`
 
 **Steps:**
-  1. Navigate to VLANs admin section - Pools tab
-    - expect: Pools section is visible with create button
-  2. Click the create/add pool button
-    - expect: A pool creation dialog is displayed
-  3. Enter pool name and VLAN range details in the form
-    - expect: Form fields accept input
-    - expect: VLAN range validation is applied
-  4. Click Save or Create button
-    - expect: The VLAN pool is created successfully
-    - expect: A success notification is displayed
-    - expect: The new pool appears in the pools list
+  1. Navigate to the VLANs admin section and click Add New Pool
+    - expect: The pool is created (POST returns 201) and an "Added <name>" notification is displayed
+  2. Fetch the pool from the API and reload the page
+    - expect: The API returns the pool
+    - expect: The pool is still listed after the reload
 
 #### 19.3. Edit VLAN Pool
 
 **File:** `tests/vlans-management/edit-vlan-pool.spec.ts`
 
 **Steps:**
-  1. Navigate to VLANs admin section - Pools tab with existing pools
-    - expect: Pools list is visible with at least one pool
-  2. Click on a pool or its edit icon
-    - expect: Pool edit dialog is displayed
-    - expect: Form fields are populated with current pool values
-  3. Modify pool details such as name or VLAN range
-    - expect: Fields accept new values
-  4. Click Save button
-    - expect: The pool is updated successfully
-    - expect: A success notification is displayed
-    - expect: Updated values are reflected in the pools list
+  1. Seed a pool through the API and navigate to the VLANs admin section
+    - expect: The pool is listed
+  2. Click the row's Rename button
+    - expect: A "Rename <pool name>" dialog opens with Name filled in with the current name
+    - expect: Save is disabled until the name changes
+  3. Enter a new name and click Save
+    - expect: A "Renamed <old> to <new>" notification is displayed
+    - expect: The row shows the new name and the old name is gone
+    - expect: Renaming does not open the pool's row
 
 #### 19.4. Delete VLAN Pool
 
 **File:** `tests/vlans-management/delete-vlan-pool.spec.ts`
 
 **Steps:**
-  1. Navigate to VLANs admin section - Pools tab
-    - expect: Pools list is visible
-  2. Click delete icon for a specific pool
-    - expect: A confirmation dialog appears asking to confirm deletion
-  3. Click Cancel in the confirmation dialog
+  1. Seed a pool through the API and navigate to the VLANs admin section
+    - expect: The pool is listed
+  2. Click the row's "Delete <pool name>" button and answer No
     - expect: Dialog closes
-    - expect: Pool is not deleted
-  4. Click delete icon again and click Confirm
-    - expect: The pool is deleted successfully
-    - expect: A success notification is displayed
+    - expect: Pool is not deleted, and its row stays closed
+  3. Click the delete button again and click Delete
+    - expect: A "Deleted <pool name>" notification is displayed
     - expect: The pool is removed from the list
-    - expect: If pool is in use by projects, appropriate error message is shown preventing deletion
 
 #### 19.5. View Project VLAN Assignments
 
@@ -1985,18 +1978,17 @@ afterwards because it persists per user.
 **File:** `tests/vlans-management/vlan-permissions-enforcement.spec.ts`
 
 **Steps:**
-  1. Log in as a user with ViewVLANs but not ManageVLANs permission
-    - expect: User is authenticated with limited VLAN permissions
-  2. Navigate to VLANs admin section
-    - expect: VLANs page is accessible
-    - expect: Pools and project assignments are visible
-    - expect: User can view but not modify VLANs
-  3. Attempt to create a new VLAN pool
-    - expect: Create button is disabled or hidden
-    - expect: Clicking it shows permission error if accessible
-  4. Attempt to edit or delete an existing pool
-    - expect: Edit and delete buttons are disabled or hidden
-    - expect: Appropriate permission denied message appears if attempted
+  1. Seed a pool through the API, and remove ManageVLANs (keeping ViewVLANs) from the user's GET /api/permissions/mine response
+    - expect: The real response included ManageVLANs
+  2. Navigate to the VLANs admin section
+    - expect: Add New Pool is disabled
+    - expect: The pool's Delete and Rename buttons are disabled
+  3. Click the disabled Rename button
+    - expect: No dialog opens and the row stays closed
+  4. Click the pool's row
+    - expect: The partitions open for viewing, with Add New Partition disabled
+  5. Click the Projects tab
+    - expect: The Projects tab is selected
 
 ### 20. Roles and Permissions Management
 
@@ -2316,29 +2308,25 @@ afterwards because it persists per user.
 **Steps:**
   1. Navigate to Admin section and click on Workspaces in the sidebar
     - expect: Workspaces admin page loads at http://localhost:4310/admin?section=Workspaces
-    - expect: Settings section is visible at the top of the page
-    - expect: Toggle switch for Disable Workspace Operations is displayed
-    - expect: Active Runs section is visible below settings
+    - expect: The toolbar has Search, the paginator and, at the end, the Disable Workspace Operations switch
+    - expect: The active runs table is below the toolbar
 
 #### 22.2. Enable Disable Workspace Operations
 
 **File:** `tests/global-workspace-settings/enable-disable-operations.spec.ts`
 
 **Steps:**
+The switch is global, so the light and dark variants run serially, and the spec always
+switches operations back on, even when an assertion fails.
+
+**Steps:**
   1. Navigate to Workspaces admin section
-    - expect: Workspace settings are visible
-    - expect: Disable Workspace Operations toggle is in OFF state (operations enabled)
-  2. Click the Disable Workspace Operations toggle switch
-    - expect: Toggle switches to ON state
-    - expect: Setting is saved
-    - expect: Success notification may appear
-  3. Navigate to a project workspace and attempt to create a plan run
-    - expect: Run creation is prevented or disabled
-    - expect: Appropriate message indicates workspace operations are globally disabled
-  4. Return to Workspaces admin and toggle Disable Workspace Operations back to OFF
-    - expect: Toggle switches to OFF state
-    - expect: Workspace operations are re-enabled globally
-    - expect: Users can now perform plan, apply, and destroy operations normally
+    - expect: Disable Workspace Operations switch is OFF (operations enabled) and no banner is shown
+  2. Click the Disable Workspace Operations switch
+    - expect: The switch turns ON once the API has made the change
+    - expect: A banner above the table says Workspace operations are disabled and what that stops
+  3. Click the switch again
+    - expect: The switch turns OFF and the banner is gone
 
 #### 22.3. View Active Runs Globally
 
@@ -2347,10 +2335,8 @@ afterwards because it persists per user.
 **Steps:**
   1. Navigate to Workspaces admin section
     - expect: Workspaces admin page loads
-  2. Scroll to the Active Runs section
-    - expect: Active Runs heading is displayed
     - expect: Table shows currently running or queued runs across all workspaces
-    - expect: Columns include: createdAt, isDestroy, status, workspaceId, actions
+    - expect: Columns are: Open action, Workspace, Project, Type, Status, Started By, Started
     - expect: Search textbox is available
     - expect: Pagination controls show items per page dropdown and navigation buttons
     - expect: If no active runs exist, appropriate message is shown
@@ -2360,33 +2346,26 @@ afterwards because it persists per user.
 **File:** `tests/global-workspace-settings/search-active-runs.spec.ts`
 
 **Steps:**
-  1. Navigate to Workspaces admin section with active runs
-    - expect: Active Runs table is visible with multiple runs
+  1. Navigate to Workspaces admin section
     - expect: Search textbox is displayed
-  2. Enter a search term (e.g., workspace ID or status) in the search box
-    - expect: The runs table filters to show matching runs
-    - expect: Search works across run details
-    - expect: Results update in real-time
-  3. Clear the search box
-    - expect: All active runs are displayed again
-    - expect: Filter is removed
+  2. Enter a search term no run matches
+    - expect: The table says `No active runs match "<term>"`
+  3. Click Clear Search
+    - expect: The search box is empty and the no-match message is gone
 
 #### 22.5. Sort Active Runs
 
 **File:** `tests/global-workspace-settings/sort-active-runs.spec.ts`
 
 **Steps:**
-  1. Navigate to Workspaces admin section - Active Runs
-    - expect: Active Runs table is visible with sortable columns
-  2. Click on the createdAt column header button
-    - expect: Runs are sorted by creation date
-    - expect: Sort indicator shows sort direction (newest or oldest first)
-  3. Click on the createdAt column header again
-    - expect: Sort direction reverses
-    - expect: Runs are now sorted in opposite order
-  4. Click on the status column header
-    - expect: Runs are sorted alphabetically by status
-    - expect: Sort indicator shows direction
+  1. Navigate to Workspaces admin section
+    - expect: Active runs table is visible with sortable columns
+  2. Click the Started column header
+    - expect: The column is sorted ascending (`aria-sort`)
+  3. Click the Started column header again
+    - expect: The column is sorted descending
+  4. Click the Status column header
+    - expect: Status is sorted ascending and Started is no longer sorted
 
 #### 22.6. Paginate Active Runs
 
@@ -2415,16 +2394,9 @@ afterwards because it persists per user.
 **File:** `tests/global-workspace-settings/actions-on-active-runs.spec.ts`
 
 **Steps:**
-  1. Navigate to Workspaces admin section with active runs
-    - expect: Active Runs table is visible
-    - expect: Actions column shows available actions for each run
-  2. Click on an action button for a running operation (e.g., Cancel)
-    - expect: Action dialog or confirmation appears
-    - expect: User can confirm the action
-  3. Confirm the action
-    - expect: Action is performed on the run (e.g., run is cancelled)
-    - expect: Success notification is displayed
-    - expect: Run status updates in the table or run is removed if completed
+  1. Navigate to Workspaces admin section
+    - expect: Each run row starts with Open for its Workspace, or a disabled Open with the reason when the viewer can't read the Project
+    - expect: With no active runs, the table says "No runs are queued, planning or applying right now"
 
 ### 23. API Rules
 

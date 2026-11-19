@@ -11,36 +11,37 @@ test.describe('Workspace Editor', () => {
 
     // 1. Navigate to workspace editor settings
     const sidebarToggle = page.locator('button[aria-label="Toggle sidebar"], button:has(mat-icon:text("menu"))').first();
+    const sidebar = page.locator('mat-sidenav, mat-drawer, [class*="sidebar"], [class*="side-panel"]').first();
     const hasSidebarToggle = await sidebarToggle.isVisible({ timeout: 10000 }).catch(() => false);
     if (hasSidebarToggle) {
       await sidebarToggle.click();
-      await page.waitForTimeout(500);
+      await expect(sidebar).toBeVisible();
     }
 
     const workspaceItems = page.locator('[class*="workspace-card"], [class*="item-card"], mat-list-item, [class*="list-item"]');
+
     const itemCount = await workspaceItems.count();
 
     if (itemCount > 0) {
+      const publishToggle = page.locator('mat-slide-toggle:has-text("Publish"), mat-checkbox:has-text("Publish"), [class*="publish"], input[type="checkbox"]').first();
       await workspaceItems.first().click();
-      await page.waitForTimeout(2000);
       await expect(page).toHaveURL(/\/topo\//, { timeout: 10000 });
 
       // expect: Publish or visibility settings are available
       // 2. Set workspace to published status
-      const publishToggle = page.locator('mat-slide-toggle:has-text("Publish"), mat-checkbox:has-text("Publish"), [class*="publish"], input[type="checkbox"]').first();
       const hasPublish = await publishToggle.isVisible({ timeout: 5000 }).catch(() => false);
 
       if (hasPublish) {
         // expect: Publish toggle or checkbox can be enabled
+        const saveButton = page.locator('button:has-text("Save"), button:has(mat-icon:text("save"))').first();
         await publishToggle.click();
-        await page.waitForTimeout(500);
+        await expect(publishToggle).toBeChecked();
 
         // 3. Save workspace settings
-        const saveButton = page.locator('button:has-text("Save"), button:has(mat-icon:text("save"))').first();
         const hasSave = await saveButton.isVisible({ timeout: 3000 }).catch(() => false);
         if (hasSave) {
           await saveButton.click();
-          await page.waitForTimeout(1000);
+          await expect(publishToggle).toBeChecked();
         }
 
         // expect: Workspace is published

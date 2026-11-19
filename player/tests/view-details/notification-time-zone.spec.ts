@@ -7,7 +7,6 @@
 import {
   test,
   expect,
-  seededPrimaryViewName,
   findPlayerHomeViewLink,
   clickWithoutOverlayInterference,
 } from '../../fixtures';
@@ -16,11 +15,11 @@ test.describe('View Details', () => {
   // Pin a DST zone so the label is a real abbreviation (EDT/EST), not UTC
   test.use({ timezoneId: 'America/New_York' });
 
-  test('Notification time shows the viewer time zone', async ({ playerAuthenticatedPage: page }) => {
+  test('Notification time shows the viewer time zone', async ({ freshView, playerAuthenticatedPage: page }) => {
     const message = `TZ label ${Date.now()}`;
 
     // 1. Open a view and its notification panel
-    await (await findPlayerHomeViewLink(page, seededPrimaryViewName())).click();
+    await (await findPlayerHomeViewLink(page, freshView.name)).click();
     await expect(page).toHaveURL(/\/view\//, { timeout: 10000 });
     const notificationsToggle = page.getByRole('button', { name: 'Notifications' });
     await clickWithoutOverlayInterference(page, notificationsToggle);

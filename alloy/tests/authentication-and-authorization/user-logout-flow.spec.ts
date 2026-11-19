@@ -4,9 +4,14 @@
 // spec: alloy/alloy-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../fixtures';
 import { authenticateWithKeycloak, Services, serviceUrlPattern } from '../../../shared-fixtures';
 import { ALLOY_THEMES, applyAlloyTheme } from '../../test-helpers';
+
+// Override storageState to start with a fresh, unauthenticated context since this spec
+// tests the authentication flow itself.
+test.use({ storageState: { cookies: [], origins: [] } });
+
 for (const theme of ALLOY_THEMES) {
   test.describe(`${theme} theme › Authentication and Authorization`, () => {
     test('User Logout Flow', async ({ page }) => {

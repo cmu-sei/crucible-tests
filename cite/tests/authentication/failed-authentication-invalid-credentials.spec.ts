@@ -13,6 +13,7 @@ test.use({ storageState: { cookies: [], origins: [] } });
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Authentication and Authorization`, () => {
     test('Failed Authentication - Invalid Credentials', async ({ page }) => {
+      test.slow(); // Auth redirect can take extended time on cold services
 
       // 1. Navigate to CITE UI at http://localhost:4721
       // The login never succeeds, so CITE's user-menu theme switch never exists. The theme
@@ -21,7 +22,7 @@ for (const theme of CITE_THEMES) {
       await page.goto(citeThemeUrl(Services.Cite.UI, theme));
 
       // expect: User is redirected to Keycloak login page
-      await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 70000 });
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 30000 });
 
       // 2. Enter invalid username 'wronguser' in the username field
       const usernameField = page.locator('#username');

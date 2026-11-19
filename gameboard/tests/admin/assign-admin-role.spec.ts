@@ -18,6 +18,11 @@ import { APIRequestContext, request as playwrightRequest } from '@playwright/tes
 // Creates a fresh Keycloak user, logs in once to provision a Gameboard user
 // record, then promotes them to "Support" role via the Gameboard PUT /api/user
 // endpoint. We verify the role assignment by reading the user back.
+//
+// Deliberately NOT a pool user (user-pool.ts): this test elevates the account. On a
+// leased user, a reset that failed to run would leave a Support-role account in the pool,
+// silently turning every later "non-admin" spec in that worker slot into a privileged one.
+// A throwaway account takes the elevation away with it.
 test.describe('Admin - Users', () => {
   let kcAdminToken: string;
   let kcUserId: string | null = null;
@@ -87,7 +92,7 @@ test.describe('Admin - Users', () => {
     }
 
     // UI sanity check — admin users page is reachable.
-    await page.goto(Services.Gameboard.UI + '/admin/registrar/users', { waitUntil: 'networkidle' });
+    await page.goto(Services.Gameboard.UI + '/admin/registrar/users', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Users' })).toBeVisible({ timeout: 15000 });
   });
 });

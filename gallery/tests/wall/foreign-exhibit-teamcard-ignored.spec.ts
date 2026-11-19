@@ -27,10 +27,9 @@ import {
  * Wall View Functionality — a TeamCard belonging to another exhibit's team must not
  * flip a card onto the Wall of the exhibit being viewed.
  *
- * Pending upstream: `isTeamCardInActiveExhibit` must reject a TeamCard whose team belongs to
- * another exhibit, including when the team store holds an authoritative empty load for the
- * active exhibit. This spec asserts the corrected behaviour, so it fails until that change
- * reaches the Gallery UI build under test.
+ * Regression test for `isTeamCardInActiveExhibit`, which rejects a TeamCard whose team
+ * belongs to another exhibit, including when the team store holds an authoritative empty
+ * load for the active exhibit.
  *
  * ## Why a foreign TeamCard reaches this browser at all
  *
@@ -63,7 +62,7 @@ import {
  *      active exhibit.
  *
  * **This spec pins branch 3's reject arm, not branch 2.** That is a deliberate choice
- * forced by what is reachable: branch 3 is the arm the pending change corrects, and
+ * forced by what is reachable: branch 3 is the arm that was corrected, and
  * branch 2 already behaves correctly, so a spec covering branch 2 would pass either way.
  * Branch 2 is also unreachable for a *foreign* team here, because the
  * `TeamCreated`/`TeamUpdated` handlers carry the matching `isTeamInActiveExhibit` filter —
@@ -73,9 +72,9 @@ import {
  * The state branch 3 must reject is an **authoritative empty** team load:
  * `TeamService.GetMineByExhibitAsync` returns `[]` for a user who is not on any team
  * of the requested exhibit, so `loadMine(B)` succeeds, sets the store empty, and
- * records `loadedExhibitId = B`. That is a steady state, not a transient one. The current
- * fallback asks `teamQuery.hasEntity(t => t.exhibitId === B)`, which is false for an empty
- * store, so the negation **accepts every foreign TeamCard** for as long as the user stays
+ * records `loadedExhibitId = B`. That is a steady state, not a transient one. The original
+ * fallback asked `teamQuery.hasEntity(t => t.exhibitId === B)`, which is false for an empty
+ * store, so the negation **accepted every foreign TeamCard** for as long as the user stayed
  * on B. Consulting the `loadedExhibitId` marker instead reads B and rejects the event.
  *
  * ## How the state is reached through the UI
@@ -118,9 +117,10 @@ import {
  *     rename has rendered, the foreign frame's handler has already run. The final
  *     assertion is therefore a real check on the handler's decision rather than a race
  *     against a frame still in flight — no sleep needed. The rename travels as
- *     `CardUpdated`, which `CardHandler.GetGroups` fans out to every user on a team in
- *     any exhibit of the card's collection, so it still reaches this user via their
- *     surviving membership of A.
+ *     `CardUpdated`, which `CardHandler.GetGroups` sends only to the users on a team the
+ *     card is assigned to. The local card is therefore also assigned, hidden, to A's
+ *     team, so the rename still reaches this user through their surviving membership
+ *     of A.
  *
  * The closing assertion is `toHaveText([...])` on the exact title list, which fails on
  * a leaked extra card *and* on a wrongly-dropped legitimate one. Verified both ways by
@@ -181,6 +181,13 @@ for (const theme of GALLERY_THEMES) {
       const localTeamCard = await apiCreateTeamCard(teamB.id, localCard.id, {
         isShownOnWall: true,
       });
+      // The local card is also assigned, hidden, to A's team. `CardHandler.GetGroups`
+      // sends a card's `CardUpdated` only to users on a team the card is assigned to (and
+      // that exhibit's observers), so once the user leaves B's team in step 3 the step-7
+      // rename would otherwise never reach this tab. Membership of A is kept, so this
+      // assignment carries it. Created before the Wall opens, and never changed, so no
+      // event for this TeamCard reaches the tab.
+      await apiCreateTeamCard(teamA.id, localCard.id, { isShownOnWall: false });
 
       // The foreign card: same collection, but its only TeamCard belongs to exhibit A's
       // team. Created hidden so that flipping it on later is the event under test.
@@ -257,7 +264,7 @@ for (const theme of GALLERY_THEMES) {
       // TeamCards up by `cardId`, so a leaked foreign TeamCard is invisible unless its Card
       // is present too. Verified by experiment — with this step's effect absent, the spec
       // goes GREEN even against the unguarded predicate, because there is no card for the
-      // leaked TeamCard to flip. If `CardHandler`'s fan-out is ever narrowed, or
+      // leaked TeamCard to flip. If `CardHandler`'s fan-out is narrowed further, or
       // `isCardInActiveExhibit` starts rejecting cross-exhibit cards, this assertion fails
       // loudly instead of the spec silently testing nothing.
       await expect
@@ -277,8 +284,8 @@ for (const theme of GALLERY_THEMES) {
       //    single connection, so once this rename has rendered, the foreign frame from
       //    step 6 has already been delivered and its handler has already decided. This is
       //    what makes the assertion below deterministic without a fixed sleep. The rename
-      //    arrives as `CardUpdated`, whose group fan-out covers every user on a team in
-      //    any exhibit of the collection, so the surviving membership of A carries it.
+      //    arrives as `CardUpdated`, which goes to the users on a team the card is assigned
+      //    to; the local card's hidden assignment to A's team carries it to this user.
       const localCardRenamed = `Foreign TC Local Renamed ${suffix}`;
       await apiRenameCard(localCard.id, collectionId, localCardRenamed);
       // `toContainText` rather than the exact list: this wait exists only to establish

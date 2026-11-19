@@ -13,11 +13,11 @@ for (const theme of CASTER_THEMES) {
 
       await expect(page.getByText('My Projects')).toBeVisible();
       await page.locator('button[mattooltip="Add New Project"]').click();
-      await expect(page.getByRole('dialog', { name: /Create New Project/i })).toBeVisible();
+      await expect(page.getByRole('dialog', { name: 'Add Project' })).toBeVisible();
 
       // expect: Save button is disabled when Name field is empty
       await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
-      await expect(page.getByRole('dialog', { name: /Create New Project/i }).locator('.mat-mdc-form-field-required-marker')).toBeVisible();
+      await expect(page.getByRole('dialog', { name: 'Add Project' }).locator('.mat-mdc-form-field-required-marker')).toBeVisible();
 
       // Fill and verify Save becomes enabled
       await page.getByRole('textbox', { name: /name/i }).fill('Valid Project Name');

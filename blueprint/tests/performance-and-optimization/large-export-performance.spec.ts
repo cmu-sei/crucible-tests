@@ -7,13 +7,11 @@ import { test, expect, Services, BLUEPRINT_THEMES, applyBlueprintTheme } from '.
 import fs from 'fs';
 import {
   getBlueprintToken,
-  createMsel,
   deleteMsel,
   createScenarioEvent,
   listScenarioEvents,
-  seedMselDataFields,
   findMselRowByName,
-  tempBlueprintName,
+  createSharedRenderableMsel,
   downloadMselFile,
 } from '../../test-helpers';
 
@@ -42,41 +40,42 @@ import {
  *
  * This version seeds a MSEL with 60 scenario events, exports it through that real control, and
  * measures. 60 rather than the plan's 500: seeding is one API call per event, and 60 is enough
- * to make the export non-trivial while keeping `beforeEach` quick. The count is asserted, so the
+ * to make the export non-trivial while keeping setup quick. The count is asserted, so the
  * spec states the size it actually tested instead of implying 500.
  */
+const EVENT_COUNT = 60;
+
+// The 60-event MSEL is seeded once per file and shared by both theme runs (it used to be
+// seeded per test: 13 DataField POSTs plus 60 events each time). Safe to share: the test only
+// downloads the MSEL — nothing is written.
+let token: string;
+let mselId: string;
+let mselName: string;
+
+test.beforeAll(async ({}, workerInfo) => {
+  token = await getBlueprintToken();
+  const msel = await createSharedRenderableMsel(token, 'ExportPerf', workerInfo.parallelIndex, {
+    description: 'Seeded to measure export performance.',
+  });
+  mselId = msel.id;
+  mselName = msel.name;
+
+  // `createScenarioEvent` is used directly rather than `createRenderableScenarioEvent`
+  // because the cell text is irrelevant here and skipping the per-event DataValue write keeps
+  // setup to one call per event.
+  for (let i = 0; i < EVENT_COUNT; i++) {
+    await createScenarioEvent(token, mselId, { deltaSeconds: (i + 1) * 60 });
+  }
+});
+
+test.afterAll(async () => {
+  if (mselId) await deleteMsel(await getBlueprintToken(), mselId);
+});
+
 for (const theme of BLUEPRINT_THEMES) {
     test.describe(`${theme} theme › Performance and Optimization`, () => {
-    const EVENT_COUNT = 60;
-
-    let token: string;
-    let mselId: string;
-    let mselName: string;
-
     test.beforeEach(async () => {
       token = await getBlueprintToken();
-      mselName = tempBlueprintName('TestBP-ExportPerf');
-      const msel = await createMsel(token, {
-        name: mselName,
-        description: 'Seeded to measure export performance.',
-      });
-      mselId = msel.id;
-
-      // DataFields once, then the events. `createScenarioEvent` is used directly rather than
-      // `createRenderableScenarioEvent` because the cell text is irrelevant here and skipping the
-      // per-event DataValue write keeps setup to one call per event.
-      await seedMselDataFields(token, mselId);
-      for (let i = 0; i < EVENT_COUNT; i++) {
-        await createScenarioEvent(token, mselId, { deltaSeconds: (i + 1) * 60 });
-      }
-    });
-
-    test.afterEach(async () => {
-      try {
-        if (mselId) await deleteMsel(token, mselId);
-      } catch (err) {
-        console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
-      }
     });
 
     test('Large Export Performance', async ({ blueprintAuthenticatedPage: page }) => {

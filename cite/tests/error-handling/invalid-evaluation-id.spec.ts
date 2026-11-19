@@ -20,7 +20,8 @@ for (const theme of CITE_THEMES) {
 
       // expect: Error message is displayed or user redirected
       // expect: User can navigate back to home
-      await page.waitForTimeout(3000);
+      // Anchor on home heading (app redirects to home on invalid evaluation ID)
+      await expect(page.locator('text=My Evaluations')).toBeVisible({ timeout: 10000 });
       const body = page.locator('body');
       await expect(body).toBeVisible();
     });

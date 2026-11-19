@@ -12,11 +12,8 @@ for (const theme of CITE_THEMES) {
       await setCiteTheme(page, theme);
 
       // 1. Navigate to the home page and check form inputs
-      await page.waitForLoadState('networkidle');
-
       // Wait for the page to be loaded with content
       await expect(page.locator('text=My Evaluations')).toBeVisible({ timeout: 10000 });
-      await page.waitForTimeout(1000);
 
       // expect: All form fields have associated labels
       // Check all visible inputs on the main page
@@ -39,9 +36,7 @@ for (const theme of CITE_THEMES) {
           }
         });
         await page.goto(Services.Cite.UI);
-        await page.waitForLoadState('networkidle');
         await expect(page.locator('text=My Evaluations')).toBeVisible({ timeout: 10000 });
-        await page.waitForTimeout(1000);
         inputs = page.locator('input:visible, select:visible, textarea:visible');
         inputCount = await inputs.count();
       }

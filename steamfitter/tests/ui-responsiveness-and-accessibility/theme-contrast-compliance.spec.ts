@@ -5,8 +5,9 @@
 // seed: tests/seed.spec.ts
 
 import type { Locator, Page } from '@playwright/test';
-import { test, expect, Services, setSteamfitterTheme, STEAMFITTER_THEMES } from '../../fixtures';
+import { test, expect, Services, toggleSteamfitterThemeViaMenu, STEAMFITTER_THEMES } from '../../fixtures';
 import { navigateToAdminSection } from '../../test-helpers';
+import { expectFaviconInTopBarColor } from '../../../theme-helpers';
 
 /**
  * Accessibility — real WCAG contrast on the Steamfitter home page and an admin
@@ -26,7 +27,7 @@ import { navigateToAdminSection } from '../../test-helpers';
  * Read-only: it navigates and reads computed styles, seeds nothing, and depends on
  * no table rows (it measures the always-present "My Scenarios" section title,
  * column headers, the Administration icon button, and an unsaved Admin → Groups
- * "Create New Group?" dialog), so it needs no cleanup. The theme is persisted in
+ * "Add Group" dialog), so it needs no cleanup. The theme is persisted in
  * localStorage, so it is restored in afterEach to leave the context as it found it.
  */
 
@@ -180,13 +181,13 @@ for (const theme of STEAMFITTER_THEMES) {
       // context inherits dark. Reload first: a failed dialog test leaves its CDK
       // backdrop over the user menu.
       await gotoHome(page);
-      await setSteamfitterTheme(page, 'light');
+      await toggleSteamfitterThemeViaMenu(page, 'light');
     });
 
     // WCAG 1.4.3 — text contrast on the page surface.
     test('Theme Contrast Compliance (WCAG 1.4.3 text)', async ({ steamfitterAuthenticatedPage: page }) => {
       await gotoHome(page);
-      await setSteamfitterTheme(page, theme);
+      await toggleSteamfitterThemeViaMenu(page, theme);
 
       // 1. The "My Scenarios" section title against the page surface. It is a text
       //    button drawn in `primary`, at 24px bold, so the large-text bar applies.
@@ -228,7 +229,7 @@ for (const theme of STEAMFITTER_THEMES) {
     // comes from each mode's configured setting, so don't hardcode a specific hex.
     test('Primary action icon contrast (WCAG 1.4.11)', async ({ steamfitterAuthenticatedPage: page }) => {
       await gotoHome(page);
-      await setSteamfitterTheme(page, theme);
+      await toggleSteamfitterThemeViaMenu(page, theme);
 
       const adminButton = page.getByRole('button', { name: 'Show Administration Page' });
       await expect(adminButton).toBeVisible({ timeout: 10000 });
@@ -253,7 +254,7 @@ for (const theme of STEAMFITTER_THEMES) {
     // falls back to light when its key is absent). Nothing is derived or corrected.
     test('Color settings applied per theme (design spec)', async ({ steamfitterAuthenticatedPage: page }) => {
       await gotoHome(page);
-      await setSteamfitterTheme(page, theme);
+      await toggleSteamfitterThemeViaMenu(page, theme);
 
       const settings = await effectiveColorSettings(page);
       for (const key of [
@@ -285,6 +286,9 @@ for (const theme of STEAMFITTER_THEMES) {
       await expect(toolbar).toHaveCSS('background-color', hexToRgb(settings.AppTopBarHexColor!));
       await expect(toolbar).toHaveCSS('color', hexToRgb(settings.AppTopBarHexTextColor!));
 
+      // The favicon is recolored to the top-bar color too.
+      await expectFaviconInTopBarColor(page, settings.AppTopBarHexColor!);
+
       // The home logo keeps the top-bar pair too: the shape in the top-bar color on
       // a disc of the top-bar text color.
       const homeLink = toolbar.getByRole('link').first();
@@ -305,12 +309,12 @@ for (const theme of STEAMFITTER_THEMES) {
     // (Save) must each reach 4.5:1. Uses Admin → Groups "Add New Group" (the shared
     // crucible-dialog NameDialog) without submitting.
     test('Primary and on-primary text contrast (WCAG 1.4.3)', async ({ steamfitterAuthenticatedPage: page }) => {
-      await setSteamfitterTheme(page, theme);
+      await toggleSteamfitterThemeViaMenu(page, theme);
       await navigateToAdminSection(page, 'Groups');
       await expect(page.locator('table')).toBeVisible({ timeout: 10000 });
 
       await page.getByRole('button', { name: 'Add New Group', exact: true }).click();
-      const dialog = page.getByRole('dialog', { name: 'Create New Group?' });
+      const dialog = page.getByRole('dialog', { name: 'Add Group' });
       await expect(dialog).toBeVisible({ timeout: 5000 });
 
       // Save stays disabled (and greyed) until the form is valid and dirty; fill the

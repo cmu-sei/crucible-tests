@@ -88,9 +88,8 @@ for (const theme of BLUEPRINT_THEMES) {
       context,
     }) => {
       await applyBlueprintTheme(page, theme);
-      // The client only notices the drop when its 30s serverTimeout elapses, and the retry
-      // policy can add another backoff step, so this needs more than the default budget.
-      test.setTimeout(240000);
+      // SignalR reconnection under network interruption with serverTimeout and retry backoff
+      test.slow();
 
       const sockets: WebSocket[] = [];
       const sentFrames: string[] = [];
@@ -147,7 +146,8 @@ for (const theme of BLUEPRINT_THEMES) {
       // 15s server keepalive), so it is a deterministic marker, not a text guess.
       await expect
         .poll(() => consoleLines.filter((l) => /Connection reconnecting because of error/i.test(l)).length, {
-          timeout: 90000,
+          // allow-wait-antipattern: SignalR serverTimeout is 30s; no intermediate state; observed 30-34s
+          timeout: 45000,
           intervals: [500, 1000],
           message: 'SignalR never reported losing the connection while the context was offline',
         })
@@ -157,7 +157,7 @@ for (const theme of BLUEPRINT_THEMES) {
       // logs a numbered attempt with its backoff delay for each retry.
       await expect
         .poll(() => consoleLines.filter((l) => /Reconnect attempt number \d+ will start in/i.test(l)).length, {
-          timeout: 60000,
+          timeout: 30000,
           intervals: [500, 1000],
           message: 'SignalR scheduled no reconnect attempts',
         })
@@ -170,7 +170,7 @@ for (const theme of BLUEPRINT_THEMES) {
       // no reload is performed, so the second socket can only come from the retry policy.
       await expect
         .poll(() => sockets.length, {
-          timeout: 150000,
+          timeout: 30000,
           intervals: [500, 1000, 2000],
           message: 'SignalR never reopened a hub WebSocket after the network was restored',
         })
@@ -179,7 +179,7 @@ for (const theme of BLUEPRINT_THEMES) {
       // expect: the client considers itself reconnected.
       await expect
         .poll(() => consoleLines.filter((l) => /HubConnection reconnected successfully/i.test(l)).length, {
-          timeout: 90000,
+          timeout: 30000,
           intervals: [500, 1000],
           message: 'SignalR never logged a successful reconnection',
         })
@@ -197,14 +197,14 @@ for (const theme of BLUEPRINT_THEMES) {
       };
       await expect
         .poll(() => sentAfterReconnect().joinCount, {
-          timeout: 60000,
+          timeout: 30000,
           intervals: [250, 500, 1000],
           message: 'the client did not re-invoke Join after reconnecting',
         })
         .toBeGreaterThan(1);
       await expect
         .poll(() => sentAfterReconnect().selectCount, {
-          timeout: 60000,
+          timeout: 30000,
           intervals: [250, 500, 1000],
           message: `the client did not re-invoke selectMsel for ${mselId} after reconnecting`,
         })
@@ -223,7 +223,7 @@ for (const theme of BLUEPRINT_THEMES) {
               .join('')
               .includes('"target":"MselUpdated"'),
           {
-            timeout: 90000,
+            timeout: 30000,
             intervals: [250, 500, 1000],
             message:
               'no MselUpdated push arrived after reconnection — real-time updates did not resume',

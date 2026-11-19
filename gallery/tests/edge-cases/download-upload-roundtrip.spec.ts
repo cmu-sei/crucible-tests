@@ -9,6 +9,9 @@ import {
   expect,
   gotoGalleryAdmin,
   gotoAdminSection,
+  apiCreateCollection,
+  apiCreateCard,
+  apiCreateArticle,
   apiDeleteCollectionById,
   GALLERY_THEMES,
   setGalleryTheme,
@@ -113,33 +116,45 @@ for (const theme of GALLERY_THEMES) {
     // all four steps in one test would leave two identically-named collections in the
     // picker at once and no locator could tell them apart. One copy per test keeps every
     // lookup unambiguous, and afterEach removes it before the next test starts.
-    test('Collection Download Upload Round Trip', async ({
-      galleryAuthenticatedPage: page,
-      seededExhibit,
-    }) => {
+    test('Collection Download Upload Round Trip', async ({ galleryAuthenticatedPage: page }) => {
       await setGalleryTheme(page, theme);
-      // `seededExhibit` gives a collection with 3 cards and 6 articles plus an exhibit
-      // with a team — enough structure that "matches the original" is a real assertion.
-      // It is worker-scoped and cleaned up by the fixture; only the upload-created
-      // collections are this test's responsibility.
+      // A collection file carries the collection's cards and its *template* articles — the
+      // articles with no exhibit. An exhibit's own articles belong to the exhibit file, not
+      // the collection's (CollectionService.DownloadJsonAsync filters on ExhibitId == null).
+      // `seededExhibit` posts all of its articles to its exhibit, so its collection file
+      // holds none, and it is worker-scoped, so adding templates to it would leak into other
+      // specs. This test seeds its own collection with cards and template articles instead,
+      // enough structure that "matches the original" is a real assertion. It is registered
+      // for cleanup at once; the cascade removes its cards and articles.
+      const suffix = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+      const collectionName = `Roundtrip Collection ${suffix}`;
+      const collection = await apiCreateCollection(collectionName);
+      collectionIdsToDelete.push(collection.id);
+      const firstCard = await apiCreateCard(collection.id, `Roundtrip Card One ${suffix}`, { move: 0 });
+      await apiCreateCard(collection.id, `Roundtrip Card Two ${suffix}`, { move: 1 });
+      await apiCreateArticle(collection.id, `Roundtrip Article One ${suffix}`, { cardId: firstCard.id });
+      await apiCreateArticle(collection.id, `Roundtrip Article Two ${suffix}`, { move: 1 });
+      await apiCreateArticle(collection.id, `Roundtrip Article Three ${suffix}`);
       await gotoGalleryAdmin(page);
 
       // 1. Download a collection as JSON
-      const collectionRow = await findCollectionRow(page, seededExhibit.collectionName);
+      const collectionRow = await findCollectionRow(page, collectionName);
       const collectionDownloadPromise = page.waitForEvent('download');
-      await collectionRow
-        .getByRole('button', { name: `Download ${seededExhibit.collectionName}` })
-        .click();
+      await collectionRow.getByRole('button', { name: `Download ${collectionName}` }).click();
       const collectionDownload = await collectionDownloadPromise;
 
       // expect: JSON file is downloaded successfully
       expect(collectionDownload.suggestedFilename()).toMatch(/\.json$/);
       const originalCollectionJson = await readJsonDownload(collectionDownload);
-      expect(originalCollectionJson.Collection.Name).toBe(seededExhibit.collectionName);
+      expect(originalCollectionJson.Collection.Name).toBe(collectionName);
       const originalCardNames = namesOf(originalCollectionJson.Cards);
       const originalArticleNames = namesOf(originalCollectionJson.Articles);
-      expect(originalCardNames.length).toBeGreaterThan(0);
-      expect(originalArticleNames.length).toBeGreaterThan(0);
+      expect(originalCardNames).toEqual([`Roundtrip Card One ${suffix}`, `Roundtrip Card Two ${suffix}`]);
+      expect(originalArticleNames).toEqual([
+        `Roundtrip Article One ${suffix}`,
+        `Roundtrip Article Three ${suffix}`,
+        `Roundtrip Article Two ${suffix}`,
+      ]);
 
       // expect: the file really is the collection's content, not an empty shell.
       expect(originalCollectionJson.Collection.Description).toBe(
@@ -176,8 +191,8 @@ for (const theme of GALLERY_THEMES) {
       // expect: A new collection is created from the uploaded file — a distinct record,
       // not a mutation of the original. `privateCollectionCopyAsync` appends " - <user>"
       // to the name.
-      expect(uploadedCollection.id).not.toBe(seededExhibit.collectionId);
-      expect(uploadedCollection.name).toBe(`${seededExhibit.collectionName} - Admin User`);
+      expect(uploadedCollection.id).not.toBe(collection.id);
+      expect(uploadedCollection.name).toBe(`${collectionName} - Admin User`);
 
       // ...and it shows up in the admin list.
       const uploadedRow = await findCollectionRow(page, uploadedCollection.name);

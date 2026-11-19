@@ -17,7 +17,6 @@ test.describe('Admin Panel', () => {
     const hasLink = await workspacesLink.isVisible({ timeout: 10000 }).catch(() => false);
     if (hasLink) {
       await workspacesLink.click();
-      await page.waitForTimeout(1000);
     }
 
     // expect: Workspace list displays
@@ -31,17 +30,18 @@ test.describe('Admin Panel', () => {
 
       if (hasStar) {
         await starIcon.click();
-        await page.waitForTimeout(500);
 
         // expect: Workspace is favorited
         // expect: Star icon changes to filled/solid style
 
         // 4. Click the filled star icon to unfavorite
         const filledStar = page.locator('mat-icon:text("star"), [class*="favorite-on"]').first();
+        await expect(filledStar).toBeVisible();
         const isFavorited = await filledStar.isVisible({ timeout: 3000 }).catch(() => false);
         if (isFavorited) {
           await filledStar.click();
-          await page.waitForTimeout(500);
+          const outlineStar = page.locator('mat-icon:text("star_border"), mat-icon:text("star_outline")').first();
+          await expect(outlineStar).toBeVisible();
         }
       }
     }

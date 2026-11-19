@@ -13,8 +13,13 @@ test.describe('Workspace Management', () => {
     const sidebarToggle = page.locator('button[aria-label="Toggle sidebar"], button:has(mat-icon:text("menu"))').first();
     const hasSidebarToggle = await sidebarToggle.isVisible({ timeout: 10000 }).catch(() => false);
     if (hasSidebarToggle) {
+      // The toggle flips app-workspace-browser's [hidden] binding (sidebar `open`, default
+      // true, persisted in localStorage), so the click's completion signal is the browser
+      // switching to the opposite visibility from before the click.
+      const workspaceBrowser = page.locator('app-workspace-browser');
+      const wasOpen = await workspaceBrowser.isVisible();
       await sidebarToggle.click();
-      await page.waitForTimeout(500);
+      await expect(workspaceBrowser).toBeVisible({ visible: !wasOpen });
     }
 
     // expect: Workspace list displays
@@ -24,25 +29,23 @@ test.describe('Workspace Management', () => {
     if (itemCount > 0) {
       // Hover over first workspace to reveal action buttons
       await workspaceItems.first().hover();
-      await page.waitForTimeout(300);
 
       // 2. Click clone/duplicate button on a workspace card
       const cloneButton = page.locator('button:has-text("Clone"), button:has(mat-icon:text("content_copy")), button:has(mat-icon:text("file_copy")), [class*="clone"]').first();
-      const hasClone = await cloneButton.isVisible({ timeout: 5000 }).catch(() => false);
+      const hasClone = await cloneButton.waitFor({ state: 'visible', timeout: 5000 }).then(() => true, () => false);
 
       if (hasClone) {
         await cloneButton.click();
-        await page.waitForTimeout(1000);
 
         // expect: Clone confirmation dialog may appear
         const confirmDialog = page.locator('mat-dialog-container, [role="dialog"]').first();
-        const hasConfirm = await confirmDialog.isVisible({ timeout: 3000 }).catch(() => false);
+        const hasConfirm = await confirmDialog.waitFor({ state: 'visible', timeout: 3000 }).then(() => true, () => false);
 
         if (hasConfirm) {
           // 3. Confirm clone action
           const confirmButton = page.locator('button:has-text("Confirm"), button:has-text("Clone"), button:has-text("OK"), button:has-text("Yes")').first();
           await confirmButton.click();
-          await page.waitForTimeout(2000);
+          await expect(confirmDialog).toBeHidden();
         }
 
         // expect: New workspace is created as a clone

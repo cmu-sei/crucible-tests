@@ -17,7 +17,9 @@ test.describe('Admin Panel', () => {
     const hasLink = await gamespaceLink.isVisible({ timeout: 10000 }).catch(() => false);
     if (hasLink) {
       await gamespaceLink.click();
-      await page.waitForTimeout(1000);
+
+      const gamespaceRows = page.locator('tr, mat-row, [class*="gamespace-row"]');
+      await expect(gamespaceRows.first()).toBeVisible();
     }
 
     const gamespaceRows = page.locator('tr, mat-row, [class*="gamespace-row"]');
@@ -25,19 +27,19 @@ test.describe('Admin Panel', () => {
 
     if (rowCount > 0) {
       await gamespaceRows.first().click();
-      await page.waitForTimeout(1000);
 
       // expect: Gamespace details and controls are visible
       // 2. Click 'End' or 'Delete' gamespace button
       const endButton = page.locator('button:has-text("End"), button:has-text("Delete"), button:has(mat-icon:text("stop"))').first();
+      await expect(endButton).toBeVisible();
       const hasEnd = await endButton.isVisible({ timeout: 5000 }).catch(() => false);
 
       if (hasEnd) {
         await endButton.click();
-        await page.waitForTimeout(500);
 
         // expect: Confirmation dialog appears
         const confirmDialog = page.locator('mat-dialog-container, [role="dialog"]').first();
+        await expect(confirmDialog).toBeVisible();
         const hasDialog = await confirmDialog.isVisible({ timeout: 3000 }).catch(() => false);
 
         if (hasDialog) {

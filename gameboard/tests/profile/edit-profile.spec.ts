@@ -27,8 +27,6 @@ test.describe('Profile', () => {
     // form accepts the submission without errors. We do NOT assert a status
     // message because Gameboard does not always render one inline.
     await requestBtn.click();
-    // Allow the UI to process (XHR + re-render).
-    await page.waitForTimeout(1500);
     // Page should still be on /user/profile after successful submit.
     await expect(page).toHaveURL(/\/user\/profile/);
   });

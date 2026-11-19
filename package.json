@@ -12,17 +12,25 @@
     "test:codegen": "playwright codegen",
     "typecheck": "tsc --noEmit",
     "check:skips": "node scripts/check-self-skips.mjs",
+    "check:waits": "node scripts/check-wait-antipatterns.mjs",
+    "check:run-filters": "node --no-warnings scripts/check-run-filters.mjs",
+    "check:ci-results": "node --no-warnings scripts/check-ci-results.mjs",
+    "check:ci-skip": "node --no-warnings scripts/check-ci-skip.mjs",
+    "check:ci-affected": "node --no-warnings scripts/check-ci-affected.mjs",
+    "check:ci-pr-comment": "node --no-warnings scripts/check-ci-pr-comment.mjs",
+    "check:ci-regressions": "node --no-warnings scripts/check-ci-regressions.mjs",
     "check:discovery": "playwright test --list --reporter=list",
-    "validate": "npm run typecheck && npm run check:skips && npm run check:discovery"
+    "validate": "npm run typecheck && npm run check:skips && npm run check:waits && npm run check:run-filters && npm run check:ci-results && npm run check:ci-skip && npm run check:ci-affected && npm run check:ci-pr-comment && npm run check:ci-regressions && npm run check:discovery",
+    "report:durations": "node scripts/report-durations.mjs"
   },
   "devDependencies": {
-    "@axe-core/playwright": "^4.11.2",
-    "@playwright/test": "^1.63.0",
-    "@types/node": "^25.5.2",
-    "@types/pg": "^8.20.0",
+    "@axe-core/playwright": "^4.14.0",
+    "@playwright/test": "^1.64.1",
+    "@types/node": "^26.6.5",
+    "@types/pg": "^8.23.1",
     "axe-core": "^4.11.3",
-    "dotenv": "^17.4.1",
-    "pg": "^8.20.0",
-    "typescript": "5.9.3"
+    "dotenv": "^18.0.7",
+    "pg": "^8.23.1",
+    "typescript": "7.0.2"
   }
 }

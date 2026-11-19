@@ -286,6 +286,14 @@ through to "View Not Found".
   "New Map", fill Name / External Image URL / Teams, Save, confirm the map
   renders ("Delete Map" visible), then delete it via the "Delete Map?" confirm
   dialog's Delete button and confirm the no-map state returns.
+- **Editor can make a Map from a view SVG, and it draws**
+  (`map/svg-map-from-view-file.spec.ts`) — upload `network.svg` to the seeded
+  view through the Player API, open "New Map", pick it under Select Image, give
+  it the Admin team, Save. The map's `<image>` href must be an
+  `image/svg+xml` data URL that the browser decodes at the SVG's 400×200 size.
+  Player serves `.svg` as octet-stream and a browser draws an untyped SVG not
+  at all, so this needs Player.Api to allow `.svg` uploads and vm.ui to type
+  view images from their name.
 
 ## Accessibility
 

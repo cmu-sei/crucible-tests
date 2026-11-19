@@ -15,6 +15,13 @@ function readCrucibleFile(relativePath: string): string {
   return readFileSync(join(modCruciblePath, relativePath), 'utf8');
 }
 
+// view.php anchors. These are the code itself rather than its debugging() messages:
+// mod_crucible #41 removed the debug lines these guards used to find.
+// Binds the user's active Alloy event when Moodle has no open attempt for it.
+const BIND_ACTIVE_EVENT = 'if (!$attempt && empty($object->event) && !empty($object->events))';
+// Handles the launch form's start request.
+const START_REQUEST = "isset($_POST['start_confirmed'])";
+
 test.describe('Moodle plugin regression guards', () => {
   test('Crucible bulk deploy launches Alloy events as the target student', () => {
     const launcherPhp = readCrucibleFile('classes/local/bulkdeploy/launcher.php');
@@ -29,7 +36,6 @@ test.describe('Moodle plugin regression guards', () => {
     expect(startEventIndex, 'bulk deploy should pass the selected user Alloy GUID and display name into Alloy event creation').toBeGreaterThan(-1);
     expect(startEventIndex, 'target user identity must be resolved before creating the Alloy event').toBeGreaterThan(guidLookupIndex);
     expect(launcherPhp).toContain("User does not have Alloy GUID (not OAuth2 user)");
-    expect(launcherPhp).toContain("Event $eventid created for user {$user->username}");
     expect(launcherPhp).not.toContain('start_event($auth, $crucible->eventtemplateid);');
 
     expect(markLaunchedIndex, 'bulk deploy should mark the row launched (conditional write) after the Alloy event is created').toBeGreaterThan(startEventIndex);
@@ -57,11 +63,12 @@ test.describe('Moodle plugin regression guards', () => {
     expect(timeFinishIndex, 'end_selected should record a finish time').toBeGreaterThan(finishedIndex);
     expect(updateIndex, 'end_selected should persist the finished attempt before returning').toBeGreaterThan(timeFinishIndex);
 
-    const bindActiveEventIndex = viewPhp.indexOf('using active Alloy event without open Moodle attempt');
-    const startRequestIndex = viewPhp.indexOf('start request received');
+    const bindActiveEventIndex = viewPhp.indexOf(BIND_ACTIVE_EVENT);
+    const startRequestIndex = viewPhp.indexOf(START_REQUEST);
     const guardedStartIndex = viewPhp.indexOf('if (!$object->event) {', startRequestIndex);
     const startEventIndex = viewPhp.indexOf('start_event($object->userauth, $object->crucible->eventtemplateid)', startRequestIndex);
 
+    expect(bindActiveEventIndex, 'view.php should bind active Alloy events').toBeGreaterThan(-1);
     expect(bindActiveEventIndex, 'view.php should bind active Alloy events before handling launch requests').toBeLessThan(startRequestIndex);
     expect(guardedStartIndex, 'view.php should gate relaunch on absence of an active Alloy event').toBeGreaterThan(startRequestIndex);
     expect(startEventIndex, 'view.php should create a new event only inside the no-active-event guard').toBeGreaterThan(guardedStartIndex);
@@ -70,14 +77,13 @@ test.describe('Moodle plugin regression guards', () => {
   test('Crucible view blocks immediate relaunch while Alloy still has an active event', () => {
     const viewPhp = readCrucibleFile('view.php');
 
-    const bindActiveEventIndex = viewPhp.indexOf('using active Alloy event without open Moodle attempt');
-    const startRequestIndex = viewPhp.indexOf('start request received');
+    const bindActiveEventIndex = viewPhp.indexOf(BIND_ACTIVE_EVENT);
+    const startRequestIndex = viewPhp.indexOf(START_REQUEST);
 
     expect(bindActiveEventIndex, 'view.php should bind active Alloy events even when Moodle has no open attempt').toBeGreaterThan(-1);
     expect(startRequestIndex, 'view.php should still handle start requests').toBeGreaterThan(-1);
     expect(bindActiveEventIndex, 'active Alloy event binding must happen before start request handling').toBeLessThan(startRequestIndex);
 
-    expect(viewPhp).toContain('if (!$attempt && empty($object->event) && !empty($object->events))');
     expect(viewPhp).toContain('$object->event = end($activeevents);');
     expect(viewPhp).toContain('if (!$object->event) {');
     expect(viewPhp).toContain('start_event($object->userauth, $object->crucible->eventtemplateid)');

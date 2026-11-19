@@ -8,7 +8,6 @@ import {
   test,
   expect,
   Services,
-  seededPrimaryViewName,
   findPlayerHomeViewLink,
   clickWithoutOverlayInterference,
   PLAYER_THEMES,
@@ -17,9 +16,9 @@ import {
 
 for (const theme of PLAYER_THEMES) {
   test.describe(`${theme} theme › User Presence`, () => {
-    test('User Presence - Team Filter', async ({ playerAuthenticatedPage: page }) => {
+    test('User Presence - Team Filter', async ({ playerAuthenticatedPage: page, seededViews }) => {
       await setPlayerTheme(page, theme);
-      const primaryViewName = seededPrimaryViewName();
+      const primaryViewName = seededViews.primary.name;
 
       // 1. Navigate to user presence page in a view with multiple teams
       await (await findPlayerHomeViewLink(page, primaryViewName)).click();

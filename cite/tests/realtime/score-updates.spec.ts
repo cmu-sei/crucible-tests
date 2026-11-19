@@ -7,6 +7,7 @@
 import { test, expect, APIRequestContext } from '@playwright/test';
 import { Services, authenticateWithKeycloak } from '../../../shared-fixtures';
 import { CITE_THEMES, setCiteTheme } from '../../fixtures';
+import { findAdminRowByName } from '../../test-helpers';
 async function getApiToken(request: APIRequestContext): Promise<string> {
   const resp = await request.post(`${Services.Keycloak}/realms/crucible/protocol/openid-connect/token`, {
     form: {
@@ -21,7 +22,7 @@ async function getApiToken(request: APIRequestContext): Promise<string> {
   return data.access_token;
 }
 
-async function createEvaluation(request: APIRequestContext, token: string): Promise<string> {
+async function createEvaluation(request: APIRequestContext, token: string): Promise<{ id: string; description: string }> {
   const modelsResp = await request.get(`${Services.Cite.API}/api/scoringmodels`, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -39,16 +40,17 @@ async function createEvaluation(request: APIRequestContext, token: string): Prom
     scoringModelId = (await smResp.json()).id;
   }
 
+  const description = `E2E Test Evaluation - ${Date.now()}`;
   const resp = await request.post(`${Services.Cite.API}/api/evaluations`, {
     headers: { Authorization: `Bearer ${token}` },
     data: {
-      description: `E2E Test Evaluation - ${Date.now()}`,
+      description,
       scoringModelId,
       status: 'Active',
     },
   });
   const evaluation = await resp.json();
-  return evaluation.id;
+  return { id: evaluation.id, description };
 }
 
 async function deleteEvaluation(request: APIRequestContext, token: string, id: string): Promise<void> {
@@ -62,12 +64,15 @@ for (const theme of CITE_THEMES) {
     test('Real-time Score Updates', async ({ browser, request }) => {
       // Setup: Create evaluation via API
       const apiToken = await getApiToken(request);
-      const evaluationId = await createEvaluation(request, apiToken);
+      const { id: evaluationId, description } = await createEvaluation(request, apiToken);
 
       try {
         // 1. Open two browser instances with different users logged in to the same evaluation
-        const context1 = await browser.newContext({ ignoreHTTPSErrors: true });
-        const context2 = await browser.newContext({ ignoreHTTPSErrors: true });
+        // Both sessions sign in as admin through Keycloak. The empty storage state is explicit so
+        // neither context inherits a saved sign-in (this spec uses the base `test`, which has none,
+        // but the CITE fixture's default would be admin's saved state).
+        const context1 = await browser.newContext({ ignoreHTTPSErrors: true, storageState: { cookies: [], origins: [] } });
+        const context2 = await browser.newContext({ ignoreHTTPSErrors: true, storageState: { cookies: [], origins: [] } });
         const page1 = await context1.newPage();
         const page2 = await context2.newPage();
 
@@ -80,7 +85,9 @@ for (const theme of CITE_THEMES) {
         for (const page of [page1, page2]) {
           await page.goto(`${Services.Cite.UI}/admin`);
           await expect(page).toHaveURL(/\/admin/, { timeout: 15000 });
-          const evalRow = page.getByRole('row').filter({ hasText: 'E2E Test Evaluation' }).first();
+          // Search for this run's evaluation: the list is paged, and earlier runs and other
+          // files' evaluations can push it off the first page.
+          const evalRow = await findAdminRowByName(page, description);
           await expect(evalRow).toBeVisible({ timeout: 15000 });
           await evalRow.click();
         }
@@ -88,22 +95,30 @@ for (const theme of CITE_THEMES) {
         // Switch to scoresheet on both (if available)
         for (const page of [page1, page2]) {
           const scoreTab = page.locator('[role="tab"]:has-text("Scoresheet"), button:has-text("Scoresheet")').first();
-          if (await scoreTab.isVisible({ timeout: 5000 }).catch(() => false)) {
+          const tabVisible = await scoreTab.waitFor({ state: 'visible', timeout: 5000 }).then(() => true, () => false);
+          if (tabVisible) {
             await scoreTab.click();
           }
         }
 
         // expect: Both instances are authenticated and viewing the evaluation
         // 2. In first instance, modify a score (if scoring options available)
-        const option = page1.locator('mat-radio-button, mat-checkbox, [class*="scoring-option"]').first();
-        if (await option.isVisible({ timeout: 5000 }).catch(() => false)) {
+        const option = page1.locator('mat-checkbox, mat-radio-button, [class*="scoring-option"]').first();
+        const optionVisible = await option.waitFor({ state: 'visible', timeout: 5000 }).then(() => true, () => false);
+        if (optionVisible) {
           await option.click();
-          await page1.waitForTimeout(2000);
-        }
+          // Wait for the checked state to reflect the selection (MDC checkbox puts checked state on inner input)
+          await expect(option.locator('input')).toBeChecked({ timeout: 5000 });
 
-        // 3. Observe second instance
-        // expect: Score update appears in second instance automatically via SignalR
-        await page2.waitForTimeout(3000);
+          // 3. Observe second instance
+          // expect: Score update appears in second instance automatically via SignalR
+          // The corresponding option on page2 should become checked via SignalR
+          const option2 = page2.locator('mat-checkbox, mat-radio-button, [class*="scoring-option"]').first();
+          const option2Visible = await option2.waitFor({ state: 'visible', timeout: 5000 }).then(() => true, () => false);
+          if (option2Visible) {
+            await expect(option2.locator('input')).toBeChecked({ timeout: 15000 });
+          }
+        }
 
         await context1.close();
         await context2.close();

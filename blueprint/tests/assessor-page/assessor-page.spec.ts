@@ -16,12 +16,6 @@
 import { test, expect, Services, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import type { BrowserContext, Locator, Page } from '@playwright/test';
 import {
-  getKeycloakAdminToken,
-  createKeycloakUser,
-  deleteKeycloakUser,
-  tempUsername,
-} from '../../../keycloak-admin';
-import {
   getBlueprintToken,
   createMsel,
   deleteMsel,
@@ -37,7 +31,6 @@ import {
   deleteUnit,
   addUnitToMsel,
   addUserToUnit,
-  deleteBlueprintUser,
   signInToBlueprintAs,
   tempBlueprintName,
 } from '../../test-helpers';
@@ -277,42 +270,28 @@ for (const theme of BLUEPRINT_THEMES) {
       await expect.poll(() => observedValue(token, seeded!.firstEventId, seeded!.mselId)).toBe('false');
     });
 
-    // Signs in as a temporary MSEL member in its own context. The theme switch drives the
+    // Signs in as a MSEL member (one of the worker's pool users) in its own context. The theme switch drives the
     // admin user's menu, so this role-access check is theme-independent and runs once.
     if (theme === 'light') {
       test.describe('as a MSEL member', () => {
-        const password = 'TestPass-123!';
-        let kcToken: string;
-        let kcUser: { id: string; username: string } | undefined;
         let context: BrowserContext | undefined;
         let unitId: string | undefined;
 
+        // The pool user's reset: deleting the unit removes their unit membership, and the
+        // MSEL (deleted by the outer afterEach) takes their MSEL roles with it.
         test.afterEach(async () => {
           await context?.close();
           context = undefined;
           if (unitId) await deleteUnit(token, unitId);
           unitId = undefined;
-          if (kcUser) {
-            await deleteBlueprintUser(token, kcUser.id);
-            await deleteKeycloakUser(kcToken, kcUser.id);
-          }
-          kcUser = undefined;
         });
 
         // A MSEL role on its own grants no reads: MselViewRequirement also wants the user in a unit
-        // attached to the MSEL (or on one of its teams). So the user joins such a unit once the
-        // sign-in has created their Blueprint record.
-        //
-        // Pending upstream: the page decides from whichever one of the user's MSEL roles it finds
-        // first and treats Evaluator alone as able to view and edit, while the API refuses every
-        // read to an Evaluator alone and lets a checkbox be ticked only by an Owner or by an
-        // Evaluator who is also an Editor or Approver. Owner is the single role both sides agree
-        // may tick, so it stands in for the evaluator here. When the page follows the API's rules,
-        // add an Evaluator-plus-Editor step.
-        test('Access follows the MSEL role: none, Editor, then Owner', async ({ browser }) => {
+        // attached to the MSEL (or on one of its teams). So the user joins such a unit (their
+        // Blueprint record is ensured by the pool fixture). Evaluator is the assessing role: on its own
+        // it lets the user read the MSEL and tick its checkboxes.
+        test('Access follows the MSEL role: none, Editor, then Evaluator', async ({ browser, nonAdminUser }) => {
           seeded = await seedAssessorMsel(token);
-          kcToken = await getKeycloakAdminToken();
-          kcUser = await createKeycloakUser(kcToken, { username: tempUsername('bp-assessor'), password });
 
           context = await browser.newContext({
             ignoreHTTPSErrors: true,
@@ -322,12 +301,12 @@ for (const theme of BLUEPRINT_THEMES) {
           const rolesLoaded = page.waitForResponse(
             // A user with no role on the MSEL gets 403 here, so wait for the response whatever its status.
             (r) => r.url().includes(`/api/msels/${seeded!.mselId}/usermselroles`),
-            { timeout: 60000 }
+            { timeout: 30000 }
           );
           await signInToBlueprintAs(
             page,
-            kcUser.username,
-            password,
+            nonAdminUser.username,
+            nonAdminUser.password,
             `${Services.Blueprint.UI}/assess?msel=${seeded.mselId}`
           );
           await rolesLoaded;
@@ -341,25 +320,30 @@ for (const theme of BLUEPRINT_THEMES) {
 
           unitId = (await createUnit(token)).id;
           await addUnitToMsel(token, seeded.mselId, unitId);
-          await addUserToUnit(token, unitId, kcUser.id);
+          await addUserToUnit(token, unitId, nonAdminUser.userId);
 
           // expect: an Editor can view the events but not tick the checkboxes
-          const editor = await addUserMselRole(token, seeded.mselId, kcUser.id, 'Editor');
+          const editor = await addUserMselRole(token, seeded.mselId, nonAdminUser.userId, 'Editor');
           await page.reload();
           const first = eventRow(page, seeded.firstNote);
           await expect(first).toBeVisible({ timeout: 30000 });
           await expect(page.getByText('Access Denied')).toHaveCount(0);
           await expect(first.getByRole('checkbox')).toBeDisabled();
 
-          // expect: an Owner can tick them
+          // expect: with Evaluator as their only role, the user can still open the page and tick them
           await removeUserMselRole(token, editor.id);
-          await addUserMselRole(token, seeded.mselId, kcUser.id, 'Owner');
+          await addUserMselRole(token, seeded.mselId, nonAdminUser.userId, 'Evaluator');
           await page.reload();
           const checkbox = eventRow(page, seeded.firstNote).getByRole('checkbox');
           await expect(checkbox).toBeEnabled({ timeout: 30000 });
+          await expect(page.getByText('Access Denied')).toHaveCount(0);
           await checkbox.click();
           await expect(checkbox).toBeChecked();
+          // expect: the tick is saved server-side and survives a reload
           await expect.poll(() => observedValue(token, seeded!.firstEventId, seeded!.mselId)).toBe('true');
+          await page.reload();
+          await expect(eventRow(page, seeded.firstNote).getByRole('checkbox')).toBeChecked({ timeout: 30000 });
+          await expect(eventRow(page, seeded.secondNote).getByRole('checkbox')).not.toBeChecked();
         });
       });
     }

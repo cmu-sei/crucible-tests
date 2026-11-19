@@ -13,8 +13,8 @@ import { test, expect, Services } from '../../fixtures';
 // regression that a new test shouldn't block on.
 test.describe('Accessibility', () => {
   test('Screen Reader Compatibility - ARIA & Headings', async ({ gameboardAuthenticatedPage: page }) => {
-    await page.goto(Services.Gameboard.UI + '/home', { waitUntil: 'networkidle' });
-    await page.waitForTimeout(1500);
+    await page.goto(Services.Gameboard.UI + '/home', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('app-game-card').first()).toBeVisible();
 
     // Structural sanity: at least one heading renders.
     const h1Count = await page.locator('h1').count();

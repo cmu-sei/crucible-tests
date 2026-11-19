@@ -12,11 +12,8 @@ for (const theme of CITE_THEMES) {
       await setCiteTheme(page, theme);
 
       // 1. Test keyboard submission using the search field on the home page
-      await page.waitForLoadState('networkidle');
-
       // Wait for the page to be loaded with content
       await expect(page.locator('text=My Evaluations')).toBeVisible({ timeout: 10000 });
-      await page.waitForTimeout(1000);
 
       // The home search field only renders on the "My Evaluations" list view. A prior test
       // may have left an evaluation selected (persisted in localStorage), which opens the
@@ -35,7 +32,6 @@ for (const theme of CITE_THEMES) {
           }
         });
         await page.goto(Services.Cite.UI);
-        await page.waitForLoadState('networkidle');
         await expect(page.locator('text=My Evaluations')).toBeVisible({ timeout: 10000 });
       }
 
@@ -44,12 +40,13 @@ for (const theme of CITE_THEMES) {
       // 2. Focus on the search field and type using keyboard
       await searchField.focus();
       await page.keyboard.type('Project');
-      await page.waitForTimeout(500);
 
       // 3. Press Enter key to submit/search
       // expect: Enter key triggers search functionality
       await page.keyboard.press('Enter');
-      await page.waitForTimeout(1000);
+
+      // Anchor: Ensure page is still on evaluations list (Enter didn't cause navigation)
+      await expect(page.locator('text=My Evaluations')).toBeVisible();
 
       // Verify the field still has the text (search was processed via Enter key)
       const fieldValue = await searchField.inputValue();
@@ -59,7 +56,6 @@ for (const theme of CITE_THEMES) {
       await searchField.focus();
       await page.keyboard.press('Control+A');
       await page.keyboard.press('Backspace');
-      await page.waitForTimeout(500);
 
       // Verify field is cleared
       const clearedValue = await searchField.inputValue();

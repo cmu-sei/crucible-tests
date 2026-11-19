@@ -5,13 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, STEAMFITTER_THEMES, setSteamfitterTheme } from '../../fixtures';
-import {
-  seedScenario,
-  deleteScenariosByPrefix,
-  isPlayerApiAvailable,
-  createPlayerView,
-  deletePlayerView,
-} from '../../fixtures';
+import { seedScenario, deleteScenariosByPrefix } from '../../fixtures';
 import {
   navigateToHomeSection,
   findHomeRowByText,
@@ -25,47 +19,31 @@ import {
  * dates), so a view-less scenario cannot be saved from the UI at all.
  *
  * The Player API is a separate service that may not be running. We therefore probe it
- * once and branch:
+ * (via the steamfitterPlayerView fixture) and branch:
  *  - Player up   → seed a real view, bind it to the scenario, and exercise the full
  *                  edit-and-save round-trip through the dialog.
  *  - Player down → assert the dependency-free behavior instead: a view-less scenario
  *                  shows "Select a view!" and its edit dialog keeps Save disabled.
- * The seeded view is created once for this file and removed in afterAll.
+ * The view is shared per worker via the steamfitterPlayerView fixture.
  */
 for (const theme of STEAMFITTER_THEMES) {
   test.describe(`${theme} theme › Scenarios Management`, () => {
     const ORIGINAL_NAME = `E2E Edit Scenario ${Date.now()}`;
     const UPDATED_NAME = `E2E Edit Scenario Updated ${Date.now()}`;
 
-    let playerAvailable = false;
-    let viewId: string | null = null;
-
-    test.beforeAll(async () => {
-      playerAvailable = await isPlayerApiAvailable();
-      if (playerAvailable) {
-        viewId = await createPlayerView(`E2E Edit Scenario View ${Date.now()}`);
-      } else {
-        console.log('[edit-scenario] Player API unavailable — running dependency-free assertions only.');
-      }
-    });
-
-    test.afterAll(async () => {
-      if (viewId) {
-        await deletePlayerView(viewId);
-        viewId = null;
-      }
-    });
-
     test.afterEach(async () => {
       await deleteScenariosByPrefix(['E2E Edit Scenario']);
     });
 
-    test('Edit scenario details', async ({ steamfitterAuthenticatedPage: page }) => {
+    test('Edit scenario details', async ({
+      steamfitterAuthenticatedPage: page,
+      steamfitterPlayerView,
+    }) => {
       await setSteamfitterTheme(page, theme);
       // Seed a scenario, binding the view when Player is available so the UI Save path
       // is reachable.
       await seedScenario(ORIGINAL_NAME, 'Scenario to be edited', {
-        viewId: viewId ?? undefined,
+        viewId: steamfitterPlayerView?.viewId,
       });
 
       // 1. Open the Scenarios section and locate the seeded row.
@@ -83,7 +61,7 @@ for (const theme of STEAMFITTER_THEMES) {
       const nameField = dialog.getByRole('textbox', { name: /Name/ });
       const saveButton = dialog.getByRole('button', { name: 'Save' });
 
-      if (!playerAvailable) {
+      if (!steamfitterPlayerView) {
         // Dependency-free path: without a view, Save is disabled (errorFree() requires a
         // viewId) and the list flags the scenario as needing a view. Assert both, then
         // close via Cancel.

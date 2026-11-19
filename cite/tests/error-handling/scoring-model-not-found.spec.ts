@@ -2,11 +2,11 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 import { randomUUID } from 'crypto';
-import { test, expect, Services, getCiteApiToken, seedScoringModel, apiDeleteScoringModel, CITE_THEMES } from '../../fixtures';
+import { test, expect, Services, getCiteApiToken, loadCiteSeedIds, CITE_THEMES } from '../../fixtures';
 
 // API-only: no browser page is opened, so there is no theme to apply. It still runs under
-// each theme's title so every CITE spec reports in both, and its seeded scoring model is
-// named per theme so the two runs never share a row.
+// each theme's title so every CITE spec reports in both. The existing model it reads is the
+// run-level shared scoring model, which it only GETs.
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Error Handling and Edge Cases`, () => {
     test('Scoring Model Not Found returns 404', async ({ request }) => {
@@ -22,16 +22,12 @@ for (const theme of CITE_THEMES) {
       expect((await missing.json()).title).toContain(missingId);
 
       // 2. Request a scoring model that does exist
-      const existingId = await seedScoringModel(`Test Scoring Model ${theme} ${randomUUID()}`);
-      try {
-        const existing = await request.get(`${Services.Cite.API}/api/scoringModels/${existingId}`, { headers });
+      const existingId = (await loadCiteSeedIds()).sharedScoringModelId;
+      const existing = await request.get(`${Services.Cite.API}/api/scoringModels/${existingId}`, { headers });
 
-        // expect: the existing scoring model is still returned
-        expect(existing.status()).toBe(200);
-        expect((await existing.json()).id).toBe(existingId);
-      } finally {
-        await apiDeleteScoringModel(existingId);
-      }
+      // expect: the existing scoring model is still returned
+      expect(existing.status()).toBe(200);
+      expect((await existing.json()).id).toBe(existingId);
     });
   });
 }
