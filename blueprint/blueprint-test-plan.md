@@ -2,7 +2,7 @@
 
 ## Application Overview
 
-Blueprint is a collaborative MSEL (Master Scenario Events List) creation application within the Crucible cybersecurity training and simulation platform. It enables teams to design, manage, and execute training scenario events through a structured interface. The application features a modern dashboard-style homepage called "Event Dashboard" that organizes MSELs into three user workflows: Join (participate in active events), Launch (start new events), and Build (design and manage events). Blueprint integrates with Player, Gallery, CITE, Player-VM, and Steamfitter services to provide comprehensive scenario management. The application supports event creation with customizable data fields, delivery methods, team/organization assignments, and timeline management. It features role-based access control, real-time collaboration, and visual scenario planning with color-coded event types. MSELs have a lifecycle with statuses: Pending, Entered, Approved, Complete, Deployed, and Archived. MSELs can be marked as reusable templates. The application includes a MSEL Playbook view for printable event summaries, MSEL Pages for rich-text content associated with a MSEL, an Event Detail page for viewing individual scenario events, and a Contributors section for managing unit access and per-MSEL roles. Integration management is done through Push/Pull Integrations. The Admin section includes Units, Data Fields, Inject Types, Catalogs, Organizations, Gallery Cards, CITE Actions, CITE Duties, Users, Roles, and Groups.
+Blueprint is a collaborative MSEL (Master Scenario Events List) creation application within the Crucible cybersecurity training and simulation platform. It enables teams to design, manage, and execute training scenario events through a structured interface. The application features a modern dashboard-style homepage called "Event Dashboard" that organizes MSELs into three user workflows: Join (participate in active events), Launch (start new events), and Build (design and manage events). Blueprint integrates with Player, Gallery, CITE, Player-VM, and Caster services to provide comprehensive scenario management, and runs a MSEL's automation tasks itself (it no longer integrates with Steamfitter): authors add and test them on scenario events, facilitators run them on the Facilitator View, and participants run the ones marked for them on the Tasks page. The application supports event creation with customizable data fields, delivery methods, team/organization assignments, and timeline management. It features role-based access control, real-time collaboration, and visual scenario planning with color-coded event types. MSELs have a lifecycle with statuses: Pending, Entered, Approved, Complete, Deployed, and Archived. MSELs can be marked as reusable templates. The application includes a MSEL Playbook view for printable event summaries, MSEL Pages for rich-text content associated with a MSEL, an Event Detail page for viewing individual scenario events, and a Contributors section for managing unit access and per-MSEL roles. Integration management is done through Push/Pull Integrations. The Admin section includes Units, Data Fields, Inject Types, Catalogs, Organizations, Gallery Cards, CITE Actions, CITE Duties, Users, Roles, and Groups.
 
 ## Test Scenarios
 
@@ -368,7 +368,7 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
     - expect: 'Set a Start Time' checkbox with tooltip 'Schedule a specific start date and time for this MSEL'
     - expect: Start Date / Time field shown when Set a Start Time is checked
     - expect: End Date / Time field with duration spinner (days d, hours h, minutes m)
-    - expect: Applications to Integrate section with checkboxes: Player, Gallery, CITE (with Scoring Model display), Steamfitter
+    - expect: Applications to Integrate section with checkboxes: Player, Gallery, CITE (with Scoring Model display), Caster; no Steamfitter
     - expect: 'Push Integrations' button
     - expect: MSEL Status dropdown
     - expect: Exercise View URL section with copy button and direct link
@@ -479,11 +479,10 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
 **File:** `blueprint/tests/msel-info-pages/view-integration-name-display.spec.ts`
 
 **Steps:**
-  1. Navigate to a MSEL Config tab that has been deployed with Player, Gallery, CITE, or Steamfitter integrations
+  1. Navigate to a MSEL Config tab that has been deployed with Player, Gallery, or CITE integrations
     - expect: Player integration shows the linked Player View name next to the checkbox
     - expect: Gallery integration shows linked Collection name and Exhibit name when deployed
     - expect: CITE integration shows linked Evaluation name and Scoring Model description
-    - expect: Steamfitter integration shows linked Scenario name
     - expect: Names are fetched dynamically from the respective service APIs
 
 #### 4.9. MSEL Moves
@@ -550,7 +549,7 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
 **Steps:**
   1. Navigate to Contributors section and click on a unit row to expand it
     - expect: The row expands to show users in that unit
-    - expect: Each user row shows checkboxes for MSEL roles: Editor, Approver, MoveEditor, Owner, Evaluator, Viewer
+    - expect: Each user row shows checkboxes for MSEL roles: Editor, Approver, MoveEditor, Owner, Evaluator, Facilitator, Viewer; there is no Steamfitter role
     - expect: CITE-related roles only appear if CITE is enabled; Gallery-related roles only if Gallery is enabled
     - expect: Role descriptions are shown: Editor (can edit scenario events), Approver (can approve events), MoveEditor (can modify move info), Owner (full control), Evaluator (can access view and mark items complete), Viewer (can only view MSEL Pages)
   2. Toggle a role checkbox for a user
@@ -558,6 +557,8 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
   3. Attempt to remove your own Owner role
     - expect: The Owner checkbox for the currently logged-in user is disabled
     - expect: User cannot remove their own Owner role
+  4. Give a user the Facilitator role
+    - expect: The role is saved as 'Facilitator' and shown in the control
 
 ### 6. MSEL Playbook
 
@@ -1027,6 +1028,16 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
     - expect: the mapping is saved and the unmapped warning is gone
   7. Map a third team to the same topology team
     - expect: the option reads 'blue_cell (used by Green Team)' and a warning says both teams 'all become "blue_cell", so Push will be refused.'
+
+#### 12.10. Integration Checkboxes Reflect MSEL Flags
+
+**File:** `blueprint/tests/integration-with-crucible-services/integration-checkboxes-reflect-msel-flags.spec.ts`
+
+**Steps:**
+  1. Open the Config tab of a MSEL with Player, Gallery and CITE enabled through the API
+    - expect: the Player, Gallery and CITE checkboxes are checked
+    - expect: there is no Steamfitter checkbox: Blueprint runs its automation tasks itself
+    - expect: the Scenario Events section, where automation tasks are authored, is listed
 
 ### 13. Real-time Collaboration and SignalR
 
@@ -1795,3 +1806,169 @@ app's layered settings files as served (`settings.json`, deep-merged with
     - expect: The user moves into Group Members, then back into Users
   4. Delete the group and confirm with 'Delete'
     - expect: The confirmation reads 'Delete Group <name>?' and the group is removed
+
+### 25. Automation Tasks
+
+**Seed:** `/mnt/data/crucible-tests/blueprint/tests/seed.setup.ts`
+
+The specs' tasks are http GETs of Blueprint's own health endpoint (`healthCheckTask` in `test-helpers.ts`), so they run without a Player view, VM, or mail server.
+
+#### 25.1. Author and Chain Tasks
+
+**File:** `blueprint/tests/automation-tasks/author-and-test-automation-tasks.spec.ts`
+
+**Steps:**
+  1. Open an event's Edit dialog from its row menu and choose the 'Automation' tab
+    - expect: 'Tasks run in list order unless a trigger says otherwise.' and 'This event has no automation tasks.'
+  2. Click 'Add Task' twice; name them, choose 'GET request', and fill in the URL and Expected output; set the second's Trigger to 'On success of' the first
+    - expect: the panels read '1. Check health' and '2. Check again'
+  3. Click 'Save'
+    - expect: the server has both tasks in order, the second following the first on success
+    - expect: the Scenario Events list has an 'Automation' column whose cell reads 2 tasks
+
+#### 25.2. Test a Task
+
+**File:** `blueprint/tests/automation-tasks/author-and-test-automation-tasks.spec.ts`
+
+**Steps:**
+  1. Choose 'Test Automation…' from an event's row menu and click 'Run Test'
+    - expect: the dialog warns 'This action runs for real'
+    - expect: the result shows 'Succeeded' with the endpoint's output
+    - expect: the run is a Test run, and the MSEL has no Exercise runs
+
+#### 25.3. An Incomplete Task Cannot Be Saved
+
+**File:** `blueprint/tests/automation-tasks/author-and-test-automation-tasks.spec.ts`
+
+**Steps:**
+  1. Add a 'GET request' task without its URL
+    - expect: 'Task 1 needs attention' is shown, Save is disabled, and Cancel saves nothing
+
+#### 25.4. Tasks in a MSEL JSON File
+
+**File:** `blueprint/tests/automation-tasks/export-and-import-automation-tasks.spec.ts`
+
+**Steps:**
+  1. Export a MSEL whose first task holds an http header (a secret)
+    - expect: the file has the tasks but not the secret's value
+  2. Upload the file from /build
+    - expect: the report's Changed section says '1 automation task(s) need a password or key entered again'
+    - expect: the copy's tasks are in order, chained, with their points, participant flag and Repeatable, and no secrets
+
+### 26. Facilitator View
+
+**Seed:** `/mnt/data/crucible-tests/blueprint/tests/seed.setup.ts`
+
+Each spec marks its MSEL deployed in the database (`deployMselForAutomation` in `db-helpers.ts`), with a deployment id, rather than pushing it.
+
+#### 26.1. Moves, Events with Tasks, and Columns
+
+**File:** `blueprint/tests/facilitator-view/facilitator-view.spec.ts`
+
+**Steps:**
+  1. Open /facilitate?msel=<id> for a deployed MSEL with two moves, three events (one without tasks), and a field marked Facilitate
+    - expect: 'Not started', 'Start Move 1' and 'Start Move 2'
+    - expect: the columns include 'Automation' and the Facilitate field, not the other field
+    - expect: 'Only events with tasks' is on, the event without tasks is hidden, and the first event reads '2 not run'
+  2. Turn 'Only events with tasks' off
+    - expect: every event is listed
+
+#### 26.2. Run a Task and Its Chain
+
+**File:** `blueprint/tests/facilitator-view/facilitator-view.spec.ts`
+
+**Steps:**
+  1. Open an event's automation panel and click 'Run Check health'
+    - expect: the task and the one chained after it succeed; the row reads '2 succeeded'
+    - expect: 'Rerun Check health' is disabled, since the task is not repeatable and succeeded
+  2. Open 'History of Check health'
+    - expect: the drawer shows 'Succeeded' and the output; 'Close the history' closes it
+
+#### 26.3. Cancel a Waiting Task and Run It Again
+
+**File:** `blueprint/tests/facilitator-view/facilitator-view.spec.ts`
+
+**Steps:**
+  1. Run a repeatable task with a 600 second delay
+    - expect: the summary and the row read '1 waiting'
+  2. Click 'Cancel Check health'
+    - expect: the run is Cancelled and the chained task does not run
+  3. Click 'Rerun Check health'
+    - expect: a second exercise run of the task
+
+#### 26.4. Start a Move
+
+**File:** `blueprint/tests/facilitator-view/facilitator-view.spec.ts`
+
+**Steps:**
+  1. Click 'Start Move 2', keep its manual task checked, and click 'Start Move'
+    - expect: the dialog says it makes the move current and lists the task
+    - expect: 'Now: Move 2 · Group 0'; the server's current move is 2; the task ran and move 1's did not
+
+#### 26.5. Pause and Resume
+
+**File:** `blueprint/tests/facilitator-view/facilitator-view.spec.ts`
+
+**Steps:**
+  1. Click 'Pause Automation', reload, then click 'Resume Automation'
+    - expect: 'Automation is paused' is shown and saved, survives the reload, and is gone after Resume
+
+#### 26.6. The Data Fields Facilitate Column
+
+**File:** `blueprint/tests/facilitator-view/facilitator-view.spec.ts`
+
+**Steps:**
+  1. On the Data Fields tab, add the 'Facilitate' display column, check it for a user-defined field, and clear it for Move
+  2. Open the MSEL's 'Facilitator View' tab
+    - expect: the field's column is shown and the Move column is not
+
+#### 26.7. No Automation on the Assessor View
+
+**File:** `blueprint/tests/facilitator-view/facilitator-view.spec.ts`
+
+**Steps:**
+  1. Open /assess?msel=<id> for the same MSEL
+    - expect: no Automation column, Run button, or Start Move button
+
+#### 26.8. A MSEL That Is Not Deployed
+
+**File:** `blueprint/tests/facilitator-view/facilitator-view.spec.ts`
+
+**Steps:**
+  1. Open /facilitate?msel=<id> for an Approved MSEL with tasks
+    - expect: 'This MSEL is not deployed' and no Start Move or Pause Automation buttons
+
+#### 26.9. Dashboard Card and Facilitate List
+
+**File:** `blueprint/tests/facilitator-view/facilitator-view.spec.ts`
+
+**Steps:**
+  1. On the Event Dashboard, click 'Facilitate Events' on the FACILITATE card
+    - expect: /facilitate lists the exercise; its 'Facilitate' link opens its Facilitator View
+
+#### 26.10. Access Follows the MSEL Role
+
+**File:** `blueprint/tests/facilitator-view/facilitator-view.spec.ts`
+
+**Steps:**
+  1. Sign in as a user with no role on the MSEL and open its /facilitate URL
+    - expect: 'Access Denied'
+  2. Give them the Evaluator role
+    - expect: still 'Access Denied', and the MSEL editor has an 'Assessor View' tab but no 'Facilitator View' tab
+  3. Give them the Editor role instead
+    - expect: the events are listed with 'You can follow the exercise here', and no Start, Pause or Run buttons
+  4. Give them the Facilitator role instead and run a task
+    - expect: the task succeeds, and the run names them as its requester
+
+#### 26.11. Participant Tasks Page
+
+**File:** `blueprint/tests/facilitator-view/participant-tasks-page.spec.ts`
+
+**Steps:**
+  1. Sign in as a member of one of the MSEL's teams and open /msel/<id>/tasks before the push
+    - expect: 'The exercise is not running.' and the task's Run button is disabled
+  2. Mark the MSEL deployed and reload
+    - expect: only the task marked for participants is listed, with its description and 'Not run'; 'Score: 0/30 (0%)'
+  3. Click 'Run Report in' and confirm with 'Run'
+    - expect: 'Succeeded', 'Score: 10/30 (33%)', 'The task has succeeded, and runs only once.' and a disabled Run button
+    - expect: the run's source is Participant and its requester is the participant

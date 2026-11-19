@@ -5,7 +5,7 @@
  * Direct Postgres access for MSEL state that only Blueprint's integration pipeline sets.
  *
  * Since blueprint.api #205 a MSEL's Pushing, Pulling and Deployed statuses, its integration IDs
- * (Player view, Gallery, CITE, Steamfitter, Caster) and its integration status are server-owned:
+ * (Player view, Gallery, CITE, Caster), its deployment id and its integration status are server-owned:
  * a create or edit that moves a MSEL into or out of a pipeline status is a 409, and the
  * integration fields are not on the create or edit requests at all. A real push reaches
  * Deployed, but it cannot hold a MSEL mid-push or in a failed push, and specs that only render
@@ -16,6 +16,7 @@
  */
 
 import { execSync } from 'child_process';
+import { randomUUID } from 'crypto';
 import { Client } from 'pg';
 
 let postgresPassword: string | undefined;
@@ -134,6 +135,8 @@ export interface MselIntegrationState {
   playerViewId?: string | null;
   /** e.g. 'Pushing Integrations' or 'ERROR: ...'; null clears it. */
   integrationStatus?: string | null;
+  /** The push's deployment, which scopes the automation runs; a deployed MSEL needs one to run tasks. */
+  deploymentId?: string | null;
 }
 
 async function updateMselIntegrationState(
@@ -149,6 +152,7 @@ async function updateMselIntegrationState(
   if (state.status !== undefined) set('status', MSEL_STATUS[state.status]);
   if (state.playerViewId !== undefined) set('player_view_id', state.playerViewId);
   if (state.integrationStatus !== undefined) set('integration_status', state.integrationStatus);
+  if (state.deploymentId !== undefined) set('deployment_id', state.deploymentId);
   if (sets.length === 0) return 0;
 
   values.push(mselId);
@@ -184,5 +188,18 @@ export async function clearMselIntegrationState(mselId: string): Promise<void> {
     status: 'Approved',
     playerViewId: null,
     integrationStatus: null,
+    deploymentId: null,
   });
+}
+
+/**
+ * Mark a seeded MSEL deployed, with a deployment of its own, as a push would, so its automation
+ * tasks can run and its Facilitator View offers its actions. No Player view is made, so only
+ * tasks that need none (an http task) run. Pair it with `clearMselIntegrationState` before
+ * deleting the MSEL. Returns the deployment id.
+ */
+export async function deployMselForAutomation(mselId: string): Promise<string> {
+  const deploymentId = randomUUID();
+  await setMselIntegrationState(mselId, { status: 'Deployed', deploymentId });
+  return deploymentId;
 }
