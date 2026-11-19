@@ -80,8 +80,13 @@ export function buildImportGraph(rootDir) {
 /**
  * Extract relative imports from TypeScript source.
  * Resolves './x' and '../x' imports, with or without '.ts' extension.
- * Handles `import`/`export ... from` statements that span several lines,
- * side-effect imports (`import './x'`) and dynamic imports (`import('./x')`).
+ * Handles `import`/`export ... from` statements that span several lines and
+ * side-effect imports (`import './x'`).
+ *
+ * Dynamic imports (`import('./x')`) are ignored. They load a module only when the
+ * code that calls them runs: provision-targets.ts, for example, lazy-loads each
+ * app's sign-in code for that app alone. Counting them would make every app that
+ * reaches provision-targets.ts depend on the TopoMojo and Gameboard fixtures.
  *
  * @param {string} content - TypeScript source
  * @param {string} fromPath - Repo-relative path of the importing file
@@ -96,7 +101,6 @@ export function extractRelativeImports(content, fromPath) {
   const patterns = [
     /^\s*(?:import|export)\b[^;]*?\bfrom\s*['"](\.[^'"]+)['"]/gm,
     /^\s*import\s*['"](\.[^'"]+)['"]/gm,
-    /\bimport\s*\(\s*['"](\.[^'"]+)['"]\s*\)/g,
   ];
   const specifiers = [];
   for (const pattern of patterns) {

@@ -43,6 +43,26 @@ const CASES = [
     },
   },
   {
+    name: 'topomojo-helpers.ts change (only apps that import it)',
+    changed: [{ path: 'topomojo-helpers.ts', status: 'M' }],
+    lists: { listChangedFiles: [], skip: [] },
+    // Hard-coded on purpose: provision-targets.ts lazy-loads gameboard/fixtures.ts,
+    // which imports topomojo-helpers.ts, and every app's fixtures reach
+    // provision-targets.ts through auth-state.ts. Counting that lazy load fanned
+    // this change out to all 11 apps.
+    expected: {
+      full: false,
+      runs: ['gameboard', 'topomojo'].map(app => ({ app, specs: [] })),
+      dropped: [],
+    },
+  },
+  {
+    name: 'topomojo/fixtures.ts change (not fanned out by the lazy sign-in load)',
+    changed: [{ path: 'topomojo/fixtures.ts', status: 'M' }],
+    lists: { listChangedFiles: [], skip: [] },
+    expected: { full: false, runs: [{ app: 'topomojo', specs: [] }], dropped: [] },
+  },
+  {
     name: 'Deleted non-spec file under an app (whole app plus importers)',
     changed: [{ path: 'playerVm/vm-helpers.ts', status: 'D' }],
     lists: { listChangedFiles: [], skip: [] },
@@ -203,10 +223,10 @@ const IMPORT_CASES = [
     expected: ['cite/b.ts', 'cite/sub/a.ts'],
   },
   {
-    name: 'Side-effect and dynamic imports',
+    name: 'Side-effect imports kept, dynamic imports ignored',
     source: "import './setup';\nconst m = await import('../lazy');\n",
     from: 'gallery/tests/x.spec.ts',
-    expected: ['gallery/lazy.ts', 'gallery/tests/setup.ts'],
+    expected: ['gallery/tests/setup.ts'],
   },
   {
     name: 'Package imports and non-import statements ignored',
