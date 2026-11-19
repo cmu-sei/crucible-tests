@@ -62,6 +62,17 @@ for (const theme of BLUEPRINT_THEMES) {
       // expect: Copy button for Starter URL is visible
       const copyStarterButton = page.getByRole('button', { name: /Copy MSEL Starter URL/ });
       await expect(copyStarterButton).toBeVisible({ timeout: 5000 });
+
+      // 3. The Facilitator View and the participants' Tasks page have their own direct links
+      for (const [label, path] of [
+        ['Facilitator View URL', `/facilitate/?msel=${mselId}`],
+        ['Tasks Page URL', `/msel/${mselId}/tasks`],
+      ]) {
+        await expect(page.getByText(label).first()).toBeVisible();
+        const link = page.getByRole('link', { name: new RegExp(`${path.replace(/[?]/g, '\\?')}$`) });
+        await expect(link).toHaveAttribute('href', new RegExp(`${path.replace(/[?]/g, '\\?')}$`));
+        await expect(page.getByRole('button', { name: new RegExp(`^Copy ${label}`) })).toBeVisible();
+      }
     });
     });
 }

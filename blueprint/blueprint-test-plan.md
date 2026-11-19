@@ -473,6 +473,7 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
   4. Navigate to the MSEL Starter URL
     - expect: The starter page loads at /starter/?msel={mselId}
     - expect: Scenario events are displayed in the starter mode
+    - expect: 'Facilitator View URL' links to /facilitate/?msel=<id> and 'Tasks Page URL' to /msel/<id>/tasks, each with a copy button
 
 #### 4.8. View Integration Name Display
 
