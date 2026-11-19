@@ -84,6 +84,8 @@ export function buildImportGraph(rootDir) {
   // provision-targets.ts, for example, lazy-loads each app's sign-in code for that
   // app alone, and every app's fixtures reach provision-targets.ts. Passing those
   // edges on would make every app depend on the TopoMojo and Gameboard fixtures.
+  // The cost: a lazy load inside a shared root helper plans no app, even when
+  // specs call the function that does it, so keep lazy loads like that rare.
   // Membership is checked against the static closure, so one dynamic edge never
   // carries another file's.
   const dynamicImporters = new Map(); // path -> files that reach it through a dynamic import
