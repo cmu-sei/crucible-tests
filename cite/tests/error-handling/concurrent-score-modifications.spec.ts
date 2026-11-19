@@ -12,8 +12,11 @@ for (const theme of CITE_THEMES) {
     test('Concurrent Score Modifications', async ({ browser }) => {
 
       // 1. Open two browser instances with same user logged in
-      const context1 = await browser.newContext({ ignoreHTTPSErrors: true });
-      const context2 = await browser.newContext({ ignoreHTTPSErrors: true });
+      // Both sessions sign in as admin through Keycloak. The empty storage state is explicit so
+      // neither context inherits a saved sign-in (this spec uses the base `test`, which has none,
+      // but the CITE fixture's default would be admin's saved state).
+      const context1 = await browser.newContext({ ignoreHTTPSErrors: true, storageState: { cookies: [], origins: [] } });
+      const context2 = await browser.newContext({ ignoreHTTPSErrors: true, storageState: { cookies: [], origins: [] } });
       const page1 = await context1.newPage();
       const page2 = await context2.newPage();
 

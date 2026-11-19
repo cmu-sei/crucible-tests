@@ -47,7 +47,7 @@ test.describe('Game Details and Registration', () => {
   });
 
   test('Individual Registration - Enroll Button Visible', async ({ gameboardAuthenticatedPage: page }) => {
-    await page.goto(`${Services.Gameboard.UI}/game/${game.id}`, { waitUntil: 'networkidle' });
+    await page.goto(`${Services.Gameboard.UI}/game/${game.id}`, { waitUntil: 'domcontentloaded' });
     await expect(page.locator(`text=${game.name}`).first()).toBeVisible({ timeout: 15000 });
 
     // Enroll button is present in the Enrollment section.

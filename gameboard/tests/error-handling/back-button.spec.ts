@@ -14,19 +14,19 @@ test.describe('Error Handling', () => {
     // inserts extra history entries that break a later goBack sequence. We
     // visit /admin first and wait for the URL to stabilize on /admin/* (not
     // /forbidden) so subsequent navigations don't trip the guard race.
-    await page.goto(Services.Gameboard.UI + '/admin', { waitUntil: 'networkidle' });
+    await page.goto(Services.Gameboard.UI + '/admin', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/admin(\/|$)/);
     await expect(page).not.toHaveURL(/\/forbidden/);
 
     // Navigate through routes that don't require admin permissions — /home
     // and /support are public, so goBack isn't fighting guard redirects.
-    await page.goto(Services.Gameboard.UI + '/home', { waitUntil: 'networkidle' });
+    await page.goto(Services.Gameboard.UI + '/home', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/home/);
 
-    await page.goto(Services.Gameboard.UI + '/support', { waitUntil: 'networkidle' });
+    await page.goto(Services.Gameboard.UI + '/support', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/support/);
 
-    await page.goto(Services.Gameboard.UI + '/user/profile', { waitUntil: 'networkidle' });
+    await page.goto(Services.Gameboard.UI + '/user/profile', { waitUntil: 'domcontentloaded' });
     await expect(page).toHaveURL(/\/user\/profile/);
 
     // Click browser back — should return to previous page without errors.

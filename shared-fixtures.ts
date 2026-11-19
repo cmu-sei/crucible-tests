@@ -3,6 +3,7 @@
 
 import { test as base, expect as baseExpect, Page, Locator } from '@playwright/test';
 import { loadCrucibleEnv } from './load-env';
+import { refreshAppAuthState, savedSessionState, stateMtime } from './auth-state';
 
 // Load environment based on CRUCIBLE_TARGET (aspire | minikube). Defaults to .env.
 loadCrucibleEnv();
@@ -136,7 +137,119 @@ export async function waitForFirstVisible<K extends string>(
     if (Date.now() >= deadline) {
       return null;
     }
+    // allow-wait-antipattern: poll interval of the multi-locator wait helper itself
     await page.waitForTimeout(pollIntervalMs);
+  }
+}
+
+/**
+ * Navigate to `url` and make sure `app`'s authenticated shell is up.
+ *
+ * Fast path: the context was created from a valid saved state, so `shell` renders
+ * without a Keycloak redirect. Fallback (state missing, expired or rejected): the
+ * Keycloak form or app's own login prompt appears, so run `login` and wait for `shell`.
+ * When the saved state was rejected (an unauthenticated signal was observed), hand the
+ * now-authenticated page to `refreshAppAuthState` so later tests in the run take the
+ * fast path again.
+ *
+ * @param opts.loginPrompt - optional app-specific login control (e.g. TopoMojo's
+ *   "Sign in with identity provider" button) that appears on a landing page before
+ *   redirecting to Keycloak. When provided, it is checked as a third signal, but is
+ *   PROVISIONAL: an app's landing page can render its sign-in control for a moment
+ *   while its OIDC client is still validating a restored token. A 'login' winner
+ *   triggers a bounded re-wait (loginPromptSettleMs) for the shell or Keycloak form;
+ *   only if the prompt persists (null) is it treated as genuinely unauthenticated.
+ * @param opts.loginPromptSettleMs - how long to re-wait for shell/keycloak after a
+ *   'login' winner to distinguish a flashing landing page from genuine unauthenticated
+ *   state (default 5000). This is an event-driven bounded wait, not a sleep: it returns
+ *   as soon as the shell or Keycloak form appears.
+ * @param opts.restoreSession - replay the saved sessionStorage into the page before
+ *   navigating, for apps whose OIDC client keeps its token there (Player, Caster,
+ *   Blueprint). Pass `storageState === authStatePath(app)` so contexts that opted
+ *   out of the saved state stay clean.
+ * @param opts.fromSavedState - the context was created from the saved state
+ *   (`storageState === authStatePath(app)`); only then does an unauthenticated signal
+ *   trigger a rewrite of the saved state. Omit for contexts that opted out.
+ * @param opts.timeout - how long to wait for either signal (default 20000)
+ */
+export async function ensureAuthenticatedShell(
+  page: Page,
+  opts: {
+    app: string;
+    url: string;
+    shell: Locator;
+    login: (page: Page) => Promise<void>;
+    loginPrompt?: Locator;
+    loginPromptSettleMs?: number;
+    timeout?: number;
+    restoreSession?: boolean;
+    fromSavedState?: boolean;
+  },
+): Promise<void> {
+  if (opts.restoreSession) {
+    const entries = savedSessionState(opts.app);
+    if (entries.length > 0) {
+      await page.addInitScript((saved: Array<[string, string]>) => {
+        for (const [key, value] of saved) sessionStorage.setItem(key, value);
+      }, entries);
+    }
+  }
+
+  await page.goto(opts.url, { waitUntil: 'domcontentloaded' });
+  // Capture the saved-state mtime here, before we check which signal appears and
+  // before any login. If another worker refreshes the state after this point but
+  // before this worker acquires the lock, the "another worker refreshed" check
+  // will see the difference and skip the redundant save.
+  const stateMtimeBefore = stateMtime(opts.app);
+  const keycloakField = page.locator('input[name="username"]');
+  const candidates: Array<{ key: 'shell' | 'keycloak' | 'login'; locator: Locator }> = [
+    { key: 'shell', locator: opts.shell },
+    { key: 'keycloak', locator: keycloakField },
+  ];
+  if (opts.loginPrompt) {
+    candidates.push({ key: 'login', locator: opts.loginPrompt });
+  }
+  let winner = await waitForFirstVisible(page, candidates, { timeout: opts.timeout ?? 20000 });
+  if (winner === 'shell') return;
+
+  // A 'login' winner is PROVISIONAL: the app's landing page can render its sign-in
+  // control for a moment while its OIDC client is validating a restored token. Re-wait
+  // to distinguish a flashing landing page (shell appears) from genuine unauthenticated
+  // state (prompt persists or Keycloak redirect happens).
+  if (winner === 'login') {
+    const settled = await waitForFirstVisible(
+      page,
+      [
+        { key: 'shell', locator: opts.shell },
+        { key: 'keycloak', locator: keycloakField },
+      ],
+      { timeout: opts.loginPromptSettleMs ?? 5000 },
+    );
+    if (settled === 'shell') {
+      // The restored state was fine; the landing page flashed but auth completed.
+      return;
+    }
+    // settled === 'keycloak' → treat as keycloak winner; settled === null → genuinely unauthenticated
+    winner = settled ?? 'login';
+  }
+
+  // An unauthenticated signal was confirmed (Keycloak form, or login prompt that
+  // persisted), or neither signal appeared (the app is slow or broken — the login
+  // below then fails with its own message). Only the positively-observed unauthenticated
+  // cases trigger a reactive state refresh; a null winner means we don't know what happened.
+  await opts.login(page);
+  await opts.shell.waitFor({ state: 'visible', timeout: 30000 });
+
+  // Rewrite the shared saved state only when this context was created from it and
+  // an unauthenticated signal was positively observed (Keycloak or persisted login prompt).
+  // A context that opted out (empty storageState) may be signed in as someone else,
+  // and a null winner (timeout) says nothing about whether the state was rejected.
+  if ((winner === 'keycloak' || winner === 'login') && opts.fromSavedState) {
+    try {
+      await refreshAppAuthState(opts.app, page.context().browser() ?? undefined, { from: page, reason: 'reactive', since: stateMtimeBefore });
+    } catch (error) {
+      console.warn(`[auth-state] could not save refreshed ${opts.app} state: ${error}`);
+    }
   }
 }
 
@@ -229,6 +342,32 @@ export function isKeycloakUrl(url: URL | string): boolean {
 }
 
 /**
+ * Per-page positive "signed in" signal consulted by `authenticateWithKeycloak`.
+ *
+ * The helper is app-agnostic, so when the page renders app content without a
+ * Keycloak redirect it has no positive signal for "authenticated" and must fall
+ * back to a 15 s negative wait for a redirect that may never come. An app whose
+ * fixture starts tests from a saved, authenticated state (Alloy) registers its
+ * authenticated shell here from its `page` fixture, so the helper can instead wait
+ * for the first of that shell or the Keycloak login form. Pages with no
+ * registration keep the original behaviour.
+ */
+const authenticatedSignals = new WeakMap<Page, Locator>();
+
+export function setAuthenticatedSignal(page: Page, signal: Locator): void {
+  authenticatedSignals.set(page, signal);
+}
+
+/**
+ * Cap on each slow step of `authenticateWithKeycloak` (the app navigation, and the
+ * wait for the Keycloak form or app content). A single stuck step fails with the
+ * helper's own message well inside the 120 s per-test timeout. Navigation, the
+ * login-form wait and the 30 s redirect back can still add up to more than 120 s
+ * when all three are slow; the test timeout is then what fires.
+ */
+const AUTH_STEP_TIMEOUT_MS = 45_000;
+
+/**
  * Generic Keycloak authentication helper
  * @param page - Playwright Page object
  * @param appUrl - The application URL to authenticate with
@@ -264,7 +403,7 @@ export async function authenticateWithKeycloak(
   console.log(`Navigating to ${appUrl}...`);
   let response;
   try {
-    response = await page.goto(appUrl, { timeout: 180000, waitUntil: 'domcontentloaded' });
+    response = await page.goto(appUrl, { timeout: AUTH_STEP_TIMEOUT_MS, waitUntil: 'domcontentloaded' });
     console.log(`Navigation response: ${response?.status()} - ${response?.url()}`);
     console.log(`Current URL after navigation: ${page.url()}`);
   } catch (navigationError: any) {
@@ -278,8 +417,8 @@ export async function authenticateWithKeycloak(
 
   if (isOnKeycloak) {
     console.log(`Redirected to Keycloak at ${currentUrl}`);
-    // Wait for the Keycloak login form to appear (3 minutes timeout)
-    await page.waitForSelector('input[name="username"]', { timeout: 180000 });
+    // Wait for the Keycloak login form to appear
+    await page.waitForSelector('input[name="username"]', { timeout: AUTH_STEP_TIMEOUT_MS });
     await keycloakLogin();
   } else {
     // Still on app URL - wait for either:
@@ -305,7 +444,7 @@ export async function authenticateWithKeycloak(
     const appContent = page.locator('app-root, [class*="topbar"], mat-toolbar, [class*="dashboard"], nav, header, [role="banner"], [role="navigation"]');
 
     try {
-      // Wait up to 3 minutes for one of these to appear (apps can take time to redirect to Keycloak).
+      // Wait up to AUTH_STEP_TIMEOUT_MS for one of these to appear (apps can take time to redirect to Keycloak).
       // Use the cancellation-safe helper instead of `Promise.race` of two waitFor()s: the loser of a
       // race is never cancelled and would keep running to its 3-minute timeout in the background.
       const winner = await waitForFirstVisible(
@@ -314,7 +453,7 @@ export async function authenticateWithKeycloak(
           { key: 'keycloak', locator: keycloakField },
           { key: 'app', locator: appContent.first() },
         ],
-        { timeout: 180000 }
+        { timeout: AUTH_STEP_TIMEOUT_MS }
       );
 
       if (winner === null) {
@@ -327,22 +466,45 @@ export async function authenticateWithKeycloak(
         await keycloakLogin();
       } else {
         console.log(`App content appeared - checking if OIDC will redirect...`);
-        // App content is visible, but the Angular OIDC client may still be initializing.
-        // Wait to see if it redirects to Keycloak (this happens if there's no valid token).
-        // We'll wait for up to 15 seconds for either:
-        // 1. A redirect to Keycloak to start (URL changes to include :8443 or /realms/crucible)
-        // 2. The wait to timeout (meaning we're stable and authenticated)
-        try {
-          await page.waitForURL((url) => isKeycloakUrl(url), {
-            timeout: 15000
-          });
-          console.log(`OIDC initiated redirect to Keycloak after app content appeared`);
-          // Now wait for Keycloak login form
-          await keycloakField.waitFor({ state: 'visible', timeout: 30000 });
-          await keycloakLogin();
-        } catch {
-          // No redirect happened - we're already authenticated
-          console.log(`No redirect occurred - already authenticated`);
+        const authenticatedSignal = authenticatedSignals.get(page);
+        if (authenticatedSignal) {
+          // Event-driven: the app registered a positive authenticated signal, so wait for
+          // the first of it or the Keycloak form instead of a fixed negative window.
+          const settled = await waitForFirstVisible(
+            page,
+            [
+              { key: 'shell', locator: authenticatedSignal },
+              { key: 'keycloak', locator: keycloakField },
+            ],
+            { timeout: 30000 }
+          );
+          if (settled === null) {
+            throw new Error('Neither the authenticated shell nor the Keycloak login form became visible');
+          }
+          if (settled === 'keycloak') {
+            console.log(`OIDC initiated redirect to Keycloak after app content appeared`);
+            await keycloakLogin();
+          } else {
+            console.log(`Authenticated shell visible - already authenticated`);
+          }
+        } else {
+          // App content is visible, but the Angular OIDC client may still be initializing.
+          // Wait to see if it redirects to Keycloak (this happens if there's no valid token).
+          // We'll wait for up to 15 seconds for either:
+          // 1. A redirect to Keycloak to start (URL changes to include :8443 or /realms/crucible)
+          // 2. The wait to timeout (meaning we're stable and authenticated)
+          try {
+            await page.waitForURL((url) => isKeycloakUrl(url), {
+              timeout: 15000
+            });
+            console.log(`OIDC initiated redirect to Keycloak after app content appeared`);
+            // Now wait for Keycloak login form
+            await keycloakField.waitFor({ state: 'visible', timeout: 30000 });
+            await keycloakLogin();
+          } catch {
+            // No redirect happened - we're already authenticated
+            console.log(`No redirect occurred - already authenticated`);
+          }
         }
       }
     } catch (error: any) {

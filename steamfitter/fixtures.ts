@@ -1,8 +1,7 @@
 // Copyright 2026 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
-import { test as base, expect, Page, request as pwRequest, APIRequestContext } from '@playwright/test';
-import fs from 'fs';
+import { test as base, expect, Page, APIRequestContext } from '@playwright/test';
 import { randomUUID } from 'crypto';
 import {
   Services,
@@ -10,10 +9,13 @@ import {
   oidcStorageKey,
   authenticateWithKeycloak,
   waitForFirstVisible,
+  ensureAuthenticatedShell,
   settleForResponse,
 } from '../shared-fixtures';
 import { authStatePath } from '../auth-paths';
-import { createView, deleteView, getPlayerToken } from '../player-helpers';
+import { cachedUserToken, sharedRequestContext } from '../api-cache';
+import { freshAuthStatePath } from '../auth-state';
+import { createView, deleteView, getPlayerToken, isPlayerApiAvailable, listViews } from '../player-helpers';
 
 /**
  * Steamfitter-specific fixtures
@@ -39,25 +41,11 @@ export async function authenticateSteamfitterWithKeycloak(
 // API-based test data seeding and cleanup
 // ========================================================================
 
-/**
- * Module-level cache for the Steamfitter API token, keyed by nothing (this suite
- * only ever authenticates as admin/admin). Every seed/cleanup helper below opens
- * its own short-lived `APIRequestContext`, so without this cache a test calling
- * several helpers in sequence would pay for a Keycloak password-grant round trip
- * per call. `expiresAt` is read from the token's own `exp` claim, minus a 5s
- * safety margin so a token doesn't expire mid-request.
- */
-let cachedToken: { token: string; expiresAt: number } | null = null;
-
-function decodeJwtExpiryMs(token: string): number {
-  const payload = token.split('.')[1];
-  const { exp } = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
-  return exp * 1000;
-}
+const STEAMFITTER_SCOPE = 'openid profile steamfitter player player-vm';
 
 /**
  * Get a Keycloak access token for the Steamfitter API, reusing a cached token
- * until shortly before it expires.
+ * (`cachedUserToken` in `api-cache.ts`, per worker) until shortly before it expires.
  *
  * The API validates against the `steamfitter` scope/audience (see the API's
  * appsettings `AuthorizationScope: "steamfitter player player-vm"`), so request
@@ -65,10 +53,12 @@ function decodeJwtExpiryMs(token: string): number {
  * supports the resource-owner password grant in this dev environment.
  */
 export async function getSteamfitterApiToken(apiContext: APIRequestContext): Promise<string> {
-  if (cachedToken && cachedToken.expiresAt > Date.now()) {
-    return cachedToken.token;
-  }
+  return cachedUserToken('crucible', 'steamfitter.ui', 'admin', STEAMFITTER_SCOPE, () =>
+    fetchSteamfitterApiToken(apiContext)
+  );
+}
 
+async function fetchSteamfitterApiToken(apiContext: APIRequestContext): Promise<string> {
   const tokenResponse = await apiContext.post(
     `${Services.Keycloak}/realms/crucible/protocol/openid-connect/token`,
     {
@@ -77,7 +67,7 @@ export async function getSteamfitterApiToken(apiContext: APIRequestContext): Pro
         client_id: 'steamfitter.ui',
         username: 'admin',
         password: 'admin',
-        scope: 'openid profile steamfitter player player-vm',
+        scope: STEAMFITTER_SCOPE,
       },
       ignoreHTTPSErrors: true,
     }
@@ -90,8 +80,7 @@ export async function getSteamfitterApiToken(apiContext: APIRequestContext): Pro
   }
 
   const data = await tokenResponse.json();
-  cachedToken = { token: data.access_token, expiresAt: decodeJwtExpiryMs(data.access_token) - 5000 };
-  return cachedToken.token;
+  return data.access_token;
 }
 
 /**
@@ -106,8 +95,8 @@ export async function seedScenarioTemplate(
   description: string = 'E2E seeded scenario template',
   durationHours: number = 1
 ): Promise<string> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getSteamfitterApiToken(apiContext);
 
     const response = await apiContext.post(`${Services.Steamfitter.API}/api/scenarioTemplates`, {
@@ -131,8 +120,6 @@ export async function seedScenarioTemplate(
     const template = await response.json();
     console.log(`API seed: Created scenario template "${name}" (${template.id})`);
     return template.id;
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -141,8 +128,8 @@ export async function seedScenarioTemplate(
  * Treats 404 as success so cleanup is idempotent.
  */
 export async function apiDeleteScenarioTemplate(scenarioTemplateId: string): Promise<void> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getSteamfitterApiToken(apiContext);
     const response = await apiContext.delete(
       `${Services.Steamfitter.API}/api/scenarioTemplates/${scenarioTemplateId}`,
@@ -155,8 +142,6 @@ export async function apiDeleteScenarioTemplate(scenarioTemplateId: string): Pro
         `API cleanup: Failed to delete scenario template ${scenarioTemplateId}: ${response.status()}`
       );
     }
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -171,8 +156,8 @@ export async function apiDeleteScenarioTemplate(scenarioTemplateId: string): Pro
 export async function deleteScenarioTemplatesByPrefix(
   prefixes: string[] = ['E2E ', 'Test Scenario Template', 'Updated Test Scenario Template']
 ): Promise<number> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getSteamfitterApiToken(apiContext);
     const headers = { Authorization: `Bearer ${token}` };
 
@@ -202,8 +187,6 @@ export async function deleteScenarioTemplatesByPrefix(
       console.log(`Cleanup: removed ${removed} scenario template(s) by name prefix`);
     }
     return removed;
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -227,8 +210,8 @@ export async function seedTask(
   description: string = 'E2E seeded task',
   overrides: Record<string, unknown> = {}
 ): Promise<string> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getSteamfitterApiToken(apiContext);
     const response = await apiContext.post(`${Services.Steamfitter.API}/api/tasks`, {
       headers: {
@@ -262,8 +245,6 @@ export async function seedTask(
     const task = await response.json();
     console.log(`API seed: Created task "${name}" (${task.id}) on template ${scenarioTemplateId}`);
     return task.id;
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -275,8 +256,8 @@ export async function seedTask(
 export async function apiGetScenarioTemplatesByNamePrefix(
   prefix: string
 ): Promise<Array<{ id: string; name: string; description: string; durationHours: number }>> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getSteamfitterApiToken(apiContext);
     const response = await apiContext.get(`${Services.Steamfitter.API}/api/scenarioTemplates`, {
       headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
@@ -287,8 +268,6 @@ export async function apiGetScenarioTemplatesByNamePrefix(
     const templates: Array<{ id: string; name: string; description: string; durationHours: number }> =
       await response.json();
     return templates.filter((t) => t.name.startsWith(prefix));
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -302,8 +281,8 @@ export async function apiGetScenarioTemplateTasks(
 ): Promise<
   Array<{ id: string; name: string; triggerTaskId: string | null; triggerCondition: string; score: number }>
 > {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getSteamfitterApiToken(apiContext);
     const response = await apiContext.get(
       `${Services.Steamfitter.API}/api/scenarioTemplates/${scenarioTemplateId}/tasks`,
@@ -313,8 +292,6 @@ export async function apiGetScenarioTemplateTasks(
       throw new Error(`Failed to list tasks: ${response.status()} ${await response.text()}`);
     }
     return await response.json();
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -394,8 +371,8 @@ export async function deletePlayerView(viewId: string): Promise<void> {
  * is startable.
  */
 export async function setScenarioView(scenarioId: string, viewId: string): Promise<void> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getSteamfitterApiToken(apiContext);
     const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
     const getResp = await apiContext.get(`${Services.Steamfitter.API}/api/scenarios/${scenarioId}`, {
@@ -412,8 +389,6 @@ export async function setScenarioView(scenarioId: string, viewId: string): Promi
     if (!putResp.ok()) {
       throw new Error(`Failed to bind view to scenario: ${putResp.status()} ${await putResp.text()}`);
     }
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -431,8 +406,8 @@ export async function seedScenario(
   description: string = 'E2E seeded scenario',
   options: { viewId?: string } = {}
 ): Promise<string> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getSteamfitterApiToken(apiContext);
     const response = await apiContext.post(`${Services.Steamfitter.API}/api/scenarios`, {
       headers: {
@@ -451,8 +426,6 @@ export async function seedScenario(
     const scenario = await response.json();
     console.log(`API seed: Created scenario "${name}" (${scenario.id})`);
     return scenario.id;
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -465,8 +438,8 @@ export async function seedScenario(
 export async function deleteScenariosByPrefix(
   prefixes: string[] = ['E2E ', 'Test Scenario', 'Updated Scenario', 'Original Scenario']
 ): Promise<number> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getSteamfitterApiToken(apiContext);
     const headers = { Authorization: `Bearer ${token}` };
 
@@ -503,8 +476,6 @@ export async function deleteScenariosByPrefix(
       console.log(`Cleanup: removed ${removed} scenario(s) by name prefix`);
     }
     return removed;
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -528,8 +499,8 @@ export async function seedUser(
   name: string = `E2E User ${Date.now()}`,
   id: string = randomUUID()
 ): Promise<string> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getSteamfitterApiToken(apiContext);
     const response = await apiContext.post(`${Services.Steamfitter.API}/api/users`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -540,8 +511,6 @@ export async function seedUser(
     }
     console.log(`API seed: Created user "${name}" (${id})`);
     return id;
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -551,8 +520,8 @@ export async function seedUser(
  * admin/operator users are untouched. Returns the number removed.
  */
 export async function deleteUsersByPrefix(prefixes: string[] = ['E2E ']): Promise<number> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getSteamfitterApiToken(apiContext);
     const headers = { Authorization: `Bearer ${token}` };
     const listResponse = await apiContext.get(`${Services.Steamfitter.API}/api/users`, {
@@ -578,8 +547,6 @@ export async function deleteUsersByPrefix(prefixes: string[] = ['E2E ']): Promis
       console.log(`Cleanup: removed ${removed} user(s) by name prefix`);
     }
     return removed;
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -587,12 +554,13 @@ export async function deleteUsersByPrefix(prefixes: string[] = ['E2E ']): Promis
  * Return the list of system roles ({@link Services.Steamfitter}'s `/api/system-roles`),
  * each with `id`, `name`, `allPermissions`, `immutable`, and `permissions`. Useful for
  * resolving a built-in role's id (e.g. "ContentDeveloper") when a test assigns it.
+ * Not cached: specs create roles and change their permissions mid-run.
  */
 export async function getSystemRoles(): Promise<
   Array<{ id: string; name: string; allPermissions: boolean; immutable: boolean; permissions: string[] }>
 > {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getSteamfitterApiToken(apiContext);
     const response = await apiContext.get(`${Services.Steamfitter.API}/api/system-roles`, {
       headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
@@ -600,9 +568,7 @@ export async function getSystemRoles(): Promise<
     if (!response.ok()) {
       throw new Error(`Failed to list system roles: ${response.status()}`);
     }
-    return response.json();
-  } finally {
-    await apiContext.dispose();
+    return await response.json();
   }
 }
 
@@ -611,8 +577,8 @@ export async function getSystemRoles(): Promise<
  * only a name.
  */
 export async function seedGroup(name: string = `E2E Group ${Date.now()}`): Promise<string> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getSteamfitterApiToken(apiContext);
     const response = await apiContext.post(`${Services.Steamfitter.API}/api/groups`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -624,8 +590,6 @@ export async function seedGroup(name: string = `E2E Group ${Date.now()}`): Promi
     const group = await response.json();
     console.log(`API seed: Created group "${name}" (${group.id})`);
     return group.id;
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -634,8 +598,8 @@ export async function seedGroup(name: string = `E2E Group ${Date.now()}`): Promi
  * created membership id (needed to remove the member).
  */
 export async function seedGroupMembership(groupId: string, userId: string): Promise<string> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getSteamfitterApiToken(apiContext);
     const response = await apiContext.post(
       `${Services.Steamfitter.API}/api/groups/${groupId}/memberships`,
@@ -650,8 +614,6 @@ export async function seedGroupMembership(groupId: string, userId: string): Prom
     const membership = await response.json();
     console.log(`API seed: Added user ${userId} to group ${groupId} (membership ${membership.id})`);
     return membership.id;
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -661,8 +623,8 @@ export async function seedGroupMembership(groupId: string, userId: string): Prom
  * removed.
  */
 export async function deleteGroupsByPrefix(prefixes: string[] = ['E2E ']): Promise<number> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getSteamfitterApiToken(apiContext);
     const headers = { Authorization: `Bearer ${token}` };
     const listResponse = await apiContext.get(`${Services.Steamfitter.API}/api/groups`, {
@@ -688,8 +650,6 @@ export async function deleteGroupsByPrefix(prefixes: string[] = ['E2E ']): Promi
       console.log(`Cleanup: removed ${removed} group(s) by name prefix`);
     }
     return removed;
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -699,8 +659,8 @@ export async function deleteGroupsByPrefix(prefixes: string[] = ['E2E ']): Promi
  * are `immutable` and can't be edited or deleted). Roles need only a name on create.
  */
 export async function seedSystemRole(name: string = `E2E Role ${Date.now()}`): Promise<string> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getSteamfitterApiToken(apiContext);
     const response = await apiContext.post(`${Services.Steamfitter.API}/api/system-roles`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -712,8 +672,6 @@ export async function seedSystemRole(name: string = `E2E Role ${Date.now()}`): P
     const role = await response.json();
     console.log(`API seed: Created system role "${name}" (${role.id})`);
     return role.id;
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -723,8 +681,8 @@ export async function seedSystemRole(name: string = `E2E Role ${Date.now()}`): P
  * regardless. Returns the number removed.
  */
 export async function deleteSystemRolesByPrefix(prefixes: string[] = ['E2E ']): Promise<number> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getSteamfitterApiToken(apiContext);
     const headers = { Authorization: `Bearer ${token}` };
     const listResponse = await apiContext.get(`${Services.Steamfitter.API}/api/system-roles`, {
@@ -751,8 +709,27 @@ export async function deleteSystemRolesByPrefix(prefixes: string[] = ['E2E ']): 
       console.log(`Cleanup: removed ${removed} system role(s) by name prefix`);
     }
     return removed;
-  } finally {
-    await apiContext.dispose();
+  }
+}
+
+/** Name prefix of the worker-scoped `steamfitterPlayerView` (`<prefix>w<slot>]`). */
+const SHARED_PLAYER_VIEW_PREFIX = 'E2E Shared Player View [';
+
+/**
+ * Delete the worker-scoped Player views a crashed worker left behind. Best effort:
+ * Player is optional for Steamfitter, so an unreachable Player API counts as none.
+ */
+async function deleteSharedPlayerViews(): Promise<number> {
+  try {
+    if (!(await isPlayerApiAvailable())) return 0;
+    const token = await getPlayerToken();
+    const leftovers = (await listViews(token)).filter((view) => view.name.startsWith(SHARED_PLAYER_VIEW_PREFIX));
+    let deleted = 0;
+    for (const view of leftovers) if (await deleteView(token, view.id)) deleted++;
+    return deleted;
+  } catch (error) {
+    console.warn(`[steamfitter purge] shared Player view cleanup skipped: ${error}`);
+    return 0;
   }
 }
 
@@ -765,6 +742,7 @@ export async function deleteSystemRolesByPrefix(prefixes: string[] = ['E2E ']): 
  * catches tests that crashed before their own afterEach ran.
  */
 export async function purgeAllSteamfitterTestData(): Promise<void> {
+  const views = await deleteSharedPlayerViews();
   const scenarios = await deleteScenariosByPrefix();
   const templates = await deleteScenarioTemplatesByPrefix();
   const users = await deleteUsersByPrefix();
@@ -772,7 +750,7 @@ export async function purgeAllSteamfitterTestData(): Promise<void> {
   const roles = await deleteSystemRolesByPrefix();
   console.log(
     `[steamfitter purge] Removed ${scenarios} leftover scenario(s), ${templates} scenario template(s), ` +
-      `${users} user(s), ${groups} group(s), and ${roles} custom role(s).`
+      `${users} user(s), ${groups} group(s), ${roles} custom role(s), and ${views} shared Player view(s).`
   );
 }
 
@@ -784,60 +762,61 @@ export type SteamfitterFixtures = {
 };
 
 /**
- * Path to the Steamfitter storageState saved by global-setup.ts. May not exist if
- * global setup failed to provision (stack down at startup) — handled below.
+ * Worker-scoped fixtures for seeded test data.
  */
-const steamfitterStatePath = authStatePath('steamfitter');
-
-/**
- * True when global-setup successfully wrote the Steamfitter auth state this run.
- * Evaluated once at module load. Specs that want a clean unauthenticated context
- * still override this with `test.use({ storageState: { cookies: [], origins: [] } })`.
- */
-const steamfitterStateExists = fs.existsSync(steamfitterStatePath);
+export type SteamfitterWorkerFixtures = {
+  /**
+   * Player view seeded once per worker, deleted on worker teardown. Test files that need
+   * a view (start-and-end-scenario, edit-scenario-details, unsupported-task-action-fails)
+   * reference this fixture; it's `null` when Player is unreachable, in which case the
+   * test skips or exercises the view-less code path.
+   */
+  steamfitterPlayerView: { viewId: string; name: string } | null;
+};
 
 /**
  * Extended test with Steamfitter-specific fixtures.
  *
  * `storageState` defaults to the pre-authenticated state captured once by
- * global-setup.ts, so every spec's browser context starts with a valid OIDC token.
- * The `steamfitterAuthenticatedPage` fixture then just navigates and waits for the
+ * global-setup.ts (refreshed by `freshAuthStatePath` when its token is near expiry),
+ * so every spec's browser context starts with a valid OIDC token. The
+ * `steamfitterAuthenticatedPage` fixture then just navigates and waits for the
  * Angular shell — no per-test Keycloak round-trip. Auth-flow specs opt out with
  * `test.use({ storageState: { cookies: [], origins: [] } })`.
  */
-export const test = base.extend<SteamfitterFixtures>({
-  storageState: steamfitterStateExists ? steamfitterStatePath : undefined,
+export const test = base.extend<SteamfitterFixtures, SteamfitterWorkerFixtures>({
+  storageState: async ({ browser }, use) => use(await freshAuthStatePath('steamfitter', browser)),
 
-  steamfitterAuthenticatedPage: async ({ page }, use) => {
-    // Fast path: storageState already carries a valid token, so navigating home
-    // should render the authenticated shell without redirecting to Keycloak.
-    await page.goto(Services.Steamfitter.UI, { waitUntil: 'domcontentloaded' });
-
-    // Match global-setup.ts's PROVISION entry: only app-topbar's mat-toolbar renders
-    // once the OIDC client has resolved a user, so it's the reliable auth signal.
-    const appShell = page.locator('app-root app-topbar mat-toolbar').first();
-    const keycloakField = page.locator('input[name="username"]');
-
-    // Race the authenticated shell against a Keycloak login form. The form appears
-    // only if the saved state is missing/expired — in that case fall back to a full
-    // interactive login. waitForFirstVisible is cancellation-safe (a bare
-    // Promise.race would leave the losing waitFor() running to its full timeout).
-    const winner = await waitForFirstVisible(
-      page,
-      [
-        { key: 'shell', locator: appShell },
-        { key: 'keycloak', locator: keycloakField },
-      ],
-      { timeout: 20000 }
-    );
-
-    if (winner !== 'shell') {
-      await authenticateSteamfitterWithKeycloak(page);
-      await appShell.waitFor({ state: 'visible', timeout: 30000 });
-    }
+  steamfitterAuthenticatedPage: async ({ page, storageState }, use) => {
+    await ensureAuthenticatedShell(page, {
+      app: 'steamfitter',
+      url: Services.Steamfitter.UI,
+      // Match global-setup.ts's PROVISION entry: only app-topbar's mat-toolbar
+      // renders once the OIDC client has resolved a user.
+      shell: page.locator('app-root app-topbar mat-toolbar').first(),
+      login: authenticateSteamfitterWithKeycloak,
+      fromSavedState: storageState === authStatePath('steamfitter'),
+    });
 
     await use(page);
   },
+
+  steamfitterPlayerView: [
+    async ({}, use, workerInfo) => {
+      const available = await isPlayerApiAvailable();
+      if (!available) {
+        await use(null);
+        return;
+      }
+
+      // parallelIndex is the stable worker slot; workerIndex grows on every restart.
+      const name = `${SHARED_PLAYER_VIEW_PREFIX}w${workerInfo.parallelIndex}]`;
+      const viewId = await createPlayerView(name);
+      await use({ viewId, name });
+      await deletePlayerView(viewId);
+    },
+    { scope: 'worker' },
+  ],
 });
 
 /**
@@ -853,24 +832,54 @@ export async function steamfitterIsDarkTheme(page: Page): Promise<boolean> {
 }
 
 /**
- * Switch Steamfitter between light and dark theme through the top bar user menu's
- * "Dark Theme" switch, and wait for the change to land on `document.body`.
+ * Switch Steamfitter between light and dark theme by writing the persisted preference
+ * and reloading, then wait for the top bar and `document.body` to reflect it. No menu
+ * clicks.
  *
- * Steamfitter persists the selected theme in the `auth.ui` slice of its Akita
- * store, saved to localStorage under 'akita-steamfitter-ui' (`main.ts`). So a theme
- * set here survives the reloads and `page.goto` calls a test performs afterward,
- * and only needs applying once, right after authentication. The preference never
- * reaches the server, and the saved auth state carries no Akita store, so every
- * test's fresh browser context starts light.
- *
- * Use the switch rather than the `?theme=dark` query param: once the param has been
- * seen, `AppComponent` writes it back onto the URL on every later theme change,
- * which would leak it into the URL assertions several specs make.
+ * Steamfitter's theme lives only in the browser: the `auth.ui` slice of the Akita
+ * auth store (@cmusei/crucible-common), persisted to localStorage under
+ * 'akita-steamfitter-ui' (`main.ts`) and rehydrated before AppComponent applies it.
+ * Nothing reads it from the server, and no component overrides it on bootstrap.
+ * Akita stores the slice under the store name, so the shape is
+ * `{"auth":{"theme":"dark-theme"},"$cache":{"auth":false}}` (captured from
+ * steamfitter.ui after a UI toggle, crucible-common 0.8.0) — NOT `{"auth":{"ui":...}}`.
+ * The key is absent until the theme first changes, so it is merged into, not replaced.
+ * The saved auth state carries no Akita store, so every test's fresh context starts
+ * light. `?theme=` is not used: once seen, AppComponent writes it back onto the URL on
+ * every later theme change, which would leak it into URL assertions.
  *
  * No-ops when the requested theme is already active, so callers can use it to
- * restore state unconditionally.
+ * restore state unconditionally. Specs whose subject is the toggle control use
+ * `toggleSteamfitterThemeViaMenu`.
  */
 export async function setSteamfitterTheme(page: Page, theme: SteamfitterTheme): Promise<void> {
+  const want = theme === 'dark';
+  if ((await steamfitterIsDarkTheme(page)) === want) return;
+
+  await page.evaluate((value) => {
+    const key = 'akita-steamfitter-ui';
+    let state: Record<string, any> = {};
+    try {
+      state = JSON.parse(localStorage.getItem(key) ?? '{}') ?? {};
+    } catch {
+      state = {};
+    }
+    state.auth = { ...(state.auth ?? {}), theme: value };
+    localStorage.setItem(key, JSON.stringify(state));
+  }, want ? 'dark-theme' : 'light-theme');
+
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(page.locator('app-topbar button.menu-trigger').first()).toBeVisible({ timeout: 15000 });
+  await expect.poll(() => steamfitterIsDarkTheme(page), { timeout: 10000 }).toBe(want);
+}
+
+/**
+ * Switch Steamfitter between light and dark theme through the top bar user menu's
+ * "Dark Theme" switch, and wait for the change to land on `document.body`. For specs
+ * whose subject is the toggle control itself; everything else uses
+ * `setSteamfitterTheme`. No-ops when the requested theme is already active.
+ */
+export async function toggleSteamfitterThemeViaMenu(page: Page, theme: SteamfitterTheme): Promise<void> {
   const want = theme === 'dark';
   if ((await steamfitterIsDarkTheme(page)) === want) return;
 

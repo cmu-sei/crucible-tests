@@ -2,7 +2,9 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 import { test as base, Locator, Page } from '@playwright/test';
-import { Services, serviceUrlPattern, oidcStorageKey, authenticateWithKeycloak } from '../shared-fixtures';
+import { Services, serviceUrlPattern, oidcStorageKey, authenticateWithKeycloak, waitForFirstVisible, ensureAuthenticatedShell } from '../shared-fixtures';
+import { freshAuthStatePath } from '../auth-state';
+import { authStatePath } from '../auth-paths';
 
 /**
  * TopoMojo-specific fixtures
@@ -21,10 +23,7 @@ export async function authenticateTopoMojoWithKeycloak(
   username: string = 'admin',
   password: string = 'admin'
 ): Promise<void> {
-  console.log(`Authenticating TopoMojo with Keycloak for ${Services.TopoMojo.UI}...`);
-
   // Navigate to TopoMojo
-  console.log(`Navigating to ${Services.TopoMojo.UI}...`);
   await page.goto(Services.TopoMojo.UI, { timeout: 180000, waitUntil: 'domcontentloaded' });
 
   // Check if we're already on Keycloak (direct redirect)
@@ -33,34 +32,45 @@ export async function authenticateTopoMojoWithKeycloak(
   const isOnKeycloak = currentUrl.includes(keycloakHost) || currentUrl.includes('/realms/crucible');
 
   if (!isOnKeycloak) {
-    // TopoMojo shows a landing page with a login button - look for it
-    // Race condition: check for both login button (unauthenticated) and auth content (authenticated)
+    // TopoMojo shows a landing page with a login button - wait for either the login
+    // button (unauthenticated) or the authenticated content (already signed in).
     const loginButton = page.getByRole('button', { name: 'identity provider' });
-    const authenticatedButton = topomojoNavLink(page, 'Logout');
+    const winner = await waitForFirstVisible(
+      page,
+      [
+        { key: 'login', locator: loginButton },
+        { key: 'authenticated', locator: topomojoNavLink(page, 'Logout') },
+      ],
+      { timeout: 15000 },
+    );
 
-    // Wait for either login button or authenticated content to appear
-    try {
-      const winner = await Promise.race([
-        loginButton.waitFor({ state: 'visible', timeout: 15000 }).then(() => 'login' as const),
-        authenticatedButton.first().waitFor({ state: 'visible', timeout: 15000 }).then(() => 'authenticated' as const),
-      ]);
-
-      if (winner === 'login') {
-        console.log(`TopoMojo landing page detected - clicking login button...`);
-        await loginButton.click();
-        // Wait for redirect to Keycloak
-        await page.waitForURL((url) => url.host.includes(keycloakHost) || url.pathname.includes('/realms/crucible'), { timeout: 30000 });
-      } else {
-        console.log(`Already authenticated on TopoMojo`);
+    if (winner === 'authenticated') {
+      return;
+    } else if (winner === 'login') {
+      await loginButton.click();
+      // Wait for redirect to Keycloak OR authenticated shell (if session is still valid).
+      // With a valid session, clicking the button processes the existing session via
+      // OIDC without visiting Keycloak.
+      const afterClick = await waitForFirstVisible(
+        page,
+        [
+          { key: 'keycloak', locator: page.locator('input[name="username"]') },
+          { key: 'authenticated', locator: topomojoNavLink(page, 'Logout') },
+        ],
+        { timeout: 30000 },
+      );
+      if (afterClick === 'authenticated') {
+        // Session was valid - already authenticated
         return;
       }
-    } catch (error: any) {
-      throw new Error(`TopoMojo page loaded but neither login button nor authenticated content appeared within timeout. Error: ${error.message}`);
+      // afterClick === 'keycloak' - continue with login flow below
+    } else {
+      throw new Error(`TopoMojo page loaded but neither login button nor authenticated content appeared within timeout.`);
     }
   }
 
-  // Now we should be on Keycloak - perform login
-  console.log(`Keycloak login page detected, logging in...`);
+  // Reached when the app redirected straight to Keycloak, or the login button led
+  // there; the waitForSelector below fails if we're not actually on Keycloak.
   await page.waitForSelector('input[name="username"]', { timeout: 30000 });
   await page.fill('input[name="username"]', username);
   await page.fill('input[name="password"]', password);
@@ -81,14 +91,11 @@ export async function authenticateTopoMojoWithKeycloak(
     await page.waitForURL((url) => !url.pathname.includes('/oidc'), { timeout: 10000 });
   } catch {
     // If still on /oidc, the callback may be processing - wait for navigation
-    console.log(`Still on OIDC callback URL, waiting for redirect...`);
   }
 
   // Wait for authenticated app content to appear (not the landing page): the top bar
   // only offers Logout once the user is signed in.
   await topomojoNavLink(page, 'Logout').waitFor({ state: 'visible', timeout: 30000 });
-
-  console.log(`Successfully authenticated and returned to TopoMojo`);
 }
 
 /**
@@ -115,11 +122,27 @@ export type TopoMojoFixtures = {
  * Extended test with TopoMojo-specific fixtures
  */
 export const test = base.extend<TopoMojoFixtures>({
-  topomojoAuthenticatedPage: async ({ page }, use) => {
-    await authenticateTopoMojoWithKeycloak(page);
+  // `undefined` when global-setup could not provision TopoMojo; the shell check below
+  // then falls back to an interactive login.
+  storageState: async ({ browser }, use) => use(await freshAuthStatePath('topomojo', browser)),
+
+  topomojoAuthenticatedPage: async ({ page, storageState }, use) => {
+    // TopoMojo shows a landing page with a "Sign in with identity provider" button when
+    // unauthenticated (no direct Keycloak redirect), so pass loginPrompt. The button can
+    // flash briefly even with valid auth while the JS auth check runs, but ensureAuthenticatedShell's
+    // loginPromptSettleMs re-wait distinguishes the flash from genuine unauthenticated state.
+    await ensureAuthenticatedShell(page, {
+      app: 'topomojo',
+      url: Services.TopoMojo.UI,
+      shell: topomojoNavLink(page, 'Logout'),
+      login: authenticateTopoMojoWithKeycloak,
+      loginPrompt: page.getByRole('button', { name: 'identity provider' }),
+      fromSavedState: storageState === authStatePath('topomojo'),
+    });
+
     await use(page);
   },
 });
 
 export { expect } from '@playwright/test';
-export { Services, serviceUrlPattern, oidcStorageKey };
+export { Services, serviceUrlPattern, oidcStorageKey, waitForFirstVisible };

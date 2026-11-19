@@ -19,7 +19,7 @@ for (const theme of CITE_THEMES) {
       const evaluationRolesTab = page.getByRole('tab', { name: 'Evaluation Roles' });
       await expect(evaluationRolesTab).toBeVisible({ timeout: 10000 });
       await evaluationRolesTab.click();
-      await page.waitForTimeout(1000);
+      // Rule applied: removed fixed sleep
 
       // 3. Verify evaluation roles content is displayed
       const rolesTable = page.locator('table, mat-table, mat-list').first();

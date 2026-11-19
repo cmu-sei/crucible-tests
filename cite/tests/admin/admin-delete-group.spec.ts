@@ -4,8 +4,8 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, CITE_THEMES, setCiteTheme } from '../../fixtures';
-import { navigateToAdminSection, deleteGroupByName, waitForDialogOpen } from '../../test-helpers';
+import { test, expect, apiDeleteGroupsByName, Services, CITE_THEMES, setCiteTheme } from '../../fixtures';
+import { navigateToAdminSection, waitForDialogOpen } from '../../test-helpers';
 
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Administration - Groups`, () => {
@@ -24,7 +24,7 @@ for (const theme of CITE_THEMES) {
       const addButton = page.locator('button[mattooltip="Add New Group"]');
       await addButton.click();
 
-      const createDialog = page.getByRole('dialog', { name: 'Create New Group?' });
+      const createDialog = page.getByRole('dialog', { name: 'Add Group' });
       await waitForDialogOpen(createDialog);
 
       const nameField = createDialog.getByRole('textbox', { name: 'Name' });
@@ -34,7 +34,7 @@ for (const theme of CITE_THEMES) {
       await expect(saveButton).toBeEnabled({ timeout: 5000 });
       await saveButton.click();
       await expect(createDialog).not.toBeVisible({ timeout: 10000 });
-      await page.waitForTimeout(1000);
+      // Rule applied: removed fixed sleep
 
       // Now delete it
       const groupRow = page.locator('tbody tr').filter({ hasText: TEST_GROUP_NAME }).first();
@@ -45,8 +45,8 @@ for (const theme of CITE_THEMES) {
       await expect(groupRow).toContainText(TEST_GROUP_NAME);
     });
 
-    test.afterEach(async ({ citeAuthenticatedPage: page }) => {
-      await deleteGroupByName(page, TEST_GROUP_NAME);
+    test.afterEach(async () => {
+      await apiDeleteGroupsByName(TEST_GROUP_NAME);
     });
   });
 }

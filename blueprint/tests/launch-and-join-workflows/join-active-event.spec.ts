@@ -143,10 +143,10 @@ for (const theme of BLUEPRINT_THEMES) {
         page.waitForResponse(
           (r) =>
             r.url().includes(`/api/msels/${mselId}/join`) && r.request().method() === 'POST',
-          { timeout: 60000 }
+          { timeout: 30000 }
         ),
         page.waitForURL((url) => url.toString().includes(`/view/${playerViewId}`), {
-          timeout: 60000,
+          timeout: 30000,
         }),
         joinLink.click(),
       ]);

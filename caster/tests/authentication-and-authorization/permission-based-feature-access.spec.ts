@@ -29,7 +29,7 @@ for (const theme of CASTER_THEMES) {
       await expect(page.getByText('Projects').first()).toBeVisible();
       await expect(page.getByText('Users')).toBeVisible();
       await expect(page.getByText('Roles')).toBeVisible();
-      await expect(page.getByText('Groups')).toBeVisible();
+      await expect(page.getByText('Groups', { exact: true })).toBeVisible();
       await expect(page.getByText('VLANs')).toBeVisible();
       await expect(page.getByText('Modules')).toBeVisible();
       await expect(page.getByText('Workspaces')).toBeVisible();

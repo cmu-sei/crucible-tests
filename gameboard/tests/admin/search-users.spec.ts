@@ -16,14 +16,12 @@ test.describe('Admin - Users', () => {
 
     // Search for a string unlikely to match any seeded user.
     await searchBox.fill('zzzzzzzzzzz_nonexistent');
-    await page.waitForTimeout(1500);
     // Page should still be on the Users admin and not throw.
     await expect(page).toHaveURL(/\/admin\/registrar\/users/);
 
     // Now clear and search for "admin" which should return at least one result.
     await searchBox.fill('');
     await searchBox.fill('admin');
-    await page.waitForTimeout(1500);
     // Admin's display name or count indicator should be present.
     await expect(page.locator('text=/count:/i').first()).toBeVisible({ timeout: 10000 });
   });

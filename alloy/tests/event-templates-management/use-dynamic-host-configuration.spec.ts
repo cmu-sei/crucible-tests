@@ -3,9 +3,9 @@
 
 // spec: alloy/alloy-test-plan.md
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../fixtures';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
-import { ALLOY_THEMES, applyAlloyTheme, createTestEventTemplate, deleteEventTemplateByName } from '../../test-helpers';
+import { ALLOY_THEMES, applyAlloyTheme, createTestEventTemplate, deleteEventTemplateByName, findEventTemplateEditButton } from '../../test-helpers';
 
 for (const theme of ALLOY_THEMES) {
   test.describe(`${theme} theme › Event Templates Management`, () => {
@@ -28,7 +28,7 @@ for (const theme of ALLOY_THEMES) {
       await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
 
       // 2. Click edit icon for the test event template
-      await page.getByRole('button', { name: `Edit: ${templateName}` }).click();
+      await (await findEventTemplateEditButton(page, templateName)).click();
 
       // expect: Edit Event Template dialog appears
       await expect(page.getByRole('dialog', { name: 'Edit Event Template' })).toBeVisible();
@@ -56,7 +56,7 @@ for (const theme of ALLOY_THEMES) {
       // expect: Template is updated successfully
 
       // Restore: uncheck the Use Dynamic Host checkbox
-      await page.getByRole('button', { name: `Edit: ${templateName}` }).first().click();
+      await (await findEventTemplateEditButton(page, templateName)).click();
       await expect(page.getByRole('dialog', { name: 'Edit Event Template' })).toBeVisible();
       if (!wasChecked) {
         await page.getByRole('checkbox', { name: 'Use Dynamic Host' }).uncheck();

@@ -12,12 +12,11 @@ test.describe('Error Handling and Edge Cases', () => {
     // 1. Navigate to /mojo/invalid-id-12345
     await page.goto(Services.TopoMojo.UI + '/mojo/invalid-id-12345');
     await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(3000);
 
     // expect: Error page is displayed
     // expect: User is notified gamespace does not exist or is not accessible
     const errorContent = page.locator('[class*="error"], text=/not found/i, text=/not accessible/i, [class*="alert"]').first();
-    const hasError = await errorContent.isVisible({ timeout: 5000 }).catch(() => false);
+    const hasError = await errorContent.waitFor({ state: 'visible', timeout: 5000 }).then(() => true, () => false);
 
     // Page should handle invalid ID gracefully
     const appRoot = page.locator('app-root').first();

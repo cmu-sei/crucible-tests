@@ -4,42 +4,22 @@
 // spec: gameboard/gameboard-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
 import { Services } from '../../../shared-fixtures';
-import { authenticateGameboardWithKeycloak } from '../../fixtures';
-import {
-  getKeycloakAdminToken,
-  createKeycloakUser,
-  deleteKeycloakUser,
-  tempUsername,
-} from '../../../keycloak-admin';
+import { test, expect, authenticateGameboardWithKeycloak } from '../../fixtures';
 
-// Creates a fresh Keycloak user with no elevated roles, logs in as that user,
-// and verifies they cannot access the Gameboard admin dashboard.
+// Logs in as one of this worker's pool users (no elevated roles) and verifies they
+// cannot access the Gameboard admin dashboard. The default `page` is driven as that
+// user, so it must start without admin's saved login.
 test.use({ storageState: { cookies: [], origins: [] } });
 
 test.describe('Admin - Games', () => {
-  let adminToken: string;
-  let userId: string | null = null;
-  const password = 'non-admin-pass';
-  let username = '';
-
-  test.beforeEach(async () => {
-    adminToken = await getKeycloakAdminToken();
-    username = tempUsername('nonadmin');
-    const user = await createKeycloakUser(adminToken, { username, password });
-    userId = user.id;
-  });
-
-  test.afterEach(async () => {
-    if (userId) await deleteKeycloakUser(adminToken, userId);
-  });
-
-  test('Admin Dashboard Access - Unauthorized', async ({ page }) => {
+  // Nothing to reset: the test only reads, and the pool user's Gameboard row belongs to
+  // the worker fixture.
+  test('Admin Dashboard Access - Unauthorized', async ({ page, nonAdminUser }) => {
     // Log in as the non-admin user via the Gameboard-aware helper that
     // navigates to /admin first (which triggers the login flow since
     // Gameboard's home page is public).
-    await authenticateGameboardWithKeycloak(page, username, password);
+    await authenticateGameboardWithKeycloak(page, nonAdminUser.username, nonAdminUser.password);
 
     // Non-admin lands on /admin/dashboard? Keycloak grants a token but the
     // backend enforces role-based permissions. The admin tabs (Live/Games/Users)
@@ -47,7 +27,7 @@ test.describe('Admin - Games', () => {
     await page.goto(Services.Gameboard.UI + '/admin/dashboard', {
       waitUntil: 'domcontentloaded',
     });
-    await page.waitForTimeout(3000);
+    await expect(page.locator('a:has-text("Log out"), button:has-text("Log out")').first()).toBeVisible();
 
     // A non-admin should not see the admin sub-tabs (Games/Users/Practice Area).
     await expect(page.locator('a[href="/admin/registrar/users"]')).toHaveCount(0);

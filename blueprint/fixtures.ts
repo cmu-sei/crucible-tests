@@ -2,15 +2,18 @@
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
 import { test as base, expect, Locator, Page } from '@playwright/test';
-import fs from 'fs';
 import {
   Services,
   serviceUrlPattern,
   oidcStorageKey,
   authenticateWithKeycloak,
   waitForFirstVisible,
+  ensureAuthenticatedShell,
 } from '../shared-fixtures';
-import { authSessionStatePath, authStatePath } from '../auth-paths';
+import { authStatePath } from '../auth-paths';
+import { freshAuthStatePath } from '../auth-state';
+import { poolUsers, PoolUser } from '../user-pool';
+import { createBlueprintUser, deleteBlueprintUser, getBlueprintToken, getBlueprintUser } from './test-helpers';
 
 /**
  * Blueprint-specific authentication helper
@@ -112,67 +115,66 @@ export type BlueprintFixtures = {
   blueprintAuthenticatedPage: Page;
 };
 
-/**
- * Path to the Blueprint storageState saved by global-setup.ts. May not exist if the
- * global setup failed to provision (stack down at startup) — handled below.
- */
-const blueprintStatePath = authStatePath('blueprint');
-const blueprintStateExists = fs.existsSync(blueprintStatePath);
-const blueprintSessionStatePath = authSessionStatePath('blueprint');
-const blueprintSessionState: Array<[string, string]> = fs.existsSync(blueprintSessionStatePath)
-  ? JSON.parse(fs.readFileSync(blueprintSessionStatePath, 'utf8'))
-  : [];
+export type BlueprintWorkerFixtures = {
+  /**
+   * This worker's two pool users (see `user-pool.ts`), each with a Blueprint user row
+   * and no role — i.e. no Blueprint system permissions.
+   */
+  nonAdminUsers: PoolUser[];
+  /** The first of `nonAdminUsers`. */
+  nonAdminUser: PoolUser;
+};
 
 /**
  * Extended test with Blueprint-specific fixtures.
  *
  * `storageState` defaults to the pre-authenticated state captured once by
- * global-setup.ts, so every spec's browser context starts with a valid OIDC token.
- * The `blueprintAuthenticatedPage` fixture then just navigates and waits for the
+ * global-setup.ts (refreshed by `freshAuthStatePath` when its token is near expiry),
+ * so every spec's browser context starts with a valid OIDC token. The
+ * `blueprintAuthenticatedPage` fixture then just navigates and waits for the
  * Angular shell — no per-test Keycloak round-trip. Auth-flow specs opt out with
  * `test.use({ storageState: { cookies: [], origins: [] } })`.
  */
-export const test = base.extend<BlueprintFixtures>({
-  // Reuse the authenticated state captured by global-setup. Authentication specs
-  // opt out with an empty storageState and retain the interactive login flow.
-  storageState: blueprintStateExists ? blueprintStatePath : undefined,
+export const test = base.extend<BlueprintFixtures, BlueprintWorkerFixtures>({
+  // Reset contract for Blueprint: a test removes the units / unit memberships it added
+  // the user to and deletes the MSELs it seeded (UserMselRoles cascade with the MSEL). The
+  // user's Blueprint row is ensured here — the same role-less row Blueprint creates on
+  // first sign-in — and deleted when the worker ends. Leased by `parallelIndex`, the
+  // stable worker slot.
+  nonAdminUsers: [
+    async ({}, use, workerInfo) => {
+      const users = poolUsers(workerInfo.parallelIndex, 2);
+      const token = await getBlueprintToken();
+      for (const user of users) {
+        const existing = await getBlueprintUser(token, user.userId).then(
+          (row) => row,
+          () => null
+        );
+        if (!existing) await createBlueprintUser(token, { id: user.userId, name: user.displayName });
+      }
+      await use(users);
+      const teardownToken = await getBlueprintToken();
+      for (const user of users) await deleteBlueprintUser(teardownToken, user.userId);
+    },
+    { scope: 'worker' },
+  ],
+  nonAdminUser: [async ({ nonAdminUsers }, use) => use(nonAdminUsers[0]), { scope: 'worker' }],
+
+  // `undefined` when global-setup could not provision Blueprint; the shell check
+  // below then falls back to an interactive login.
+  storageState: async ({ browser }, use) => use(await freshAuthStatePath('blueprint', browser)),
 
   blueprintAuthenticatedPage: async ({ page, storageState }, use) => {
-    // Restore sessionStorage if it was captured during global-setup. The OIDC client
-    // may store its token in sessionStorage (like Player) or localStorage (captured
-    // by storageState), so we restore both to handle either case.
-    if (storageState === blueprintStatePath && blueprintSessionState.length > 0) {
-      await page.addInitScript((entries: Array<[string, string]>) => {
-        for (const [key, value] of entries) {
-          sessionStorage.setItem(key, value);
-        }
-      }, blueprintSessionState);
-    }
-
-    // Fast path: storageState already carries a valid token, so navigating home
-    // should render the authenticated shell without redirecting to Keycloak.
-    await page.goto(Services.Blueprint.UI, { waitUntil: 'domcontentloaded' });
-
-    const appShell = page.locator('app-root mat-toolbar').first();
-    const keycloakField = page.locator('input[name="username"]');
-
-    // Race the authenticated shell against a Keycloak login form. The form appears
-    // only if the saved state is missing/expired — in that case fall back to the
-    // full interactive login so the test still proceeds (just not as fast).
-    const winner = await waitForFirstVisible(
-      page,
-      [
-        { key: 'shell', locator: appShell },
-        { key: 'keycloak', locator: keycloakField },
-      ],
-      { timeout: 20000 }
-    );
-
-    if (winner !== 'shell') {
-      // Either Keycloak appeared or neither did within the window — do a full login.
-      await authenticateBlueprintWithKeycloak(page);
-      await appShell.waitFor({ state: 'visible', timeout: 30000 });
-    }
+    // The Blueprint OIDC client keeps its token in sessionStorage, which
+    // storageState does not carry, so replay the saved sessionStorage too.
+    await ensureAuthenticatedShell(page, {
+      app: 'blueprint',
+      url: Services.Blueprint.UI,
+      shell: page.locator('app-root mat-toolbar').first(),
+      login: authenticateBlueprintWithKeycloak,
+      restoreSession: storageState === authStatePath('blueprint'),
+      fromSavedState: storageState === authStatePath('blueprint'),
+    });
 
     await use(page);
   },
@@ -194,21 +196,61 @@ export async function blueprintIsDarkTheme(page: Page): Promise<boolean> {
 }
 
 /**
- * Put the Blueprint UI into the requested theme via the top-bar "Admin User" menu's
- * "Dark Theme" switch, then wait until <body> reflects the change.
+ * Put the Blueprint UI into the requested theme by writing the persisted preference
+ * and reloading, then wait until <body> reflects it. No menu clicks.
  *
- * Blueprint persists the selected theme through localStorage key 'uiState' (JSON with
- * selectedTheme: "dark-theme" or "light-theme"), so a theme set here survives the
- * client-side navigations a test performs afterward — it only needs applying once,
- * right after authentication. A fresh browser context defaults to light, so requesting
- * 'light' is a no-op.
+ * Blueprint's theme lives only in the browser (no server-side user preference):
+ * - `uiState` localStorage (UIDataService, `selectedTheme`) — the bootstrap source of
+ *   truth: TopbarComponent's constructor calls `authService.setUserTheme(uiDataService
+ *   .getTheme())`, overriding whatever the Akita store rehydrated.
+ * - `akita-blueprint-ui` (Akita persistState of `auth.ui`, `main.ts`) — what AppComponent
+ *   applies before the top bar renders. Akita stores the `auth.ui` slice under the store
+ *   name, so the shape is `{"auth":{"theme":"dark-theme"},"$cache":{"auth":false}}`
+ *   (captured from blueprint.ui after a UI toggle, crucible-common 0.8.0) — NOT
+ *   `{"auth":{"ui":{...}}}`.
+ * Both are merged into, not replaced. A fresh browser context defaults to light, so
+ * requesting 'light' is a no-op. The `?theme=` query param would also work on bootstrap,
+ * but AppComponent then writes it back onto the URL on every later theme change.
  *
- * Mirrors alloyIsDarkTheme/applyAlloyTheme: we drive the real UI control (not the
- * `?theme=` query param, which only applies on a fresh app bootstrap) and confirm
- * the switch took effect via the body class with a MutationObserver rather than a
- * fixed wait.
+ * Specs whose subject is the toggle control use `toggleBlueprintThemeViaMenu`.
  */
 export async function applyBlueprintTheme(page: Page, theme: BlueprintTheme): Promise<void> {
+  const wantDark = theme === 'dark';
+  if ((await blueprintIsDarkTheme(page)) === wantDark) {
+    return;
+  }
+
+  await page.evaluate((value) => {
+    const merge = (key: string, patch: (s: Record<string, any>) => void) => {
+      let state: Record<string, any> = {};
+      try {
+        state = JSON.parse(localStorage.getItem(key) ?? '{}') ?? {};
+      } catch {
+        state = {};
+      }
+      patch(state);
+      localStorage.setItem(key, JSON.stringify(state));
+    };
+    merge('uiState', (s) => {
+      s.selectedTheme = value;
+    });
+    merge('akita-blueprint-ui', (s) => {
+      s.auth = { ...(s.auth ?? {}), theme: value };
+    });
+  }, wantDark ? 'dark-theme' : 'light-theme');
+
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('button', { name: 'Admin User' })).toBeVisible({ timeout: 15000 });
+  await expect.poll(() => blueprintIsDarkTheme(page), { timeout: 10000 }).toBe(wantDark);
+}
+
+/**
+ * Put the Blueprint UI into the requested theme via the top-bar "Admin User" menu's
+ * "Dark Theme" switch, then wait until <body> reflects the change. For specs whose
+ * subject is the toggle control itself; everything else uses `applyBlueprintTheme`.
+ * No-ops when the requested theme is already active.
+ */
+export async function toggleBlueprintThemeViaMenu(page: Page, theme: BlueprintTheme): Promise<void> {
   const wantDark = theme === 'dark';
   if ((await blueprintIsDarkTheme(page)) === wantDark) {
     return;

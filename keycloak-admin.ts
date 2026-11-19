@@ -18,8 +18,16 @@
  * environment differs.
  */
 
-import { APIRequestContext, request as playwrightRequest } from '@playwright/test';
 import { Services } from './shared-fixtures';
+import {
+  cachedToken,
+  cachedUserToken,
+  invalidateToken,
+  invalidateTokensForUser,
+  markTemporaryUser,
+  sharedRequestContext,
+  tokenKey,
+} from './api-cache';
 
 const ADMIN_REALM = 'master';
 const ADMIN_CLIENT_ID = 'admin-cli';
@@ -31,17 +39,19 @@ function adminPassword(): string {
   return process.env.KEYCLOAK_ADMIN_PASSWORD || 'admin';
 }
 
-async function newContext(): Promise<APIRequestContext> {
-  return playwrightRequest.newContext({ ignoreHTTPSErrors: true });
-}
-
 /**
  * Acquire a master-realm admin token with full admin-cli privileges.
  * This token can manage users, roles, and clients in any realm.
  */
 export async function getKeycloakAdminToken(): Promise<string> {
-  const ctx = await newContext();
-  try {
+  return cachedToken(ADMIN_TOKEN_KEY(), fetchKeycloakAdminToken);
+}
+
+const ADMIN_TOKEN_KEY = () => tokenKey(ADMIN_REALM, ADMIN_CLIENT_ID, adminUsername(), '');
+
+async function fetchKeycloakAdminToken(): Promise<string> {
+  const ctx = await sharedRequestContext();
+  {
     const keycloak = Services.Keycloak.replace(/\/$/, '');
     const res = await ctx.post(
       `${keycloak}/realms/${ADMIN_REALM}/protocol/openid-connect/token`,
@@ -61,8 +71,6 @@ export async function getKeycloakAdminToken(): Promise<string> {
     }
     const data = await res.json();
     return data.access_token as string;
-  } finally {
-    await ctx.dispose();
   }
 }
 
@@ -104,8 +112,9 @@ export async function createKeycloakUser(
 ): Promise<KeycloakUser> {
   const realm = opts.realm || 'crucible';
   const keycloak = Services.Keycloak.replace(/\/$/, '');
-  const ctx = await newContext();
-  try {
+  markTemporaryUser(opts.username);
+  const ctx = await sharedRequestContext();
+  {
     // POST /admin/realms/{realm}/users
     const createRes = await ctx.post(`${keycloak}/admin/realms/${realm}/users`, {
       headers: {
@@ -201,16 +210,18 @@ export async function createKeycloakUser(
       }
     }
 
+    createdUsernames.set(userId, opts.username);
     return {
       id: userId,
       username: opts.username,
       password: opts.password,
       realm,
     };
-  } finally {
-    await ctx.dispose();
   }
 }
+
+/** Usernames of the users `createKeycloakUser` made in this worker, by user id. */
+const createdUsernames = new Map<string, string>();
 
 /**
  * Delete a Keycloak user by id. Safe to call on a non-existent id — swallows
@@ -222,20 +233,27 @@ export async function deleteKeycloakUser(
   realm: string = 'crucible'
 ): Promise<void> {
   const keycloak = Services.Keycloak.replace(/\/$/, '');
-  const ctx = await newContext();
-  try {
-    const res = await ctx.fetch(
-      `${keycloak}/admin/realms/${realm}/users/${userId}`,
-      {
+  const username = createdUsernames.get(userId);
+  if (username) {
+    invalidateTokensForUser(username);
+    createdUsernames.delete(userId);
+  }
+  const ctx = await sharedRequestContext();
+  {
+    const deleteUser = (token: string) =>
+      ctx.fetch(`${keycloak}/admin/realms/${realm}/users/${userId}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${adminToken}` },
-      }
-    );
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    let res = await deleteUser(adminToken);
+    if (res.status() === 401) {
+      // The caller's admin token (often captured in beforeEach) expired; retry once fresh.
+      invalidateToken(ADMIN_TOKEN_KEY());
+      res = await deleteUser(await getKeycloakAdminToken());
+    }
     if (!res.ok() && res.status() !== 404) {
       console.warn(`deleteKeycloakUser(${userId}) returned ${res.status()}`);
     }
-  } finally {
-    await ctx.dispose();
   }
 }
 
@@ -259,8 +277,8 @@ export async function getClientSecret(
   realm: string = 'crucible'
 ): Promise<string | null> {
   const keycloak = Services.Keycloak.replace(/\/$/, '');
-  const ctx = await newContext();
-  try {
+  const ctx = await sharedRequestContext();
+  {
     const headers = { Authorization: `Bearer ${adminToken}` };
     const found = await ctx.fetch(
       `${keycloak}/admin/realms/${realm}/clients?clientId=${encodeURIComponent(clientId)}`,
@@ -282,8 +300,6 @@ export async function getClientSecret(
       return null;
     }
     return ((await secret.json()) as { value?: string }).value ?? null;
-  } finally {
-    await ctx.dispose();
   }
 }
 
@@ -299,6 +315,9 @@ export function tempUsername(prefix: string = 'tmpuser'): string {
  * Acquire a user-level bearer token for `username` / `password` against the
  * `crucible` realm using the specified OIDC client (defaults to `gameboard.ui`).
  * Useful when a test needs to call an app's API as a non-admin user.
+ *
+ * Cached per worker, except for temporary users (see `isTemporaryUser` in
+ * `api-cache.ts`), whose accounts are deleted within the test.
  */
 export async function getUserToken(
   username: string,
@@ -306,9 +325,20 @@ export async function getUserToken(
   clientId: string = 'gameboard.ui',
   scope: string = 'openid profile gameboard'
 ): Promise<string> {
+  return cachedUserToken('crucible', clientId, username, scope, () =>
+    fetchUserToken(username, password, clientId, scope)
+  );
+}
+
+async function fetchUserToken(
+  username: string,
+  password: string,
+  clientId: string,
+  scope: string
+): Promise<string> {
   const keycloak = Services.Keycloak.replace(/\/$/, '');
-  const ctx = await newContext();
-  try {
+  const ctx = await sharedRequestContext();
+  {
     const res = await ctx.post(
       `${keycloak}/realms/crucible/protocol/openid-connect/token`,
       {
@@ -328,7 +358,5 @@ export async function getUserToken(
     }
     const data = await res.json();
     return data.access_token as string;
-  } finally {
-    await ctx.dispose();
   }
 }

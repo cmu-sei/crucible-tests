@@ -26,25 +26,22 @@ for (const theme of CITE_THEMES) {
       await navigateToAdminSection(page, 'Evaluations');
       await waitForAdminListLoad(page, '/api/evaluations', true);
 
-      // Search for the seeded evaluation
+      // Search for the seeded evaluation (Rule B: wait for filtered row)
       const searchBox = page.locator('input[placeholder="Search"], input[type="search"], input[aria-label="Search"]').first();
       await expect(searchBox).toBeVisible({ timeout: 5000 });
       await searchBox.clear();
       await searchBox.fill(evalName);
-      await page.waitForTimeout(1000);
 
       const evalRow = page.locator('tbody tr').filter({ hasText: evalName }).first();
       await expect(evalRow).toBeVisible({ timeout: 10000 });
       await evalRow.click();
-      await page.waitForTimeout(1000);
 
-      // 3. Expand the Actions panel (team already created via API seed)
+      // 3. Expand the Actions panel (team already created via API seed, Rule C: wait for panel button)
       const actionsPanelButton = page.getByRole('button', { name: 'Actions', exact: true });
       await expect(actionsPanelButton).toBeVisible({ timeout: 10000 });
       await actionsPanelButton.click();
-      await page.waitForTimeout(1000);
 
-      // 4. Add an action
+      // 4. Add an action (Rule C: wait for add button after panel expansion)
       const addActionButton = page.locator('button[title="Add Action"]');
       await expect(addActionButton).toBeVisible({ timeout: 5000 });
       await addActionButton.click();
@@ -58,9 +55,8 @@ for (const theme of CITE_THEMES) {
       await expect(actionSaveButton).toBeEnabled({ timeout: 5000 });
       await actionSaveButton.click();
       await expect(actionDialog).not.toBeVisible({ timeout: 10000 });
-      await page.waitForTimeout(1000);
 
-      // 5. Verify the action appears in the actions table within the Actions region
+      // 5. Verify the action appears in the actions table within the Actions region (Rule D: item visibility is completion signal)
       const actionsRegion = page.getByRole('region', { name: 'Actions' });
       const actionItem = actionsRegion.getByRole('cell', { name: 'Test Action Description', exact: true }).first();
       await expect(actionItem).toBeVisible({ timeout: 10000 });

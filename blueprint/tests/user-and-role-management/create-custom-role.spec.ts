@@ -69,7 +69,7 @@ for (const theme of BLUEPRINT_THEMES) {
       await expect(confirmDialog).toContainText(customRoleName);
 
       // 7. Confirm deletion
-      await confirmDialog.locator('button:has-text("YES")').click();
+      await confirmDialog.locator('button:has-text("Delete")').click();
 
       // expect: The role is removed from the permissions matrix
       await expect(page.locator(`[role="columnheader"]:has-text("${customRoleName}")`)).not.toBeVisible({ timeout: 5000 });

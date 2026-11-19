@@ -10,7 +10,9 @@ import {
   Services,
   seedCompleteEvaluation,
   cleanupCompleteEvaluation,
-  seedScoringModel,
+  loadCiteSeedIds,
+  apiDeleteEvaluation,
+  apiDeleteTeamType,
   seedEvaluation,
   seedTeamType,
   seedTeam,
@@ -24,6 +26,7 @@ for (const theme of CITE_THEMES) {
 
     let evalName = '';
     let seedData: { scoringModelId: string; evaluationId: string; teamTypeId: string } | null = null;
+    let liveSeed: { evaluationId: string; teamTypeId: string } | null = null;
     let otherSeedData: { scoringModelId: string; evaluationId: string; teamTypeId: string } | null = null;
 
     test('Manage Evaluation Teams', async ({ citeAuthenticatedPage: page }) => {
@@ -42,20 +45,17 @@ for (const theme of CITE_THEMES) {
       await expect(searchBox).toBeVisible({ timeout: 5000 });
       await searchBox.clear();
       await searchBox.fill(evalName);
-      await page.waitForTimeout(1000);
 
       const evalRow = page.locator('tbody tr').filter({ hasText: evalName }).first();
       await expect(evalRow).toBeVisible({ timeout: 10000 });
       await evalRow.click();
-      await page.waitForTimeout(1000);
 
       // 3. Find and expand the Teams panel
       const teamsPanelButton = page.getByRole('button', { name: 'Teams', exact: true });
       await expect(teamsPanelButton).toBeVisible({ timeout: 10000 });
       await teamsPanelButton.click();
-      await page.waitForTimeout(1000);
 
-      // 4. Verify the seeded team appears
+      // 4. Verify the seeded team appears (Rule C: team item visibility after panel expansion)
       const teamItem = page.getByRole('button').filter({ hasText: `Team for ${evalName}` }).first();
       await expect(teamItem).toBeVisible({ timeout: 10000 });
 
@@ -79,10 +79,11 @@ for (const theme of CITE_THEMES) {
       // 1. Seed an evaluation with a team that has no members
       const stamp = `${theme} ${Date.now()}`;
       evalName = `E2E Teams Live ${stamp}`;
-      const scoringModelId = await seedScoringModel(`Test Scoring Model Teams Live ${stamp}`);
-      const evaluationId = await seedEvaluation(scoringModelId, evalName);
+      // On the run-level shared scoring model, which the API copies onto the evaluation
+      const { sharedScoringModelId } = await loadCiteSeedIds();
+      const evaluationId = await seedEvaluation(sharedScoringModelId, evalName);
       const teamTypeId = await seedTeamType(`Test Team Type Teams Live ${stamp}`);
-      seedData = { scoringModelId, evaluationId, teamTypeId };
+      liveSeed = { evaluationId, teamTypeId };
       const teamName = `Live Team ${stamp}`;
       await seedTeam(evaluationId, teamTypeId, teamName);
 
@@ -127,6 +128,11 @@ for (const theme of CITE_THEMES) {
       if (seedData) {
         await cleanupCompleteEvaluation(seedData);
         seedData = null;
+      }
+      if (liveSeed) {
+        await apiDeleteEvaluation(liveSeed.evaluationId);
+        await apiDeleteTeamType(liveSeed.teamTypeId);
+        liveSeed = null;
       }
       if (otherSeedData) {
         await cleanupCompleteEvaluation(otherSeedData);

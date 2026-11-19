@@ -4,36 +4,37 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, expectCasterProjectOpen, CASTER_THEMES, setCasterTheme } from '../../fixtures';
+import {
+  test,
+  expect,
+  openCasterDirectory,
+  seedCasterSharedProjectPageFree,
+  casterSharedProjectName,
+  seedCasterDirectoryPageFree,
+  deleteCasterProjectPageFree,
+  CASTER_THEMES,
+  setCasterTheme,
+} from '../../fixtures';
 
-for (const theme of CASTER_THEMES) {
-  test.describe(`${theme} theme › Workspaces Management`, () => {
-    test('View Workspaces List', async ({ casterAuthenticatedPage: page, cleanupCasterProjectByName }) => {
+test.describe('Workspaces Management › View Workspaces List', () => {
+  let projectId: string;
+  const directoryName = 'WS-List-Dir';
+
+  test.beforeAll(async ({}, workerInfo) => {
+    projectId = await seedCasterSharedProjectPageFree(casterSharedProjectName('view-workspaces-list', workerInfo));
+    await seedCasterDirectoryPageFree(projectId, directoryName);
+  });
+
+  test.afterAll(async () => {
+    await deleteCasterProjectPageFree(projectId);
+  });
+
+  for (const theme of CASTER_THEMES) {
+    test(`View Workspaces List - ${theme}`, async ({ casterAuthenticatedPage: page }) => {
       await setCasterTheme(page, theme);
 
-      const projectName = 'View WS List Project';
-      await cleanupCasterProjectByName(projectName);
-
-      // Setup: Create a project and directory
-      await expect(page.getByText('My Projects')).toBeVisible();
-      await page.reload();
-
-      await page.locator('[mattooltip="Add New Project"]').click();
-      const projectDialog = page.getByRole('dialog', { name: 'Add Project' });
-      await expect(projectDialog).toBeVisible();
-      await projectDialog.getByRole('textbox', { name: 'Name' }).fill(projectName);
-      await projectDialog.getByRole('button', { name: 'Save' }).click();
-      await expectCasterProjectOpen(page, projectName);
-
-      await page.getByTitle('Add New Directory').click();
-      const dirDialog = page.getByRole('dialog', { name: 'Add Directory' });
-      await expect(dirDialog).toBeVisible();
-      await dirDialog.getByRole('textbox', { name: 'Name' }).fill('WS-List-Dir');
-      await dirDialog.getByRole('button', { name: 'Save' }).click();
-      await expect(page.getByRole('button', { name: 'WS-List-Dir' })).toBeVisible({ timeout: 10000 });
-
-      // Expand directory and navigate to WORKSPACES
-      await page.getByRole('button', { name: 'WS-List-Dir' }).click();
+      // Navigate to the seeded directory
+      await openCasterDirectory(page, projectId, directoryName);
 
       // expect: WORKSPACES section is available
       await expect(page.getByRole('button', { name: 'WORKSPACES' })).toBeVisible();
@@ -44,5 +45,5 @@ for (const theme of CASTER_THEMES) {
       // expect: Workspaces section shows Add Workspace option
       await expect(page.getByText('Add Workspace')).toBeVisible();
     });
-  });
-}
+  }
+});

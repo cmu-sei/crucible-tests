@@ -11,17 +11,20 @@ test.describe('Error Handling and Edge Cases', () => {
 
     // 1. Navigate to a gamespace area
     const sidebarToggle = page.locator('button[aria-label="Toggle sidebar"], button:has(mat-icon:text("menu"))').first();
+    const sidebar = page.locator('mat-sidenav, mat-drawer, [class*="sidebar"]').first();
+    const gamespaceTab = page.locator('mat-button-toggle:has-text("Gamespace"), button:has-text("Gamespace")').first();
+
     const hasSidebarToggle = await sidebarToggle.isVisible({ timeout: 10000 }).catch(() => false);
     if (hasSidebarToggle) {
       await sidebarToggle.click();
-      await page.waitForTimeout(500);
+      await expect(sidebar).toBeVisible({ timeout: 5000 });
     }
 
-    const gamespaceTab = page.locator('mat-button-toggle:has-text("Gamespace"), button:has-text("Gamespace")').first();
     const hasTab = await gamespaceTab.isVisible({ timeout: 5000 }).catch(() => false);
     if (hasTab) {
+      const activeGamespaces = page.locator('[class*="gamespace-card"], [class*="item-card"], mat-list-item');
       await gamespaceTab.click();
-      await page.waitForTimeout(500);
+      await expect(activeGamespaces.first()).toBeVisible({ timeout: 5000 });
     }
 
     // expect: Application handles console unavailability gracefully

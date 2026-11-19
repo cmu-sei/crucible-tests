@@ -12,10 +12,11 @@ test.describe('Workspace Editor', () => {
     // 1. Navigate to workspace editor for an existing workspace
     // First get a workspace from the sidebar
     const sidebarToggle = page.locator('button[aria-label="Toggle sidebar"], button:has(mat-icon:text("menu"))').first();
+    const sidebar = page.locator('mat-sidenav, mat-drawer, [class*="sidebar"], [class*="side-panel"]').first();
     const hasSidebarToggle = await sidebarToggle.isVisible({ timeout: 10000 }).catch(() => false);
     if (hasSidebarToggle) {
       await sidebarToggle.click();
-      await page.waitForTimeout(500);
+      await expect(sidebar).toBeVisible();
     }
 
     const workspaceItems = page.locator('[class*="workspace-card"], [class*="item-card"], mat-list-item, [class*="list-item"]');
@@ -23,7 +24,6 @@ test.describe('Workspace Editor', () => {
 
     if (itemCount > 0) {
       await workspaceItems.first().click();
-      await page.waitForTimeout(2000);
 
       // expect: Workspace editor page loads
       await expect(page).toHaveURL(/\/topo\//, { timeout: 10000 });

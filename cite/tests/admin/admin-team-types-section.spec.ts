@@ -13,7 +13,7 @@ for (const theme of CITE_THEMES) {
 
       await page.goto(`${Services.Cite.UI}/admin`);
       await page.waitForLoadState('load');
-      await page.waitForTimeout(3000);
+      // Rule applied: removed fixed sleep
 
       await page.waitForFunction(() => {
         const items = Array.from(document.querySelectorAll('mat-list-item'));

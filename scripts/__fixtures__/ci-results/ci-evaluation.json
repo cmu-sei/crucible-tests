@@ -1,0 +1,28 @@
+{
+  "app": "alloy",
+  "ok": false,
+  "didNotRun": false,
+  "globalErrors": [],
+  "newFailures": [
+    {
+      "file": "alloy/tests/error-handling-and-validation/data-type-validation.spec.ts",
+      "title": "light theme > Error Handling and Validation > Data Type Validation"
+    },
+    {
+      "file": "gameboard/tests/admin/delete-challenge.spec.ts",
+      "title": "Admin - Challenges > Delete Challenge (Spec) from Game"
+    }
+  ],
+  "knownFailures": [],
+  "nowPassing": [],
+  "flaky": [],
+  "staleEntries": [],
+  "skipLeaks": [],
+  "skippedInCi": [],
+  "counts": {
+    "expected": 1,
+    "unexpected": 2,
+    "flaky": 0,
+    "skipped": 1
+  }
+}

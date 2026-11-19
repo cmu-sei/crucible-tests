@@ -26,12 +26,12 @@ for (const theme of STEAMFITTER_THEMES) {
 
     let templateId: string;
 
-    test.beforeEach(async () => {
+    test.beforeAll(async () => {
       templateId = await seedScenarioTemplate(TEMPLATE_NAME, 'Template holding a task to view', 1);
       await seedTask(templateId, TASK_NAME, 'Task seeded for the view test');
     });
 
-    test.afterEach(async () => {
+    test.afterAll(async () => {
       await deleteScenarioTemplatesByPrefix(['E2E Task View Template']);
     });
 

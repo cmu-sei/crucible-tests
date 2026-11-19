@@ -5,7 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect } from '@playwright/test';
-import { Services, serviceUrlPattern, CITE_THEMES, citeIsDarkTheme, citeThemeUrl } from '../../fixtures';
+import { Services, serviceUrlPattern, settleForResponse, CITE_THEMES, citeIsDarkTheme, citeThemeUrl } from '../../fixtures';
 
 // Override global storageState so the entry URL goes through the Keycloak login.
 test.use({ storageState: { cookies: [], origins: [] } });
@@ -21,11 +21,13 @@ test.use({ storageState: { cookies: [], origins: [] } });
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Authentication and Authorization`, () => {
     test('Theme query param survives the login redirect', async ({ page }) => {
+      test.slow(); // Auth redirect can take extended time on cold services
+
       // 1. Open CITE with the theme on the entry URL
       await page.goto(citeThemeUrl(Services.Cite.UI, theme));
 
       // expect: User is redirected to the Keycloak login page
-      await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 70000 });
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 30000 });
 
       // 2. Log in
       await page.locator('#username').fill('admin');
@@ -38,7 +40,8 @@ for (const theme of CITE_THEMES) {
       await expect(page).toHaveURL(new RegExp(`[?&]theme=${theme}-theme`));
 
       // expect: The theme holds once the app has settled
-      await page.waitForLoadState('networkidle');
+      // Wait for the app to finish loading before checking theme again
+      await settleForResponse(page, 'api/evaluations');
       expect(await citeIsDarkTheme(page)).toBe(theme === 'dark');
       await expect(page).toHaveURL(new RegExp(`[?&]theme=${theme}-theme`));
     });

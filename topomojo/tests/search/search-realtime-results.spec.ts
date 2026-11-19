@@ -11,10 +11,11 @@ test.describe('Search and Filtering', () => {
 
     // 1. Navigate to workspace browser
     const sidebarToggle = page.locator('button[aria-label="Toggle sidebar"], button:has(mat-icon:text("menu"))').first();
+    const sidebar = page.locator('mat-sidenav, mat-drawer, [class*="sidebar"]').first();
     const hasSidebarToggle = await sidebarToggle.isVisible({ timeout: 10000 }).catch(() => false);
     if (hasSidebarToggle) {
       await sidebarToggle.click();
-      await page.waitForTimeout(500);
+      await expect(sidebar).toBeVisible({ timeout: 5000 });
     }
 
     // expect: Search field is visible
@@ -27,12 +28,13 @@ test.describe('Search and Filtering', () => {
       await page.keyboard.type('test', { delay: 200 });
 
       // expect: Results update in real-time as user types
-      await page.waitForTimeout(1000);
+      // Wait for search input to have the typed value
+      await expect(searchInput).toHaveValue('test');
 
       // expect: Matching workspaces are highlighted or filtered
       // Clear search
       await searchInput.clear();
-      await page.waitForTimeout(500);
+      await expect(searchInput).toHaveValue('');
     }
   });
 });

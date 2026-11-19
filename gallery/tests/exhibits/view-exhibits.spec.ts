@@ -9,9 +9,6 @@ import {
   expect,
   gotoGalleryAdmin,
   gotoAdminSection,
-  apiCreateCollection,
-  apiCreateExhibit,
-  apiDeleteCollectionById,
   GALLERY_THEMES,
   setGalleryTheme,
 } from '../../fixtures';
@@ -34,27 +31,8 @@ async function selectCollection(page: Page, collectionName: string): Promise<voi
 
 for (const theme of GALLERY_THEMES) {
   test.describe(`${theme} theme › Exhibit Management`, () => {
-    // Registered as soon as the collection exists so `afterEach` can remove it even
-    // when the test body throws partway through.
-    let collectionId: string | undefined;
-
-    test.afterEach(async () => {
-      // Exhibit.CollectionId is configured with DeleteBehavior.Cascade, so removing
-      // the collection also removes every exhibit inside it.
-      if (collectionId) {
-        await apiDeleteCollectionById(collectionId, 'Exhibit View Test collection');
-      }
-      collectionId = undefined;
-    });
-
-    test('View Exhibits List', async ({ galleryAuthenticatedPage: page }) => {
+    test('View Exhibits List', async ({ galleryAuthenticatedPage: page, seededCollection }) => {
       await setGalleryTheme(page, theme);
-      // Seed our own collection + exhibit: the list must not depend on whatever
-      // rows happen to already exist in the database.
-      const suffix = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-      const collection = await apiCreateCollection(`Exhibit View Test ${suffix}`);
-      collectionId = collection.id;
-      const exhibit = await apiCreateExhibit(collectionId, `View Exhibit ${suffix}`);
 
       await gotoGalleryAdmin(page);
 
@@ -66,10 +44,10 @@ for (const theme of GALLERY_THEMES) {
       await expect(collectionDropdown).toBeVisible();
 
       // 2. Select a collection from the dropdown
-      await selectCollection(page, collection.name);
+      await selectCollection(page, seededCollection.collectionName);
 
       // expect: Exhibits for the selected collection are displayed in a table
-      const exhibitRow = page.locator('tr.element-row').filter({ hasText: exhibit.name });
+      const exhibitRow = page.locator('tr.element-row').filter({ hasText: seededCollection.exhibitName });
       await expect(exhibitRow).toBeVisible();
 
       // expect: Table shows columns: Name, Created, User, Move, Inject

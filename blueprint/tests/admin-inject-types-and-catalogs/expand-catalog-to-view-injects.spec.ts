@@ -6,6 +6,8 @@
 
 import { test, expect, Services, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import { getBlueprintToken, tempBlueprintName,
+  createInjectType,
+  createCatalog,
   acquireAdminCatalogLock,
   releaseAdminCatalogLock,
 } from '../../test-helpers';
@@ -28,9 +30,14 @@ for (const theme of BLUEPRINT_THEMES) {
     let CATALOG_NAME: string;
     let INJECT_TYPE_NAME: string;
 
-    test.beforeEach(() => {
+    test.beforeEach(async () => {
       CATALOG_NAME = tempBlueprintName('ExpandCat');
       INJECT_TYPE_NAME = tempBlueprintName('ExpandCatIT');
+      // Preconditions over the API, inside the lock the first beforeEach took (every create
+      // broadcasts to open admin pages). Only the expand/collapse goes through the UI.
+      const token = await getBlueprintToken();
+      const injectType = await createInjectType(token, { name: INJECT_TYPE_NAME });
+      await createCatalog(token, { name: CATALOG_NAME, injectTypeId: injectType.id });
     });
 
     // Cleanup runs in afterEach (not inline at the end of the test body) so a mid-test
@@ -73,73 +80,9 @@ for (const theme of BLUEPRINT_THEMES) {
         ).toBeVisible({ timeout: 5000 });
       };
 
-      // ── Step 1: Create a prerequisite Inject Type ────────────────────────────
-
-      await navigateTo('Inject Types');
-
-      const addInjectTypeButton = page.locator(
-        'button[title*="Add"], button[aria-label*="Add"]'
-      ).first();
-      await expect(addInjectTypeButton).toBeVisible({ timeout: 5000 });
-      await addInjectTypeButton.click();
-
-      const injectTypeNameField = page.locator(
-        'input[formControlName="name"], input[placeholder*="Name"]'
-      ).first();
-      await expect(injectTypeNameField).toBeVisible({ timeout: 5000 });
-      await injectTypeNameField.fill(INJECT_TYPE_NAME);
-
-      const injectTypeDescField = page.locator(
-        'input[formControlName="description"], input[placeholder*="Description"], textarea[placeholder*="Description"]'
-      ).first();
-      await expect(injectTypeDescField).toBeVisible({ timeout: 5000 });
-      await injectTypeDescField.fill('Test inject type for expand catalog test');
-
-      const injectTypeSaveButton = page.locator(
-        'button:has-text("Save"), button[type="submit"]'
-      ).first();
-      await expect(injectTypeSaveButton).toBeEnabled({ timeout: 5000 });
-      await injectTypeSaveButton.click();
-
-      await expect(page.locator(`text=${INJECT_TYPE_NAME}`).first()).toBeVisible({ timeout: 10000 });
-
-      // ── Step 2: Create Catalog ───────────────────────────────────────────────
+      // ── Step 1/2: the Inject Type and Catalog were seeded in beforeEach ─────
 
       await navigateTo('Catalogs');
-
-      const addCatalogButton = page.getByRole('button', { name: 'Add new Catalog' });
-      await expect(addCatalogButton).toBeVisible({ timeout: 5000 });
-      await addCatalogButton.click();
-
-      const nameField = page.locator('input[placeholder*="Name"]').first();
-      await expect(nameField).toBeVisible({ timeout: 5000 });
-      await nameField.fill(CATALOG_NAME);
-
-      const descField = page.locator(
-        'input[placeholder*="Description"], textarea[placeholder*="Description"]'
-      ).first();
-      await expect(descField).toBeVisible({ timeout: 5000 });
-      await descField.fill('Test catalog for expand/collapse test');
-
-      // Select this spec's own inject type by name, not whatever happens to render
-      // first — the option list is global across concurrently-running specs, and
-      // picking the first option binds this catalog to a sibling spec's inject type.
-      // That sibling's teardown then CASCADE-DELETEs this catalog when it deletes its
-      // own inject type.
-      const injectTypeCombobox = page.getByRole('combobox', { name: /Inject Type/i }).first();
-      await expect(injectTypeCombobox).toBeVisible({ timeout: 5000 });
-      await injectTypeCombobox.click();
-      const injectTypeOption = page
-        .locator('mat-option, [role="option"]')
-        .filter({ hasText: INJECT_TYPE_NAME });
-      await expect(injectTypeOption).toBeVisible({ timeout: 5000 });
-      await injectTypeOption.click();
-
-      const saveButton = page.locator('button:has-text("Save"), button[type="submit"]').first();
-      await expect(saveButton).toBeEnabled({ timeout: 5000 });
-      await saveButton.click();
-
-      await expect(page.locator(`text=${CATALOG_NAME}`).first()).toBeVisible({ timeout: 10000 });
 
       // ── Step 3: Expand and collapse this spec's own catalog row ──────────────
 
@@ -172,7 +115,7 @@ for (const theme of BLUEPRINT_THEMES) {
         }
         // expect: The row expands to show the Injects expansion panel for that catalog
         await expect(expandedContent).toBeVisible({ timeout: 3000 });
-      }).toPass({ timeout: 45000 });
+      }).toPass({ timeout: 30000 });
 
       // 2. Click the same row again to collapse it
       await expect(async () => {
@@ -184,7 +127,7 @@ for (const theme of BLUEPRINT_THEMES) {
         // hidden), not removal from the DOM, so `.not.toBeVisible()` on the same
         // locator is the correct real assertion — no swallow needed.
         await expect(expandedContent).not.toBeVisible({ timeout: 3000 });
-      }).toPass({ timeout: 45000 });
+      }).toPass({ timeout: 30000 });
     });
     });
 }

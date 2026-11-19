@@ -8,7 +8,6 @@ import {
   test,
   expect,
   Services,
-  seededPrimaryViewName,
   findPlayerHomeViewLink,
   PLAYER_THEMES,
   setPlayerTheme,
@@ -16,9 +15,9 @@ import {
 
 for (const theme of PLAYER_THEMES) {
   test.describe(`${theme} theme › Performance`, () => {
-    test('Memory Usage - Extended Session', async ({ playerAuthenticatedPage: page }) => {
+    test('Memory Usage - Extended Session', async ({ playerAuthenticatedPage: page, seededViews }) => {
       await setPlayerTheme(page, theme);
-      const primaryViewName = seededPrimaryViewName();
+      const primaryViewName = seededViews.primary.name;
 
       // 1. Log in and navigate through various pages for extended period
       await expect(page.getByText('My Views')).toBeVisible();

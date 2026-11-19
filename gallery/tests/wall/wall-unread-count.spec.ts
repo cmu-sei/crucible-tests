@@ -5,7 +5,7 @@
 // seed: seed.spec.ts
 
 import { APIRequestContext, request as pwRequest } from '@playwright/test';
-import { test, expect, gotoExhibitSection, Services, GALLERY_THEMES, setGalleryTheme } from '../../fixtures';
+import { test, expect, gotoExhibitSection, Services, GALLERY_THEMES, setGalleryTheme, apiGetAdminUserId } from '../../fixtures';
 import { getUserToken } from '../../../keycloak-admin';
 
 /**
@@ -65,13 +65,7 @@ function unreadFromTitle(title: string): number {
 }
 
 async function seedUnreadExhibit(api: APIRequestContext): Promise<UnreadFixture> {
-  const users: Array<{ id: string; name: string }> = await (
-    await api.get(`${Services.Gallery.API}/api/users`)
-  ).json();
-  const admin = users.find((u) => u.name?.toLowerCase().includes('admin'));
-  if (!admin) {
-    throw new Error('Admin user not found in the Gallery database');
-  }
+  const adminUserId = await apiGetAdminUserId();
 
   const stamp = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
   const collection = await post<{ id: string }>(api, '/api/collections', {
@@ -89,7 +83,7 @@ async function seedUnreadExhibit(api: APIRequestContext): Promise<UnreadFixture>
     shortName: 'UNRD',
     exhibitId: exhibit.id,
   });
-  await post(api, '/api/teamusers', { teamId: team.id, userId: admin.id, isObserver: false });
+  await post(api, '/api/teamusers', { teamId: team.id, userId: adminUserId, isObserver: false });
 
   const releasedCardName = `Unread ${stamp} Card 1`;
   const laterCardName = `Unread ${stamp} Card 2`;

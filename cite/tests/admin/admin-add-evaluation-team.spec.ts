@@ -50,18 +50,18 @@ for (const theme of CITE_THEMES) {
       await expect(searchBox).toBeVisible({ timeout: 5000 });
       await searchBox.clear();
       await searchBox.fill(evalName);
-      await page.waitForTimeout(1000);
+      // Rule B: evalRow wait below serves as completion signal
 
       const evalRow = page.locator('tbody tr').filter({ hasText: evalName }).first();
       await expect(evalRow).toBeVisible({ timeout: 10000 });
       await evalRow.click();
-      await page.waitForTimeout(1000);
+      // Rule C: teamsPanel wait below serves as completion signal
 
       // 3. Expand the Teams panel
       const teamsPanel = page.locator('mat-expansion-panel').filter({ hasText: 'Teams' }).first();
       await expect(teamsPanel).toBeVisible({ timeout: 10000 });
       await teamsPanel.locator('mat-expansion-panel-header').first().click();
-      await page.waitForTimeout(1000);
+      // Rule C: addTeamButton wait below serves as completion signal
 
       // 4. Fill in the Add Team dialog, leaving Hide Scoresheet untouched
       const addTeamButton = teamsPanel.locator('button[title="Add Team"]');
@@ -73,9 +73,9 @@ for (const theme of CITE_THEMES) {
       await teamDialog.getByRole('textbox').first().fill(teamName);
       await teamDialog.getByRole('textbox').nth(1).fill(teamShortName);
       await teamDialog.getByRole('combobox', { name: 'Team Type' }).click();
-      await page.waitForTimeout(500);
+      // Rule C: option wait
       await page.getByRole('option', { name: `Team Type for ${evalName}` }).first().click();
-      await page.waitForTimeout(500);
+      // Rule C: selection processed
 
       const createResponse = page.waitForResponse(
         (r) => r.url().includes('/api/teams') && r.request().method() === 'POST',

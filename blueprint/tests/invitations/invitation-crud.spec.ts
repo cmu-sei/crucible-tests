@@ -238,13 +238,13 @@ for (const theme of BLUEPRINT_THEMES) {
       await expect(confirm).toContainText(
         'Are you sure that you want to delete the invitation for @alpha.test?'
       );
-      await confirm.getByRole('button', { name: 'No', exact: true }).click();
+      await confirm.getByRole('button', { name: 'Cancel', exact: true }).click();
       await expect(confirm).toBeHidden();
       await expect(invitationRow(page, '@alpha.test')).toBeVisible();
 
       await page.getByRole('button', { name: 'Delete @alpha.test invitation' }).click();
       confirm = page.getByRole('dialog').filter({ hasText: 'Delete Invitation' });
-      await confirm.getByRole('button', { name: /YES/i }).click();
+      await confirm.getByRole('button', { name: 'Delete' }).click();
 
       // expect: only the confirmed invitation is removed
       await expect(confirm).toBeHidden();

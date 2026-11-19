@@ -256,6 +256,9 @@ for (const theme of GALLERY_THEMES) {
         const secondReadButton = await openArticle(secondPage);
         // A fresh context starts light; match the theme under test.
         await setGalleryTheme(secondPage, theme);
+        // setGalleryTheme reloads to apply dark; wait for the re-rendered Read button
+        // (and its team context) before the race below clicks it.
+        await expect(secondReadButton).toBeEnabled();
 
         /**
          * Click Read and return the PUT it issued, re-clicking one the app swallowed.

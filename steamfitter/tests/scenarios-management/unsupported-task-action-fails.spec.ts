@@ -18,9 +18,6 @@ import {
   getSteamfitterApiToken,
   seedScenario,
   deleteScenariosByPrefix,
-  isPlayerApiAvailable,
-  createPlayerView,
-  deletePlayerView,
 } from '../../fixtures';
 
 const NAME_PREFIX = 'E2E Unsupported Action';
@@ -118,32 +115,17 @@ async function getResults(taskId: string): Promise<SteamfitterResult[]> {
 }
 
 test.describe('Scenarios Management', () => {
-  let playerAvailable = false;
-  let viewId: string | null = null;
-
-  test.beforeAll(async () => {
-    playerAvailable = await isPlayerApiAvailable();
-    if (playerAvailable) {
-      viewId = await createPlayerView(`${NAME_PREFIX} View ${Date.now()}`);
-    }
-  });
-
-  test.afterAll(async () => {
-    if (viewId) {
-      await deletePlayerView(viewId);
-      viewId = null;
-    }
-  });
-
   test.afterEach(async () => {
     await deleteScenariosByPrefix([NAME_PREFIX]);
   });
 
-  test('a task using a removed StackStorm action fails and runs its Failure subtask', async () => {
+  test('a task using a removed StackStorm action fails and runs its Failure subtask', async ({
+    steamfitterPlayerView,
+  }) => {
     // Skips locally (Player is optional in a partial stack) but fails under CI, where the
     // whole stack is expected up.
     requirePrecondition(
-      playerAvailable,
+      steamfitterPlayerView !== null,
       'Player API unavailable — tasks only run in a started scenario, which needs a view.'
     );
 
@@ -151,7 +133,7 @@ test.describe('Scenarios Management', () => {
     const scenarioId = await seedScenario(
       `${NAME_PREFIX} Scenario ${Date.now()}`,
       'Scenario holding a task whose action was removed',
-      { viewId: viewId ?? undefined }
+      { viewId: steamfitterPlayerView.viewId }
     );
     const started = await callApi(`/Scenarios/${scenarioId}/start`, { method: 'PUT' });
     expect(started.ok, `PUT /Scenarios/${scenarioId}/start failed (${started.status}): ${started.text}`).toBe(

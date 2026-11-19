@@ -4,8 +4,8 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, CITE_THEMES, setCiteTheme } from '../../fixtures';
-import { navigateToAdminSection, deleteScoringModelByName, findAdminRowByName, waitForDialogOpen } from '../../test-helpers';
+import { test, expect, apiDeleteScoringModelsByName, Services, CITE_THEMES, setCiteTheme } from '../../fixtures';
+import { navigateToAdminSection, findAdminRowByName, waitForDialogOpen } from '../../test-helpers';
 
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Administration - Scoring Models`, () => {
@@ -31,7 +31,6 @@ for (const theme of CITE_THEMES) {
       await expect(saveButton).toBeEnabled({ timeout: 5000 });
       await saveButton.click();
       await expect(dialog).not.toBeVisible({ timeout: 15000 });
-      await page.waitForTimeout(2000);
 
       // Re-navigate to refresh the list
       await navigateToAdminSection(page, 'Scoring Models');
@@ -46,14 +45,13 @@ for (const theme of CITE_THEMES) {
       const confirmDialog = page.getByRole('dialog');
       await waitForDialogOpen(confirmDialog);
 
-      const yesButton = confirmDialog.getByRole('button', { name: 'Yes' });
+      const yesButton = confirmDialog.getByRole('button', { name: 'Delete' });
       await yesButton.click();
       await expect(confirmDialog).not.toBeVisible({ timeout: 5000 });
-      await page.waitForTimeout(1000);
     });
 
-    test.afterEach(async ({ citeAuthenticatedPage: page }) => {
-      await deleteScoringModelByName(page, TEST_MODEL_NAME);
+    test.afterEach(async () => {
+      await apiDeleteScoringModelsByName(TEST_MODEL_NAME);
     });
   });
 }

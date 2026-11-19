@@ -6,6 +6,9 @@
 
 import { test, expect, Services, topomojoNavLink } from '../../fixtures';
 
+// Override global storageState so this test starts from a fresh unauthenticated state.
+test.use({ storageState: { cookies: [], origins: [] } });
+
 test.describe('Authentication and Authorization', () => {
   test('Role-Based Access - Admin Access', async ({ topomojoAuthenticatedPage: page }) => {
 

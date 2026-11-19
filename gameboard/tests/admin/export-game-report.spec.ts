@@ -46,7 +46,7 @@ test.describe('Admin - Reports', () => {
       await ctx.dispose();
     }
 
-    await page.goto(Services.Gameboard.UI + '/reports', { waitUntil: 'networkidle' });
+    await page.goto(Services.Gameboard.UI + '/reports', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Reports', exact: true })).toBeVisible({ timeout: 30000 });
   });
 });

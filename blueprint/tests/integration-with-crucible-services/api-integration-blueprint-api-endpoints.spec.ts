@@ -6,11 +6,13 @@
 import { test, expect, Services, serviceUrlPattern, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import {
   getBlueprintToken,
-  createMsel,
   deleteMsel,
   createRenderableScenarioEvent,
-  tempBlueprintName,
   navigateToMsel,
+  createSharedRenderableMsel,
+  resetSharedRenderableMsel,
+  type CreatedMsel,
+  sharedChildName,
 } from '../../test-helpers';
 
 /**
@@ -30,41 +32,50 @@ import {
  *    lists and `foundExpectedEndpoints` and then only logged them, or asserted them
  *    inside an `if` whose else-branch also passed.
  *
- * Now: the fixture MSEL is seeded through the API under a `tempBlueprintName()` name and
- * deleted by id in `afterEach`, and every expectation is asserted unconditionally.
+ * Now: the fixture MSEL is seeded through the API once per file (a shared MSEL the teardown
+ * purge also sweeps) and deleted by id in `afterAll`, and every expectation is asserted
+ * unconditionally.
  *
  * The endpoint list below is not guesswork — it is what the MSEL detail page actually
  * requests, captured live. Note the paths the UI uses are **lowercase**
  * (`/scenarioevents`, `/datafields`), unlike the mixed-case forms the API also accepts.
  */
+// One MSEL with the standard DataFields (13 POSTs) is seeded per file and shared by both
+// theme runs. Safe to share: the test only reads the MSEL's endpoints.
+// Each test seeds its own uniquely named events, and `resetSharedRenderableMsel` removes
+// them (and any extra DataField) in afterEach.
+let shared: CreatedMsel;
+
+test.beforeAll(async ({}, workerInfo) => {
+  shared = await createSharedRenderableMsel(await getBlueprintToken(), 'ApiIntegration', workerInfo.parallelIndex);
+});
+
+test.afterAll(async () => {
+  if (shared) await deleteMsel(await getBlueprintToken(), shared.id);
+});
+
 for (const theme of BLUEPRINT_THEMES) {
     test.describe(`${theme} theme › Integration with Crucible Services`, () => {
+    // Per-test names for this test's own records on the shared MSEL.
+    let child: (base: string) => string;
     let token: string;
     let mselId: string;
 
-    test.beforeEach(async () => {
+    test.beforeEach(async ({}, testInfo) => {
+      child = (base: string) => sharedChildName(base, testInfo, theme);
       token = await getBlueprintToken();
-      const msel = await createMsel(token, {
-        name: tempBlueprintName('TestBP-ApiIntegration'),
-        description: 'Seeded to observe Blueprint UI -> Blueprint API traffic.',
-      });
-      mselId = msel.id;
+      mselId = shared.id;
 
       // One renderable event, so the MSEL has DataFields/DataValues and the detail page
       // has real content to fetch rather than a set of empty collections.
-      await createRenderableScenarioEvent(token, mselId, 'API integration probe event', {
+      await createRenderableScenarioEvent(token, mselId, child('TestBP-ApiIntegrationProbe'), {
         deltaSeconds: 60,
       });
     });
 
     test.afterEach(async () => {
-      if (mselId) {
-        try {
-          await deleteMsel(token, mselId);
-        } catch (err) {
-          console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
-        }
-      }
+      // Back to "standard DataFields, no events" for the next test on the shared MSEL.
+      await resetSharedRenderableMsel(token, mselId);
     });
 
     test('API Integration - Blueprint API Endpoints', async ({

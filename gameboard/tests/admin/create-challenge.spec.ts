@@ -4,7 +4,7 @@
 // spec: gameboard/gameboard-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, type SharedWorkspace } from '../../fixtures';
 import {
   getAdminToken,
   createGame,
@@ -14,39 +14,26 @@ import {
   CreatedGame,
   CreatedChallengeSpec,
 } from '../../api-helpers';
-import {
-  getTopoMojoAdminToken,
-  createWorkspace,
-  deleteWorkspace,
-  CreatedWorkspace,
-} from '../../../topomojo-helpers';
 
 // Gameboard does not "create" challenges — they originate in TopoMojo as
-// workspaces and are added to a game as challenge specs. This test authors
-// a new TopoMojo workspace with challenge content and attaches it to a
-// Gameboard game as a new challenge.
+// workspaces and are added to a game as challenge specs. This test attaches
+// the run's shared TopoMojo workspace to a Gameboard game as a new challenge
+// with its own name, description and points.
 test.describe('Admin - Challenges', () => {
   let gbToken: string;
-  let tmToken: string;
   let game: CreatedGame;
-  let workspace: CreatedWorkspace;
+  let workspace: SharedWorkspace;
   let spec: CreatedChallengeSpec | null = null;
 
-  test.beforeEach(async () => {
+  test.beforeEach(async ({ sharedWorkspace }) => {
     gbToken = await getAdminToken();
-    tmToken = await getTopoMojoAdminToken();
-    workspace = await createWorkspace(tmToken, {
-      name: `SQLInj-${Date.now()}`,
-      description: 'Identify and mitigate a SQL injection vulnerability.',
-      audience: 'gameboard',
-    });
+    workspace = sharedWorkspace;
     game = await createGame(gbToken, { name: `CreateChal-Game-${Date.now()}` });
   });
 
   test.afterEach(async () => {
     if (spec) await deleteChallengeSpec(gbToken, spec.id).catch(() => {});
     if (game) await deleteGame(gbToken, game.id);
-    if (workspace) await deleteWorkspace(tmToken, workspace.id);
   });
 
   test('Create New Challenge (TopoMojo-backed)', async ({ gameboardAuthenticatedPage: page }) => {
@@ -60,7 +47,7 @@ test.describe('Admin - Challenges', () => {
     expect(spec.externalId).toBe(workspace.id);
 
     // UI sanity — admin dashboard still reachable.
-    await page.goto(Services.Gameboard.UI + '/admin/dashboard', { waitUntil: 'networkidle' });
+    await page.goto(Services.Gameboard.UI + '/admin/dashboard', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
   });
 });

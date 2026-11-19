@@ -18,13 +18,13 @@ import {
   citeMoveLabel,
   type TeamMemberUser,
 } from '../../fixtures';
-import { navigateToAdminSection, findAdminRowByName } from '../../test-helpers';
+import { navigateToAdminSection, findAdminRowByName, recordHubInvocations } from '../../test-helpers';
 
 /**
  * A team member sees moves up to the evaluation's current move, and the move list follows
  * the current move live, in both directions, over SignalR.
  *
- * The watching user is a temporary team member with the default Member role, not `admin`:
+ * The watching user is a pool user on the team with the default Member role, not `admin`:
  * admin holds every system permission, reads every move, and so would show the future move
  * from the start. The move counter's "of N" is the highest move the member can see, which
  * makes the visible move list readable from the toolbar.
@@ -34,23 +34,28 @@ for (const theme of CITE_THEMES) {
     let seeded: Awaited<ReturnType<typeof seedCompleteEvaluation>> | null = null;
     let member: TeamMemberUser | null = null;
 
-    test('Real-time Move Advancement', async ({ citeAuthenticatedPage: adminPage, browser }) => {
+    test('Real-time Move Advancement', async ({ citeAuthenticatedPage: adminPage, browser, nonAdminUser }) => {
       // Move 1 exists from the start; the evaluation is on move 0.
       const evalName = `E2E Move Advancement ${theme} ${Date.now()}`;
       seeded = await seedCompleteEvaluation(evalName, 1);
-      member = await seedTeamMemberUser(seeded.teamId);
+      member = await seedTeamMemberUser(seeded.teamId, nonAdminUser);
 
       // 1. Open two browser instances: the member on the evaluation, admin on its admin row
       // An empty storage state: the default for this suite is admin's saved sign-in
       const memberContext = await browser.newContext({ ignoreHTTPSErrors: true, storageState: { cookies: [], origins: [] } });
       try {
         const memberPage = await memberContext.newPage();
+        const memberHub = recordHubInvocations(memberPage);
         await authenticateCiteWithKeycloak(memberPage, member.username, member.password);
         await setCiteTheme(memberPage, theme);
         await memberPage.goto(`${Services.Cite.UI}/?evaluation=${seeded.evaluationId}`);
 
         // expect: The member sees the current move and not the future move 1
         await expect(citeMoveLabel(memberPage)).toHaveText('Move 0 of 0', { timeout: 15000 });
+        // The move update is sent to the member's team group, which the member's hub
+        // client joins only after the evaluation has rendered; advancing before that
+        // join completes sends the update to nobody.
+        await expect.poll(() => memberHub.completed('switchTeam'), { timeout: 10000 }).toBe(true);
 
         await setCiteTheme(adminPage, theme);
         await navigateToAdminSection(adminPage, 'Evaluations');

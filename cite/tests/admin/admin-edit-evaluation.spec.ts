@@ -36,7 +36,6 @@ for (const theme of CITE_THEMES) {
       await expect(searchBox).toBeVisible({ timeout: 5000 });
       await searchBox.clear();
       await searchBox.fill(evalName);
-      await page.waitForTimeout(1000);
 
       const evalRow = page.locator('tbody tr').filter({ hasText: evalName }).first();
       await expect(evalRow).toBeVisible({ timeout: 10000 });
@@ -64,12 +63,10 @@ for (const theme of CITE_THEMES) {
       await expect(editSaveButton).toBeEnabled({ timeout: 5000 });
       await editSaveButton.click();
       await expect(editDialog).not.toBeVisible({ timeout: 10000 });
-      await page.waitForTimeout(1000);
 
       // 7. Verify the edit is reflected
       await searchBox.clear();
       await searchBox.fill(editedName);
-      await page.waitForTimeout(1000);
 
       const editedRow = page.locator('tbody tr').filter({ hasText: editedName }).first();
       await expect(editedRow).toBeVisible({ timeout: 10000 });

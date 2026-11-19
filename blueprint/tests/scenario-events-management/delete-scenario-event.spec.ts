@@ -7,13 +7,15 @@
 import { test, expect, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import {
   getBlueprintToken,
-  createMsel,
   deleteMsel,
   createRenderableScenarioEvent,
   listScenarioEvents,
   navigateToMselSection,
   findScenarioEventRow,
-  tempBlueprintName,
+  createSharedRenderableMsel,
+  resetSharedRenderableMsel,
+  type CreatedMsel,
+  sharedChildName,
 } from '../../test-helpers';
 
 /**
@@ -24,21 +26,37 @@ import {
  * `waitForResponse` timed out. See `findScenarioEventRow` for why position is unsafe here,
  * including the pending upstream cross-MSEL leak that makes it worse.
  */
+// One MSEL with the standard DataFields (13 POSTs) is seeded per file and shared by both
+// theme runs. Safe to share: the delete removes only the test's own event.
+// Each test seeds its own uniquely named events, and `resetSharedRenderableMsel` removes
+// them (and any extra DataField) in afterEach.
+let shared: CreatedMsel;
+
+test.beforeAll(async ({}, workerInfo) => {
+  shared = await createSharedRenderableMsel(await getBlueprintToken(), 'DeleteEvent', workerInfo.parallelIndex);
+});
+
+test.afterAll(async () => {
+  if (shared) await deleteMsel(await getBlueprintToken(), shared.id);
+});
+
 for (const theme of BLUEPRINT_THEMES) {
     test.describe(`${theme} theme › Scenario Events Management`, () => {
+    // Per-test names for this test's own records on the shared MSEL.
+    let child: (base: string) => string;
     let token: string;
     let mselId: string;
     let eventId: string;
     let description: string;
 
-    test.beforeEach(async () => {
+    test.beforeEach(async ({}, testInfo) => {
+      child = (base: string) => sharedChildName(base, testInfo, theme);
       // Seed: create a MSEL with a renderable scenario event to delete
       token = await getBlueprintToken();
-      const msel = await createMsel(token);
-      mselId = msel.id;
+      mselId = shared.id;
 
       // Unique per run, so the row locator below can never resolve to another spec's event.
-      description = tempBlueprintName('TestBP-DeleteEvent');
+      description = child('TestBP-DeleteEvent');
       const event = await createRenderableScenarioEvent(
         token,
         mselId,
@@ -52,12 +70,8 @@ for (const theme of BLUEPRINT_THEMES) {
     });
 
     test.afterEach(async () => {
-      // Cleanup: delete the MSEL (cascade deletes any remaining events)
-      try {
-        if (mselId) await deleteMsel(token, mselId);
-      } catch (err) {
-        console.warn(`Cleanup failed for MSEL ${mselId}: ${err}`);
-      }
+      // Back to "standard DataFields, no events" for the next test on the shared MSEL.
+      await resetSharedRenderableMsel(token, mselId);
     });
 
     test('Delete Scenario Event', async ({ blueprintAuthenticatedPage: page }) => {

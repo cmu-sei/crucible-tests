@@ -12,14 +12,8 @@ for (const theme of CITE_THEMES) {
       await setCiteTheme(page, theme);
 
       // 1. Navigate to home page - already authenticated via fixture
-      // Wait for the page to be fully loaded and interactive
-      await page.waitForLoadState('networkidle');
-
       // Wait for CITE-specific content to be visible (the "My Evaluations" heading)
       await expect(page.locator('text=My Evaluations')).toBeVisible({ timeout: 10000 });
-
-      // Wait a bit for the page to fully render and become interactive
-      await page.waitForTimeout(1000);
 
       // 2. Press Tab key repeatedly to navigate through interactive elements
       const focusedElements: string[] = [];
@@ -27,7 +21,6 @@ for (const theme of CITE_THEMES) {
 
       for (let i = 0; i < 15; i++) {
         await page.keyboard.press('Tab');
-        await page.waitForTimeout(300);
 
         // expect: Focus moves through elements in logical order
         // expect: All interactive elements are reachable

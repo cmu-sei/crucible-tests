@@ -83,6 +83,10 @@ test.describe('Invitation Links', () => {
   let bravoId: string;
   let inviteeContext: BrowserContext | undefined;
 
+  // Deliberately NOT a pool user (user-pool.ts): the subject is an invitation bringing a
+  // user who has never been on the MSEL onto a team, matched by the email domain of a
+  // unique address, and the use counter it decrements. A pooled account would carry a
+  // shared address and could already have joined in an earlier test in the worker.
   test.beforeEach(async () => {
     token = await getBlueprintToken();
     kcToken = await getKeycloakAdminToken();

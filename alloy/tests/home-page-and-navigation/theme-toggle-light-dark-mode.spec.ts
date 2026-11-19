@@ -4,7 +4,7 @@
 // spec: alloy/alloy-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../fixtures';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
 
 test.describe('Home Page and Navigation', () => {

@@ -3,9 +3,9 @@
 
 // spec: alloy/alloy-test-plan.md
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../fixtures';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
-import { ALLOY_THEMES, applyAlloyTheme, createTestEventTemplate, deleteEventTemplateByName } from '../../test-helpers';
+import { ALLOY_THEMES, applyAlloyTheme, createTestEventTemplate, deleteEventTemplateByName, findEventTemplateEditButton } from '../../test-helpers';
 
 for (const theme of ALLOY_THEMES) {
   test.describe(`${theme} theme › Event Templates Management`, () => {
@@ -28,7 +28,7 @@ for (const theme of ALLOY_THEMES) {
       await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
 
       // 2. Click edit icon for the test event template
-      const editButton = page.getByRole('button', { name: `Edit: ${templateName}` });
+      const editButton = await findEventTemplateEditButton(page, templateName);
       await editButton.click();
 
       // expect: Edit Event Template dialog appears

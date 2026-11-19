@@ -19,7 +19,7 @@ test.describe('Authentication and Authorization', () => {
 
     // expect: The application redirects to the Keycloak authentication page at https://localhost:8443/realms/crucible
     // Note: Blueprint tries silent auth renewal first (iframe), which takes ~10s to fail before full redirect
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 70000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 30000 });
 
     // 2. Enter username 'admin' in the username field
     const usernameField = page.locator('#username');

@@ -4,7 +4,7 @@
 // spec: alloy/alloy-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../fixtures';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
 import { ALLOY_THEMES, applyAlloyTheme } from '../../test-helpers';
 
@@ -34,9 +34,9 @@ for (const theme of ALLOY_THEMES) {
       // expect: Buttons have accessible names
       await expect(page.getByRole('button', { name: 'Add Event Template' })).toBeVisible();
 
-      // 3. Verify dialog accessibility - "Add Event Template" opens the
-      //    "Create New Event Template" dialog directly (Alloy.ui PR #711).
-      const createDialog = page.getByRole('dialog', { name: 'Create New Event Template' });
+      // 3. Verify dialog accessibility - the "Add Event Template" button opens the
+      //    dialog of the same name directly (Alloy.ui PR #711).
+      const createDialog = page.getByRole('dialog', { name: 'Add Event Template' });
       await page.getByRole('button', { name: 'Add Event Template' }).click();
       await expect(createDialog).toBeVisible();
 

@@ -12,12 +12,21 @@ for (const theme of CASTER_THEMES) {
       await setCasterTheme(page, theme);
 
       await page.goto(Services.Caster.UI + '/admin?section=Workspaces');
-      await expect(page.getByRole('button', { name: 'Created At' })).toBeVisible({ timeout: 10000 });
 
-      await page.getByRole('button', { name: 'Created At' }).click();
-      await page.getByRole('button', { name: 'Created At' }).click();
-      await page.getByRole('button', { name: 'status' }).click();
-      await expect(page.getByRole('button', { name: 'status' })).toBeVisible();
+      const started = page.getByRole('columnheader', { name: 'Started', exact: true });
+      const status = page.getByRole('columnheader', { name: 'Status', exact: true });
+      await expect(started).toBeVisible({ timeout: 10000 });
+
+      // 2-3. Sort by Started, then reverse it
+      await started.getByRole('button').click();
+      await expect(started).toHaveAttribute('aria-sort', 'ascending');
+      await started.getByRole('button').click();
+      await expect(started).toHaveAttribute('aria-sort', 'descending');
+
+      // 4. Sort by Status
+      await status.getByRole('button').click();
+      await expect(status).toHaveAttribute('aria-sort', 'ascending');
+      await expect(started).toHaveAttribute('aria-sort', 'none');
     });
   });
 }

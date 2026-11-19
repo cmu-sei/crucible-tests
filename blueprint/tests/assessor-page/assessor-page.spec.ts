@@ -16,12 +16,6 @@
 import { test, expect, Services, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import type { BrowserContext, Locator, Page } from '@playwright/test';
 import {
-  getKeycloakAdminToken,
-  createKeycloakUser,
-  deleteKeycloakUser,
-  tempUsername,
-} from '../../../keycloak-admin';
-import {
   getBlueprintToken,
   createMsel,
   deleteMsel,
@@ -37,7 +31,6 @@ import {
   deleteUnit,
   addUnitToMsel,
   addUserToUnit,
-  deleteBlueprintUser,
   signInToBlueprintAs,
   tempBlueprintName,
 } from '../../test-helpers';
@@ -277,36 +270,28 @@ for (const theme of BLUEPRINT_THEMES) {
       await expect.poll(() => observedValue(token, seeded!.firstEventId, seeded!.mselId)).toBe('false');
     });
 
-    // Signs in as a temporary MSEL member in its own context. The theme switch drives the
+    // Signs in as a MSEL member (one of the worker's pool users) in its own context. The theme switch drives the
     // admin user's menu, so this role-access check is theme-independent and runs once.
     if (theme === 'light') {
       test.describe('as a MSEL member', () => {
-        const password = 'TestPass-123!';
-        let kcToken: string;
-        let kcUser: { id: string; username: string } | undefined;
         let context: BrowserContext | undefined;
         let unitId: string | undefined;
 
+        // The pool user's reset: deleting the unit removes their unit membership, and the
+        // MSEL (deleted by the outer afterEach) takes their MSEL roles with it.
         test.afterEach(async () => {
           await context?.close();
           context = undefined;
           if (unitId) await deleteUnit(token, unitId);
           unitId = undefined;
-          if (kcUser) {
-            await deleteBlueprintUser(token, kcUser.id);
-            await deleteKeycloakUser(kcToken, kcUser.id);
-          }
-          kcUser = undefined;
         });
 
         // A MSEL role on its own grants no reads: MselViewRequirement also wants the user in a unit
-        // attached to the MSEL (or on one of its teams). So the user joins such a unit once the
-        // sign-in has created their Blueprint record. Evaluator is the assessing role: on its own
+        // attached to the MSEL (or on one of its teams). So the user joins such a unit (their
+        // Blueprint record is ensured by the pool fixture). Evaluator is the assessing role: on its own
         // it lets the user read the MSEL and tick its checkboxes.
-        test('Access follows the MSEL role: none, Editor, then Evaluator', async ({ browser }) => {
+        test('Access follows the MSEL role: none, Editor, then Evaluator', async ({ browser, nonAdminUser }) => {
           seeded = await seedAssessorMsel(token);
-          kcToken = await getKeycloakAdminToken();
-          kcUser = await createKeycloakUser(kcToken, { username: tempUsername('bp-assessor'), password });
 
           context = await browser.newContext({
             ignoreHTTPSErrors: true,
@@ -316,12 +301,12 @@ for (const theme of BLUEPRINT_THEMES) {
           const rolesLoaded = page.waitForResponse(
             // A user with no role on the MSEL gets 403 here, so wait for the response whatever its status.
             (r) => r.url().includes(`/api/msels/${seeded!.mselId}/usermselroles`),
-            { timeout: 60000 }
+            { timeout: 30000 }
           );
           await signInToBlueprintAs(
             page,
-            kcUser.username,
-            password,
+            nonAdminUser.username,
+            nonAdminUser.password,
             `${Services.Blueprint.UI}/assess?msel=${seeded.mselId}`
           );
           await rolesLoaded;
@@ -335,10 +320,10 @@ for (const theme of BLUEPRINT_THEMES) {
 
           unitId = (await createUnit(token)).id;
           await addUnitToMsel(token, seeded.mselId, unitId);
-          await addUserToUnit(token, unitId, kcUser.id);
+          await addUserToUnit(token, unitId, nonAdminUser.userId);
 
           // expect: an Editor can view the events but not tick the checkboxes
-          const editor = await addUserMselRole(token, seeded.mselId, kcUser.id, 'Editor');
+          const editor = await addUserMselRole(token, seeded.mselId, nonAdminUser.userId, 'Editor');
           await page.reload();
           const first = eventRow(page, seeded.firstNote);
           await expect(first).toBeVisible({ timeout: 30000 });
@@ -347,7 +332,7 @@ for (const theme of BLUEPRINT_THEMES) {
 
           // expect: with Evaluator as their only role, the user can still open the page and tick them
           await removeUserMselRole(token, editor.id);
-          await addUserMselRole(token, seeded.mselId, kcUser.id, 'Evaluator');
+          await addUserMselRole(token, seeded.mselId, nonAdminUser.userId, 'Evaluator');
           await page.reload();
           const checkbox = eventRow(page, seeded.firstNote).getByRole('checkbox');
           await expect(checkbox).toBeEnabled({ timeout: 30000 });

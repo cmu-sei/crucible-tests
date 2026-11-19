@@ -6,6 +6,8 @@
 
 import { test, expect, Services, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
 import { getBlueprintToken, tempBlueprintName,
+  createInjectType,
+  createCatalog,
   acquireAdminCatalogLock,
   releaseAdminCatalogLock,
 } from '../../test-helpers';
@@ -29,9 +31,14 @@ for (const theme of BLUEPRINT_THEMES) {
     let CATALOG_NAME: string;
     let INJECT_TYPE_NAME: string;
 
-    test.beforeEach(() => {
+    test.beforeEach(async () => {
       CATALOG_NAME = tempBlueprintName('CopyCat');
       INJECT_TYPE_NAME = tempBlueprintName('CopyCatIT');
+      // Preconditions over the API, inside the lock the first beforeEach took (every create
+      // broadcasts to open admin pages). Only the copy goes through the UI.
+      const token = await getBlueprintToken();
+      const injectType = await createInjectType(token, { name: INJECT_TYPE_NAME });
+      await createCatalog(token, { name: CATALOG_NAME, injectTypeId: injectType.id });
     });
 
     // Cleanup runs in afterEach (never inline at the end of the test body) so a mid-test
@@ -76,81 +83,9 @@ for (const theme of BLUEPRINT_THEMES) {
         ).toBeVisible({ timeout: 5000 });
       };
 
-      // ── Step 1: Create a prerequisite Inject Type ────────────────────────────
-
-      await navigateTo('Inject Types');
-
-      const addInjectTypeButton = page.locator(
-        'button[title*="Add"], button[aria-label*="Add"]'
-      ).first();
-      await expect(addInjectTypeButton).toBeVisible({ timeout: 5000 });
-      await addInjectTypeButton.click();
-
-      const injectTypeNameField = page.locator(
-        'input[formControlName="name"], input[placeholder*="Name"]'
-      ).first();
-      await expect(injectTypeNameField).toBeVisible({ timeout: 5000 });
-      await injectTypeNameField.fill(INJECT_TYPE_NAME);
-
-      const injectTypeDescField = page.locator(
-        'textarea[formControlName="description"], textarea[placeholder*="Description"], input[placeholder*="Description"]'
-      ).first();
-      await expect(injectTypeDescField).toBeVisible({ timeout: 5000 });
-      await injectTypeDescField.fill('Test inject type for copy catalog test');
-
-      const injectTypeSaveButton = page.locator(
-        'button:has-text("Save"), button[type="submit"]'
-      ).first();
-      await expect(injectTypeSaveButton).toBeEnabled({ timeout: 5000 });
-      await injectTypeSaveButton.click();
-
-      const createdInjectType = page.locator(`text=${INJECT_TYPE_NAME}`).first();
-      await expect(createdInjectType).toBeVisible({ timeout: 10000 });
-
-      // ── Step 2: Navigate to Catalogs and create this spec's catalog ──────────
+      // ── Step 1/2: the Inject Type and Catalog were seeded in beforeEach ─────
 
       await navigateTo('Catalogs');
-
-      const addCatalogButton = page.locator(
-        'button[title*="Add new Catalog"], button[title*="Add Catalog"]'
-      ).first();
-      await expect(addCatalogButton).toBeVisible({ timeout: 5000 });
-      await addCatalogButton.click();
-
-      // Fill Name
-      const catalogNameField = page.locator('input[placeholder*="Name"]').first();
-      await expect(catalogNameField).toBeVisible({ timeout: 5000 });
-      await catalogNameField.fill(CATALOG_NAME);
-
-      // Fill Description (required)
-      const catalogDescField = page.locator(
-        'input[placeholder*="Description"], textarea[placeholder*="Description"]'
-      ).first();
-      await expect(catalogDescField).toBeVisible({ timeout: 5000 });
-      await catalogDescField.fill('Test catalog for copy test');
-
-      // Select Inject Type (required) — pick this spec's own inject type by name, not
-      // whichever option happens to render first. The option list is global across
-      // concurrently-running specs; picking blindly binds this catalog to a sibling
-      // spec's inject type, and that sibling's teardown CASCADE-DELETEs this catalog
-      // the moment it deletes its own inject type.
-      const injectTypeCombobox = page.getByRole('combobox', { name: /Inject Type/i }).first();
-      await expect(injectTypeCombobox).toBeVisible({ timeout: 5000 });
-      await injectTypeCombobox.click();
-      const injectTypeOption = page
-        .locator('mat-option, [role="option"]')
-        .filter({ hasText: INJECT_TYPE_NAME });
-      await expect(injectTypeOption).toBeVisible({ timeout: 5000 });
-      await injectTypeOption.click();
-
-      // Save the catalog
-      const catalogSaveButton = page.locator('button:has-text("Save"), button[type="submit"]').first();
-      await expect(catalogSaveButton).toBeEnabled({ timeout: 5000 });
-      await catalogSaveButton.click();
-
-      // Verify the catalog was created
-      const createdCatalog = page.locator(`text=${CATALOG_NAME}`).first();
-      await expect(createdCatalog).toBeVisible({ timeout: 10000 });
 
       // The Catalogs list paginates (20/page); a freshly-created catalog can land on
       // page 2+ once enough rows exist. Type the unique name into the list's own Search

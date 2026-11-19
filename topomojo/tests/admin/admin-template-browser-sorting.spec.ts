@@ -13,11 +13,17 @@ test.describe('Admin Panel', () => {
     await page.goto(Services.TopoMojo.UI + '/admin');
     await page.waitForLoadState('domcontentloaded');
 
+    // The admin browsers sort client-side in the same handler that moves the sort-up/sort-down
+    // icon: only the active .sort-header button carries one, so an applied sort always changes
+    // which button has the icon or its direction - even with 0 or 1 rows, where the row order
+    // cannot change. Rows were already visible before the click, so they prove nothing.
+    const sortState = () => page.locator('.sort-header').evaluateAll((buttons) =>
+      buttons.map((b) => b.querySelector('svg[data-icon]')?.getAttribute('data-icon') ?? '').join('|'));
+
     const templateLink = page.locator('a:has-text("Template"), button:has-text("Template"), mat-tab:has-text("Template")').first();
     const hasLink = await templateLink.isVisible({ timeout: 10000 }).catch(() => false);
     if (hasLink) {
       await templateLink.click();
-      await page.waitForTimeout(1000);
     }
 
     // expect: Template list displays with table headers
@@ -26,8 +32,9 @@ test.describe('Admin Panel', () => {
     const hasName = await nameHeader.isVisible({ timeout: 10000 }).catch(() => false);
 
     if (hasName) {
+      const sortBefore = await sortState();
       await nameHeader.click();
-      await page.waitForTimeout(500);
+      await expect.poll(sortState).not.toBe(sortBefore);
 
       // expect: Templates are sorted alphabetically by name
       // expect: Sort indicator appears on Name column

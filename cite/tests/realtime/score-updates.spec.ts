@@ -68,8 +68,11 @@ for (const theme of CITE_THEMES) {
 
       try {
         // 1. Open two browser instances with different users logged in to the same evaluation
-        const context1 = await browser.newContext({ ignoreHTTPSErrors: true });
-        const context2 = await browser.newContext({ ignoreHTTPSErrors: true });
+        // Both sessions sign in as admin through Keycloak. The empty storage state is explicit so
+        // neither context inherits a saved sign-in (this spec uses the base `test`, which has none,
+        // but the CITE fixture's default would be admin's saved state).
+        const context1 = await browser.newContext({ ignoreHTTPSErrors: true, storageState: { cookies: [], origins: [] } });
+        const context2 = await browser.newContext({ ignoreHTTPSErrors: true, storageState: { cookies: [], origins: [] } });
         const page1 = await context1.newPage();
         const page2 = await context2.newPage();
 
@@ -92,22 +95,30 @@ for (const theme of CITE_THEMES) {
         // Switch to scoresheet on both (if available)
         for (const page of [page1, page2]) {
           const scoreTab = page.locator('[role="tab"]:has-text("Scoresheet"), button:has-text("Scoresheet")').first();
-          if (await scoreTab.isVisible({ timeout: 5000 }).catch(() => false)) {
+          const tabVisible = await scoreTab.waitFor({ state: 'visible', timeout: 5000 }).then(() => true, () => false);
+          if (tabVisible) {
             await scoreTab.click();
           }
         }
 
         // expect: Both instances are authenticated and viewing the evaluation
         // 2. In first instance, modify a score (if scoring options available)
-        const option = page1.locator('mat-radio-button, mat-checkbox, [class*="scoring-option"]').first();
-        if (await option.isVisible({ timeout: 5000 }).catch(() => false)) {
+        const option = page1.locator('mat-checkbox, mat-radio-button, [class*="scoring-option"]').first();
+        const optionVisible = await option.waitFor({ state: 'visible', timeout: 5000 }).then(() => true, () => false);
+        if (optionVisible) {
           await option.click();
-          await page1.waitForTimeout(2000);
-        }
+          // Wait for the checked state to reflect the selection (MDC checkbox puts checked state on inner input)
+          await expect(option.locator('input')).toBeChecked({ timeout: 5000 });
 
-        // 3. Observe second instance
-        // expect: Score update appears in second instance automatically via SignalR
-        await page2.waitForTimeout(3000);
+          // 3. Observe second instance
+          // expect: Score update appears in second instance automatically via SignalR
+          // The corresponding option on page2 should become checked via SignalR
+          const option2 = page2.locator('mat-checkbox, mat-radio-button, [class*="scoring-option"]').first();
+          const option2Visible = await option2.waitFor({ state: 'visible', timeout: 5000 }).then(() => true, () => false);
+          if (option2Visible) {
+            await expect(option2.locator('input')).toBeChecked({ timeout: 15000 });
+          }
+        }
 
         await context1.close();
         await context2.close();

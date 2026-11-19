@@ -4,7 +4,7 @@
 // spec: alloy/alloy-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../fixtures';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
 import { ALLOY_THEMES, applyAlloyTheme } from '../../test-helpers';
 
@@ -17,9 +17,9 @@ for (const theme of ALLOY_THEMES) {
       await page.goto(`${Services.Alloy.UI}/admin`);
       await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
 
-      // "Add Event Template" opens the "Create New Event Template" dialog directly
+      // The "Add Event Template" button opens the dialog of the same name directly
       // (Alloy.ui PR #711); no row is created until Save, so Cancel leaves no orphan.
-      const dialog = page.getByRole('dialog', { name: 'Create New Event Template' });
+      const dialog = page.getByRole('dialog', { name: 'Add Event Template' });
       await page.getByRole('button', { name: 'Add Event Template' }).click();
 
       // expect: Dialog opens

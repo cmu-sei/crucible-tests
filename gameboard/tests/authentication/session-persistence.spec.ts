@@ -6,6 +6,9 @@
 
 import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
+// Override the fixture's saved storageState so this test starts from a fresh unauthenticated state.
+test.use({ storageState: { cookies: [], origins: [] } });
+
 test.describe('Authentication', () => {
   test('Session Persistence After Refresh', async ({ gameboardAuthenticatedPage: page }) => {
     // 1. Arrive authenticated (fixture logs in).

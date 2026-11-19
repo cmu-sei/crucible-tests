@@ -4,15 +4,14 @@
 // spec: gameboard/gameboard-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, type SharedWorkspace } from '../../fixtures';
 import {
   getAdminToken, createGame, deleteGame, createSponsor, deleteSponsor,
   setAdminSponsor, enrollAdmin, deletePlayer,
   addChallengeSpecToGame, deleteChallengeSpec,
   CreatedGame, CreatedSponsor,
 } from '../../api-helpers';
-import { getTopoMojoAdminToken, createWorkspace, deleteWorkspace, CreatedWorkspace } from '../../../topomojo-helpers';
-import { gbConnect, seedChallenge } from '../../db-helpers';
+import { seedChallenge } from '../../db-helpers';
 import { APIRequestContext, request as playwrightRequest } from '@playwright/test';
 
 // Seed a challenge with a deployed gamespace and VM. Verify Gameboard's
@@ -20,47 +19,40 @@ import { APIRequestContext, request as playwrightRequest } from '@playwright/tes
 // list of active consoles an admin can observe; for a seeded in-progress
 // challenge this should include our challenge id).
 test.describe('Challenges', () => {
-  let gbToken: string, tmToken: string;
-  let sponsor: CreatedSponsor, game: CreatedGame, workspace: CreatedWorkspace;
+  let gbToken: string;
+  let sponsor: CreatedSponsor, game: CreatedGame, workspace: SharedWorkspace;
   let specId: string, playerId: string, teamId: string, challengeId: string;
   let previousSponsorId = 'other';
 
-  test.beforeEach(async () => {
+  test.beforeEach(async ({ sharedWorkspace, gbDb: client }) => {
     gbToken = await getAdminToken();
-    tmToken = await getTopoMojoAdminToken();
+    workspace = sharedWorkspace;
     sponsor = await createSponsor(gbToken, `Con-${Date.now()}`);
     ({ previousSponsorId } = await setAdminSponsor(gbToken, sponsor.id));
-    workspace = await createWorkspace(tmToken, { name: `Con-WS-${Date.now()}`, audience: 'gameboard' });
     game = await createGame(gbToken, { name: `Con-${Date.now()}`, startOffsetDays: -1, endOffsetDays: 30 });
     const spec = await addChallengeSpecToGame(gbToken, game.id, { externalId: workspace.id, name: 'Console' });
     specId = spec.id;
     const player = await enrollAdmin(gbToken, game.id);
     playerId = player.id; teamId = player.teamId;
 
-    const client = await gbConnect();
-    try {
-      const stateJson = JSON.stringify({
-        id: 'seed', name: 'Console',
-        challenge: { text: 'Console challenge', maxAttempts: 3, maxPoints: 100, attempts: 0, score: 0, sectionCount: 1, sectionIndex: 0, questions: [] },
-        vms: [{ id: 'vm-console', name: 'kali', isolationId: 'iso-c' }],
-        isActive: true,
-      });
-      const ch = await seedChallenge(client, {
-        gameId: game.id, specId, playerId, teamId,
-        externalId: workspace.id, name: 'Console', points: 100,
-        stateJson, hasDeployedGamespace: true,
-      });
-      challengeId = ch.challengeId;
-    } finally {
-      await client.end();
-    }
+    const stateJson = JSON.stringify({
+      id: 'seed', name: 'Console',
+      challenge: { text: 'Console challenge', maxAttempts: 3, maxPoints: 100, attempts: 0, score: 0, sectionCount: 1, sectionIndex: 0, questions: [] },
+      vms: [{ id: 'vm-console', name: 'kali', isolationId: 'iso-c' }],
+      isActive: true,
+    });
+    const ch = await seedChallenge(client, {
+      gameId: game.id, specId, playerId, teamId,
+      externalId: workspace.id, name: 'Console', points: 100,
+      stateJson, hasDeployedGamespace: true,
+    });
+    challengeId = ch.challengeId;
   });
 
   test.afterEach(async () => {
     if (playerId) await deletePlayer(gbToken, playerId).catch(() => {});
     if (specId) await deleteChallengeSpec(gbToken, specId).catch(() => {});
     if (game) await deleteGame(gbToken, game.id);
-    if (workspace) await deleteWorkspace(tmToken, workspace.id);
     if (previousSponsorId) await setAdminSponsor(gbToken, previousSponsorId).catch(() => {});
     if (sponsor) await deleteSponsor(gbToken, sponsor.id);
   });
@@ -79,7 +71,7 @@ test.describe('Challenges', () => {
       await ctx.dispose();
     }
 
-    await page.goto(Services.Gameboard.UI + '/admin/dashboard', { waitUntil: 'networkidle' });
+    await page.goto(Services.Gameboard.UI + '/admin/dashboard', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
   });
 });

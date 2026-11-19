@@ -4,7 +4,7 @@
 // spec: alloy/alloy-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../fixtures';
 import { authenticateWithKeycloak, Services } from '../../../shared-fixtures';
 import { ALLOY_THEMES, applyAlloyTheme } from '../../test-helpers';
 
@@ -28,19 +28,19 @@ for (const theme of ALLOY_THEMES) {
       // expect: Admin page loads
       await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
 
-      // 2. Wait briefly for SignalR connection to establish
-      // The app connects to SignalR hub when the admin section loads
-      await page.waitForTimeout(1000);
-
-      // 3. Verify the admin section is functioning (SignalR connection supports real-time updates)
+      // 2. Verify the admin section is functioning (SignalR connection supports real-time updates)
       await expect(page.getByRole('table')).toBeVisible();
 
       // expect: SignalR connection was established via WebSocket
-      // Check if SignalR negotiation and connection requests were made
-      const hasSignalRConnection = signalRRequests.some(
-        url => url.includes('/hubs/engine/negotiate') || url.includes('/hubs/engine?')
-      );
-      expect(hasSignalRConnection).toBeTruthy();
+      // Wait for SignalR negotiation and connection requests
+      await expect
+        .poll(
+          () => signalRRequests.some(
+            url => url.includes('/hubs/engine/negotiate') || url.includes('/hubs/engine?')
+          ),
+          { timeout: 5000, intervals: [200, 500] }
+        )
+        .toBeTruthy();
     });
   });
 }

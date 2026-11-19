@@ -24,25 +24,22 @@ for (const theme of CITE_THEMES) {
       await navigateToAdminSection(page, 'Evaluations');
       await waitForAdminListLoad(page, '/api/evaluations', true);
 
-      // Search for the seeded evaluation
+      // Search for the seeded evaluation (Rule B: wait for filtered row)
       const searchBox = page.locator('input[placeholder="Search"], input[type="search"], input[aria-label="Search"]').first();
       await expect(searchBox).toBeVisible({ timeout: 5000 });
       await searchBox.clear();
       await searchBox.fill(evalName);
-      await page.waitForTimeout(1000);
 
       const evalRow = page.locator('tbody tr').filter({ hasText: evalName }).first();
       await expect(evalRow).toBeVisible({ timeout: 10000 });
       await evalRow.click();
-      await page.waitForTimeout(1000);
 
-      // 3. Find and expand the Duties panel
+      // 3. Find and expand the Duties panel (Rule C: wait for panel button)
       const dutiesPanelButton = page.getByRole('button', { name: 'Duties', exact: true });
       await expect(dutiesPanelButton).toBeVisible({ timeout: 10000 });
       await dutiesPanelButton.click();
-      await page.waitForTimeout(1000);
 
-      // 4. Add a duty
+      // 4. Add a duty (Rule C: wait for add button after panel expansion)
       const addDutyButton = page.locator('button[title="Add Duty"]');
       await expect(addDutyButton).toBeVisible({ timeout: 5000 });
       await addDutyButton.click();
@@ -62,9 +59,8 @@ for (const theme of CITE_THEMES) {
 
       // Wait for the dialog to close and the duty to be created
       await expect(dutyDialog).not.toBeVisible({ timeout: 10000 });
-      await page.waitForTimeout(1000);
 
-      // 5. Verify the duty appears within the Duties region
+      // 5. Verify the duty appears within the Duties region (Rule D: item visibility is completion signal)
       const dutiesRegion = page.getByRole('region', { name: 'Duties' });
       const dutyItem = dutiesRegion.getByText('Test Duty Name').first();
       await expect(dutyItem).toBeVisible({ timeout: 10000 });

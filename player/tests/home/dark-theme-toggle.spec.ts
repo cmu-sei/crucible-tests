@@ -4,7 +4,7 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
+import { test, expect, PLAYER_THEMES, togglePlayerThemeViaMenu } from '../../fixtures';
 import { closeMenuAndWaitForOverlay, expectBodyTheme } from '../../../theme-helpers';
 
 // This spec is about the toggle itself, so the theme is the *starting* state: each
@@ -18,7 +18,7 @@ for (const theme of PLAYER_THEMES) {
       // 1. Log in as admin user, starting in this run's theme
       // expect: User is on the home page
       await expect(page.getByText('My Views')).toBeVisible();
-      await setPlayerTheme(page, theme);
+      await togglePlayerThemeViaMenu(page, theme);
       await expectBodyTheme(page, theme);
 
       // 2. Click the Menu button

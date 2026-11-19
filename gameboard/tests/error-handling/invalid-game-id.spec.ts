@@ -16,8 +16,7 @@ test.describe('Error Handling', () => {
     // must either (a) still render the top-nav chrome without a JS crash, or
     // (b) redirect to an error or home view. Either is acceptable; the key
     // contract is "application does not crash".
-    await page.waitForTimeout(8000);
-    await expect(page.locator('a:has-text("Log out"), button:has-text("Log out")').first()).toBeVisible();
+    await expect(page.locator('a:has-text("Log out"), button:has-text("Log out")').first()).toBeVisible({ timeout: 15000 });
 
     // The bogus game id should not resolve into a playable game view — we do
     // NOT expect a functional challenge board to appear.

@@ -292,8 +292,13 @@ Options:
                         keeping the live progress display readable.
   --filter <pattern>    Filter tests by pattern
   --app <app>           Run tests for specific app
-  --browser <name>      Run tests in a single browser: chromium | firefox.
-                        When omitted, tests run in both browsers (default).
+  --browser <name>      Run tests in specific browser(s): chromium | firefox | all.
+                        Default: chromium. Sets CRUCIBLE_BROWSERS env var.
+  --exclude <app>       Exclude an app from the run (repeatable). Filters out
+                        all specs under that app's directory (one combined
+                        --grep-invert with --theme) and sets
+                        CRUCIBLE_EXCLUDE_APPS so global setup/teardown skip
+                        the app's provisioning and purge.
   --theme <name>        Run only the light or dark variant of themed tests:
                         light | dark. Tests that aren't parameterized by theme
                         still run. When omitted, both themes run (default).
@@ -305,15 +310,17 @@ Options:
                         set via the CRUCIBLE_TARGET environment variable.
 
 Examples:
-  $0 all                # Run all tests for all apps
-  $0 blueprint          # Run all Blueprint tests
-  $0 quick --app blueprint  # Run Blueprint smoke tests
-  $0 ui blueprint       # Run Blueprint tests in UI mode
+  $0 all                          # Run all tests for all apps (chromium only)
+  $0 blueprint                    # Run all Blueprint tests
+  $0 quick --app blueprint        # Run Blueprint smoke tests
+  $0 ui blueprint                 # Run Blueprint tests in UI mode
   $0 --filter login --app player  # Run Player tests matching 'login'
   $0 blueprint --target minikube  # Run Blueprint tests against a minikube deployment
-  $0 all --browser chromium  # Run all tests in chromium only
-  $0 all --workers 4         # Run all tests with 4 parallel workers
-  $0 player --theme light    # Run Player tests in light theme only
+  $0 all --browser all            # Run all tests in both chromium and firefox
+  $0 all --browser firefox        # Run all tests in firefox only
+  $0 all --exclude moodle         # Run all tests except Moodle
+  $0 all --workers 4              # Run all tests with 4 parallel workers
+  $0 player --theme light         # Run Player tests in light theme only
 
 EOF
 }
@@ -328,6 +335,7 @@ WORKERS=""
 THEME=""
 VERBOSE=false
 SHOW_HELP=false
+EXCLUDE_APPS=()
 
 case "$COMMAND" in
     -h|--help)
@@ -361,14 +369,18 @@ while [[ $# -gt 0 ]]; do
             ;;
         --browser)
             case "$2" in
-                chromium|firefox)
+                chromium|firefox|all)
                     BROWSER="$2"
                     ;;
                 *)
-                    print_error "Invalid --browser value: '$2' (valid values: chromium, firefox)"
+                    print_error "Invalid --browser value: '$2' (valid values: chromium, firefox, all)"
                     exit 1
                     ;;
             esac
+            shift 2
+            ;;
+        --exclude)
+            EXCLUDE_APPS+=("$2")
             shift 2
             ;;
         --theme)
@@ -415,6 +427,14 @@ if [ "$SHOW_HELP" = true ]; then
 fi
 
 load_target_env
+
+# Export CRUCIBLE_BROWSERS based on --browser flag (after env load so it takes precedence).
+case "$BROWSER" in
+    chromium) export CRUCIBLE_BROWSERS=chromium ;;
+    firefox)  export CRUCIBLE_BROWSERS=firefox ;;
+    all)      export CRUCIBLE_BROWSERS=chromium,firefox ;;
+    "")       ;; # Not set: playwright.config.ts uses its default (chromium)
+esac
 
 # Resolve infrastructure URLs (with defaults)
 KEYCLOAK_URL="${KEYCLOAK_URL:-https://localhost:8443}"
@@ -470,27 +490,36 @@ if [ "$NO_CHECK" = false ] && [ "$COMMAND" != "help" ] && [ "$COMMAND" != "repor
     fi
 fi
 
-# Build the Playwright --project argument from --browser (empty = run all browsers).
-# The project names map to those defined in playwright.config.ts.
-BROWSER_ARG=""
-if [ -n "$BROWSER" ]; then
-    BROWSER_ARG="--project $BROWSER"
-fi
-
 # Build the Playwright --workers argument (empty = use the config default).
 WORKERS_ARG=""
 if [ -n "$WORKERS" ]; then
     WORKERS_ARG="--workers $WORKERS"
 fi
 
-# Build the Playwright --grep-invert argument from --theme (empty = run both themes).
+# Build ONE Playwright --grep-invert argument from --theme and --exclude: repeated
+# --grep-invert flags don't combine (Playwright honors only the last one), so every
+# exclusion is joined into a single OR pattern.
 # Themed specs title their describe blocks "<theme> theme › ...", so excluding the
 # other theme keeps the requested one plus every test that isn't themed at all.
-THEME_ARGS=()
+# A test's grep title is " <project> <file path> <describes> <title>", so
+# "(^| )(cite|player)/" excludes every spec under those app directories without
+# also catching a subdirectory such as blueprint's ".../admin-gallery-and-cite/".
+INVERT_PATTERNS=()
 case "$THEME" in
-    light) THEME_ARGS=(--grep-invert "dark theme ›") ;;
-    dark)  THEME_ARGS=(--grep-invert "light theme ›") ;;
+    light) INVERT_PATTERNS+=("dark theme ›") ;;
+    dark)  INVERT_PATTERNS+=("light theme ›") ;;
 esac
+if [ ${#EXCLUDE_APPS[@]} -gt 0 ]; then
+    INVERT_PATTERNS+=("(^| )($(IFS='|'; echo "${EXCLUDE_APPS[*]}"))/")
+    # Tell global setup/teardown too, so an excluded app is neither provisioned
+    # nor purged (playwright-run-filters.ts pathFiltersIncludeApp).
+    CRUCIBLE_EXCLUDE_APPS=$(IFS=','; echo "${EXCLUDE_APPS[*]}")
+    export CRUCIBLE_EXCLUDE_APPS
+fi
+GREP_INVERT_ARGS=()
+if [ ${#INVERT_PATTERNS[@]} -gt 0 ]; then
+    GREP_INVERT_ARGS=(--grep-invert "$(IFS='|'; echo "${INVERT_PATTERNS[*]}")")
+fi
 
 # Execute command
 case $COMMAND in
@@ -499,15 +528,15 @@ case $COMMAND in
         if [ -n "$APP" ]; then
             print_warning "Running tests for app: $APP"
             if [ -n "$FILTER" ]; then
-                npx playwright test "$APP/tests/" $BROWSER_ARG "${THEME_ARGS[@]}" $WORKERS_ARG --grep "$FILTER"
+                npx playwright test "$APP/tests/" "${GREP_INVERT_ARGS[@]}" $WORKERS_ARG --grep "$FILTER"
             else
-                npx playwright test "$APP/tests/" $BROWSER_ARG "${THEME_ARGS[@]}" $WORKERS_ARG
+                npx playwright test "$APP/tests/" "${GREP_INVERT_ARGS[@]}" $WORKERS_ARG
             fi
         else
             if [ -n "$FILTER" ]; then
-                npx playwright test $BROWSER_ARG "${THEME_ARGS[@]}" $WORKERS_ARG --grep "$FILTER"
+                npx playwright test "${GREP_INVERT_ARGS[@]}" $WORKERS_ARG --grep "$FILTER"
             else
-                npx playwright test $BROWSER_ARG "${THEME_ARGS[@]}" $WORKERS_ARG
+                npx playwright test "${GREP_INVERT_ARGS[@]}" $WORKERS_ARG
             fi
         fi
         ;;
@@ -516,10 +545,10 @@ case $COMMAND in
         print_header "Running Quick Smoke Tests"
         if [ -n "$APP" ]; then
             print_warning "Running smoke tests for: $APP"
-            npx playwright test "$APP/tests/" $BROWSER_ARG "${THEME_ARGS[@]}" $WORKERS_ARG --grep "login|home"
+            npx playwright test "$APP/tests/" "${GREP_INVERT_ARGS[@]}" $WORKERS_ARG --grep "login|home"
         else
             print_warning "Running smoke tests for all apps"
-            npx playwright test $BROWSER_ARG "${THEME_ARGS[@]}" $WORKERS_ARG --grep "login|home"
+            npx playwright test "${GREP_INVERT_ARGS[@]}" $WORKERS_ARG --grep "login|home"
         fi
         print_success "Smoke tests complete!"
         ;;
@@ -532,9 +561,9 @@ case $COMMAND in
             print_warning "Running UI tests for: $APP"
         fi
         if [ -n "$FILTER" ]; then
-            npx playwright test "$TEST_PATH" $BROWSER_ARG "${THEME_ARGS[@]}" --ui --grep "$FILTER"
+            npx playwright test "$TEST_PATH" "${GREP_INVERT_ARGS[@]}" --ui --grep "$FILTER"
         else
-            npx playwright test "$TEST_PATH" $BROWSER_ARG "${THEME_ARGS[@]}" --ui
+            npx playwright test "$TEST_PATH" "${GREP_INVERT_ARGS[@]}" --ui
         fi
         ;;
 
@@ -546,9 +575,9 @@ case $COMMAND in
             print_warning "Running headed tests for: $APP"
         fi
         if [ -n "$FILTER" ]; then
-            npx playwright test "$TEST_PATH" $BROWSER_ARG "${THEME_ARGS[@]}" $WORKERS_ARG --headed --grep "$FILTER"
+            npx playwright test "$TEST_PATH" "${GREP_INVERT_ARGS[@]}" $WORKERS_ARG --headed --grep "$FILTER"
         else
-            npx playwright test "$TEST_PATH" $BROWSER_ARG "${THEME_ARGS[@]}" $WORKERS_ARG --headed
+            npx playwright test "$TEST_PATH" "${GREP_INVERT_ARGS[@]}" $WORKERS_ARG --headed
         fi
         ;;
 
@@ -560,9 +589,9 @@ case $COMMAND in
             print_warning "Running debug tests for: $APP"
         fi
         if [ -n "$FILTER" ]; then
-            npx playwright test "$TEST_PATH" $BROWSER_ARG "${THEME_ARGS[@]}" --debug --grep "$FILTER"
+            npx playwright test "$TEST_PATH" "${GREP_INVERT_ARGS[@]}" --debug --grep "$FILTER"
         else
-            npx playwright test "$TEST_PATH" $BROWSER_ARG "${THEME_ARGS[@]}" --debug
+            npx playwright test "$TEST_PATH" "${GREP_INVERT_ARGS[@]}" --debug
         fi
         ;;
 
@@ -580,9 +609,9 @@ case $COMMAND in
         if echo "$ALL_APPS" | grep -qw "$COMMAND"; then
             print_header "Running $COMMAND Tests"
             if [ -n "$FILTER" ]; then
-                npx playwright test "$COMMAND/tests/" $BROWSER_ARG "${THEME_ARGS[@]}" $WORKERS_ARG --grep "$FILTER"
+                npx playwright test "$COMMAND/tests/" "${GREP_INVERT_ARGS[@]}" $WORKERS_ARG --grep "$FILTER"
             else
-                npx playwright test "$COMMAND/tests/" $BROWSER_ARG "${THEME_ARGS[@]}" $WORKERS_ARG
+                npx playwright test "$COMMAND/tests/" "${GREP_INVERT_ARGS[@]}" $WORKERS_ARG
             fi
         else
             echo -e "${RED}Unknown command: $COMMAND${NC}"
