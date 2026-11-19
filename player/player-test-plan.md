@@ -409,6 +409,25 @@ Runs once per theme, with that theme as the starting state.
     - expect: Application opens in the main content area or new window/tab
     - expect: Application interface is functional
 
+#### 4.5. Top Bar Keeps the User Menu On Screen
+
+**File:** `player/tests/view-player/topbar-overflow.spec.ts`
+
+**Steps:**
+  1. Open a view whose name is longer than the top bar
+    - expect: The view title is cut short instead of pushing the menu away
+    - expect: The user's name is shown on the Menu button, which is fully on screen
+  2. Hover the view title
+    - expect: A tooltip shows the full view name
+  3. Hover the Menu button
+    - expect: A tooltip shows the user's name
+  4. Open the Menu
+    - expect: The menu opens and Logout is reachable
+  5. Return home and narrow the window to phone width
+    - expect: The name is dropped, leaving the Menu button's chevron fully on screen
+  6. Hover the Menu button
+    - expect: A tooltip still shows the user's name
+
 ### 5. File Browser
 
 **Seed:** `seed.spec.ts`

@@ -45,6 +45,7 @@ export function buildImportGraph(rootDir) {
   const files = collectTsFiles(rootDir);
   const importMap = new Map(); // path -> Set of files it imports
   const graph = new Map(); // path -> Set of files that import it
+  const dynamicEdges = []; // [importer, imported] for each import('./x')
 
   // First pass: build direct import relationships
   for (const absPath of files) {
@@ -57,6 +58,9 @@ export function buildImportGraph(rootDir) {
     if (!importMap.has(relPath)) importMap.set(relPath, new Set());
     for (const imported of imports) {
       importMap.get(relPath).add(imported);
+    }
+    for (const imported of extractDynamicImports(content, relPath)) {
+      dynamicEdges.push([relPath, imported]);
     }
   }
 
@@ -74,30 +78,74 @@ export function buildImportGraph(rootDir) {
     transitive.set(file, computeTransitiveImporters(file, graph));
   }
 
+  // A dynamic import makes the file that contains it depend on the loaded module
+  // and on everything that module imports. It does not make that file's importers
+  // depend on them, because the module loads only when the calling code runs.
+  // provision-targets.ts, for example, lazy-loads each app's sign-in code for that
+  // app alone, and every app's fixtures reach provision-targets.ts. Passing those
+  // edges on would make every app depend on the TopoMojo and Gameboard fixtures.
+  // The cost: the importers of a file that does a lazy load don't see that load.
+  // A lazy load in a root helper plans no app, and one in an app file plans only
+  // that app, even when other code calls the function that does it. Keep such
+  // lazy loads rare.
+  // Membership is checked against the static closure, so one dynamic edge never
+  // carries another file's.
+  const dynamicImporters = new Map(); // path -> files that reach it through a dynamic import
+  for (const [importer, imported] of dynamicEdges) {
+    // The loaded module, plus every file it imports directly or transitively.
+    const reached = [imported];
+    for (const [file, importers] of transitive) {
+      if (importers.has(imported)) reached.push(file);
+    }
+    for (const file of reached) {
+      if (!dynamicImporters.has(file)) dynamicImporters.set(file, new Set());
+      dynamicImporters.get(file).add(importer);
+    }
+  }
+  for (const [file, importers] of dynamicImporters) {
+    if (!transitive.has(file)) transitive.set(file, new Set());
+    for (const importer of importers) transitive.get(file).add(importer);
+  }
+
   return transitive;
 }
 
 /**
  * Extract relative imports from TypeScript source.
  * Resolves './x' and '../x' imports, with or without '.ts' extension.
- * Handles `import`/`export ... from` statements that span several lines,
- * side-effect imports (`import './x'`) and dynamic imports (`import('./x')`).
+ * Handles `import`/`export ... from` statements that span several lines and
+ * side-effect imports (`import './x'`). Dynamic imports (`import('./x')`) are left
+ * to extractDynamicImports, since the import graph treats them differently.
  *
  * @param {string} content - TypeScript source
  * @param {string} fromPath - Repo-relative path of the importing file
  * @returns {Set<string>} Repo-relative paths of the imported files
  */
 export function extractRelativeImports(content, fromPath) {
-  const imports = new Set();
-  const dir = fromPath.split('/').slice(0, -1).join('/');
-
   // [^;]*? crosses newlines, so a named-import list split over several lines still
   // reaches its `from` clause; stopping at `;` keeps it inside one statement.
-  const patterns = [
+  return matchRelativeImports(content, fromPath, [
     /^\s*(?:import|export)\b[^;]*?\bfrom\s*['"](\.[^'"]+)['"]/gm,
     /^\s*import\s*['"](\.[^'"]+)['"]/gm,
-    /\bimport\s*\(\s*['"](\.[^'"]+)['"]\s*\)/g,
-  ];
+  ]);
+}
+
+/**
+ * Extract relative dynamic imports (`import('./x')`) from TypeScript source,
+ * resolved as extractRelativeImports does.
+ *
+ * @param {string} content - TypeScript source
+ * @param {string} fromPath - Repo-relative path of the importing file
+ * @returns {Set<string>} Repo-relative paths of the imported files
+ */
+export function extractDynamicImports(content, fromPath) {
+  return matchRelativeImports(content, fromPath, [/\bimport\s*\(\s*['"](\.[^'"]+)['"]\s*\)/g]);
+}
+
+/** Resolve the relative specifiers that `patterns` capture to repo-relative .ts paths. */
+function matchRelativeImports(content, fromPath, patterns) {
+  const imports = new Set();
+  const dir = fromPath.split('/').slice(0, -1).join('/');
   const specifiers = [];
   for (const pattern of patterns) {
     let match;
