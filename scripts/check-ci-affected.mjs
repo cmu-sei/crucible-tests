@@ -6,7 +6,9 @@
  * Usage: node --no-warnings scripts/check-ci-affected.mjs
  */
 
-import { existsSync } from 'fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
+import { dirname, join } from 'path';
 import { execSync } from 'child_process';
 import { affectedRuns, buildImportGraph, extractRelativeImports, toMatrix, parseAppsFilter } from './lib/ci-affected.mjs';
 
@@ -41,6 +43,32 @@ const CASES = [
       runs: ['console', 'player', 'playerVm', 'steamfitter'].map(app => ({ app, specs: [] })),
       dropped: [],
     },
+  },
+  {
+    name: 'topomojo-helpers.ts change (only apps that import it)',
+    changed: [{ path: 'topomojo-helpers.ts', status: 'M' }],
+    lists: { listChangedFiles: [], skip: [] },
+    // Hard-coded on purpose: provision-targets.ts lazy-loads gameboard/fixtures.ts,
+    // which imports topomojo-helpers.ts, and every app's fixtures reach
+    // provision-targets.ts through auth-state.ts. Counting that lazy load fanned
+    // this change out to all 11 apps.
+    expected: {
+      full: false,
+      runs: ['gameboard', 'topomojo'].map(app => ({ app, specs: [] })),
+      dropped: [],
+    },
+  },
+  {
+    name: 'topomojo/fixtures.ts change (not fanned out by the lazy sign-in load)',
+    changed: [{ path: 'topomojo/fixtures.ts', status: 'M' }],
+    lists: { listChangedFiles: [], skip: [] },
+    expected: { full: false, runs: [{ app: 'topomojo', specs: [] }], dropped: [] },
+  },
+  {
+    name: 'gameboard/fixtures.ts change (not fanned out by the lazy sign-in load)',
+    changed: [{ path: 'gameboard/fixtures.ts', status: 'M' }],
+    lists: { listChangedFiles: [], skip: [] },
+    expected: { full: false, runs: [{ app: 'gameboard', specs: [] }], dropped: [] },
   },
   {
     name: 'Deleted non-spec file under an app (whole app plus importers)',
@@ -203,10 +231,10 @@ const IMPORT_CASES = [
     expected: ['cite/b.ts', 'cite/sub/a.ts'],
   },
   {
-    name: 'Side-effect and dynamic imports',
+    name: 'Side-effect imports kept, dynamic imports ignored',
     source: "import './setup';\nconst m = await import('../lazy');\n",
     from: 'gallery/tests/x.spec.ts',
-    expected: ['gallery/lazy.ts', 'gallery/tests/setup.ts'],
+    expected: ['gallery/tests/setup.ts'],
   },
   {
     name: 'Package imports and non-import statements ignored',
@@ -265,6 +293,68 @@ for (const { name, source, from, expected } of IMPORT_CASES) {
     console.log(`  expected: ${JSON.stringify(expected)}`);
   } else {
     console.log(`ok   ${name}`);
+  }
+}
+
+// Dynamic imports count for the file that makes them (including what the loaded
+// module imports), not for that file's importers.
+// Built in a scratch tree so the case doesn't depend on which lazy loads the repo has.
+console.log();
+{
+  const name = 'Dynamic imports plan the importing file, not its importers';
+  const root = mkdtempSync(join(tmpdir(), 'ci-affected-'));
+  const files = {
+    // A shared root module lazy-loads one app's code, as provision-targets.ts does.
+    'shared.ts': "export const signIn = () => import('./gameboard/fixtures');\n",
+    'alloy/fixtures.ts': "import { signIn } from '../shared';\n",
+    'gameboard/fixtures.ts': 'export const x = 1;\n',
+    // A spec lazy-loads another app's helper it really depends on.
+    'cite/tests/x.spec.ts': "const m = await import('../../gallery/seed-helpers');\n",
+    'gallery/seed-helpers.ts': "export { seed } from '../seed-core';\n",
+    'seed-core.ts': 'export const seed = 1;\n',
+    // A chain of lazy loads: the spec reaches console/b.ts only through caster/a.ts's.
+    'player/tests/y.spec.ts': "const a = await import('../../caster/a');\n",
+    'caster/a.ts': "export const b = () => import('../console/b');\n",
+    'console/b.ts': 'export const b = 1;\n',
+  };
+  try {
+    for (const [path, content] of Object.entries(files)) {
+      mkdirSync(join(root, dirname(path)), { recursive: true });
+      writeFileSync(join(root, path), content);
+    }
+    const scratchGraph = buildImportGraph(root);
+    const plan = path =>
+      affectedRuns([{ path, status: 'M' }], scratchGraph, { listChangedFiles: [], skip: [] })
+        .runs.map(r => r.app)
+        .sort();
+    const problems = [];
+    const lazyShared = plan('gameboard/fixtures.ts');
+    if (JSON.stringify(lazyShared) !== JSON.stringify(['gameboard'])) {
+      problems.push(`gameboard/fixtures.ts: ${JSON.stringify(lazyShared)} !== ["gameboard"]`);
+    }
+    const lazySpec = plan('gallery/seed-helpers.ts');
+    if (JSON.stringify(lazySpec) !== JSON.stringify(['cite', 'gallery'])) {
+      problems.push(`gallery/seed-helpers.ts: ${JSON.stringify(lazySpec)} !== ["cite","gallery"]`);
+    }
+    // The spec also depends on what the lazy-loaded module imports.
+    const lazySpecDep = plan('seed-core.ts');
+    if (JSON.stringify(lazySpecDep) !== JSON.stringify(['cite', 'gallery'])) {
+      problems.push(`seed-core.ts: ${JSON.stringify(lazySpecDep)} !== ["cite","gallery"]`);
+    }
+    // One dynamic edge never carries another, so the spec's app is not planned.
+    const lazyChain = plan('console/b.ts');
+    if (JSON.stringify(lazyChain) !== JSON.stringify(['caster', 'console'])) {
+      problems.push(`console/b.ts: ${JSON.stringify(lazyChain)} !== ["caster","console"]`);
+    }
+    if (problems.length > 0) {
+      failures++;
+      console.log(`FAIL ${name}`);
+      for (const problem of problems) console.log(`  ${problem}`);
+    } else {
+      console.log(`ok   ${name}`);
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 }
 
@@ -356,6 +446,6 @@ if (!existsSync(slicesPath)) {
   }
 }
 
-const totalCases = CASES.length + IMPORT_CASES.length + MATRIX_CASES.length + APPS_FILTER_CASES.length;
+const totalCases = CASES.length + IMPORT_CASES.length + 1 + MATRIX_CASES.length + APPS_FILTER_CASES.length;
 console.log(`\n${totalCases - failures}/${totalCases} cases passed`);
 process.exit(failures ? 1 : 0);
