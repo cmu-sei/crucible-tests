@@ -150,13 +150,12 @@ for (const theme of CASTER_THEMES) {
         cleanupCasterProject(targetId);
         await importArchive(page, targetId, targetName, archive);
 
-        // expect: the file arrives with exactly the bytes written, not mojibake or a truncated tail
+        // expect: the file arrives exactly as written (JS string equality over code points is byte equality in UTF-8), not mojibake or a truncated tail
         const imported = await directoryByName(page, targetId, 'Unicode-Dir');
         expect(imported).toBeTruthy();
         const files = (await casterApi<any[]>(page, 'GET', `directories/${imported.id}/files`)).body;
         expect(files.map((f) => f.name)).toEqual(['unicode.tf']);
         const file = (await casterApi(page, 'GET', `files/${files[0].id}`)).body;
-        expect(Buffer.from(file.content, 'utf8').equals(Buffer.from(NON_ASCII_TF, 'utf8'))).toBe(true);
         expect(file.content).toBe(NON_ASCII_TF);
       });
     }
