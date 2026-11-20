@@ -25,7 +25,12 @@ async function overrideBrandColor(page: Page, brandColor: string | undefined): P
 }
 
 test.describe('Home Page and Navigation', () => {
-  test('Brand Color Setting - Applies Across Branding and Controls', async ({ page }) => {
+  // The TopoMojo fixtures give every test the saved admin session. The Login button only
+  // renders for a signed-out visitor, so this test opts out of the saved session.
+  test.describe('signed out', () => {
+    test.use({ storageState: { cookies: [], origins: [] } });
+
+    test('Brand Color Setting - Applies Across Branding and Controls', async ({ page }) => {
 
     // 1. Load the landing page with settings.json brandColor set to blue
     await overrideBrandColor(page, BRAND_BLUE);
@@ -44,6 +49,7 @@ test.describe('Home Page and Navigation', () => {
 
     // expect: Primary buttons (Login) use the brand color
     await expect(page.locator('.btn-primary').first()).toHaveCSS('background-color', BRAND_BLUE_RGB);
+    });
   });
 
   test('Brand Color Setting - Table Headers Follow Brand Color', async ({ topomojoAuthenticatedPage: page }) => {
