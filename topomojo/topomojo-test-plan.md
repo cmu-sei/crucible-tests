@@ -171,6 +171,31 @@ This updated test plan covers recent feature additions including: configurable b
     - expect: Sidebar toggles open/closed via keyboard
     - expect: Button is fully keyboard accessible
 
+#### 2.5. Brand Color Setting
+
+**File:** `topomojo/tests/home/brand-color-setting.spec.ts`
+
+**Steps:**
+  1. Load the landing page with settings.json `brandColor` set to `#1565c0`
+    - expect: Navigation bar, footer bar, and home page title use the brand color
+    - expect: Primary buttons (Login) use the brand color
+  2. Log in with `brandColor` set and open Admin > Templates
+    - expect: Sortable column headers use the brand color
+    - expect: Active admin tab uses the brand color
+  3. Load the landing page with no `brandColor`
+    - expect: Navigation bar and title keep the built-in primary color
+  4. Load the landing page with a malformed `brandColor` (no leading #)
+    - expect: Navigation bar keeps the built-in primary color instead of going transparent
+
+#### 2.6. Main Content Scrollbars
+
+**File:** `topomojo/tests/home/main-content-scrollbars.spec.ts`
+
+**Steps:**
+  1. Log in and land on home page
+    - expect: Main content area uses overflow auto, not scroll
+    - expect: No scrollbar gutters are drawn when content fits
+
 ### 3. Workspace Management
 
 **Seed:** `seed.spec.ts`
