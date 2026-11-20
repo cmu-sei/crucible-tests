@@ -473,7 +473,7 @@ for (const theme of BLUEPRINT_THEMES) {
         });
 
         // A MSEL role on its own grants no reads: the user also joins a unit attached to the MSEL.
-        test('Access follows the MSEL role: none, Evaluator, Editor, then Facilitator', async ({
+        test('Access follows the MSEL role: none, Evaluator, Editor, Approver, then Facilitator', async ({
           browser,
           nonAdminUser,
         }) => {
@@ -530,6 +530,9 @@ for (const theme of BLUEPRINT_THEMES) {
           await expect(eventRow(page, seeded.withTasks)).toBeVisible({ timeout: 30000 });
           await expect(page.getByText(/You can follow the exercise here/)).toBeVisible();
           await expect(page.getByRole('button', { name: /^Start Move/ })).toHaveCount(0);
+          await expect(page.getByRole('button', { name: 'Pause Automation' })).toHaveCount(0);
+          const approverPanel = await openAutomationPanel(page, seeded.withTasks);
+          await expect(approverPanel.getByRole('button', { name: `Run ${FIRST_TASK}` })).toHaveCount(0);
           await removeUserMselRole(token, approver.id);
 
           // expect: a Facilitator runs a task
