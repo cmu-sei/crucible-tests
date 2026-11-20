@@ -81,22 +81,30 @@ test.describe('Caster Integration', () => {
     await page.reload({ waitUntil: 'domcontentloaded' });
 
     // expect: the directory is what is missing now
-    await expect(page.getByText('Select the Caster directory to deploy.')).toBeVisible({ timeout: 15000 });
+    const missingDirectory = page.getByText('Select the Caster directory to deploy on the Caster tab.');
+    await expect(missingDirectory).toBeVisible({ timeout: 15000 });
+    await expect(casterRow).toContainText('not set');
     await expect(push).toBeDisabled();
 
-    // 3. Choose the seeded template's directory and save
+    // 3. Open the Caster tab from the Caster row, choose the seeded template's directory and save
     const directories = await blueprintCall<any[]>(token, '/api/caster/directories');
     expect(directories.ok, directories.text).toBe(true);
     const directory = directories.data.find(d => d.id === template!.directoryId);
     expect(directory, 'the seeded directory is offered').toBeTruthy();
-    await casterRow.locator('mat-select').click();
-    await page.getByRole('option', { name: `${directory.projectName} / ${directory.name}` }).click();
+    const label = `${directory.projectName} / ${directory.name}`;
+    await casterRow.getByRole('button', { name: 'Open the Caster tab' }).click();
+    await page.locator('.link-select mat-select').click({ timeout: 15000 });
+    await page.getByRole('option', { name: label, exact: true }).click();
     await page.getByRole('button', { name: 'Save Changes' }).click();
-
-    // expect: the directory is saved, the Caster warnings are gone and Push is enabled. Nothing
-    // in Player opens the VM UI yet, which is pointed out without blocking Push.
     await expect.poll(async () => (await getMsel(token, msel.id)).casterDirectoryId).toBe(template!.directoryId);
-    await expect(page.getByText('Select the Caster directory to deploy.')).toBeHidden();
+
+    // 4. Go back to the Config tab
+    await page.locator('mat-list-item').filter({ hasText: 'Info' }).first().click();
+
+    // expect: the Caster row names the directory, the Caster warnings are gone and Push is enabled.
+    // Nothing in Player opens the VM UI yet, which is pointed out without blocking Push.
+    await expect(casterRow).toContainText(label, { timeout: 15000 });
+    await expect(missingDirectory).toBeHidden();
     await expect(page.getByText(/^No Player application opens the VM UI/)).toBeVisible();
     await expect(push).toBeEnabled();
   });
