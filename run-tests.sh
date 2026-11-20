@@ -292,7 +292,7 @@ Options:
                         keeping the live progress display readable.
   --filter <pattern>    Filter tests by pattern
   --app <app>           Run tests for specific app
-  --browser <name>      Run tests in specific browser(s): chromium | firefox | all.
+  --browser <name>      Run tests in specific browser(s): chromium | firefox | webkit | all.
                         Default: chromium. Sets CRUCIBLE_BROWSERS env var.
   --exclude <app>       Exclude an app from the run (repeatable). Filters out
                         all specs under that app's directory (one combined
@@ -316,7 +316,7 @@ Examples:
   $0 ui blueprint                 # Run Blueprint tests in UI mode
   $0 --filter login --app player  # Run Player tests matching 'login'
   $0 blueprint --target minikube  # Run Blueprint tests against a minikube deployment
-  $0 all --browser all            # Run all tests in both chromium and firefox
+  $0 all --browser all            # Run all tests in chromium, firefox and webkit
   $0 all --browser firefox        # Run all tests in firefox only
   $0 all --exclude moodle         # Run all tests except Moodle
   $0 all --workers 4              # Run all tests with 4 parallel workers
@@ -369,11 +369,11 @@ while [[ $# -gt 0 ]]; do
             ;;
         --browser)
             case "$2" in
-                chromium|firefox|all)
+                chromium|firefox|webkit|all)
                     BROWSER="$2"
                     ;;
                 *)
-                    print_error "Invalid --browser value: '$2' (valid values: chromium, firefox, all)"
+                    print_error "Invalid --browser value: '$2' (valid values: chromium, firefox, webkit, all)"
                     exit 1
                     ;;
             esac
@@ -432,7 +432,8 @@ load_target_env
 case "$BROWSER" in
     chromium) export CRUCIBLE_BROWSERS=chromium ;;
     firefox)  export CRUCIBLE_BROWSERS=firefox ;;
-    all)      export CRUCIBLE_BROWSERS=chromium,firefox ;;
+    webkit)   export CRUCIBLE_BROWSERS=webkit ;;
+    all)      export CRUCIBLE_BROWSERS=chromium,firefox,webkit ;;
     "")       ;; # Not set: playwright.config.ts uses its default (chromium)
 esac
 

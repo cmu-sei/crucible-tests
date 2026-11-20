@@ -17,7 +17,7 @@ End-to-end Playwright tests for the **Crucible** platform — a suite of apps (`
 ./run-tests.sh quick [--app <app>]                # smoke tests (grep "login|home")
 ./run-tests.sh ui | headed | debug [app]          # interactive modes
 ./run-tests.sh <app> --filter <pattern>           # --grep wrapper
-./run-tests.sh <cmd> --browser chromium|firefox|all  # default chromium
+./run-tests.sh <cmd> --browser chromium|firefox|webkit|all  # default chromium
 ./run-tests.sh <cmd> --exclude <app>              # exclude an app (repeatable)
 ./run-tests.sh <cmd> --workers <n>                # parallel workers (count or %, e.g. 4 or 50%); overrides config default
 ./run-tests.sh <cmd> --theme light|dark           # one theme variant only (untheme'd tests still run)

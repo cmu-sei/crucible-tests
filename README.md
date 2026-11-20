@@ -110,7 +110,7 @@ After a test fails, click the **Show trace** link in the test results to open th
 
 #### Selecting a Browser Project
 
-The extension reads browser projects from `playwright.config.ts`. Click the **Select Default Profile** dropdown in the Testing panel to choose between configured projects (Chromium or Firefox). Only Chromium is installed by default in the dev container — to use Firefox, run `npx playwright install firefox` first.
+The extension reads browser projects from `playwright.config.ts`. Click the **Select Default Profile** dropdown in the Testing panel to choose between configured projects (Chromium, Firefox or WebKit). Only Chromium is installed by default in the dev container — to use Firefox or WebKit (the engine behind Safari), run `npx playwright install firefox webkit` first. On Linux, `npx playwright install-deps webkit` installs WebKit's system libraries.
 
 ### Using the Command Line
 
