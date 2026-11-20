@@ -83,10 +83,17 @@ test.describe('Automation tasks in a MSEL JSON file', () => {
   test('Tasks come back with their chain and points, and their secrets do not', async ({
     blueprintAuthenticatedPage: page,
   }) => {
-    // expect: the file names the secret, never its value
+    // expect: the file names the secret, with no value, plain or encrypted
     const file = fs.readFileSync(filePath!, 'utf8');
-    expect(file).toContain(FIRST_TASK);
     expect(file).not.toContain(secretValue);
+    expect(file).not.toContain('enc:v1');
+    const exported = JSON.parse(file).ScenarioEvents.flatMap((e: any) => e.AutomationTasks ?? []);
+    const withSecret = exported.find((t: any) => t.Name === FIRST_TASK);
+    expect(JSON.parse(withSecret.SecretParameters)).toEqual({ Headers: '' });
+
+    // The source goes first, so the copy keeps its name, which the global purge recognizes if this test stops early.
+    await deleteMsel(token, sourceMselId!);
+    sourceMselId = undefined;
 
     await page.goto(`${Services.Blueprint.UI}/build`, { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('table').first()).toBeVisible({ timeout: 15000 });

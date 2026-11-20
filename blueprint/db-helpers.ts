@@ -137,6 +137,8 @@ export interface MselIntegrationState {
   integrationStatus?: string | null;
   /** The push's deployment, which scopes the automation runs; a deployed MSEL needs one to run tasks. */
   deploymentId?: string | null;
+  /** Whether the MSEL's automation is paused, as a facilitator's Pause Automation leaves it. */
+  automationPaused?: boolean;
 }
 
 async function updateMselIntegrationState(
@@ -153,6 +155,7 @@ async function updateMselIntegrationState(
   if (state.playerViewId !== undefined) set('player_view_id', state.playerViewId);
   if (state.integrationStatus !== undefined) set('integration_status', state.integrationStatus);
   if (state.deploymentId !== undefined) set('deployment_id', state.deploymentId);
+  if (state.automationPaused !== undefined) set('automation_paused', state.automationPaused);
   if (sets.length === 0) return 0;
 
   values.push(mselId);
@@ -189,6 +192,7 @@ export async function clearMselIntegrationState(mselId: string): Promise<void> {
     playerViewId: null,
     integrationStatus: null,
     deploymentId: null,
+    automationPaused: false,
   });
 }
 
@@ -198,8 +202,12 @@ export async function clearMselIntegrationState(mselId: string): Promise<void> {
  * tasks that need none (an http task) run. Pair it with `clearMselIntegrationState` before
  * deleting the MSEL. Returns the deployment id.
  */
-export async function deployMselForAutomation(mselId: string): Promise<string> {
+export async function deployMselForAutomation(
+  mselId: string,
+  opts: { paused?: boolean } = {}
+): Promise<string> {
   const deploymentId = randomUUID();
-  await setMselIntegrationState(mselId, { status: 'Deployed', deploymentId });
+  // paused in the same write, so the scheduler never sees it deployed and running
+  await setMselIntegrationState(mselId, { status: 'Deployed', deploymentId, automationPaused: opts.paused ?? false });
   return deploymentId;
 }

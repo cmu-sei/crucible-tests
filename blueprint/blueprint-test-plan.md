@@ -1889,8 +1889,8 @@ The specs' tasks are http GETs of Blueprint's own health endpoint (`healthCheckT
 **File:** `blueprint/tests/automation-tasks/export-and-import-automation-tasks.spec.ts`
 
 **Steps:**
-  1. Export a MSEL whose first task holds an http header (a secret)
-    - expect: the file has the tasks but not the secret's value
+  1. Export a MSEL whose first task holds an http header (a secret), then delete the source
+    - expect: the file names the secret with an empty value, and holds neither its value nor any ciphertext
   2. Upload the file from /build
     - expect: the report's Changed section says '1 automation task(s) need a password or key entered again'
     - expect: the copy's tasks are in order, chained, with their points, participant flag and Repeatable, and no secrets
@@ -1945,6 +1945,36 @@ Each spec marks its MSEL deployed in the database (`deployMselForAutomation` in 
     - expect: the dialog says it makes the move current and lists the task
     - expect: 'Now: Move 2 · Group 0'; the server's current move is 2; the task ran and move 1's did not
 
+#### 26.4a. Start a Group
+
+**File:** `blueprint/tests/facilitator-view/facilitator-view.spec.ts`
+
+**Steps:**
+  1. Click 'Start Group 0' under move 1, keep its manual task checked, and click 'Start Group'
+    - expect: the dialog 'Start Move 1 · Group 0' offers the manual task and not the task it triggers
+    - expect: 'Now: Move 1 · Group 0'; the task and the one chained after it ran; move 2's did not
+
+#### 26.4b. A Pause Holds Tasks Due at Their Event Time
+
+**File:** `blueprint/tests/facilitator-view/facilitator-view.spec.ts`
+
+**Steps:**
+  1. Open the Facilitator View of a paused, deployed MSEL whose first task runs At event time, at the MSEL's start
+    - expect: 'Automation is paused'
+  2. Run another task by hand
+    - expect: it succeeds, and the task due at its event time has not run
+  3. Click 'Resume Automation'
+    - expect: the task runs, as a scheduled run, and the task chained after it follows
+
+#### 26.4c. On Failure, On Success and On Completion
+
+**File:** `blueprint/tests/facilitator-view/facilitator-view.spec.ts`
+
+**Steps:**
+  1. Run a task whose expected output the endpoint never returns, with tasks chained on its failure, success and completion
+    - expect: it fails; the On failure and On completion tasks succeed; the On success task does not run
+    - expect: the event's row reads '1 of 4 failed'
+
 #### 26.5. Pause and Resume
 
 **File:** `blueprint/tests/facilitator-view/facilitator-view.spec.ts`
@@ -1992,10 +2022,10 @@ Each spec marks its MSEL deployed in the database (`deployMselForAutomation` in 
 
 **Steps:**
   1. Sign in as a user with no role on the MSEL and open its /facilitate URL
-    - expect: 'Access Denied'
+    - expect: 'Access Denied', once the MSEL's roles have loaded
   2. Give them the Evaluator role
     - expect: still 'Access Denied', and the MSEL editor has an 'Assessor View' tab but no 'Facilitator View' tab
-  3. Give them the Editor role instead
+  3. Give them the Editor role instead, then the Approver role
     - expect: the events are listed with 'You can follow the exercise here', and no Start, Pause or Run buttons
   4. Give them the Facilitator role instead and run a task
     - expect: the task succeeds, and the run names them as its requester

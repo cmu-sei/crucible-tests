@@ -46,9 +46,12 @@ test.describe('Participant Tasks Page', () => {
     await context?.close();
     context = undefined;
     if (mselId) {
-      await clearMselIntegrationState(mselId);
-      // The team, and the user's place on it, go with the MSEL.
-      await deleteMsel(token, mselId);
+      try {
+        await clearMselIntegrationState(mselId);
+      } finally {
+        // The team, and the user's place on it, go with the MSEL.
+        await deleteMsel(token, mselId);
+      }
     }
     mselId = undefined;
   });

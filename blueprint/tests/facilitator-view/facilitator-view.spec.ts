@@ -53,6 +53,7 @@ const MOVE_TWO_TASK = 'Move two check';
 
 interface SeededMsel {
   mselId: string;
+  firstEventId: string;
   mselName: string;
   taskIds: Record<string, string>;
   withTasks: string;
@@ -60,12 +61,19 @@ interface SeededMsel {
   moveTwo: string;
 }
 
+/**
+ * The MSELs this worker's test seeded, recorded as soon as each is created so the afterEach deletes it even when a
+ * later seeding step throws.
+ */
+const created: string[] = [];
+
 async function seedFacilitatorMsel(
   token: string,
-  opts: { deploy?: boolean; firstTask?: Parameters<typeof healthCheckTask>[1] } = {}
+  opts: { deploy?: boolean; paused?: boolean; firstTask?: Parameters<typeof healthCheckTask>[1] } = {}
 ): Promise<SeededMsel> {
   const mselName = tempBlueprintName('TestBP-Facilitator');
   const { id: mselId } = await createMsel(token, { name: mselName, status: 'Approved' });
+  created.push(mselId);
   await createMove(token, mselId, { moveNumber: 1, deltaSeconds: 0, description: 'Opening move' });
   await createMove(token, mselId, { moveNumber: 2, deltaSeconds: 3600, description: 'Second move' });
   // Fields first: an event gets a data value only for the fields that exist when it is created.
@@ -102,8 +110,8 @@ async function seedFacilitatorMsel(
   for (const t of await setAutomationTasks(token, third.id, [healthCheckTask(MOVE_TWO_TASK)])) {
     taskIds[t.name] = t.id;
   }
-  if (opts.deploy ?? true) await deployMselForAutomation(mselId);
-  return { mselId, mselName, taskIds, ...notes };
+  if (opts.deploy ?? true) await deployMselForAutomation(mselId, { paused: opts.paused });
+  return { mselId, mselName, firstEventId: first.id, taskIds, ...notes };
 }
 
 async function gotoFacilitatorPage(page: Page, mselId: string): Promise<void> {
@@ -134,12 +142,15 @@ for (const theme of BLUEPRINT_THEMES) {
     });
 
     test.afterEach(async () => {
-      if (seeded) {
-        // Back to an ordinary MSEL first, so deleting it does not queue a pull.
-        await clearMselIntegrationState(seeded.mselId);
-        await deleteMsel(token, seeded.mselId);
-      }
       seeded = undefined;
+      for (const mselId of created.splice(0)) {
+        try {
+          // Back to an ordinary MSEL first, so deleting it does not queue a pull.
+          await clearMselIntegrationState(mselId);
+        } finally {
+          await deleteMsel(token, mselId);
+        }
+      }
     });
 
     test('Lists every move, the events with tasks, and the Facilitate columns', async ({
@@ -184,7 +195,6 @@ for (const theme of BLUEPRINT_THEMES) {
       await gotoFacilitatorPage(page, mselId);
 
       const panel = await openAutomationPanel(page, seeded.withTasks);
-      // expect: the chained task cannot be run by hand while the one before it has not run
       await expect(panel.getByRole('button', { name: `Run ${FIRST_TASK}` })).toBeEnabled();
 
       await panel.getByRole('button', { name: `Run ${FIRST_TASK}` }).click();
@@ -261,6 +271,85 @@ for (const theme of BLUEPRINT_THEMES) {
       await expect.poll(() => latestRunStatus(token, mselId, taskIds[MOVE_TWO_TASK]), { timeout: 30000 }).toBe('Succeeded');
       // expect: the move 1 tasks were not run
       expect(await latestRunStatus(token, mselId, taskIds[FIRST_TASK])).toBeNull();
+    });
+
+    test('Starting a group makes it current and runs its manual tasks, and their chain', async ({
+      blueprintAuthenticatedPage: page,
+    }) => {
+      await applyBlueprintTheme(page, theme);
+      seeded = await seedFacilitatorMsel(token);
+      const { mselId, taskIds } = seeded;
+      await gotoFacilitatorPage(page, mselId);
+
+      await page.getByRole('button', { name: 'Start Group 0' }).first().click();
+
+      // expect: the dialog offers the group's manual task, not the one it triggers
+      const dialog = page.getByRole('dialog', { name: 'Start Move 1 · Group 0' });
+      await expect(dialog).toBeVisible();
+      await expect(dialog.getByRole('checkbox', { name: new RegExp(`${FIRST_TASK}$`) })).toBeChecked();
+      await expect(dialog.getByRole('checkbox', { name: new RegExp(`${CHAINED_TASK}$`) })).toHaveCount(0);
+      await dialog.getByRole('button', { name: 'Start Group' }).click();
+      await expect(dialog).toBeHidden();
+
+      // expect: move 1 group 0 is current, and the task and the one chained after it ran
+      await expect(page.locator('.facilitator-summary').getByText('Now: Move 1 · Group 0')).toBeVisible({ timeout: 15000 });
+      await expect.poll(() => latestRunStatus(token, mselId, taskIds[FIRST_TASK]), { timeout: 30000 }).toBe('Succeeded');
+      await expect.poll(() => latestRunStatus(token, mselId, taskIds[CHAINED_TASK]), { timeout: 30000 }).toBe('Succeeded');
+      expect(await latestRunStatus(token, mselId, taskIds[MOVE_TWO_TASK])).toBeNull();
+    });
+
+    test('A pause holds a task due at its event time, and resuming runs it', async ({
+      blueprintAuthenticatedPage: page,
+    }) => {
+      await applyBlueprintTheme(page, theme);
+      // The first task is due at once: its event is at the MSEL's start, which is now.
+      seeded = await seedFacilitatorMsel(token, { paused: true, firstTask: { triggerCondition: 'AtEventTime' } });
+      const { mselId, taskIds } = seeded;
+      await gotoFacilitatorPage(page, mselId);
+      const view = page.locator('app-facilitator-view');
+      await expect(view.getByText('Automation is paused')).toBeVisible({ timeout: 30000 });
+
+      // A task run by hand goes ahead while paused, which also shows the scheduler has had its turn.
+      const moveTwo = await openAutomationPanel(page, seeded.moveTwo);
+      await moveTwo.getByRole('button', { name: `Run ${MOVE_TWO_TASK}` }).click();
+      await expect.poll(() => latestRunStatus(token, mselId, taskIds[MOVE_TWO_TASK]), { timeout: 30000 }).toBe('Succeeded');
+
+      // expect: the task due at its event time has not run while paused
+      expect(await latestRunStatus(token, mselId, taskIds[FIRST_TASK])).toBeNull();
+
+      // expect: resuming runs it, as scheduled, and the task chained after it follows
+      await view.getByRole('button', { name: 'Resume Automation' }).click();
+      await expect.poll(() => latestRunStatus(token, mselId, taskIds[FIRST_TASK]), { timeout: 30000 }).toBe('Succeeded');
+      const scheduled = (await listAutomationRuns(token, mselId, 'Exercise')).find((r) => r.automationTaskId === taskIds[FIRST_TASK]);
+      expect(scheduled.source).toBe('Schedule');
+      await expect.poll(() => latestRunStatus(token, mselId, taskIds[CHAINED_TASK]), { timeout: 30000 }).toBe('Succeeded');
+    });
+
+    test('A task that fails starts the task chained on its failure, not on its success', async ({
+      blueprintAuthenticatedPage: page,
+    }) => {
+      await applyBlueprintTheme(page, theme);
+      seeded = await seedFacilitatorMsel(token);
+      const { mselId } = seeded;
+      // The endpoint never answers this text, so the task fails.
+      const tasks = await setAutomationTasks(token, seeded.firstEventId, [
+        healthCheckTask('Fails', { expectedOutput: 'not-what-it-says' }),
+        healthCheckTask('On its failure', { triggerCondition: 'OnFailure', triggerTask: 'Fails' }),
+        healthCheckTask('On its success', { triggerCondition: 'OnSuccess', triggerTask: 'Fails' }),
+        healthCheckTask('On its completion', { triggerCondition: 'OnCompletion', triggerTask: 'Fails' }),
+      ]);
+      const id = (name: string) => tasks.find((t) => t.name === name).id;
+      await gotoFacilitatorPage(page, mselId);
+
+      const panel = await openAutomationPanel(page, seeded.withTasks);
+      await panel.getByRole('button', { name: 'Run Fails' }).click();
+
+      await expect.poll(() => latestRunStatus(token, mselId, id('Fails')), { timeout: 30000 }).toBe('Failed');
+      await expect.poll(() => latestRunStatus(token, mselId, id('On its failure')), { timeout: 30000 }).toBe('Succeeded');
+      await expect.poll(() => latestRunStatus(token, mselId, id('On its completion')), { timeout: 30000 }).toBe('Succeeded');
+      expect(await latestRunStatus(token, mselId, id('On its success'))).toBeNull();
+      // expect: the event's row counts the failure
+      await expect(eventRow(page, seeded.withTasks)).toContainText('1 of 4 failed', { timeout: 15000 });
     });
 
     test('Pausing the automation is saved and can be undone', async ({ blueprintAuthenticatedPage: page }) => {
@@ -393,14 +482,20 @@ for (const theme of BLUEPRINT_THEMES) {
 
           context = await browser.newContext({ ignoreHTTPSErrors: true, storageState: { cookies: [], origins: [] } });
           const page = await context.newPage();
+          // The page shows Access Denied until the roles load, so a refusal is asserted only once they have: a user
+          // with no role gets a 403 for them, so wait for the response whatever its status.
+          const rolesLoaded = () =>
+            page.waitForResponse((r) => r.url().includes(`/api/msels/${mselId}/usermselroles`), { timeout: 30000 });
+          let roles = rolesLoaded();
           await signInToBlueprintAs(
             page,
             nonAdminUser.username,
             nonAdminUser.password,
             `${Services.Blueprint.UI}/facilitate?msel=${mselId}`
           );
+          await roles;
 
-          // expect: with no role on the MSEL the page refuses
+          // expect: with no role on the MSEL the page refuses, once its roles have loaded
           await expect(page.getByText('Access Denied')).toBeVisible({ timeout: 30000 });
 
           unitId = (await createUnit(token)).id;
@@ -409,7 +504,9 @@ for (const theme of BLUEPRINT_THEMES) {
 
           // expect: an Evaluator is refused too, and the MSEL editor has no Facilitator View tab for them
           const evaluator = await addUserMselRole(token, mselId, nonAdminUser.userId, 'Evaluator');
+          roles = rolesLoaded();
           await page.reload();
+          await roles;
           await expect(page.getByText('Access Denied')).toBeVisible({ timeout: 30000 });
           await navigateToMsel(page, mselId);
           await expect(mselSectionItem(page, 'Assessor View')).toBeVisible();
@@ -426,6 +523,14 @@ for (const theme of BLUEPRINT_THEMES) {
           const readOnly = await openAutomationPanel(page, seeded.withTasks);
           await expect(readOnly.getByRole('button', { name: `Run ${FIRST_TASK}` })).toHaveCount(0);
           await removeUserMselRole(token, editor.id);
+
+          // expect: so does an Approver
+          const approver = await addUserMselRole(token, mselId, nonAdminUser.userId, 'Approver');
+          await page.reload();
+          await expect(eventRow(page, seeded.withTasks)).toBeVisible({ timeout: 30000 });
+          await expect(page.getByText(/You can follow the exercise here/)).toBeVisible();
+          await expect(page.getByRole('button', { name: /^Start Move/ })).toHaveCount(0);
+          await removeUserMselRole(token, approver.id);
 
           // expect: a Facilitator runs a task
           await addUserMselRole(token, mselId, nonAdminUser.userId, 'Facilitator');

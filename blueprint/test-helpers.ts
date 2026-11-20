@@ -2795,9 +2795,14 @@ export interface AutomationTaskSeed {
   userExecutable?: boolean;
 }
 
-/** The URL of Blueprint's health endpoint, which answers `{"status":"Healthy"}`. */
+/**
+ * The URL of Blueprint's health endpoint, which answers `{"status":"Healthy"}`, as the Blueprint API itself reaches it:
+ * the API server makes a task's request, not the test runner. `BLUEPRINT_API_INTERNAL_URL` names it where the two
+ * differ (a cluster, whose API cannot reach the runner's ingress name); the runner's URL otherwise.
+ */
 export function blueprintHealthUrl(): string {
-  return `${Services.Blueprint.API.replace(/\/$/, '')}/api/health/live`;
+  const base = process.env.BLUEPRINT_API_INTERNAL_URL || Services.Blueprint.API;
+  return `${base.replace(/\/$/, '')}/api/health/live`;
 }
 
 /** An http GET of Blueprint's health endpoint that succeeds, unless `expectedOutput` says otherwise. */
@@ -2822,6 +2827,11 @@ export async function setAutomationTasks(
   tasks: AutomationTaskSeed[]
 ): Promise<any[]> {
   const event = await getScenarioEvent(token, eventId);
+  // a triggerTask names its task, so names must be unique
+  const twice = tasks.map((t) => t.name).filter((name, i, all) => all.indexOf(name) !== i);
+  if (twice.length > 0) {
+    throw new Error(`setAutomationTasks: more than one task is named "${twice[0]}"`);
+  }
   const ids = new Map(tasks.map((t) => [t.name, randomUUID()]));
   const automationTasks = tasks.map((t) => {
     const triggerTaskId = t.triggerTask ? ids.get(t.triggerTask) : undefined;
