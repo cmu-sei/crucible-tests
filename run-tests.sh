@@ -292,7 +292,7 @@ Options:
                         keeping the live progress display readable.
   --filter <pattern>    Filter tests by pattern
   --app <app>           Run tests for specific app
-  --browser <name>      Run tests in specific browser(s): chromium | firefox | all.
+  --browser <name>      Run tests in specific browser(s): chromium | firefox | webkit | all (chromium + firefox).
                         Default: chromium. Sets CRUCIBLE_BROWSERS env var.
   --exclude <app>       Exclude an app from the run (repeatable). Filters out
                         all specs under that app's directory (one combined
@@ -369,11 +369,11 @@ while [[ $# -gt 0 ]]; do
             ;;
         --browser)
             case "$2" in
-                chromium|firefox|all)
+                chromium|firefox|webkit|all)
                     BROWSER="$2"
                     ;;
                 *)
-                    print_error "Invalid --browser value: '$2' (valid values: chromium, firefox, all)"
+                    print_error "Invalid --browser value: '$2' (valid values: chromium, firefox, webkit, all)"
                     exit 1
                     ;;
             esac
@@ -432,6 +432,7 @@ load_target_env
 case "$BROWSER" in
     chromium) export CRUCIBLE_BROWSERS=chromium ;;
     firefox)  export CRUCIBLE_BROWSERS=firefox ;;
+    webkit)   export CRUCIBLE_BROWSERS=webkit ;;
     all)      export CRUCIBLE_BROWSERS=chromium,firefox ;;
     "")       ;; # Not set: playwright.config.ts uses its default (chromium)
 esac

@@ -120,6 +120,8 @@ export default defineConfig({
     const ALL_PROJECTS = [
       { name: 'chromium', use: { ...devices['Desktop Chrome'], acceptDownloads: true } },
       { name: 'firefox', use: { ...devices['Desktop Firefox'], acceptDownloads: true } },
+      // WebKit is the engine behind Safari; Playwright's build is the closest stand-in on Linux.
+      { name: 'webkit', use: { ...devices['Desktop Safari'], acceptDownloads: true } },
     ];
     const validNames = ALL_PROJECTS.map(p => p.name);
     for (const name of BROWSERS) {
