@@ -2893,15 +2893,6 @@ export async function latestRunStatus(
   return runs[0]?.status ?? null;
 }
 
-/** Run a task of a deployed MSEL by hand, as a facilitator. */
-export async function runAutomationTask(token: string, taskId: string): Promise<any> {
-  const r = await blueprintCall(token, `/api/automationTasks/${taskId}/run`, { method: 'POST' });
-  if (!r.ok) {
-    throw new Error(`runAutomationTask(${taskId}) failed (${r.status}): ${r.text}`);
-  }
-  return r.data;
-}
-
 /** Where the exercise is: its current move and group, and whether its automation is paused. */
 export async function getMselExecution(token: string, mselId: string): Promise<any> {
   const r = await blueprintCall<any>(token, `/api/msels/${mselId}/execution`);
