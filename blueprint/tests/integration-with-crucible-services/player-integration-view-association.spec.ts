@@ -128,7 +128,7 @@ for (const theme of BLUEPRINT_THEMES) {
       await navigateToMsel(page, mselId);
 
       // The Player integration row. Scoped by its own checkbox so this cannot silently
-      // match the Gallery/CITE/Steamfitter rows, which have identical structure.
+      // match the Gallery/CITE/Caster rows, which have identical structure.
       const playerRow = page
         .locator('.integration-row')
         .filter({ has: page.getByRole('checkbox', { name: 'Player' }) });

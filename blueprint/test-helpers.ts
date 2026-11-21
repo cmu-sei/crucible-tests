@@ -162,7 +162,6 @@ export async function createMsel(
     usePlayer: false,
     useGallery: false,
     useCite: false,
-    useSteamfitter: false,
     startTime: opts.startTime ?? new Date().toISOString(),
     durationSeconds: 3600,
   };
@@ -1454,7 +1453,7 @@ export async function downloadMselFile(page: Page, mselRow: Locator, menuItem: R
  * The MSEL detail page renders its sections as bare `mat-list-item`s — there is no
  * `mat-nav-list` or `[role="navigation"]` wrapper, so do not wait on one.
  */
-function mselSectionItem(page: Page, sectionName: string) {
+export function mselSectionItem(page: Page, sectionName: string) {
   return page.locator('mat-list-item').filter({ hasText: sectionName }).first();
 }
 
@@ -2761,4 +2760,154 @@ export async function createOptionListDataField(
       ...o,
     })),
   });
+}
+
+// ============================================================================
+// Automation tasks, their runs, and the exercise's execution state
+// ============================================================================
+//
+// Blueprint runs a MSEL's automation tasks itself. Tasks are saved with their scenario event
+// (`PUT /api/scenarioEvents/{id}` with `automationTasks`, which replaces the event's list in
+// order) and cascade-delete with it. A task runs only on a deployed MSEL, which needs a
+// `deploymentId`: seed both with `deployMselForAutomation` in db-helpers.ts.
+//
+// The specs' tasks are http GETs of Blueprint's own health endpoint: they run without a Player
+// view, VM, or mail server, they succeed when `expectedOutput` is "Healthy", and fail with any
+// text the endpoint does not return. The dev stack allows the loopback address
+// (`Automation__Http__AllowLoopbackAddresses` in the AppHost).
+
+export interface AutomationTaskSeed {
+  name: string;
+  description?: string;
+  /** `AutomationAction` name; default `http_get`. */
+  action?: string;
+  actionParameters?: Record<string, string>;
+  expectedOutput?: string;
+  /** `AutomationTrigger` name; default `Manual`. */
+  triggerCondition?: string;
+  /** The name of another task in the same list that this one follows. */
+  triggerTask?: string;
+  delaySeconds?: number;
+  expirationSeconds?: number;
+  enabled?: boolean;
+  repeatable?: boolean;
+  score?: number;
+  userExecutable?: boolean;
+}
+
+/**
+ * The URL of Blueprint's health endpoint, which answers `{"status":"Healthy"}`, as the Blueprint API itself reaches it:
+ * the API server makes a task's request, not the test runner. `BLUEPRINT_API_INTERNAL_URL` names it where the two
+ * differ (a cluster, whose API cannot reach the runner's ingress name); the runner's URL otherwise.
+ */
+export function blueprintHealthUrl(): string {
+  const base = process.env.BLUEPRINT_API_INTERNAL_URL || Services.Blueprint.API;
+  return `${base.replace(/\/$/, '')}/api/health/live`;
+}
+
+/** An http GET of Blueprint's health endpoint that succeeds, unless `expectedOutput` says otherwise. */
+export function healthCheckTask(name: string, seed: Partial<AutomationTaskSeed> = {}): AutomationTaskSeed {
+  return {
+    name,
+    action: 'http_get',
+    actionParameters: { Url: blueprintHealthUrl() },
+    expectedOutput: 'Healthy',
+    ...seed,
+  };
+}
+
+/**
+ * Replace a scenario event's automation tasks with `tasks`, in that order, and return them as
+ * saved (the server gives them their own ids). `triggerTask` names an earlier or later task of
+ * the same list.
+ */
+export async function setAutomationTasks(
+  token: string,
+  eventId: string,
+  tasks: AutomationTaskSeed[]
+): Promise<any[]> {
+  const event = await getScenarioEvent(token, eventId);
+  // a triggerTask names its task, so names must be unique
+  const twice = tasks.map((t) => t.name).filter((name, i, all) => all.indexOf(name) !== i);
+  if (twice.length > 0) {
+    throw new Error(`setAutomationTasks: more than one task is named "${twice[0]}"`);
+  }
+  const ids = new Map(tasks.map((t) => [t.name, randomUUID()]));
+  const automationTasks = tasks.map((t) => {
+    const triggerTaskId = t.triggerTask ? ids.get(t.triggerTask) : undefined;
+    if (t.triggerTask && !triggerTaskId) {
+      throw new Error(`setAutomationTasks: no task named "${t.triggerTask}" to follow`);
+    }
+    return {
+      id: ids.get(t.name),
+      name: t.name,
+      description: t.description,
+      action: t.action ?? 'http_get',
+      actionParameters: t.actionParameters ?? {},
+      expectedOutput: t.expectedOutput,
+      triggerCondition: t.triggerCondition ?? 'Manual',
+      triggerTaskId,
+      delaySeconds: t.delaySeconds ?? 0,
+      expirationSeconds: t.expirationSeconds ?? 0,
+      iterations: 1,
+      enabled: t.enabled ?? true,
+      repeatable: t.repeatable ?? false,
+      score: t.score ?? 0,
+      userExecutable: t.userExecutable ?? false,
+    };
+  });
+  const r = await blueprintCall(token, `/api/scenarioEvents/${eventId}`, {
+    method: 'PUT',
+    body: { ...event, automationTasks },
+  });
+  if (!r.ok) {
+    throw new Error(`setAutomationTasks failed (${r.status}): ${r.text}`);
+  }
+  return listEventAutomationTasks(token, eventId);
+}
+
+/** A scenario event's automation tasks, in their order. */
+export async function listEventAutomationTasks(token: string, eventId: string): Promise<any[]> {
+  const r = await blueprintCall<any[]>(token, `/api/scenarioEvents/${eventId}/automationTasks`);
+  if (!r.ok) {
+    throw new Error(`listEventAutomationTasks(${eventId}) failed (${r.status}): ${r.text}`);
+  }
+  return r.data ?? [];
+}
+
+/** A MSEL's automation runs, newest first; `kind` is `Exercise` or `Test`. */
+export async function listAutomationRuns(
+  token: string,
+  mselId: string,
+  kind?: 'Exercise' | 'Test'
+): Promise<any[]> {
+  const r = await blueprintCall<any[]>(token, `/api/msels/${mselId}/automationRuns`, {
+    query: { kind },
+  });
+  if (!r.ok) {
+    throw new Error(`listAutomationRuns(${mselId}) failed (${r.status}): ${r.text}`);
+  }
+  return r.data ?? [];
+}
+
+/** The status of a task's newest run of `kind`, or null when it has none. */
+export async function latestRunStatus(
+  token: string,
+  mselId: string,
+  taskId: string,
+  kind: 'Exercise' | 'Test' = 'Exercise'
+): Promise<string | null> {
+  const runs = (await listAutomationRuns(token, mselId, kind))
+    .filter((r) => r.automationTaskId === taskId)
+    .sort((a, b) => Date.parse(b.dateCreated) - Date.parse(a.dateCreated));
+  return runs[0]?.status ?? null;
+}
+
+/** Where the exercise is: its current move and group, and whether its automation is paused. */
+export async function getMselExecution(token: string, mselId: string): Promise<any> {
+  const r = await blueprintCall<any>(token, `/api/msels/${mselId}/execution`);
+  if (!r.ok) {
+    throw new Error(`getMselExecution(${mselId}) failed (${r.status}): ${r.text}`);
+  }
+  return r.data;
 }

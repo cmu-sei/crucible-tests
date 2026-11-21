@@ -314,7 +314,7 @@ for (const theme of BLUEPRINT_THEMES) {
           // expect: with no role on the MSEL the page refuses, even once the roles have loaded
           await expect(page.getByText('Access Denied')).toBeVisible();
           await expect(
-            page.getByText('You need at least Editor role on this MSEL to view the assessor page.')
+            page.getByText('You need the Owner, Editor, Approver or Evaluator role on this MSEL to view the assessor page.')
           ).toBeVisible();
           await expect(page.locator('app-assessor-view')).toHaveCount(0);
 

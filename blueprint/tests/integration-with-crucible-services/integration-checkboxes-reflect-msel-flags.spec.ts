@@ -14,8 +14,9 @@ import {
 
 /**
  * Verifies the "Applications to Integrate" section of the MSEL Info tab reflects the
- * MSEL's integration flags, and that the Scenario Events section (where Steamfitter
- * tasks are triggered from) is reachable.
+ * MSEL's integration flags, that it no longer offers Steamfitter (Blueprint runs its
+ * automation tasks itself), and that the Scenario Events section, where the tasks are
+ * authored, is reachable.
  *
  * Rewritten. The previous version depended on a MSEL literally named "Project Lagoon
  * TTX" existing on the stack with Steamfitter pre-enabled. No such MSEL exists here —
@@ -23,7 +24,7 @@ import {
  * spec failed at its first locator on every run. It also used two `networkidle` waits,
  * which CLAUDE.md forbids.
  *
- * Now: seed a MSEL, enable all four integrations through the API, and assert the
+ * Now: seed a MSEL, enable Player, Gallery and CITE through the API, and assert the
  * checkboxes render that state. The MSEL is deleted in `afterEach` so it runs even
  * when the body throws.
  */
@@ -35,14 +36,13 @@ for (const theme of BLUEPRINT_THEMES) {
     test.beforeEach(async () => {
       token = await getBlueprintToken();
       const msel = await createMsel(token, {
-        name: tempBlueprintName('TestBP-Steamfitter'),
+        name: tempBlueprintName('TestBP-Integrations'),
         description: 'Seeded to verify integration checkboxes render MSEL flags.',
       });
       mselId = msel.id;
 
       // Enable every integration so each checkbox has a known, asserted state.
       await updateMsel(token, mselId, {
-        useSteamfitter: true,
         usePlayer: true,
         useGallery: true,
         useCite: true,
@@ -59,7 +59,7 @@ for (const theme of BLUEPRINT_THEMES) {
       }
     });
 
-    test('Steamfitter Integration - Scenario Automation', async ({
+    test('Integration checkboxes reflect the MSEL, and Steamfitter is not offered', async ({
       blueprintAuthenticatedPage: page,
     }) => {
       await applyBlueprintTheme(page, theme);
@@ -73,7 +73,7 @@ for (const theme of BLUEPRINT_THEMES) {
 
       // Every integration was enabled during seeding, so each box must be present AND checked.
       // Asserting the checked state (not just visibility) is what ties the UI to the MSEL's flags.
-      for (const name of ['Steamfitter', 'Player', 'Gallery', 'CITE']) {
+      for (const name of ['Player', 'Gallery', 'CITE']) {
         const checkbox = page.getByRole('checkbox', { name });
         await expect(checkbox, `"${name}" integration checkbox should be visible`).toBeVisible({
           timeout: 15000,
@@ -84,7 +84,10 @@ for (const theme of BLUEPRINT_THEMES) {
         ).toBeChecked();
       }
 
-      // The Scenario Events section is where Steamfitter tasks get triggered from.
+      // expect: Steamfitter is no longer an integration
+      await expect(page.getByRole('checkbox', { name: 'Steamfitter' })).toHaveCount(0);
+
+      // The Scenario Events section is where automation tasks are authored.
       const scenarioEvents = page
         .locator('mat-list-item')
         .filter({ hasText: 'Scenario Events' })
