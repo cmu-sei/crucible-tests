@@ -19,13 +19,6 @@ import {
   tempBlueprintName,
 } from '../../test-helpers';
 
-/**
- * A user with the same MSEL open in two tabs counts once, and is still listed while either tab is open.
- *
- * Each tab is its own SignalR connection. Presence used to be kept per connection, so closing one of two
- * tabs announced the user's departure while the other tab was still open, and everyone else saw them
- * disappear. The observer (admin, window 1) must keep seeing the second user until their last tab closes.
- */
 /** The JSON messages in one SignalR frame, which separates them with U+001E. */
 function hubMessages(payload: string | Buffer): any[] {
   return String(payload)
@@ -41,23 +34,30 @@ function hubMessages(payload: string | Buffer): any[] {
 }
 
 /**
- * Resolves once the hub has answered this page's selectMsel, which is when the server has put the page's connection
- * on the MSEL. Register it before the page navigates; it rejects if the hub never answers.
+ * Resolves once the hub has answered this page's selectMsel for `mselId` without an error, which is when the server
+ * has put the page's connection on the MSEL. Register it before the page navigates. It rejects, naming `who`, if the
+ * hub gives no such answer within `timeoutMs`, which is counted from the call and so includes the page's navigation.
  */
-function selectMselAnswered(page: Page, timeoutMs = 30000): Promise<void> {
+function selectMselAnswered(page: Page, who: string, mselId: string, timeoutMs = 60000): Promise<void> {
   const answered = new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('the hub never answered selectMsel')), timeoutMs);
+    const timer = setTimeout(() => reject(new Error(`the hub never answered ${who}'s selectMsel`)), timeoutMs);
     page.on('websocket', (ws) => {
       if (!ws.url().includes('/hubs/main')) return;
       const pending = new Set<string>();
       ws.on('framesent', (frame) => {
         for (const message of hubMessages(frame.payload)) {
-          if (message.target === 'selectMsel' && message.invocationId) pending.add(message.invocationId);
+          if (
+            message.target === 'selectMsel' &&
+            message.invocationId &&
+            JSON.stringify(message.arguments).includes(mselId)
+          ) {
+            pending.add(message.invocationId);
+          }
         }
       });
       ws.on('framereceived', (frame) => {
         for (const message of hubMessages(frame.payload)) {
-          if (message.type === 3 && pending.has(message.invocationId)) {
+          if (message.type === 3 && !message.error && pending.has(message.invocationId)) {
             clearTimeout(timer);
             resolve();
           }
@@ -70,6 +70,13 @@ function selectMselAnswered(page: Page, timeoutMs = 30000): Promise<void> {
   return answered;
 }
 
+/**
+ * A user with the same MSEL open in two tabs counts once, and is still listed while either tab is open.
+ *
+ * Each tab is its own SignalR connection. Presence used to be kept per connection, so closing one of two
+ * tabs announced the user's departure while the other tab was still open, and everyone else saw them
+ * disappear. The observer (admin, window 1) must keep seeing the second user until their last tab closes.
+ */
 test.describe('Real-time Collaboration and SignalR › presence with two tabs', () => {
   let blueprintToken: string;
   let mselId: string;
@@ -110,7 +117,7 @@ test.describe('Real-time Collaboration and SignalR › presence with two tabs', 
     blueprintAuthenticatedPage: page,
     nonAdminUser,
   }) => {
-    const observerSelected = selectMselAnswered(page);
+    const observerSelected = selectMselAnswered(page, 'the observer', mselId);
     await navigateToMsel(page, mselId);
     await observerSelected;
     const chips = page.locator('.presence-chip');
@@ -126,13 +133,13 @@ test.describe('Real-time Collaboration and SignalR › presence with two tabs', 
       const firstTab = await context.newPage();
       await signInToBlueprintAs(firstTab, nonAdminUser.username, nonAdminUser.password);
       await expect(firstTab.locator('app-root mat-toolbar').first()).toBeVisible({ timeout: 30000 });
-      const firstSelected = selectMselAnswered(firstTab);
+      const firstSelected = selectMselAnswered(firstTab, 'the first tab', mselId);
       await navigateToMsel(firstTab, mselId);
       await firstSelected;
 
       const secondTab = await context.newPage();
       // The tab only counts once the hub has put its own connection on the MSEL, not when the page has loaded.
-      const secondSelected = selectMselAnswered(secondTab);
+      const secondSelected = selectMselAnswered(secondTab, 'the second tab', mselId);
       await navigateToMsel(secondTab, mselId);
       await secondSelected;
 
