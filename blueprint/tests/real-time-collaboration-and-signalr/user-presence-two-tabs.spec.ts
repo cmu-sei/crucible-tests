@@ -3,8 +3,8 @@
 
 // spec: specs/blueprint-test-plan.md
 
-import { test, expect, Services } from '../../fixtures';
-import { chromium } from '@playwright/test';
+import { test, expect } from '../../fixtures';
+import { chromium, type Page } from '@playwright/test';
 import {
   getBlueprintToken,
   createMsel,
@@ -26,6 +26,50 @@ import {
  * tabs announced the user's departure while the other tab was still open, and everyone else saw them
  * disappear. The observer (admin, window 1) must keep seeing the second user until their last tab closes.
  */
+/** The JSON messages in one SignalR frame, which separates them with U+001E. */
+function hubMessages(payload: string | Buffer): any[] {
+  return String(payload)
+    .split('\u001e')
+    .filter(Boolean)
+    .map((message) => {
+      try {
+        return JSON.parse(message);
+      } catch {
+        return {};
+      }
+    });
+}
+
+/**
+ * Resolves once the hub has answered this page's selectMsel, which is when the server has put the page's connection
+ * on the MSEL. Register it before the page navigates; it rejects if the hub never answers.
+ */
+function selectMselAnswered(page: Page, timeoutMs = 30000): Promise<void> {
+  const answered = new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('the hub never answered selectMsel')), timeoutMs);
+    page.on('websocket', (ws) => {
+      if (!ws.url().includes('/hubs/main')) return;
+      const pending = new Set<string>();
+      ws.on('framesent', (frame) => {
+        for (const message of hubMessages(frame.payload)) {
+          if (message.target === 'selectMsel' && message.invocationId) pending.add(message.invocationId);
+        }
+      });
+      ws.on('framereceived', (frame) => {
+        for (const message of hubMessages(frame.payload)) {
+          if (message.type === 3 && pending.has(message.invocationId)) {
+            clearTimeout(timer);
+            resolve();
+          }
+        }
+      });
+    });
+  });
+  // Nobody awaits it yet when it can reject; the await that follows still sees the rejection.
+  answered.catch(() => undefined);
+  return answered;
+}
+
 test.describe('Real-time Collaboration and SignalR › presence with two tabs', () => {
   let blueprintToken: string;
   let mselId: string;
@@ -66,7 +110,9 @@ test.describe('Real-time Collaboration and SignalR › presence with two tabs', 
     blueprintAuthenticatedPage: page,
     nonAdminUser,
   }) => {
+    const observerSelected = selectMselAnswered(page);
     await navigateToMsel(page, mselId);
+    await observerSelected;
     const chips = page.locator('.presence-chip');
     await expect(chips).toHaveCount(0, { timeout: 15000 });
 
@@ -80,33 +126,14 @@ test.describe('Real-time Collaboration and SignalR › presence with two tabs', 
       const firstTab = await context.newPage();
       await signInToBlueprintAs(firstTab, nonAdminUser.username, nonAdminUser.password);
       await expect(firstTab.locator('app-root mat-toolbar').first()).toBeVisible({ timeout: 30000 });
+      const firstSelected = selectMselAnswered(firstTab);
       await navigateToMsel(firstTab, mselId);
+      await firstSelected;
 
       const secondTab = await context.newPage();
-      // The tab only counts once its own hub connection is open, so wait for that rather than the page.
-      // Resolves once the hub has answered this tab's selectMsel, which is when the server has put it on the MSEL.
-      const secondSelected = new Promise<void>((resolve) =>
-        secondTab.on('websocket', (ws) => {
-          let selectId: string | undefined;
-          ws.on('framesent', (f) => {
-            selectId ??= /"invocationId":"(\d+)","target":"selectMsel"/.exec(String(f.payload))?.[1];
-          });
-          ws.on('framereceived', (f) => {
-            const payload = String(f.payload);
-            if (selectId && payload.includes('"type":3') && payload.includes(`"invocationId":"${selectId}"`)) resolve();
-          });
-        }),
-      );
-      const secondHub = secondTab.waitForEvent('websocket', {
-        predicate: (ws) => ws.url().includes('/hubs/main'),
-        timeout: 30000,
-      });
-      await secondTab.goto(Services.Blueprint.UI, {
-        waitUntil: 'domcontentloaded',
-      });
-      await expect(secondTab.locator('app-root mat-toolbar').first()).toBeVisible({ timeout: 30000 });
+      // The tab only counts once the hub has put its own connection on the MSEL, not when the page has loaded.
+      const secondSelected = selectMselAnswered(secondTab);
       await navigateToMsel(secondTab, mselId);
-      await secondHub;
       await secondSelected;
 
       // The user shows once, however many tabs they have open.
