@@ -21,7 +21,7 @@ for (const theme of PLAYER_THEMES) {
 
       // expect: View player loads within acceptable time
       await expect(page).toHaveURL(/\/view\//, { timeout: 10000 });
-      await expect(page.getByText(primaryViewName, { exact: true })).toBeVisible();
+      await expect(page.locator('app-topbar').getByText(primaryViewName, { exact: true })).toBeVisible();
 
       const loadTime = Date.now() - startTime;
 

@@ -17,7 +17,7 @@ for (const theme of PLAYER_THEMES) {
 
       // expect: Key page landmarks and labels are present for screen readers
       // Note: The app uses <span> elements instead of semantic headings (h1-h6)
-      await expect(page.getByText('Player')).toBeVisible();
+      await expect(page.locator('app-topbar').getByText('Player', { exact: true })).toBeVisible();
 
       // expect: Tables have proper row and column headers
       await expect(page.getByRole('table')).toBeVisible();
