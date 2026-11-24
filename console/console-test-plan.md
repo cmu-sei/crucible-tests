@@ -117,7 +117,7 @@ skipped).
   checked); `--mat-sys-primary` / `--mat-sys-on-primary` equal the active mode's
   settings verbatim, with dark falling back to light.
 - **Primary and on-primary text contrast (WCAG 1.4.3)** — via gear menu ›
-  Keyboard › Send Text (filled in, then cancelled, never sent): the filled Send
+  Keyboard › Text (filled in, then cancelled, never sent): the filled Send
   button's on-primary label, the Cancel label (primary as text) on the dialog
   surface, and the options bar's outlined Copy / Paste / Ctrl-Alt-Del labels.
   Primary-as-text checks are soft so every pair is reported. Expected to fail in
