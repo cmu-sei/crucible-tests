@@ -4,7 +4,7 @@
 // spec: player/player-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
+import { test, expect, Services, typeIntoSearch, PLAYER_THEMES, setPlayerTheme } from '../../fixtures';
 
 for (const theme of PLAYER_THEMES) {
   test.describe(`${theme} theme › Home Page - My Views`, () => {
@@ -17,6 +17,14 @@ for (const theme of PLAYER_THEMES) {
       // expect: User is on the home page with multiple views displayed
       await expect(page.getByText('My Views')).toBeVisible();
       await expect(page.getByRole('table')).toBeVisible();
+
+      // Filter to this worker's two views, so the comparison doesn't depend on which page of
+      // the paginated list they sort onto. Both seeded names end in the worker's ` [w<n>]` tag.
+      const workerTag = primaryViewName.slice(primaryViewName.lastIndexOf(' ['));
+      expect(steamfitterViewName.endsWith(workerTag)).toBe(true);
+      await typeIntoSearch(page.getByRole('textbox', { name: 'Search' }), workerTag.trim());
+      await expect(page.getByRole('link', { name: primaryViewName, exact: true })).toBeVisible();
+      await expect(page.getByRole('link', { name: steamfitterViewName, exact: true })).toBeVisible();
 
       const nameHeader = page.getByRole('columnheader', { name: 'Name' });
       const getSortState = async () => (await nameHeader.getAttribute('aria-sort')) ?? 'none';
