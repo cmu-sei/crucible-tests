@@ -96,17 +96,18 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
     - expect: The user's name is displayed in the topbar
     - expect: The main content area displays a card-based layout
   2. Check for available dashboard cards
-    - expect: If user has join MSELs, a 'Join an Event' card is visible with subtitle 'Access In-Progress Events'
-    - expect: If user has launch MSELs, a 'Start an Event' card is visible with subtitle 'Launch New events'
-    - expect: If user has build MSELs or create permission, a 'Manage an Event' card is visible with subtitle 'Design and Plan Events'
-    - expect: If no MSELs are available and no create permission, a 'Nothing to see here!' card is displayed
+    - expect: A JOIN card is always visible with subtitle 'Active Exercises' and the number of joinable events; it is disabled when there are none
+    - expect: If user has launch MSELs, a LAUNCH card is visible with subtitle 'Initiate New Missions'
+    - expect: If user has build MSELs or create permission, a BUILD card is visible with subtitle 'Design & Planning'
+    - expect: If user can assess a MSEL, an ASSESS card is visible with subtitle 'Evaluation & Scoring'
+    - expect: If no MSELs are available, no create permission and nothing to assess, a NO ACCESS card is displayed
 
 #### 2.2. Navigate to Join Events
 
 **File:** `blueprint/tests/event-dashboard-and-navigation/navigate-to-join-events.spec.ts`
 
 **Steps:**
-  1. From Event Dashboard, click on 'Join an Event' card
+  1. From Event Dashboard, click on the JOIN card
     - expect: Navigation to /join occurs
     - expect: Page displays list of available MSELs to join
     - expect: Topbar still displays with navigation back to dashboard
@@ -116,7 +117,7 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
 **File:** `blueprint/tests/event-dashboard-and-navigation/navigate-to-launch-events.spec.ts`
 
 **Steps:**
-  1. From Event Dashboard, click on 'Start an Event' card
+  1. From Event Dashboard, click on the LAUNCH card
     - expect: Navigation to /launch occurs
     - expect: Page displays list of available MSELs to launch
     - expect: Topbar still displays with navigation back to dashboard
@@ -126,7 +127,7 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
 **File:** `blueprint/tests/event-dashboard-and-navigation/navigate-to-build-events.spec.ts`
 
 **Steps:**
-  1. From Event Dashboard, click on 'Manage an Event' card
+  1. From Event Dashboard, click on the BUILD card
     - expect: Navigation to /build occurs
     - expect: Page displays MSEL list
     - expect: Admin button is visible if user has admin permissions
@@ -494,15 +495,28 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
     - expect: The 'Add a Move' dialog pre-fills Move Number 1
     - expect: The move is listed as move 1 and no ordering warning is shown
   2. Add a second move
-    - expect: The dialog pre-fills Move Number 2 and the latest existing start offset
-    - expect: '** The moves are not in ascending start time order!' is shown, because both moves start at the same time
-  3. Edit Move 2, set 'Minutes from Start' to 30, and click 'Save'
-    - expect: The ordering warning disappears and the new offset is saved
-  4. Search for move 1's description, then clear the search
+    - expect: The dialog pre-fills Move Number 2 and a start one hour after move 1, so no warning is shown
+  3. Edit Move 2 and set 'Hours from Start' to 0
+    - expect: The move saves, and 'Move 1 and Move 2 start at the same time.' is shown
+  4. Edit Move 2 and set 'Minutes from Start' to 30
+    - expect: The warning disappears and the new offset is saved
+  5. Search for move 1's description, then clear the search
     - expect: Only move 1 is listed, then both moves are listed again
-  5. Click 'Delete Move 1', answer 'No', then repeat and answer 'Yes'
+  6. Click 'Delete Move 1', answer 'No', then repeat and answer 'Yes'
     - expect: The confirmation reads 'Are you sure that you want to delete <description>?'
     - expect: Declining keeps the move; confirming removes only move 1
+
+#### 4.10. Push Requires Valid Moves
+
+**File:** `blueprint/tests/msel-info-pages/msel-moves.spec.ts`
+
+**Steps:**
+  1. Give a MSEL two moves with the same start time and a scenario event before the first move
+    - expect: Both are saved
+  2. Push integrations through the API
+    - expect: The push is refused with a 409 naming 'Move 1 and Move 2 start at the same time.' and the event that is in no move
+  3. Open the Info tab, then the Moves tab
+    - expect: Both list the same problems
 
 ### 5. Contributors Management
 
@@ -618,7 +632,7 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
 **File:** `blueprint/tests/launch-and-join-workflows/launch-new-event.spec.ts`
 
 **Steps:**
-  1. Navigate to Event Dashboard and click 'Start an Event', then click 'Start' on a MSEL card
+  1. Navigate to Event Dashboard and click the LAUNCH card, then click 'Start' on a MSEL card
     - expect: Launch process begins
     - expect: Progress spinner is displayed on the card
     - expect: Launch status message is shown
@@ -644,7 +658,7 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
 **File:** `blueprint/tests/launch-and-join-workflows/join-active-event.spec.ts`
 
 **Steps:**
-  1. Navigate to Event Dashboard and click 'Join an Event', then click 'Join' on a MSEL card
+  1. Navigate to Event Dashboard and click the JOIN card, then click 'Join' on a MSEL card
     - expect: Join page displays with available MSELs to join
     - expect: Only MSELs with status 'Deployed' are shown
     - expect: User is redirected to the event participant view
@@ -1014,18 +1028,44 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
   1. Open the Config tab of a MSEL using Caster without Player
     - expect: 'Caster requires Player: the VMs are added to the Player view and its teams.' and Push Integrations is disabled
   2. Turn on Player
-    - expect: 'Select the Caster directory to deploy.' and Push Integrations is disabled
-  3. Choose the directory from the Caster row's Directory select and Save Changes
-    - expect: the directory is saved, Push Integrations is enabled, and 'No Player application opens the VM UI…' is shown
-  4. Open the Teams section of a MSEL with a Caster directory
+    - expect: 'Select the Caster directory to deploy on the Caster tab.', the Caster row's directory reads 'not set', and Push Integrations is disabled
+  3. Open the Caster tab from the Caster row, choose the directory from its Caster Directory select and Save Changes
+    - expect: the directory is saved
+  4. Go back to the Config tab
+    - expect: the Caster row names the directory, Push Integrations is enabled, and 'No Player application opens the VM UI…' is shown
+  5. Open the Teams section of a MSEL with a Caster directory
     - expect: a Topology Team column with each team's variable, '(not in template)' for a name the template lacks, a warning for a mapping the template no longer declares, and no warning for an unmapped topology team with a default
-  5. Edit a mapped team and choose Topology Team 'By team name'
+  6. Edit a mapped team and choose Topology Team 'By team name'
     - expect: the options name the other teams using them, e.g. 'red_cell (used by Red Cell)'
     - expect: the mapping is cleared and 'Topology team "blue_cell" has no MSEL team. The Caster template gives it no default, so the plan will fail unless Caster supplies it.' is shown
-  6. Edit another team and choose 'blue_cell'
+  7. Edit another team and choose 'blue_cell'
     - expect: the mapping is saved and the unmapped warning is gone
-  7. Map a third team to the same topology team
+  8. Map a third team to the same topology team
     - expect: the option reads 'blue_cell (used by Green Team)' and a warning says both teams 'all become "blue_cell", so Push will be refused.'
+
+#### 12.10. Caster Integration Caster Tab
+
+**File:** `blueprint/tests/integration-with-crucible-services/caster-integration-caster-tab.spec.ts`
+
+**Steps:**
+  1. Open the Caster section of a MSEL using Caster with no directory
+    - expect: 'No copy is stored.' and Store a Copy Now is disabled
+  2. Choose a directory that sits below a root directory holding a shared file, and Save Changes
+    - expect: the directory is saved and 'The push creates a workspace in the linked directory.' is shown
+  3. Store a Copy Now
+    - expect: the copy names its project and 'root / range', and lists 'root/providers.tf' (shared from above) before the directory's own 'range/terraform.tfvars' and 'range/variables.tf'
+  4. Open 'range/variables.tf'
+    - expect: its content as it is in Caster
+  5. Delete the Copy and confirm
+    - expect: 'No copy is stored.', and the directory stays linked
+  6. Download the JSON file of a MSEL linked to that directory, and import it as a file from a Caster without the directory
+    - expect: the file carries the copy of root and range; the imported MSEL has no directory, and the report says the push imports the copy as a new Caster project
+  7. Open the imported MSEL's Config tab
+    - expect: the Caster row reads 'a copy of <project> / root / range, which the push imports as a new Caster project', and Push Integrations is enabled
+  8. Open the Caster tab from the Caster row, Import into Caster and confirm
+    - expect: the MSEL links a new range directory in a new project, below a copy of root holding the shared file
+  9. Open the Caster section of a deployed MSEL with a copy
+    - expect: the copy is shown with 'Both are locked while the integrations are deployed', and there is no directory select, Store a Copy Now, Delete the Copy or Save Changes
 
 ### 13. Real-time Collaboration and SignalR
 
@@ -1131,7 +1171,7 @@ Blueprint is a collaborative MSEL (Master Scenario Events List) creation applica
     - expect: Focus retraces the forward order exactly
   3. Focus the Name column sort header and press Enter three times
     - expect: Each press changes the column's aria-sort, and both ascending and descending are reached
-  4. Navigate to the Event Dashboard and Tab to the 'Manage an Event' card
+  4. Navigate to the Event Dashboard and Tab to the BUILD card
     - expect: The card is reachable by keyboard
   5. Press Enter, then Space, on the focused card
     - expect: The card activates and navigates to /build (currently fails upstream: the cards only handle mouse clicks, so the spec asserts that no click fires)
@@ -1417,6 +1457,29 @@ app's layered settings files as served (`settings.json`, deep-merged with
     - expect: A new MSEL application (not the template id) is listed and persisted
   4. Pick a template whose URL uses {viewId} and Save
     - expect: 'Unknown variable(s): {viewId}' (pending upstream); after changing to {playerViewId} it saves
+
+#### 19.7. Add a Blueprint Player Application Template to a MSEL
+
+**File:** `blueprint/tests/player-applications/blueprint-player-application-templates.spec.ts`
+
+**Steps:**
+  1. In Admin 'Player Apps', click 'Add a template Player Application', fill Name, URL, Icon URL, uncheck Embeddable, check Load in Background, Save
+    - expect: Dialog 'Add a Player Application Template'; the template is listed with its URL and stored with no MSEL
+  2. In a MSEL with Player enabled, open Player Apps → Add
+    - expect: The template is offered, titled with its URL, and not under the 'From Player' group
+  3. Pick it and Save
+    - expect: Dialog prefilled with the template's name, URL, icon, Embeddable and Load in Background
+    - expect: The MSEL has one application with those values and its own id; the template is still a template with no MSEL
+
+#### 19.8. Edit and Delete a Blueprint Player Application Template
+
+**File:** `blueprint/tests/player-applications/blueprint-player-application-templates.spec.ts`
+
+**Steps:**
+  1. Seed a template; in Admin 'Player Apps', edit it and rename it
+    - expect: Dialog 'Edit Player Application Template' prefilled; the list and the API show the new name only
+  2. Delete it and confirm Yes
+    - expect: 'Delete Player Application Template' confirmation names it; the row and the record are gone
 
 ### 20. Invitations
 

@@ -14,7 +14,7 @@ import {
   CreatedGame,
   CreatedSponsor,
 } from '../../api-helpers';
-import { gbConnect, seedScoreboardPlayers, cleanupSeededScoreboard } from '../../db-helpers';
+import { seedScoreboardPlayers, cleanupSeededScoreboard } from '../../db-helpers';
 import { APIRequestContext, request as playwrightRequest } from '@playwright/test';
 
 // Seeds 120 synthetic scoreboard entries directly in the database, then
@@ -35,13 +35,8 @@ test.describe('Error Handling', () => {
     });
   });
 
-  test.afterEach(async () => {
-    const client = await gbConnect();
-    try {
-      await cleanupSeededScoreboard(client, game.id);
-    } finally {
-      await client.end();
-    }
+  test.afterEach(async ({ gbDb: client }) => {
+    await cleanupSeededScoreboard(client, game.id);
     if (game) await deleteGame(token, game.id);
     if (sponsor) await deleteSponsor(token, sponsor.id);
   });
@@ -49,20 +44,15 @@ test.describe('Error Handling', () => {
   // Pending upstream: /api/game/{id}/score issues ~7-9 SQL round-trips per team, so with
   // 120 seeded teams the request consistently exceeds 60s. Re-enable once the endpoint
   // batches its per-team queries.
-  test.skip('Large Data Set Handling - Leaderboard Pagination', async ({ gameboardAuthenticatedPage: page }) => {
-    const client = await gbConnect();
-    try {
-      await seedScoreboardPlayers(client, game.id, sponsor.id, 120);
-    } finally {
-      await client.end();
-    }
+  test.skip('Large Data Set Handling - Leaderboard Pagination', async ({ gameboardAuthenticatedPage: page, gbDb: client }) => {
+    await seedScoreboardPlayers(client, game.id, sponsor.id, 120);
 
     const ctx: APIRequestContext = await playwrightRequest.newContext({ ignoreHTTPSErrors: true });
     try {
       const start = Date.now();
       const res = await ctx.fetch(`${Services.Gameboard.API}/api/game/${game.id}/score`, {
         headers: { Authorization: `Bearer ${token}` },
-        timeout: 60000,
+        timeout: 30000,
       });
       const elapsed = Date.now() - start;
       expect(res.ok(), `status: ${res.status()}`).toBe(true);
@@ -70,12 +60,12 @@ test.describe('Error Handling', () => {
       const teams = Array.isArray(board) ? board : (board.teams ?? []);
       expect(teams.length).toBeGreaterThanOrEqual(100);
       // Large-list fetch should still complete within a reasonable time.
-      expect(elapsed).toBeLessThan(60000);
+      expect(elapsed).toBeLessThan(30000);
     } finally {
       await ctx.dispose();
     }
 
-    await page.goto(Services.Gameboard.UI + '/admin/dashboard', { waitUntil: 'networkidle' });
+    await page.goto(Services.Gameboard.UI + '/admin/dashboard', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
   });
 });

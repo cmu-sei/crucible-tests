@@ -19,7 +19,7 @@ for (const theme of CITE_THEMES) {
       const scoringModelRolesTab = page.getByRole('tab', { name: 'Scoring Model Roles' });
       await expect(scoringModelRolesTab).toBeVisible({ timeout: 10000 });
       await scoringModelRolesTab.click();
-      await page.waitForTimeout(1000);
+      // Rule applied: removed fixed sleep
 
       // 3. Verify scoring model roles content is displayed
       const rolesTable = page.locator('table, mat-table, mat-list').first();

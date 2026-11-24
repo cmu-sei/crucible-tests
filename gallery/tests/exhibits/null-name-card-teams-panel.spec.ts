@@ -25,16 +25,16 @@ import { waitForFirstVisible } from '../../../shared-fixtures';
  * Exhibit Management — the "Card Teams" sub-panel of an expanded exhibit row tolerates a
  * team or a card whose `name` is null.
  *
- * Pending upstream: `admin-team-cards`' sort comparator and search predicate must guard a
- * null team name and a null card name. This spec asserts the guarded behaviour, so it fails
- * until that change reaches the Gallery UI build under test.
+ * Regression test for the null guards in `admin-team-cards`' sort comparator and search
+ * predicate, which keep a null team name or a null card name from throwing and emptying
+ * the panel.
  *
  * `admin-team-cards.component.ts` renders one row per TeamCard, resolving the display
  * text through `getTeamName(teamId)` / `getCardName(cardId)`. Both helpers return the
  * found record's `name` verbatim, so both return `null` when that record's name is null —
  * and `Team.Name` and `Card.Name` are both nullable with no `[Required]`
  * (`Gallery.Api.Data/Models/Team.cs`, `.../Card.cs`). Four call sites lowercase those
- * results unguarded:
+ * results, and each must stay guarded:
  *
  *   - `applyFilter`'s predicate, on both the team and the card name — wired to this
  *     panel's Search box (`admin-team-cards.component.html:36`).

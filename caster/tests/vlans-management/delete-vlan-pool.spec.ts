@@ -4,33 +4,43 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, CASTER_THEMES, setCasterTheme } from '../../fixtures';
+import {
+  test,
+  expect,
+  CASTER_THEMES,
+  setCasterTheme,
+  gotoCasterVlansAdmin,
+  casterPoolRow,
+  casterPoolName,
+  seedCasterPool,
+} from '../../fixtures';
 
 for (const theme of CASTER_THEMES) {
   test.describe(`${theme} theme › VLANs Management`, () => {
-    test('Delete VLAN Pool', async ({ casterAuthenticatedPage: page, cleanupCasterPool }) => {
+    test('Delete VLAN Pool', async ({ casterAuthenticatedPage: page, cleanupCasterPool }, testInfo) => {
       await setCasterTheme(page, theme);
 
-      await page.goto(Services.Caster.UI + '/admin?section=VLANs');
-      await expect(page.getByRole('heading', { name: 'Pools' })).toBeVisible({ timeout: 10000 });
+      const name = casterPoolName('Cancel Delete', theme, testInfo.repeatEachIndex);
+      // Registered in case the delete below fails; a 404 at teardown is harmless.
+      cleanupCasterPool(await seedCasterPool(page, name));
+      await gotoCasterVlansAdmin(page);
 
-      // Intercept the POST response so we can capture the new pool's ID for cleanup
-      const poolResponsePromise = page.waitForResponse(
-        resp => resp.url().includes('/api/vlans/pools') && resp.request().method() === 'POST'
-      );
+      const row = casterPoolRow(page, name);
+      const deleteButton = row.getByRole('button', { name: `Delete ${name}` });
+      const dialog = page.getByRole('dialog', { name: 'Delete Pool' });
 
-      // First create a pool by clicking the add button (creates immediately via API)
-      const addButton = page.getByRole('tabpanel', { name: 'Pools' }).getByRole('button').first();
-      await addButton.click();
+      // Answering No keeps the pool.
+      await deleteButton.click();
+      await dialog.getByRole('button', { name: 'No' }).click();
+      await expect(dialog).toHaveCount(0);
+      await expect(row).toBeVisible();
+      await expect(row).toHaveAttribute('aria-expanded', 'false');
 
-      const poolResponse = await poolResponsePromise;
-      expect(poolResponse.status()).toBe(201);
-
-      const pool = await poolResponse.json();
-      // Register the created pool for teardown deletion in case the delete step below fails
-      cleanupCasterPool(pool.id);
-
-      await expect(page.getByRole('heading', { name: 'Pools' })).toBeVisible();
+      // Confirming deletes it.
+      await deleteButton.click();
+      await dialog.getByRole('button', { name: 'Delete' }).click();
+      await expect(page.getByText(`Deleted ${name}`)).toBeVisible();
+      await expect(row).toHaveCount(0);
     });
   });
 }

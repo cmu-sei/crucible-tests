@@ -21,7 +21,7 @@ test.describe('Performance', () => {
       const isAlreadyOpen = await workspaceBrowserContent.isVisible().catch(() => false);
       if (!isAlreadyOpen) {
         await sidebarToggle.click();
-        await page.waitForTimeout(500);
+        await expect(workspaceBrowserContent).toBeVisible({ timeout: 5000 });
       }
     }
 

@@ -38,7 +38,7 @@ for (const theme of BLUEPRINT_THEMES) {
         // 1. Create. Save stays disabled until a name is typed.
         await page.locator('th button:has(mat-icon[fonticon="mdi-plus-circle"])').click();
         const dialog = page.getByRole('dialog');
-        await expect(dialog).toContainText('Create New Group?');
+        await expect(dialog).toContainText('Add Group');
         const save = dialog.getByRole('button', { name: 'Save' });
         await expect(save).toBeDisabled();
         await dialog.getByLabel('Name').fill(name);
@@ -54,7 +54,7 @@ for (const theme of BLUEPRINT_THEMES) {
         const renameButton = (r: typeof row) =>
           r.locator('button:has(mat-icon[fonticon="mdi-square-edit-outline"])');
         await renameButton(row).click();
-        await expect(dialog).toContainText(`Rename ${name}`);
+        await expect(dialog).toContainText('Rename Group');
         await expect(dialog.getByLabel('Name')).toHaveValue(name);
         // expect: an untouched dialog has nothing to save.
         await expect(dialog.getByRole('button', { name: 'Save' })).toBeDisabled();
@@ -99,8 +99,8 @@ for (const theme of BLUEPRINT_THEMES) {
 
         // 4. Delete, through the confirmation.
         await renamedRow.locator('button:has(mat-icon[fonticon="mdi-trash-can-outline"])').click();
-        const confirm = page.getByRole('dialog').filter({ hasText: 'Delete Group?' });
-        await expect(confirm).toContainText(`Delete Group ${renamed}?`);
+        const confirm = page.getByRole('dialog').filter({ hasText: 'Delete Group' });
+        await expect(confirm).toContainText(`Are you sure that you want to delete ${renamed}?`);
         await confirm.getByRole('button', { name: 'Delete' }).click();
         await expect(renamedRow).toHaveCount(0);
       } finally {

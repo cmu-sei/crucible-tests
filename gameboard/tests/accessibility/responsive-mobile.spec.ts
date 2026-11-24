@@ -10,7 +10,6 @@ test.describe('Accessibility', () => {
   test('Responsive Design - Mobile View', async ({ gameboardAuthenticatedPage: page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto(Services.Gameboard.UI + '/home', { waitUntil: 'domcontentloaded' });
-    await page.waitForTimeout(1500);
 
     // The responsive Menu toggle button (#nav-toggle) should be visible on mobile.
     const menuToggle = page.locator('#nav-toggle');

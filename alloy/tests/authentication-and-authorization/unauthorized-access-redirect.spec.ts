@@ -4,8 +4,12 @@
 // spec: alloy/alloy-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../../fixtures';
 import { Services, serviceUrlPattern } from '../../../shared-fixtures';
+
+// Override storageState to start with a fresh, unauthenticated context since this spec
+// tests the authentication flow itself.
+test.use({ storageState: { cookies: [], origins: [] } });
 
 test.describe('Authentication and Authorization', () => {
   test('Unauthorized Access Redirect', async ({ page }) => {

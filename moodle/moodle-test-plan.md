@@ -1234,6 +1234,24 @@ The Moodle application is a Learning Management System (LMS) integration within 
     - expect: Activity logs show recent events
     - expect: Logs can be filtered by user, course, activity
 
+#### 7.15. Applications Block - Site Role Mappings from Keycloak Groups
+
+**File:** `moodle/tests/plugin-block-crucible-site-roles.spec.ts`
+
+**Steps:**
+  1. Create a top-level Keycloak group and a Keycloak user in it, and map the group to `manager` in `block_crucible/siterolemap`
+    - expect: Setup succeeds
+  2. Log in to Moodle as the user through Keycloak
+    - expect: The user holds Manager at site level, owned by block_crucible
+  3. As admin, open `/blocks/crucible/manage_rolemap.php?map=site`
+    - expect: The mapping shows "Granted at site level"
+    - expect: "Who holds manager at site level" lists the user
+  4. Open Site administration > Users > Permissions > Assign system roles > Manager
+    - expect: The user's entry under Existing users is disabled
+    - expect: Forcing a Remove request leaves the grant in place
+  5. Remove the user from the group in Keycloak and log in again within five minutes
+    - expect: The site-level Manager grant is gone
+
 ### 8. Navigation and UI
 
 **Seed:** `tests/seed.setup.ts`

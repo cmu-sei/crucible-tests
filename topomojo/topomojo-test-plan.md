@@ -171,6 +171,51 @@ This updated test plan covers recent feature additions including: configurable b
     - expect: Sidebar toggles open/closed via keyboard
     - expect: Button is fully keyboard accessible
 
+#### 2.5. Brand Color Setting
+
+**File:** `topomojo/tests/home/brand-color-setting.spec.ts`
+
+**Steps:**
+  1. Load the landing page with settings.json `brandColor` set to `#1565c0`
+    - expect: Navigation bar, footer bar, and home page title use the brand color
+    - expect: Primary buttons (Login) use the brand color
+  2. Log in with `brandColor` set and open Admin > Templates
+    - expect: Sortable column headers use the brand color
+    - expect: Active admin tab uses the brand color
+  3. Load the landing page with no `brandColor`
+    - expect: Navigation bar and title keep the built-in primary color
+  4. Load the landing page with a malformed `brandColor` (no leading #)
+    - expect: Navigation bar keeps the built-in primary color instead of going transparent
+
+#### 2.6. Main Content Scrollbars
+
+**File:** `topomojo/tests/home/main-content-scrollbars.spec.ts`
+
+**Steps:**
+  1. Log in and land on home page
+    - expect: Main content area uses overflow auto, not scroll
+    - expect: No scrollbar gutters are drawn when content fits
+
+#### 2.7. Dark Theme
+
+**File:** `topomojo/tests/home/dark-theme.spec.ts`
+
+**Steps:**
+  1. Load the landing page with `?theme=dark-theme`
+    - expect: `html` has the `dark-theme` class and the page background is dark
+  2. Reload without the query param
+    - expect: The dark theme is still applied
+  3. Load with an unknown `?theme=` value
+    - expect: The saved dark theme is kept
+  4. Load with `?theme=light-theme`
+    - expect: The light theme is applied
+  5. Click "Switch to dark theme" in the navigation bar, then reload
+    - expect: The dark theme is applied and survives the reload; the toggle reads "Switch to light theme"
+  6. With a dark OS preference and no saved theme, load the landing page
+    - expect: The dark theme is applied
+  7. Choose the light theme with the toggle and reload
+    - expect: The saved choice wins over the OS preference
+
 ### 3. Workspace Management
 
 **Seed:** `seed.spec.ts`
@@ -545,6 +590,17 @@ This updated test plan covers recent feature additions including: configurable b
     - expect: Workspace is deleted
     - expect: User is redirected to home page
     - expect: Workspace no longer appears in list
+
+#### 4.15. Workspace Editor - Delete Workspace Removes Document Images
+
+**File:** `topomojo/tests/workspace-editor/delete-workspace-removes-document-images.spec.ts`
+
+**Steps:**
+  1. Through the API, create a workspace, upload a document image, and save a document that references it
+    - expect: The image is served from `/docs/{id}/<file>`
+  2. Delete the workspace through the API
+    - expect: The delete returns 200
+    - expect: `GET /docs/{id}/<file>` returns 404
 
 ### 5. Gamespace Management
 

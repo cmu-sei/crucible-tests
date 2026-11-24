@@ -131,6 +131,7 @@ for (const theme of PLAYERVM_THEMES) {
     test('A console session that has ended appears in the report', async ({
       playerVmAuthenticatedPage: page,
     }) => {
+      test.slow(); // Hub connection and usage log entry recording with focus event retry
       requirePrecondition(
         usageLoggingEnabled,
         'VM usage logging is disabled on this VM API (VmUsageLogging:Enabled), so no log entry can be recorded'
@@ -163,7 +164,7 @@ for (const theme of PLAYERVM_THEMES) {
       try {
         await authenticateConsoleWithKeycloak(consolePage);
         await gotoConsole(consolePage, `/vm/${seeded.vmId}/console`, theme);
-        await expect(consolePage.locator('app-console')).toBeVisible({ timeout: 60000 });
+        await expect(consolePage.locator('app-console')).toBeVisible({ timeout: 30000 });
 
         // `ngOnInit` claims the VM only `if (document.hasFocus())`, which a page that
         // has never been interacted with may not report, and only after
@@ -179,7 +180,7 @@ for (const theme of PLAYERVM_THEMES) {
               await consolePage.evaluate(() => window.dispatchEvent(new Event('focus')));
               return (await usageLogEntries(seeded.token, session.id)).length;
             },
-            { timeout: 60000, intervals: [1000, 2000, 3000] }
+            { timeout: 30000, intervals: [1000, 2000, 3000] }
           )
           .toBeGreaterThan(0);
       } finally {
@@ -192,7 +193,7 @@ for (const theme of PLAYERVM_THEMES) {
       await expect
         .poll(
           async () => (await usageLogEntries(seeded.token, session.id)).filter((x) => x.closed).length,
-          { timeout: 60000, intervals: [1000, 2000, 3000] }
+          { timeout: 30000, intervals: [1000, 2000, 3000] }
         )
         .toBeGreaterThan(0);
 

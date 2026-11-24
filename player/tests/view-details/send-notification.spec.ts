@@ -7,7 +7,6 @@
 import {
   test,
   expect,
-  seededPrimaryViewName,
   findPlayerHomeViewLink,
   clickWithoutOverlayInterference,
   PLAYER_THEMES,
@@ -16,9 +15,9 @@ import {
 
 for (const theme of PLAYER_THEMES) {
   test.describe(`${theme} theme › View Details`, () => {
-    test('Send System Notification', async ({ playerAuthenticatedPage: page }) => {
+    test('Send System Notification', async ({ freshView, playerAuthenticatedPage: page }) => {
       await setPlayerTheme(page, theme);
-      const primaryViewName = seededPrimaryViewName();
+      const primaryViewName = freshView.name;
 
       // 1. Log in and navigate to a view
       await (await findPlayerHomeViewLink(page, primaryViewName)).click();

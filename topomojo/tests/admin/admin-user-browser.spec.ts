@@ -4,21 +4,23 @@
 // spec: topomojo/topomojo-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, topomojoNavLink, waitForFirstVisible } from '../../fixtures';
 
 test.describe('Admin Panel', () => {
   test('Admin - User Browser', async ({ topomojoAuthenticatedPage: page }) => {
 
     // 1. The fixture should have authenticated, but Angular app may need time to initialize
-    // Wait for either authenticated state (Admin button) or login prompt
-    const adminButton = page.getByRole('button', { name: 'Admin' });
+    // Wait for either authenticated state (Admin link) or login prompt
+    const adminLink = topomojoNavLink(page, 'Admin');
     const loginButton = page.getByRole('button', { name: 'identity provider' });
 
-    // Race between Admin button appearing (authenticated) or login button appearing (needs auth)
-    const winner = await Promise.race([
-      adminButton.waitFor({ state: 'visible', timeout: 30000 }).then(() => 'authenticated'),
-      loginButton.waitFor({ state: 'visible', timeout: 30000 }).then(() => 'needsAuth')
-    ]).catch(() => 'timeout');
+    // Wait for either authenticated state (Admin link) or login prompt to appear
+    const winner = await waitForFirstVisible(page, [
+      { key: 'authenticated', locator: adminLink },
+      { key: 'needsAuth', locator: loginButton }
+    ], { timeout: 30000 });
+
+    expect(winner, 'Neither Admin link nor login button appeared').not.toBeNull();
 
     // If we need to authenticate, click the login button and go through Keycloak
     if (winner === 'needsAuth') {
@@ -29,13 +31,11 @@ test.describe('Admin Panel', () => {
       await page.click('button:has-text("Sign In")');
       await page.waitForURL(serviceUrlPattern(Services.TopoMojo.UI), { timeout: 30000 });
       // Wait for admin button to appear after auth
-      await adminButton.waitFor({ state: 'visible', timeout: 30000 });
-    } else if (winner === 'timeout') {
-      throw new Error('Timeout waiting for either Admin button or Login button to appear');
+      await adminLink.waitFor({ state: 'visible', timeout: 30000 });
     }
 
-    // Click Admin button to access admin dashboard
-    await adminButton.click();
+    // Click Admin link to access admin dashboard
+    await adminLink.click();
     await page.waitForLoadState('domcontentloaded');
 
     // expect: Admin menu is visible

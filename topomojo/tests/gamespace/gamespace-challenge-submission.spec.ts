@@ -11,31 +11,33 @@ test.describe('Gamespace Management', () => {
 
     // 1. Navigate to gamespace challenge section
     const sidebarToggle = page.locator('button[aria-label="Toggle sidebar"], button:has(mat-icon:text("menu"))').first();
+    const sidebar = page.locator('mat-sidenav, mat-drawer, [class*="sidebar"]').first();
     const hasSidebarToggle = await sidebarToggle.isVisible({ timeout: 10000 }).catch(() => false);
     if (hasSidebarToggle) {
       await sidebarToggle.click();
-      await page.waitForTimeout(500);
+      await expect(sidebar).toBeVisible({ timeout: 5000 });
     }
 
     const gamespaceTab = page.locator('mat-button-toggle:has-text("Gamespace"), button:has-text("Gamespace")').first();
+    const activeGamespaces = page.locator('[class*="gamespace-card"], [class*="item-card"], mat-list-item');
     const hasTab = await gamespaceTab.isVisible({ timeout: 5000 }).catch(() => false);
     if (hasTab) {
       await gamespaceTab.click();
-      await page.waitForTimeout(500);
+      await expect(activeGamespaces.first()).toBeVisible({ timeout: 5000 });
     }
 
-    const activeGamespaces = page.locator('[class*="gamespace-card"], [class*="item-card"], mat-list-item');
     const activeCount = await activeGamespaces.count();
 
     if (activeCount > 0) {
-      await activeGamespaces.first().click();
-      await page.waitForTimeout(2000);
-
       const challengeTab = page.locator('mat-tab:has-text("Challenge"), button:has-text("Challenge")').first();
+      await activeGamespaces.first().click();
+      await expect(challengeTab).toBeVisible({ timeout: 10000 });
+
       const hasChallenge = await challengeTab.isVisible({ timeout: 5000 }).catch(() => false);
       if (hasChallenge) {
+        const answerField = page.locator('input[type="text"], textarea, input[placeholder*="nswer"]').first();
         await challengeTab.click();
-        await page.waitForTimeout(1000);
+        await expect(answerField).toBeVisible({ timeout: 5000 });
       }
 
       // expect: Challenge questions are displayed
@@ -51,7 +53,6 @@ test.describe('Gamespace Management', () => {
         const hasSubmit = await submitButton.isVisible({ timeout: 3000 }).catch(() => false);
         if (hasSubmit) {
           await submitButton.click();
-          await page.waitForTimeout(2000);
 
           // expect: Answer is submitted
           // expect: Feedback is provided (correct/incorrect)

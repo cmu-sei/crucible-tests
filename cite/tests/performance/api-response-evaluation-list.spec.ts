@@ -14,20 +14,29 @@ for (const theme of CITE_THEMES) {
       // 1. Monitor network requests when loading evaluation list
       const apiTimes: number[] = [];
 
-      page.on('response', (response) => {
-        if (response.url().includes('/api/') && response.url().includes('evaluation')) {
-          const timing = response.request().timing();
-          if (timing.responseEnd > 0) {
-            apiTimes.push(timing.responseEnd);
-          }
+      page.on('requestfinished', (req) => {
+        if (req.url().includes('/api/') && req.url().includes('evaluation')) {
+          apiTimes.push(req.timing().responseEnd);
         }
       });
 
-      await page.goto(Services.Cite.UI);
-      await page.waitForLoadState('networkidle');
+      // Set up promise to wait for evaluation API response before checking apiTimes
+      const evaluationResponsePromise = page.waitForResponse(resp =>
+        resp.url().includes('/api/') && resp.url().includes('evaluation')
+      );
 
+      await page.goto(Services.Cite.UI);
+      await page.waitForLoadState('domcontentloaded');
+      // Wait for evaluation list to load
+      await expect(page.getByText('My Evaluations')).toBeVisible({ timeout: 10000 });
+      // Ensure at least one evaluation API response has been received
+      await evaluationResponsePromise;
+
+      // Poll for timing data to be populated (responseEnd is only available when request finishes)
+      await expect.poll(() => apiTimes.filter(t => t > 0).length, { timeout: 3000 }).toBeGreaterThan(0);
       // expect: API response time is under acceptable threshold
-      for (const time of apiTimes) {
+      const positiveTimes = apiTimes.filter(t => t > 0);
+      for (const time of positiveTimes) {
         expect(time).toBeLessThan(5000);
       }
 

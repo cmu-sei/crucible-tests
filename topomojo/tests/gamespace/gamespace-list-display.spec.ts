@@ -11,22 +11,23 @@ test.describe('Gamespace Management', () => {
 
     // 1. Log in and switch to gamespace mode in sidebar
     const sidebarToggle = page.locator('button[aria-label="Toggle sidebar"], button:has(mat-icon:text("menu"))').first();
+    const sidebar = page.locator('mat-sidenav, mat-drawer, [class*="sidebar"]').first();
     const hasSidebarToggle = await sidebarToggle.isVisible({ timeout: 10000 }).catch(() => false);
     if (hasSidebarToggle) {
       await sidebarToggle.click();
-      await page.waitForTimeout(500);
+      await expect(sidebar).toBeVisible({ timeout: 5000 });
     }
 
     // Switch to gamespace mode
     const gamespaceTab = page.locator('mat-button-toggle:has-text("Gamespace"), button:has-text("Gamespace"), mat-tab:has-text("Gamespace")').first();
+    const workspaceBrowser = page.locator('app-workspace-browser, section.sidebar').first();
     const hasGamespaceTab = await gamespaceTab.isVisible({ timeout: 5000 }).catch(() => false);
     if (hasGamespaceTab) {
       await gamespaceTab.click();
-      await page.waitForTimeout(500);
+      await expect(workspaceBrowser).toBeVisible({ timeout: 10000 });
     }
 
     // expect: Workspace browser (which shows gamespaces when gamespace filter is active) is visible
-    const workspaceBrowser = page.locator('app-workspace-browser, section.sidebar').first();
     await expect(workspaceBrowser).toBeVisible({ timeout: 10000 });
 
     // expect: Workspace cards (which represent both workspaces and gamespaces) display or empty state

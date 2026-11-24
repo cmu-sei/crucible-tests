@@ -19,7 +19,7 @@ test.describe('Authentication and Authorization', () => {
     await page.goto(Services.Blueprint.UI);
 
     // expect: The application redirects to the Keycloak login page
-    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 70000 });
+    await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 30000 });
 
     // expect: No application content is displayed before authentication
     const blueprintContent = page.locator('text=Event Dashboard');

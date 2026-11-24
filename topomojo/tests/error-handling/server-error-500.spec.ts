@@ -29,7 +29,6 @@ test.describe('Error Handling and Edge Cases', () => {
     // Navigate to trigger workspace API call
     await page.goto(Services.TopoMojo.UI);
     await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(3000);
 
     // expect: Application handles error gracefully
     const appRoot = page.locator('app-root').first();

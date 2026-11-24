@@ -4,21 +4,46 @@
 // spec: caster/caster-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services, CASTER_THEMES, setCasterTheme } from '../../fixtures';
+import {
+  test,
+  expect,
+  CASTER_THEMES,
+  setCasterTheme,
+  gotoCasterVlansAdmin,
+  casterPoolRow,
+  casterPoolName,
+  seedCasterPool,
+} from '../../fixtures';
 
 for (const theme of CASTER_THEMES) {
   test.describe(`${theme} theme › Pools Management`, () => {
-    test('View Pool Details', async ({ casterAuthenticatedPage: page }) => {
+    test('View Pool Details', async ({ casterAuthenticatedPage: page, cleanupCasterPool }, testInfo) => {
       await setCasterTheme(page, theme);
 
-      await page.goto(Services.Caster.UI + '/admin?section=VLANs');
-      await expect(page.getByRole('heading', { name: 'Pools' })).toBeVisible({ timeout: 10000 });
-      await expect(page.getByRole('tab', { name: 'Pools', selected: true })).toBeVisible();
+      const name = casterPoolName('Details', theme, testInfo.repeatEachIndex);
+      cleanupCasterPool(await seedCasterPool(page, name));
+      await gotoCasterVlansAdmin(page);
 
-      const poolRow = page.getByRole('tabpanel', { name: 'Pools' }).getByRole('row').first();
-      if (await poolRow.isVisible({ timeout: 5000 }).catch(() => false)) {
-        await poolRow.click();
-      }
+      const row = casterPoolRow(page, name);
+      const details = page.getByRole('region', { name: `${name} partitions` });
+      await expect(row).toHaveAttribute('aria-expanded', 'false');
+
+      // Clicking the row opens its partitions in place, under the row.
+      await row.getByRole('cell', { name, exact: true }).click();
+      await expect(row).toHaveAttribute('aria-expanded', 'true');
+      await expect(details.getByRole('button', { name: 'Add New Partition' })).toBeEnabled();
+      // A new pool has no partitions, so all of its VLANs are unassigned.
+      await expect(details.getByText(/\d+ VLANs aren't in any partition/)).toBeVisible();
+      await expect(details.getByRole('button', { name: 'Show' })).toBeVisible();
+
+      // Opening the pool counts its partitions and VLANs in the row.
+      await expect(row.getByRole('cell').nth(3)).toHaveText('0');
+      await expect(row.getByRole('cell').nth(4)).toHaveText(/^\s*0 \/ \d+\s*$/);
+
+      // Clicking the row again closes it.
+      await row.getByRole('cell', { name, exact: true }).click();
+      await expect(row).toHaveAttribute('aria-expanded', 'false');
+      await expect(details.getByRole('button', { name: 'Add New Partition' })).toHaveCount(0);
     });
   });
 }

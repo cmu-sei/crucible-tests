@@ -12,6 +12,7 @@ test.use({ storageState: { cookies: [], origins: [] } });
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Error Handling and Edge Cases`, () => {
     test('Deep Link Access', async ({ page }) => {
+      test.slow(); // Auth redirect can take extended time on cold services
 
       // 1-2. Navigate to deep link URL without auth
       // The Keycloak screens aren't CITE's, so the theme is requested on the deep link
@@ -19,7 +20,7 @@ for (const theme of CITE_THEMES) {
       await page.goto(citeThemeUrl(`${Services.Cite.UI}/?evaluation=test-eval-id`, theme));
 
       // expect: User is redirected to login
-      await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 70000 });
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 30000 });
 
       // 3. After login, user should be redirected back
       await page.fill('input[name="username"]', 'admin');

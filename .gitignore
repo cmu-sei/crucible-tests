@@ -24,3 +24,9 @@ playwright/.cache/
 
 # Per-user env overrides (loaded last, overrides .env.<target>)
 .env.local
+
+# CI stack files written by ci/stack/prepare.sh (certificates, realm, UI settings)
+ci/stack/.generated/
+
+# CI evaluation and digest staging written by the E2E workflow and ci/stack/digests.sh
+ci-artifacts/

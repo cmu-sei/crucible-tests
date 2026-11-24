@@ -18,7 +18,6 @@ test.describe('Workspace Management', () => {
       const isAlreadyOpen = await workspaceBrowserContent.isVisible().catch(() => false);
       if (!isAlreadyOpen) {
         await sidebarToggle.click();
-        await page.waitForTimeout(500);
       }
     }
 

@@ -37,7 +37,7 @@ for (const theme of CASTER_THEMES) {
       for (const name of ['../escape.tf', 'nested/main.tf', '..', ' padded.tf']) {
         // 1. Try to add a file with a name that could escape the working directory
         await files.getByText('Add File').click();
-        const create = page.getByRole('dialog', { name: 'Create New File?' });
+        const create = page.getByRole('dialog', { name: 'Add File' });
         await create.getByRole('textbox', { name: 'Name' }).fill(name);
         await create.getByRole('button', { name: 'Save' }).click();
 
@@ -57,7 +57,7 @@ for (const theme of CASTER_THEMES) {
 
       // 2. Add one with a space inside its name, which stays allowed
       await files.getByText('Add File').click();
-      const create = page.getByRole('dialog', { name: 'Create New File?' });
+      const create = page.getByRole('dialog', { name: 'Add File' });
       await create.getByRole('textbox', { name: 'Name' }).fill('my vars.auto.tfvars');
       await create.getByRole('button', { name: 'Save' }).click();
 

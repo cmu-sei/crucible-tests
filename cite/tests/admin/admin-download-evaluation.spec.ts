@@ -4,26 +4,18 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, seedCompleteEvaluation, cleanupCompleteEvaluation, CITE_THEMES, setCiteTheme } from '../../fixtures';
+import { test, expect, Services, loadCiteSeedIds, SHARED_READ_ONLY_EVALUATION, CITE_THEMES, setCiteTheme } from '../../fixtures';
 import { navigateToAdminSection, waitForAdminListLoad } from '../../test-helpers';
 
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Administration - Evaluations`, () => {
 
-    let evaluationIds: { scoringModelId: string; evaluationId: string; teamTypeId: string } | null = null;
-    let evalName = '';
-
     test('Download Evaluation', async ({ citeAuthenticatedPage: page }) => {
       await setCiteTheme(page, theme);
 
-      // 1. Seed an evaluation via API
-      evalName = `Download Test ${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-      const seedData = await seedCompleteEvaluation(evalName, 0);
-      evaluationIds = {
-        scoringModelId: seedData.scoringModelId,
-        evaluationId: seedData.evaluationId,
-        teamTypeId: seedData.teamTypeId,
-      };
+      // 1. The run-level shared read-only evaluation (global-setup); downloading only reads it.
+      await loadCiteSeedIds();
+      const evalName = SHARED_READ_ONLY_EVALUATION;
 
       // 2. Navigate to the evaluations admin list
       await navigateToAdminSection(page, 'Evaluations');
@@ -36,7 +28,7 @@ for (const theme of CITE_THEMES) {
       await expect(searchBox).toBeVisible({ timeout: 5000 });
       await searchBox.clear();
       await searchBox.fill(evalName);
-      await page.waitForTimeout(1000);
+      // Rule B: evalRow wait below serves as completion signal
 
       const evalRow = page.locator('tbody tr').filter({ hasText: evalName }).first();
       await expect(evalRow).toBeVisible({ timeout: 10000 });
@@ -52,14 +44,6 @@ for (const theme of CITE_THEMES) {
       const download = await downloadPromise;
       expect(download.suggestedFilename()).toContain('.json');
       expect(download.suggestedFilename()).toContain('evaluation');
-    });
-
-    test.afterEach(async () => {
-      // Clean up via API
-      if (evaluationIds) {
-        await cleanupCompleteEvaluation(evaluationIds);
-        evaluationIds = null;
-      }
     });
   });
 }

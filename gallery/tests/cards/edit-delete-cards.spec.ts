@@ -15,6 +15,7 @@ import {
   apiDeleteCollectionById,
   GALLERY_THEMES,
   setGalleryTheme,
+  clickRowAction,
 } from '../../fixtures';
 
 /**
@@ -179,13 +180,9 @@ for (const theme of GALLERY_THEMES) {
       // ---------------------------------------------------------------------
       // 1. Edit an existing card by modifying its name and description
       // ---------------------------------------------------------------------
-      // force: true is required. The buttons themselves are enabled
-      // (disabled=null, aria-disabled=null) but each row is a
-      // `<mat-expansion-panel disabled>` whose `<mat-expansion-panel-header>`
-      // carries aria-disabled="true"; Playwright treats descendants of an
-      // aria-disabled ancestor as disabled and would wait out the full timeout.
+      // The row header is a disabled expansion-panel header; see clickRowAction in fixtures.ts.
       const editPanel = await ensureCardsPanel(page, collectionName, editCardName);
-      await editPanel.getByRole('button', { name: `Edit ${editCardName}` }).click({ force: true });
+      await clickRowAction(editPanel.getByRole('button', { name: `Edit ${editCardName}` }));
       // The dialog title is hardcoded to "Edit Card" in
       // admin-card-edit-dialog.component.html.
       await expect(page.getByRole('dialog', { name: 'Edit Card' })).toBeVisible();
@@ -227,7 +224,7 @@ for (const theme of GALLERY_THEMES) {
       // CrucibleDialogService.confirm with title 'Delete Card'.
       const openDeleteConfirm = async (cardName: string) => {
         const panel = await ensureCardsPanel(page, collectionName, cardName);
-        await panel.getByRole('button', { name: `Delete ${cardName}` }).click({ force: true });
+        await clickRowAction(panel.getByRole('button', { name: `Delete ${cardName}` }));
         const confirm = page.getByRole('dialog').filter({ hasText: 'Delete Card' });
         await expect(confirm).toBeVisible();
         return confirm;

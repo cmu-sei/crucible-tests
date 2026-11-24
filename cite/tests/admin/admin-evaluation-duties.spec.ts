@@ -5,7 +5,7 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, seedCompleteEvaluation, cleanupCompleteEvaluation, CITE_THEMES, setCiteTheme } from '../../fixtures';
-import { navigateToAdminSection, waitForAdminListLoad } from '../../test-helpers';
+import { navigateToAdminSection, waitForAdminListLoad, waitForDialogOpen } from '../../test-helpers';
 
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Administration - Evaluations`, () => {
@@ -24,31 +24,28 @@ for (const theme of CITE_THEMES) {
       await navigateToAdminSection(page, 'Evaluations');
       await waitForAdminListLoad(page, '/api/evaluations', true);
 
-      // Search for the seeded evaluation
+      // Search for the seeded evaluation (Rule B: wait for filtered row)
       const searchBox = page.locator('input[placeholder="Search"], input[type="search"], input[aria-label="Search"]').first();
       await expect(searchBox).toBeVisible({ timeout: 5000 });
       await searchBox.clear();
       await searchBox.fill(evalName);
-      await page.waitForTimeout(1000);
 
       const evalRow = page.locator('tbody tr').filter({ hasText: evalName }).first();
       await expect(evalRow).toBeVisible({ timeout: 10000 });
       await evalRow.click();
-      await page.waitForTimeout(1000);
 
-      // 3. Find and expand the Duties panel
+      // 3. Find and expand the Duties panel (Rule C: wait for panel button)
       const dutiesPanelButton = page.getByRole('button', { name: 'Duties', exact: true });
       await expect(dutiesPanelButton).toBeVisible({ timeout: 10000 });
       await dutiesPanelButton.click();
-      await page.waitForTimeout(1000);
 
-      // 4. Add a duty
+      // 4. Add a duty (Rule C: wait for add button after panel expansion)
       const addDutyButton = page.locator('button[title="Add Duty"]');
       await expect(addDutyButton).toBeVisible({ timeout: 5000 });
       await addDutyButton.click();
 
       const dutyDialog = page.getByRole('dialog');
-      await expect(dutyDialog).toBeVisible({ timeout: 5000 });
+      await waitForDialogOpen(dutyDialog);
 
       // Fill in the duty name
       const dutyNameField = dutyDialog.getByRole('textbox', { name: 'Duty Name' });
@@ -62,12 +59,30 @@ for (const theme of CITE_THEMES) {
 
       // Wait for the dialog to close and the duty to be created
       await expect(dutyDialog).not.toBeVisible({ timeout: 10000 });
-      await page.waitForTimeout(1000);
 
-      // 5. Verify the duty appears within the Duties region
+      // 5. Verify the duty appears within the Duties region (Rule D: item visibility is completion signal)
       const dutiesRegion = page.getByRole('region', { name: 'Duties' });
       const dutyItem = dutiesRegion.getByText('Test Duty Name').first();
       await expect(dutyItem).toBeVisible({ timeout: 10000 });
+
+      // 6. Edit the duty: the API cannot move an existing duty to another team, so Team
+      //    is locked, and the save sends only the name
+      const dutyRow = dutiesRegion.getByRole('row').filter({ hasText: 'Test Duty Name' });
+      await dutyRow.locator('button[title="Edit Duty"]').click();
+      const editDialog = page.getByRole('dialog');
+      await waitForDialogOpen(editDialog);
+      await expect(editDialog.getByRole('combobox', { name: 'Team' })).toHaveAttribute('aria-disabled', 'true');
+
+      await editDialog.getByRole('textbox', { name: 'Duty Name' }).fill('Edited Duty Name');
+      const updateResponse = page.waitForResponse(
+        (r) => r.url().includes('/api/duties/') && r.request().method() === 'PUT',
+      );
+      await editDialog.getByRole('button', { name: 'Save' }).click();
+      expect((await updateResponse).status()).toBe(200);
+      await expect(editDialog).not.toBeVisible({ timeout: 10000 });
+
+      // 7. Verify the edited duty appears within the Duties region
+      await expect(dutiesRegion.getByText('Edited Duty Name').first()).toBeVisible({ timeout: 10000 });
     });
 
     test.afterEach(async () => {

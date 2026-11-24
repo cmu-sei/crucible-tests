@@ -181,12 +181,14 @@ for (const theme of PLAYERVM_THEMES) {
      * still exists, on a class `vm.ui` does not inject at that call site.
      */
     test('every operation the API declares is a method on the generated service for its tag', async () => {
+      // surface() first: it is what skips the test when vm.ui is not checked out.
+      const { operations } = await surface();
       const services = new Map(
         generatedServices().map((x) => [normalizeName(x.file), x.methods.map(normalizeName)])
       );
       const differences: string[] = [];
 
-      for (const [route, operation] of Object.entries((await surface()).operations)) {
+      for (const [route, operation] of Object.entries(operations)) {
         if (!operation.operationId) {
           differences.push(`${route}: the API declares no operationId, so no method can be generated`);
           continue;

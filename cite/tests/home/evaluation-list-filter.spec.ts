@@ -4,108 +4,55 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern, seedCompleteEvaluation, cleanupCompleteEvaluation, CITE_THEMES, setCiteTheme } from '../../fixtures';
-import { navigateToAdminSection } from '../../test-helpers';
+import { test, expect, Services, serviceUrlPattern, loadCiteSeedIds, SHARED_READ_ONLY_EVALUATION, SHARED_BETA_EVALUATION, CITE_THEMES, setCiteTheme } from '../../fixtures';
 
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Home Page and Evaluation List`, () => {
-
     test('Evaluation List Search/Filter', async ({ citeAuthenticatedPage: page }) => {
+      // Two evaluations to filter between: the run-level shared pair (global-setup),
+      // both with Admin User on their team, so both are in "My Evaluations". Only read.
+      await loadCiteSeedIds();
       await setCiteTheme(page, theme);
 
-      // 1. Seed multiple evaluations via API to ensure they exist
-      const timestamp = Date.now();
-      const evalName1 = `E2E Filter Alpha ${timestamp}`;
-      const evalName2 = `E2E Filter Beta ${timestamp}`;
-      const seededData1 = await seedCompleteEvaluation(evalName1, 0);
-      const seededData2 = await seedCompleteEvaluation(evalName2, 0);
+      // 1. Home page with the "My Evaluations" list loaded.
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI));
+      const list = page.locator('.evaluation-list-container');
+      await expect(list.getByText('My Evaluations', { exact: true })).toBeVisible();
+      const rows = list.locator('mat-row');
+      const readOnlyRow = rows.filter({ hasText: SHARED_READ_ONLY_EVALUATION });
+      const betaRow = rows.filter({ hasText: SHARED_BETA_EVALUATION });
 
-      // 2. Navigate to home page to test the search/filter functionality on My Evaluations list
-      await page.goto(Services.Cite.UI);
-      await page.waitForLoadState('domcontentloaded');
-      await expect(page).toHaveURL(serviceUrlPattern(Services.Cite.UI), { timeout: 10000 });
+      // The list pages at 10 by default and other evaluations can sort between the two,
+      // so show 100 per page to keep both on page 1 regardless of what else exists.
+      // The paginator's touch-target overlay intercepts a pointer click on the select,
+      // so open it from the keyboard.
+      const pageSize = list.getByRole('combobox', { name: 'Items per page:' });
+      await pageSize.focus();
+      await pageSize.press('Enter');
+      await page.getByRole('option', { name: '100', exact: true }).click();
 
-      const myEvalsHeading = page.locator('text=My Evaluations');
-      await expect(myEvalsHeading).toBeVisible({ timeout: 10000 });
+      // expect: the list displays both evaluations.
+      await expect(readOnlyRow).toHaveCount(1);
+      await expect(betaRow).toHaveCount(1);
 
-      // 3. Wait for evaluation list to load
-      const rows = page.locator('mat-row, tbody tr').filter({ hasNot: page.locator('th') });
-      await expect(rows.first()).toBeVisible({ timeout: 15000 });
+      // 2. The search field.
+      const searchField = list.getByPlaceholder('Search');
+      await expect(searchField).toBeVisible();
 
-      // 4. Locate the search/filter input (try multiple selectors)
-      let searchField = page.getByRole('textbox', { name: /search|filter/i });
-      if (!(await searchField.isVisible({ timeout: 2000 }).catch(() => false))) {
-        searchField = page.locator('input[type="text"]').filter({ hasText: '' }).first();
-      }
-      if (!(await searchField.isVisible({ timeout: 2000 }).catch(() => false))) {
-        searchField = page.locator('input[placeholder*="Search"], input[placeholder*="Filter"]').first();
-      }
+      // 3. Filter on one evaluation's name. The home page filters on keyup, so type it.
+      await searchField.pressSequentially(SHARED_READ_ONLY_EVALUATION);
 
-      // If no search field exists on home page, use admin page instead
-      if (!(await searchField.isVisible({ timeout: 1000 }).catch(() => false))) {
-        await navigateToAdminSection(page, 'Evaluations');
-        await page.waitForTimeout(2000);
+      // expect: the matching row stays (positive signal), the other is hidden.
+      await expect(readOnlyRow).toHaveCount(1);
+      await expect(betaRow).toHaveCount(0);
 
-        searchField = page.getByRole('textbox', { name: 'Search' });
-        await expect(searchField).toBeVisible({ timeout: 5000 });
+      // 4. Clear the search with the field's clear button.
+      await list.getByRole('button', { name: 'Clear Search' }).click();
 
-        // Retry strategy: the CITE UI may not immediately show seeded data
-        // Poll by searching and reloading until data appears (SignalR update delay)
-        await searchField.fill(evalName1);
-        await page.waitForTimeout(1000);
-
-        let eval1Row = page.locator('tbody tr').filter({ hasText: evalName1 }).first();
-        let attempts = 0;
-        while (!(await eval1Row.isVisible({ timeout: 2000 }).catch(() => false)) && attempts < 5) {
-          console.log(`Attempt ${attempts + 1}: Evaluation not visible, reloading admin page...`);
-          await page.reload({ waitUntil: 'domcontentloaded' });
-          await page.waitForTimeout(2000);
-          await searchField.fill(evalName1);
-          await page.waitForTimeout(1000);
-          attempts++;
-        }
-        await expect(eval1Row).toBeVisible({ timeout: 5000 });
-
-        await searchField.clear();
-        await page.waitForTimeout(1000);
-
-        await searchField.fill(evalName2);
-        await page.waitForTimeout(1500);
-        const eval2Row = page.locator('tbody tr').filter({ hasText: evalName2 }).first();
-        await expect(eval2Row).toBeVisible({ timeout: 15000 });
-
-        await searchField.clear();
-        await page.waitForTimeout(1000);
-
-        // Get count of all evaluation rows
-        const allRows = page.locator('tbody tr').filter({ hasNot: page.locator('[colspan]') });
-        const initialCount = await allRows.count();
-        expect(initialCount).toBeGreaterThan(0);
-
-        // Test filtering for evalName1
-        await searchField.fill(evalName1);
-        await page.waitForTimeout(1000);
-
-        const filteredRow = page.locator('tbody tr').filter({ hasText: evalName1 }).first();
-        await expect(filteredRow).toBeVisible({ timeout: 10000 });
-
-        const filteredRows = page.locator('tbody tr').filter({ hasNot: page.locator('[colspan]') });
-        const filteredCount = await filteredRows.count();
-        expect(filteredCount).toBeGreaterThan(0);
-        expect(filteredCount).toBeLessThanOrEqual(initialCount);
-
-        // Clear search
-        await searchField.clear();
-        await page.waitForTimeout(1000);
-
-        const restoredRows = page.locator('tbody tr').filter({ hasNot: page.locator('[colspan]') });
-        const restoredCount = await restoredRows.count();
-        expect(restoredCount).toBe(initialCount);
-      }
-
-      // Cleanup
-      await cleanupCompleteEvaluation(seededData1);
-      await cleanupCompleteEvaluation(seededData2);
+      // expect: the field is empty and both evaluations are displayed again.
+      await expect(searchField).toHaveValue('');
+      await expect(readOnlyRow).toHaveCount(1);
+      await expect(betaRow).toHaveCount(1);
     });
   });
 }

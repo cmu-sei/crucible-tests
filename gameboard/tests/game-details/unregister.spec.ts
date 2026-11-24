@@ -46,7 +46,7 @@ test.describe('Game Details and Registration', () => {
   });
 
   test('Unregister from Game', async ({ gameboardAuthenticatedPage: page }) => {
-    await page.goto(`${Services.Gameboard.UI}/game/${game.id}`, { waitUntil: 'networkidle' });
+    await page.goto(`${Services.Gameboard.UI}/game/${game.id}`, { waitUntil: 'domcontentloaded' });
     await expect(page.locator(`text=${game.name}`).first()).toBeVisible({ timeout: 15000 });
 
     // When enrolled, an "Unenroll" button replaces "Enroll".

@@ -18,7 +18,6 @@ test.describe('Error Handling and Edge Cases', () => {
 
     // 3. Attempt to perform an action
     await page.goto(Services.TopoMojo.UI);
-    await page.waitForTimeout(5000);
 
     // expect: User is notified of session expiration
     // expect: User is redirected to login page

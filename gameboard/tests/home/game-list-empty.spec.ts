@@ -13,7 +13,7 @@ import { test, expect, Services } from '../../fixtures';
 // informational empty-state message appears rather than an error surface.
 test.describe('Home Page and Game Discovery', () => {
   test('Game List Display - Empty State Sections', async ({ gameboardAuthenticatedPage: page }) => {
-    await page.goto(Services.Gameboard.UI + '/home', { waitUntil: 'networkidle' });
+    await page.goto(Services.Gameboard.UI + '/home', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Upcoming Games' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Completed Games' })).toBeVisible();
 

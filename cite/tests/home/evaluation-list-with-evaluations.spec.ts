@@ -4,22 +4,26 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern, seedCompleteEvaluation, cleanupCompleteEvaluation, CITE_THEMES, setCiteTheme } from '../../fixtures';
+import {
+  test,
+  expect,
+  Services,
+  serviceUrlPattern,
+  loadCiteSeedIds,
+  CITE_THEMES,
+  setCiteTheme,
+  SHARED_READ_ONLY_EVALUATION,
+  SHARED_BETA_EVALUATION,
+} from '../../fixtures';
 
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Home Page and Evaluation List`, () => {
-    let evaluationIds: { evaluationId: string; scoringModelId: string; teamTypeId: string; } | null = null;
-
     test('Evaluation List Display - With Evaluations', async ({ citeAuthenticatedPage: page }) => {
       await setCiteTheme(page, theme);
 
-      // 1. Seed a complete evaluation with team and membership via API
-      const seededData = await seedCompleteEvaluation(`E2E Display Test Evaluation ${Date.now()}`);
-      evaluationIds = {
-        evaluationId: seededData.evaluationId,
-        scoringModelId: seededData.scoringModelId,
-        teamTypeId: seededData.teamTypeId,
-      };
+      // 1. The run-level shared evaluations (global-setup) have Admin User on a team, so
+      //    My Evaluations lists them; this test only reads the list.
+      await loadCiteSeedIds();
 
       // 2. Navigate to home page
       await page.goto(Services.Cite.UI);
@@ -40,15 +44,12 @@ for (const theme of CITE_THEMES) {
       const statusColumn = page.locator('th:has-text("Status"), mat-header-cell:has-text("Status"), [class*="header"]:has-text("Status")').first();
       await expect(statusColumn).toBeVisible({ timeout: 5000 });
 
-      // 5. Verify active evaluations are visible in the list
+      // 5. Verify both shared evaluations are listed. Checking for any row is not enough:
+      //    the admin may belong to other evaluations, so the list can be non-empty even
+      //    when the seeded membership went to someone else.
       const rows = page.locator('mat-row, tbody tr').filter({ hasNot: page.locator('th') });
-      await expect(rows.first()).toBeVisible({ timeout: 15000 });
-    });
-
-    test.afterEach(async () => {
-      if (evaluationIds) {
-        await cleanupCompleteEvaluation(evaluationIds);
-        evaluationIds = null;
+      for (const name of [SHARED_READ_ONLY_EVALUATION, SHARED_BETA_EVALUATION]) {
+        await expect(rows.filter({ hasText: name }), `${name} is in My Evaluations`).toHaveCount(1, { timeout: 15000 });
       }
     });
   });

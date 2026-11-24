@@ -21,7 +21,6 @@ test.describe('Accessibility', () => {
     // Tab to the Request button and press Enter.
     await page.keyboard.press('Tab');
     await page.keyboard.press('Enter');
-    await page.waitForTimeout(1500);
 
     // Page should still be /user/profile — keyboard submission accepted.
     await expect(page).toHaveURL(/\/user\/profile/);

@@ -135,7 +135,7 @@ for (const theme of GALLERY_THEMES) {
 
       const responsePromise = page.waitForResponse(
         (r) => r.url().includes(urlFragment) && r.request().method() === 'POST',
-        { timeout: 60000 }
+        { timeout: 30000 }
       );
       await fileChooser.setFiles(filePath);
       return await responsePromise;

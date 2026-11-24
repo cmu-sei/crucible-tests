@@ -4,32 +4,16 @@
 // spec: cite/cite-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect, Services, serviceUrlPattern, seedCompleteEvaluation, cleanupCompleteEvaluation, CITE_THEMES, setCiteTheme } from '../../fixtures';
+import { test, expect, Services, serviceUrlPattern, loadCiteSeedIds, CITE_THEMES, setCiteTheme } from '../../fixtures';
 
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Home Page and Evaluation List`, () => {
-    let evaluation1Ids: { evaluationId: string; scoringModelId: string; teamTypeId: string; } | null = null;
-    let evaluation2Ids: { evaluationId: string; scoringModelId: string; teamTypeId: string; } | null = null;
-
     test('Evaluation List Sorting', async ({ citeAuthenticatedPage: page }) => {
       await setCiteTheme(page, theme);
 
-      const timestamp = Date.now();
-
-      // 1. Create two evaluations via API with team memberships
-      const seededData1 = await seedCompleteEvaluation(`E2E Sort Alpha ${timestamp}`);
-      evaluation1Ids = {
-        evaluationId: seededData1.evaluationId,
-        scoringModelId: seededData1.scoringModelId,
-        teamTypeId: seededData1.teamTypeId,
-      };
-
-      const seededData2 = await seedCompleteEvaluation(`E2E Sort Beta ${timestamp}`);
-      evaluation2Ids = {
-        evaluationId: seededData2.evaluationId,
-        scoringModelId: seededData2.scoringModelId,
-        teamTypeId: seededData2.teamTypeId,
-      };
+      // 1. Two evaluations to sort: the run-level shared read-only pair (global-setup),
+      //    both with Admin User on a team. Sorting only reads them.
+      await loadCiteSeedIds();
 
       // 2. Navigate to home page
       await page.goto(Services.Cite.UI);
@@ -46,7 +30,6 @@ for (const theme of CITE_THEMES) {
       // 4. Click on the 'Name' column header to sort ascending
       const nameHeader = page.locator('th:has-text("Name"), mat-header-cell:has-text("Name"), [mat-sort-header]:has-text("Name")').first();
       await nameHeader.click();
-      await page.waitForTimeout(500);
 
       // Verify sort indicator appears
       const sortIndicator = nameHeader.locator('.mat-sort-header-arrow, mat-sort-header-arrow');
@@ -54,18 +37,8 @@ for (const theme of CITE_THEMES) {
 
       // 5. Click again to sort descending
       await nameHeader.click();
-      await page.waitForTimeout(500);
-    });
-
-    test.afterEach(async () => {
-      if (evaluation1Ids) {
-        await cleanupCompleteEvaluation(evaluation1Ids);
-        evaluation1Ids = null;
-      }
-      if (evaluation2Ids) {
-        await cleanupCompleteEvaluation(evaluation2Ids);
-        evaluation2Ids = null;
-      }
+      // Wait for sort direction to change to descending (Angular Material sets aria-sort attribute)
+      await expect(nameHeader).toHaveAttribute('aria-sort', 'descending', { timeout: 5000 });
     });
   });
 }

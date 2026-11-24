@@ -330,6 +330,17 @@ what the spec drives:
     - expect: User is navigated back to home page
     - expect: Evaluation list is displayed
 
+#### 3.11. Score Summary
+
+**File:** `tests/cite/evaluation/score-summary.spec.ts`
+
+**Steps:**
+  1. Navigate to the dashboard of an evaluation whose scoring model shows the Score Summary on the right
+    - expect: The "Score Summary" panel names the displayed move ("Move 0")
+    - expect: The six levels are listed highest first, "Level 5 - Emergency" to "Level 0 - Baseline", each with its range and definition
+    - expect: The new submission's score of 0 is listed under "Level 0 - Baseline", and that level is marked as current
+    - expect: Levels with no scores, such as Emergency, list none
+
 ### 4. Scoresheet Interface
 
 **Seed:** `tests/seed.setup.ts`
@@ -461,6 +472,26 @@ what the spec drives:
     - expect: Total score is displayed
     - expect: Category-wise score breakdown is shown
     - expect: Percentage or progress indicators are present if applicable
+
+#### 4.11. Scoresheet - View Official Submission by Team Role
+
+**File:** `tests/cite/scoresheet/official-score-by-role.spec.ts`
+
+**Seed:** an evaluation of the shared scoring model (official scores on) at move 1 of
+moves 0-1, and a team whose team type is marked Official Score Contributor, with a
+temporary user on it in the default Member role (ViewTeam, ViewPastOfficialScore).
+
+**Steps:**
+  1. As the member, open the scoresheet on the current move
+    - expect: The scoresheet displays for the member's team
+    - expect: No Official toggle is offered, since Member holds neither
+      ViewCurrentOfficialScore nor EditOfficialScore, and the contributor flag grants nothing
+  2. Display the previous move
+    - expect: The Official toggle is offered, since Member holds ViewPastOfficialScore
+
+The scoresheet offers the Official toggle only when the API returned the displayed move's
+official submission, so the toggle shows what the role may read. It runs as a temporary
+user because `admin` holds every system permission and reads every official score.
 
 ### 5. Report Interface
 
@@ -766,6 +797,15 @@ what the spec drives:
     - expect: POST /api/teams returns 201
     - expect: Dialog closes and no error sheet is raised
     - expect: Team appears in list
+  6. Expand the API-seeded team (part of `admin-evaluation-teams.spec.ts`)
+    - expect: Its member, added without naming a role, shows the Member role, the default
+      every team membership gets
+
+A second test in `admin-evaluation-teams.spec.ts` expands a team with no members, then puts
+Admin User on another evaluation's team. The admin page is sent that membership live over
+SignalR, and the test waits for the hub message before checking.
+    - expect: Admin User is still listed among the users who can be added to this team
+    - expect: Admin User is not listed as a member of this team
 
 Steps 3-5 need their own spec because the read-back case seeds its team over the API
 and so never exercises the dialog. Leaving Hide Scoresheet untouched is the point of
@@ -790,6 +830,17 @@ step 4: the checkbox the user never clicks is the one whose value used to be sen
   5. Save new action
     - expect: Action is created successfully
     - expect: Action appears in list
+  6. Edit the action
+    - expect: The Team field is locked, since an existing action can't move to another team
+  7. Change the description and save
+    - expect: PUT /api/actions/{id} returns 200
+    - expect: The edited description appears in the list
+
+A second test in the same file adds an action for all teams after another evaluation gains a
+team while the Actions panel is open. The admin page is sent that team live over SignalR, and
+the test waits for the hub message before adding.
+    - expect: Exactly one POST /api/actions, answered 201, for the evaluation's own team
+    - expect: No create for the other evaluation's team, which the API would refuse with 409
 
 #### 7.17. Admin - Manage Evaluation Duties
 
@@ -809,6 +860,11 @@ step 4: the checkbox the user never clicks is the one whose value used to be sen
   5. Save new duty
     - expect: Duty is created successfully
     - expect: Duty appears in list
+  6. Edit the duty
+    - expect: The Team field is locked, since an existing duty can't move to another team
+  7. Change the name and save
+    - expect: PUT /api/duties/{id} returns 200
+    - expect: The edited name appears in the list
 
 #### 7.18. Admin - Manage Evaluation Memberships
 
@@ -954,6 +1010,21 @@ step 4: the checkbox the user never clicks is the one whose value used to be sen
   5. Save membership
     - expect: Membership is created successfully
     - expect: User appears in memberships list
+
+#### 8.9. Admin - Severity Levels
+
+**File:** `tests/cite/scoring-models/severity-levels.spec.ts`
+
+**Steps:**
+  1. Open a scoring model without levels of its own in the admin Scoring Models section
+    - expect: The Severity Levels section reads "Using the default CISA levels."
+  2. Click Customize Levels
+    - expect: The six default levels are listed, highest first, as editable rows
+  3. Rename Emergency to Critical and click Save
+    - expect: The scoring model's severity levels are Critical, Severe, High, Medium, Low and Baseline
+  4. Open the dashboard of an evaluation whose scoring model has the levels Calm (from 0) and Storm (from 60)
+    - expect: The Score Summary lists "Level 1 - Storm" and "Level 0 - Calm" with the ranges "60+" and "<60" and their descriptions
+    - expect: The new submission's score of 0 is in Calm, the current level
 
 ### 9. Administration - Submissions
 
@@ -1266,16 +1337,23 @@ step 4: the checkbox the user never clicks is the one whose value used to be sen
 
 **File:** `tests/cite/realtime/move-advancement.spec.ts`
 
+**Seed:** an evaluation at move 0 that already has move 1, and a temporary user on its
+team in the default Member role.
+
 **Steps:**
-  1. Open two browser instances with users in the same evaluation
-    - expect: Both instances show current move number
-  2. In first instance (with ManageEvaluations permission), advance to next move
-    - expect: Move increments in first instance
-    - expect: Move advancement is saved
-  3. Observe second instance
-    - expect: Move number updates automatically in second instance
-    - expect: Dashboard reflects new move without refresh
-    - expect: SignalR notification is received
+  1. Open two browser instances: the member on the evaluation dashboard, admin on the
+     admin Evaluations list
+    - expect: The member's move counter reads "Move 0 of 0": team members see moves up to
+      the current one, so the future move 1 is hidden
+  2. As admin, increment the evaluation's move
+    - expect: The member's counter reads "Move 0 of 1" without a refresh, as move 1 arrives
+      over SignalR
+  3. As admin, decrement the evaluation's move
+    - expect: The member's counter reads "Move 0 of 0" again without a refresh, as move 1
+      is withdrawn
+
+The watching user is a temporary team member, not `admin`: admin reads every move, so it
+would show the future move from the start and never see one withdrawn.
 
 #### 14.3. Real-time Team Changes
 

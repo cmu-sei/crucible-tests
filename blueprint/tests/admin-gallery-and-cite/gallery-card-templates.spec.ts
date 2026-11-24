@@ -78,13 +78,13 @@ for (const theme of BLUEPRINT_THEMES) {
         await page.getByRole('button', { name: `Delete ${name}` }).click();
         const confirm = page.getByRole('dialog').filter({ hasText: 'Delete Card' });
         await expect(confirm).toContainText(`Are you sure that you want to delete ${name}?`);
-        await confirm.getByRole('button', { name: 'No' }).click();
+        await confirm.getByRole('button', { name: 'Cancel' }).click();
         await expect(confirm).toBeHidden();
         await expect(row).toHaveCount(1);
 
         // Confirming removes it.
         await page.getByRole('button', { name: `Delete ${name}` }).click();
-        await confirm.getByRole('button', { name: 'Yes' }).click();
+        await confirm.getByRole('button', { name: 'Delete' }).click();
         await expect(row).toHaveCount(0);
 
         // Secondary: the delete reached the server.

@@ -12,13 +12,21 @@ for (const theme of CASTER_THEMES) {
       await setCasterTheme(page, theme);
 
       await page.goto(Services.Caster.UI + '/admin?section=Workspaces');
-      await expect(page.getByRole('heading', { name: 'Active Runs' })).toBeVisible({ timeout: 10000 });
 
       const searchBox = page.getByRole('textbox', { name: 'Search' });
-      await expect(searchBox).toBeVisible();
+      await expect(searchBox).toBeVisible({ timeout: 10000 });
+
+      // 2. Search for something no run matches
+      // expect: the table says nothing matches
       await searchBox.fill('test-search');
-      await searchBox.clear();
-      await expect(page.getByRole('status')).toBeVisible();
+      const noMatch = page.getByRole('cell', { name: 'No active runs match "test-search"' });
+      await expect(noMatch).toBeVisible();
+
+      // 3. Clear the search
+      // expect: the filter is removed
+      await page.getByRole('button', { name: 'Clear Search' }).click();
+      await expect(searchBox).toHaveValue('');
+      await expect(noMatch).toBeHidden();
     });
   });
 }

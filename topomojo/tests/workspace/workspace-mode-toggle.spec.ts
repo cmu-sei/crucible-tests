@@ -11,15 +11,15 @@ test.describe('Workspace Management', () => {
 
     // 1. Navigate to home page workspace browser
     const sidebarToggle = page.locator('button[aria-label="Toggle sidebar"], button:has(mat-icon:text("menu"))').first();
-    const hasSidebarToggle = await sidebarToggle.isVisible({ timeout: 10000 }).catch(() => false);
+    const hasSidebarToggle = await sidebarToggle.waitFor({ state: 'visible', timeout: 10000 }).then(() => true, () => false);
+    const modeToggle = page.locator('mat-button-toggle-group, [class*="mode-toggle"], mat-tab-group').first();
+
     if (hasSidebarToggle) {
       await sidebarToggle.click();
-      await page.waitForTimeout(500);
+      // expect: Mode toggle is visible (e.g., tabs or buttons for 'Workspaces' and 'Gamespaces')
     }
 
-    // expect: Mode toggle is visible (e.g., tabs or buttons for 'Workspaces' and 'Gamespaces')
-    const modeToggle = page.locator('mat-button-toggle-group, [class*="mode-toggle"], mat-tab-group').first();
-    const hasToggle = await modeToggle.isVisible({ timeout: 5000 }).catch(() => false);
+    const hasToggle = await modeToggle.waitFor({ state: 'visible', timeout: 5000 }).then(() => true, () => false);
 
     if (hasToggle) {
       // 2. Click on 'Gamespaces' mode
@@ -27,16 +27,18 @@ test.describe('Workspace Management', () => {
       const hasGamespaceTab = await gamespaceTab.isVisible({ timeout: 3000 }).catch(() => false);
 
       if (hasGamespaceTab) {
+        const gamespaceContent = page.locator('[class*="gamespace"], app-gamespace-browser');
         await gamespaceTab.click();
-        await page.waitForTimeout(500);
+        await expect(gamespaceContent.first()).toBeVisible();
 
         // expect: View switches to gamespace mode
         // expect: Active and playable gamespaces are displayed
 
         // 3. Click on 'Workspaces' mode
         const workspaceTab = page.locator('mat-button-toggle:has-text("Workspace"), mat-tab:has-text("Workspace"), button:has-text("Workspace")').first();
+        const workspaceContent = page.locator('[class*="workspace"], app-workspace-browser');
         await workspaceTab.click();
-        await page.waitForTimeout(500);
+        await expect(workspaceContent.first()).toBeVisible();
 
         // expect: View switches back to workspace mode
         // expect: Workspace list is displayed

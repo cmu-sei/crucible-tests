@@ -17,7 +17,7 @@ for (const theme of CASTER_THEMES) {
       await context.route('**/api/**', (route) => route.abort());
 
       await page.locator('button[mattooltip="Add New Project"]').click();
-      const dialog = page.getByRole('dialog', { name: 'Create New Project?' });
+      const dialog = page.getByRole('dialog', { name: 'Add Project' });
       if (await dialog.isVisible({ timeout: 5000 }).catch(() => false)) {
         await page.getByRole('textbox', { name: 'Name' }).fill('Network Test');
         await page.getByRole('button', { name: 'Save' }).click();

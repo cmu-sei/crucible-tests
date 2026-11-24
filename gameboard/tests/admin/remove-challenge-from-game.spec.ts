@@ -4,7 +4,7 @@
 // spec: gameboard/gameboard-test-plan.md
 // seed: seed.spec.ts
 
-import { test, expect, Services } from '../../fixtures';
+import { test, expect, Services, type SharedWorkspace } from '../../fixtures';
 import {
   getAdminToken,
   createGame,
@@ -15,27 +15,16 @@ import {
   CreatedGame,
   CreatedChallengeSpec,
 } from '../../api-helpers';
-import {
-  getTopoMojoAdminToken,
-  createWorkspace,
-  deleteWorkspace,
-  CreatedWorkspace,
-} from '../../../topomojo-helpers';
 
 test.describe('Admin - Challenges', () => {
   let gbToken: string;
-  let tmToken: string;
   let game: CreatedGame;
-  let workspace: CreatedWorkspace;
+  let workspace: SharedWorkspace;
   let spec: CreatedChallengeSpec;
 
-  test.beforeEach(async () => {
+  test.beforeEach(async ({ sharedWorkspace }) => {
     gbToken = await getAdminToken();
-    tmToken = await getTopoMojoAdminToken();
-    workspace = await createWorkspace(tmToken, {
-      name: `RemChal-WS-${Date.now()}`,
-      audience: 'gameboard',
-    });
+    workspace = sharedWorkspace;
     game = await createGame(gbToken, { name: `RemChal-Game-${Date.now()}` });
     spec = await addChallengeSpecToGame(gbToken, game.id, {
       externalId: workspace.id,
@@ -45,7 +34,6 @@ test.describe('Admin - Challenges', () => {
 
   test.afterEach(async () => {
     if (game) await deleteGame(gbToken, game.id);
-    if (workspace) await deleteWorkspace(tmToken, workspace.id);
   });
 
   test('Remove Challenge from Game', async ({ gameboardAuthenticatedPage: page }) => {
@@ -57,7 +45,7 @@ test.describe('Admin - Challenges', () => {
     const after = await listGameChallengeSpecs(gbToken, game.id);
     expect(after.some(s => s.id === spec.id)).toBe(false);
 
-    await page.goto(Services.Gameboard.UI + '/admin/dashboard', { waitUntil: 'networkidle' });
+    await page.goto(Services.Gameboard.UI + '/admin/dashboard', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Administration' })).toBeVisible();
   });
 });

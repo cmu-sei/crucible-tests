@@ -53,7 +53,7 @@ for (const theme of STEAMFITTER_THEMES) {
           response.ok(),
         { timeout: 15000 }
       );
-      await respondToConfirmDialog(page, true);
+      await respondToConfirmDialog(page, true, 'Create');
       await createResponse.catch(() => {});
 
       // 3. Switch to the Scenarios section.

@@ -20,8 +20,9 @@ for (const theme of CITE_THEMES) {
       const rows = page.locator('tbody tr');
       await expect(rows.first()).toBeVisible({ timeout: 10000 });
 
-      // Verify user data is visible
-      await expect(rows.first()).toContainText('Admin User');
+      // Verify user data is visible. Other realm users ("Admin", "Crucible Admin") can
+      // sort ahead of the signed-in user, so look for its row rather than the first one.
+      await expect(rows.filter({ hasText: 'Admin User' })).toHaveCount(1);
     });
   });
 }

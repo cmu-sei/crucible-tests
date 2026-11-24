@@ -6,9 +6,14 @@
 
 import { test, expect, Services, serviceUrlPattern, CITE_THEMES, setCiteTheme } from '../../fixtures';
 
+// Logging out ends the Keycloak session behind the saved admin login, which the
+// other CITE specs keep reusing. Sign in with a session of this spec's own instead.
+test.use({ storageState: { cookies: [], origins: [] } });
+
 for (const theme of CITE_THEMES) {
   test.describe(`${theme} theme › Authentication and Authorization`, () => {
     test('Logout Functionality', async ({ citeAuthenticatedPage: page }) => {
+      test.slow(); // Auth redirect can take extended time on cold services
       await setCiteTheme(page, theme);
 
       // 1. Log in with valid credentials (admin/admin)
@@ -27,16 +32,20 @@ for (const theme of CITE_THEMES) {
       const logoutButton = page.locator('button:has-text("Logout"), button:has-text("Sign Out"), button:has-text("Log Out")').first();
       await logoutButton.click();
 
-      // expect: User is logged out
-      // expect: User is redirected to Keycloak or CITE home
-      await page.waitForURL(serviceUrlPattern(Services.Cite.UI), { timeout: 30000 });
+      // expect: User is logged out and lands on the Keycloak login page.
+      // Keycloak's end-session redirects straight back to CITE, which then starts a fresh
+      // sign-in redirect. The page is on a CITE URL throughout the first leg, so waiting for
+      // that URL returns at once and the goto below collides with the in-flight redirect
+      // (Firefox aborts it with NS_BINDING_ABORTED). Wait for the login form instead.
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 30000 });
+      await expect(page.locator('#username')).toBeVisible({ timeout: 10000 });
 
       // expect: Authentication session is terminated
       // 4. Attempt to navigate to CITE UI again
       await page.goto(Services.Cite.UI);
 
       // expect: User is redirected to Keycloak login page
-      await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 70000 });
+      await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak), { timeout: 30000 });
 
       // expect: User must authenticate again
       const usernameField = page.locator('#username');

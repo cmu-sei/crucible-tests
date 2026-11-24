@@ -34,8 +34,9 @@ for (const theme of CASTER_THEMES) {
       // 3. Verify confirmation dialog appears
       // Scoped by name: an unscoped getByRole('dialog') also matches a previous
       // dialog that is still mid-exit-animation, which fails strict mode.
-      const dialog = page.getByRole('dialog', { name: 'Delete Group?' });
+      const dialog = page.getByRole('dialog', { name: 'Delete Group' });
       await expect(dialog).toBeVisible({ timeout: 10000 });
+      await expect(dialog).toContainText('Are you sure that you want to delete Group To Delete?');
 
       // 4. Click "No" to cancel deletion
       await dialog.getByRole('button', { name: 'No' }).click();

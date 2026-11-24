@@ -1,16 +1,17 @@
 // Copyright 2026 Carnegie Mellon University. All Rights Reserved.
 // Released under a MIT (SEI)-style license. See LICENSE.md in the project root for license information.
 
-import { test as base, Page, Locator, expect, request as pwRequest, APIRequestContext } from '@playwright/test';
-import fs from 'fs';
+import { test as base, Page, Locator, expect, APIRequestContext } from '@playwright/test';
 import {
   Services,
   serviceUrlPattern,
   oidcStorageKey,
   authenticateWithKeycloak,
-  waitForFirstVisible,
+  ensureAuthenticatedShell,
 } from '../shared-fixtures';
 import { authStatePath } from '../auth-paths';
+import { cachedUserToken, jwtSub, sharedRequestContext } from '../api-cache';
+import { freshAuthStatePath } from '../auth-state';
 
 /**
  * Gallery-specific fixtures
@@ -121,6 +122,53 @@ export async function openMatSelect(trigger: Locator): Promise<Locator> {
 }
 
 /**
+ * Click a row action inside a disabled `mat-expansion-panel-header`, once it can really
+ * be clicked.
+ *
+ * The admin Cards and Articles lists render each row as
+ * `<mat-expansion-panel-header disabled>` with Edit and Delete buttons inside. The buttons
+ * are enabled, but the header carries `aria-disabled="true"`, and Playwright treats every
+ * descendant of an aria-disabled element as disabled, so a plain `click()` waits out its
+ * timeout. `force: true` gets past that, but it also skips the two checks that matter
+ * here: that the button has stopped moving, and that it is the element under the
+ * pointer. The Cards and Articles sections animate open, so a forced click sent while the
+ * section is still sliding into place lands on the section itself and opens nothing.
+ * Seen as an "Edit Article"/"Edit Card" dialog that never appears; a probe caught
+ * `document.elementFromPoint` at the button's centre returning the `div.sub-panel` around
+ * it. Firefox loses this race more often than chromium.
+ *
+ * This waits for both conditions itself — the button's box unchanged across two animation
+ * frames, and the button (or its icon) the element at its centre — and only then forces
+ * the click.
+ *
+ * @param button - The Edit or Delete button in the row header
+ */
+export async function clickRowAction(button: Locator): Promise<void> {
+  // Visible and stable are the checks scrollIntoViewIfNeeded makes; enabled is not, so the
+  // aria-disabled ancestor does not stall it.
+  await button.scrollIntoViewIfNeeded();
+  await expect
+    .poll(
+      () =>
+        button.evaluate(async (element) => {
+          const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+          const before = element.getBoundingClientRect();
+          await nextFrame();
+          await nextFrame();
+          const box = element.getBoundingClientRect();
+          if (box.width === 0 || box.x !== before.x || box.y !== before.y) {
+            return false;
+          }
+          const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+          return hit !== null && element.contains(hit);
+        }),
+      { message: 'the row action should stop moving and be the element under the pointer' }
+    )
+    .toBe(true);
+  await button.click({ force: true });
+}
+
+/**
  * A wall or archive card's simulated date/time, e.g. "10/13/26, 8:35 PM EDT".
  *
  * The cards render it with `toLocaleString('en-US', { ..., timeZoneName: 'short' })` in
@@ -148,9 +196,13 @@ export const GROUP_TEST_PREFIXES = [
 // ========================================================================
 
 /**
- * Get a Keycloak access token for the Gallery API.
+ * Get a Keycloak access token for the Gallery API, cached per worker until near expiry.
  */
 async function getGalleryApiToken(apiContext: APIRequestContext): Promise<string> {
+  return cachedUserToken('crucible', 'gallery.ui', 'admin', 'openid profile gallery', () => fetchGalleryApiToken(apiContext));
+}
+
+async function fetchGalleryApiToken(apiContext: APIRequestContext): Promise<string> {
   const tokenResponse = await apiContext.post(
     `${Services.Keycloak}/realms/crucible/protocol/openid-connect/token`,
     {
@@ -195,8 +247,8 @@ async function deleteGroupViaApi(apiContext: APIRequestContext, token: string, g
  * @param prefixes - Array of name prefixes to match for deletion
  */
 export async function apiCleanupGroups(prefixes: string[] = GROUP_TEST_PREFIXES): Promise<void> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getGalleryApiToken(apiContext);
 
     // List all groups
@@ -217,8 +269,6 @@ export async function apiCleanupGroups(prefixes: string[] = GROUP_TEST_PREFIXES)
         await deleteGroupViaApi(apiContext, token, group.id, group.name);
       }
     }
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -228,8 +278,8 @@ export async function apiCleanupGroups(prefixes: string[] = GROUP_TEST_PREFIXES)
  * @param exactName - The exact group name to delete
  */
 export async function apiDeleteGroupByName(exactName: string): Promise<void> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getGalleryApiToken(apiContext);
 
     // List all groups
@@ -250,8 +300,6 @@ export async function apiDeleteGroupByName(exactName: string): Promise<void> {
     } else {
       console.log(`API cleanup: Group "${exactName}" not found, nothing to delete.`);
     }
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -279,8 +327,8 @@ async function deleteExhibitViaApi(apiContext: APIRequestContext, token: string,
  * @param exactName - The exact exhibit name to delete
  */
 export async function apiDeleteExhibitByName(exactName: string): Promise<void> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getGalleryApiToken(apiContext);
 
     const listResponse = await apiContext.get(`${Services.Gallery.API}/api/exhibits`, {
@@ -300,8 +348,6 @@ export async function apiDeleteExhibitByName(exactName: string): Promise<void> {
     } else {
       console.log(`API cleanup: Exhibit "${exactName}" not found, nothing to delete.`);
     }
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -311,8 +357,8 @@ export async function apiDeleteExhibitByName(exactName: string): Promise<void> {
  * @param prefixes - Array of name prefixes to match for deletion
  */
 export async function apiCleanupExhibits(prefixes: string[]): Promise<void> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getGalleryApiToken(apiContext);
 
     const listResponse = await apiContext.get(`${Services.Gallery.API}/api/exhibits`, {
@@ -331,8 +377,6 @@ export async function apiCleanupExhibits(prefixes: string[]): Promise<void> {
         await deleteExhibitViaApi(apiContext, token, exhibit.id, exhibit.name);
       }
     }
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -380,8 +424,8 @@ async function deleteCollectionViaApi(apiContext: APIRequestContext, token: stri
  * @param exactName - The exact collection name to delete
  */
 export async function apiDeleteCollectionByName(exactName: string): Promise<void> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getGalleryApiToken(apiContext);
 
     const listResponse = await apiContext.get(`${Services.Gallery.API}/api/collections`, {
@@ -401,8 +445,6 @@ export async function apiDeleteCollectionByName(exactName: string): Promise<void
     } else {
       console.log(`API cleanup: Collection "${exactName}" not found, nothing to delete.`);
     }
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -412,8 +454,8 @@ export async function apiDeleteCollectionByName(exactName: string): Promise<void
  * @param prefixes - Array of name prefixes to match for deletion
  */
 export async function apiCleanupCollections(prefixes: string[]): Promise<void> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getGalleryApiToken(apiContext);
 
     const listResponse = await apiContext.get(`${Services.Gallery.API}/api/collections`, {
@@ -432,8 +474,6 @@ export async function apiCleanupCollections(prefixes: string[]): Promise<void> {
         await deleteCollectionViaApi(apiContext, token, collection.id, collection.name);
       }
     }
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -451,8 +491,8 @@ export async function apiCleanupCollections(prefixes: string[]): Promise<void> {
  * @param prefixes - Array of name prefixes to match for deletion
  */
 export async function apiCleanupSystemRoles(prefixes: string[]): Promise<void> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getGalleryApiToken(apiContext);
 
     const listResponse = await apiContext.get(`${Services.Gallery.API}/api/system-roles`, {
@@ -478,9 +518,36 @@ export async function apiCleanupSystemRoles(prefixes: string[]): Promise<void> {
         }
       }
     }
-  } finally {
-    await apiContext.dispose();
   }
+}
+
+/**
+ * Purge all Gallery test data by E2E prefix (called from global-teardown.ts).
+ * Best-effort: logs failures but does not throw.
+ */
+export async function purgeAllGalleryTestData(): Promise<void> {
+  const prefixes = ['E2E'];
+  console.log(`[global-teardown] Gallery: purging test data by prefixes: ${prefixes.join(', ')}`);
+
+  try {
+    await apiCleanupGroups(prefixes);
+  } catch (error) {
+    console.warn(`[global-teardown] Gallery: Group cleanup failed: ${error}`);
+  }
+
+  try {
+    await apiCleanupExhibits(prefixes);
+  } catch (error) {
+    console.warn(`[global-teardown] Gallery: Exhibit cleanup failed: ${error}`);
+  }
+
+  try {
+    await apiCleanupCollections(prefixes);
+  } catch (error) {
+    console.warn(`[global-teardown] Gallery: Collection cleanup failed: ${error}`);
+  }
+
+  console.log(`[global-teardown] Gallery: test data purge completed`);
 }
 
 // ========================================================================
@@ -498,8 +565,8 @@ export async function apiCreateCollection(
   name: string,
   description: string = 'Auto-seeded collection for Playwright tests'
 ): Promise<{ id: string; name: string }> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getGalleryApiToken(apiContext);
     const response = await apiContext.post(`${Services.Gallery.API}/api/collections`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -511,8 +578,6 @@ export async function apiCreateCollection(
     const collection: { id: string; name: string } = await response.json();
     console.log(`Seeded collection: ${collection.name} (${collection.id})`);
     return collection;
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -526,8 +591,8 @@ export async function apiCreateExhibit(
   name: string,
   options: { showAdvanceButton?: boolean } = {}
 ): Promise<{ id: string; name: string }> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getGalleryApiToken(apiContext);
     const response = await apiContext.post(`${Services.Gallery.API}/api/exhibits`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -544,8 +609,6 @@ export async function apiCreateExhibit(
     const exhibit: { id: string; name: string } = await response.json();
     console.log(`Seeded exhibit: ${exhibit.name} (${exhibit.id})`);
     return exhibit;
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -569,8 +632,8 @@ export async function apiCreateTeam(
   exhibitId: string,
   team: { name?: string | null; shortName?: string | null; email?: string | null } = {}
 ): Promise<{ id: string; name: string | null; shortName: string | null }> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getGalleryApiToken(apiContext);
     const response = await apiContext.post(`${Services.Gallery.API}/api/teams`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -589,15 +652,24 @@ export async function apiCreateTeam(
       `Seeded team: name=${JSON.stringify(created.name)} shortName=${JSON.stringify(created.shortName)} (${created.id})`
     );
     return created;
-  } finally {
-    await apiContext.dispose();
   }
 }
 
-/** The Gallery user id of the `admin` account, read from `GET /api/users`. */
-export async function apiGetAdminUserId(): Promise<string> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+/**
+ * The Gallery user id of the `admin` account the API token belongs to: the token's
+ * `sub`. Matching on display name is unreliable because the realm has several users
+ * whose names contain "admin". The users request also confirms Gallery has a record.
+ */
+// Worker-level cache for admin user ID (read-only, fetched once per worker)
+const adminUserIdCache = new Map<number, string>();
+
+export async function apiGetAdminUserId(workerIndex: number = 0): Promise<string> {
+  if (adminUserIdCache.has(workerIndex)) {
+    return adminUserIdCache.get(workerIndex)!;
+  }
+
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getGalleryApiToken(apiContext);
     const response = await apiContext.get(`${Services.Gallery.API}/api/users`, {
       headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
@@ -606,13 +678,13 @@ export async function apiGetAdminUserId(): Promise<string> {
       throw new Error(`Failed to list users: ${response.status()} ${await response.text()}`);
     }
     const users: Array<{ id: string; name: string }> = await response.json();
-    const admin = users.find(u => u.name?.toLowerCase().includes('admin'));
+    const sub = jwtSub(token);
+    const admin = users.find(u => u.id === sub);
     if (!admin) {
-      throw new Error('Admin user not found in the Gallery database');
+      throw new Error(`The token's user (${sub}) is not in the Gallery database`);
     }
+    adminUserIdCache.set(workerIndex, admin.id);
     return admin.id;
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -637,8 +709,8 @@ export async function apiAddUserToTeam(
   userId: string,
   options: { isObserver?: boolean } = {}
 ): Promise<{ id: string }> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getGalleryApiToken(apiContext);
     const response = await apiContext.post(`${Services.Gallery.API}/api/teamusers`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -648,8 +720,6 @@ export async function apiAddUserToTeam(
       throw new Error(`Failed to add user to team: ${response.status()} ${await response.text()}`);
     }
     return await response.json();
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -663,8 +733,8 @@ export async function apiAddUserToTeam(
  * state `signalr.service.ts`'s TeamCard predicate has to reason about.
  */
 export async function apiRemoveUserFromTeam(teamId: string, userId: string): Promise<void> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getGalleryApiToken(apiContext);
     const response = await apiContext.delete(
       `${Services.Gallery.API}/api/teams/${teamId}/users/${userId}`,
@@ -673,8 +743,6 @@ export async function apiRemoveUserFromTeam(teamId: string, userId: string): Pro
     if (!response.ok() && response.status() !== 404) {
       throw new Error(`Failed to remove user from team: ${response.status()} ${await response.text()}`);
     }
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -693,8 +761,8 @@ export async function apiCreateCard(
   name: string | null,
   options: { move?: number; inject?: number; description?: string } = {}
 ): Promise<{ id: string; name: string | null }> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getGalleryApiToken(apiContext);
     const response = await apiContext.post(`${Services.Gallery.API}/api/cards`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -710,8 +778,6 @@ export async function apiCreateCard(
       throw new Error(`Failed to create card: ${response.status()} ${await response.text()}`);
     }
     return await response.json();
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -729,8 +795,8 @@ export async function apiRenameCard(
   name: string,
   options: { move?: number; inject?: number; description?: string } = {}
 ): Promise<void> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getGalleryApiToken(apiContext);
     const response = await apiContext.put(`${Services.Gallery.API}/api/cards/${cardId}`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -746,8 +812,6 @@ export async function apiRenameCard(
     if (!response.ok()) {
       throw new Error(`Failed to update card: ${response.status()} ${await response.text()}`);
     }
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -757,8 +821,8 @@ export async function apiCreateTeamCard(
   cardId: string,
   options: { isShownOnWall?: boolean; canPostArticles?: boolean; move?: number; inject?: number } = {}
 ): Promise<{ id: string }> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getGalleryApiToken(apiContext);
     const response = await apiContext.post(`${Services.Gallery.API}/api/teamcards`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -775,8 +839,6 @@ export async function apiCreateTeamCard(
       throw new Error(`Failed to create team card: ${response.status()} ${await response.text()}`);
     }
     return await response.json();
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -798,8 +860,8 @@ export async function apiSetTeamCardShownOnWall(
   isShownOnWall: boolean,
   options: { canPostArticles?: boolean; move?: number; inject?: number } = {}
 ): Promise<void> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getGalleryApiToken(apiContext);
     const response = await apiContext.put(`${Services.Gallery.API}/api/teamCards/${teamCardId}`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -816,8 +878,6 @@ export async function apiSetTeamCardShownOnWall(
     if (!response.ok()) {
       throw new Error(`Failed to update team card: ${response.status()} ${await response.text()}`);
     }
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -833,8 +893,8 @@ export async function apiSetExhibitMoveAndInject(
   move: number,
   inject: number
 ): Promise<void> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getGalleryApiToken(apiContext);
     const response = await apiContext.put(
       `${Services.Gallery.API}/api/exhibits/${exhibitId}/move/${move}/inject/${inject}`,
@@ -845,8 +905,6 @@ export async function apiSetExhibitMoveAndInject(
         `Failed to reset exhibit ${exhibitId} to move ${move}/inject ${inject}: ${response.status()}`
       );
     }
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -857,8 +915,8 @@ export async function apiSetExhibitMoveAndInject(
 export async function apiAdvanceExhibit(
   exhibitId: string
 ): Promise<{ currentMove: number; currentInject: number } | null> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getGalleryApiToken(apiContext);
     const response = await apiContext.put(`${Services.Gallery.API}/api/exhibits/${exhibitId}/advance`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -870,8 +928,6 @@ export async function apiAdvanceExhibit(
       throw new Error(`Failed to advance exhibit: ${response.status()} ${await response.text()}`);
     }
     return await response.json();
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -889,8 +945,8 @@ export async function apiAdvanceExhibit(
  * `apiDeleteGalleryUser`.
  */
 export async function apiCreateGalleryUser(id: string, name: string): Promise<{ id: string; name: string }> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getGalleryApiToken(apiContext);
     const response = await apiContext.post(`${Services.Gallery.API}/api/users`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -901,15 +957,13 @@ export async function apiCreateGalleryUser(id: string, name: string): Promise<{ 
     }
     console.log(`Seeded gallery user: ${name} (${id})`);
     return await response.json();
-  } finally {
-    await apiContext.dispose();
   }
 }
 
 /** Delete a Gallery user by id. Safe to call for an already-deleted user. */
 export async function apiDeleteGalleryUser(id: string): Promise<void> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getGalleryApiToken(apiContext);
     const response = await apiContext.delete(`${Services.Gallery.API}/api/users/${id}`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -917,8 +971,6 @@ export async function apiDeleteGalleryUser(id: string): Promise<void> {
     if (!response.ok() && response.status() !== 404) {
       console.warn(`Cleanup: failed to delete gallery user ${id}: ${response.status()}`);
     }
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -958,8 +1010,8 @@ export async function apiCreateArticle(
     datePosted?: string;
   } = {}
 ): Promise<{ id: string; name: string; move: number; inject: number }> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getGalleryApiToken(apiContext);
     const response = await apiContext.post(`${Services.Gallery.API}/api/articles`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -985,8 +1037,6 @@ export async function apiCreateArticle(
       throw new Error(`Failed to create article: ${response.status()} ${await response.text()}`);
     }
     return await response.json();
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -1006,8 +1056,8 @@ export async function apiCreateUserArticle(
   articleId: string,
   options: { isRead?: boolean; actualDatePosted?: string } = {}
 ): Promise<{ id: string; exhibitId: string; userId: string; articleId: string }> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getGalleryApiToken(apiContext);
     const response = await apiContext.post(`${Services.Gallery.API}/api/userArticles`, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -1023,8 +1073,6 @@ export async function apiCreateUserArticle(
       throw new Error(`Failed to create user article: ${response.status()} ${await response.text()}`);
     }
     return await response.json();
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -1045,8 +1093,8 @@ export interface ApiUserArticle {
  * it to order), so `article` comes back null here. Assert on `articleId`.
  */
 export async function apiGetExhibitUserArticles(exhibitId: string): Promise<ApiUserArticle[]> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getGalleryApiToken(apiContext);
     const response = await apiContext.get(
       `${Services.Gallery.API}/api/exhibits/${exhibitId}/userArticles`,
@@ -1056,8 +1104,6 @@ export async function apiGetExhibitUserArticles(exhibitId: string): Promise<ApiU
       throw new Error(`Failed to get exhibit user articles: ${response.status()} ${await response.text()}`);
     }
     return await response.json();
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -1071,8 +1117,8 @@ export async function apiGetExhibitTeamUserArticles(
   exhibitId: string,
   teamId: string
 ): Promise<ApiUserArticle[]> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getGalleryApiToken(apiContext);
     const response = await apiContext.get(
       `${Services.Gallery.API}/api/exhibits/${exhibitId}/teams/${teamId}/userarticles`,
@@ -1084,8 +1130,6 @@ export async function apiGetExhibitTeamUserArticles(
       );
     }
     return await response.json();
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -1093,12 +1137,10 @@ export async function apiGetExhibitTeamUserArticles(
  * Delete a collection by id. Safe to call for an already-deleted collection.
  */
 export async function apiDeleteCollectionById(collectionId: string, label: string = collectionId): Promise<void> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getGalleryApiToken(apiContext);
     await deleteCollectionViaApi(apiContext, token, collectionId, label);
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -1106,12 +1148,10 @@ export async function apiDeleteCollectionById(collectionId: string, label: strin
  * Delete an exhibit by id. Safe to call for an already-deleted exhibit.
  */
 export async function apiDeleteExhibitById(exhibitId: string, label: string = exhibitId): Promise<void> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getGalleryApiToken(apiContext);
     await deleteExhibitViaApi(apiContext, token, exhibitId, label);
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -1147,7 +1187,7 @@ export async function createGalleryGroup(page: Page, name: string): Promise<void
   // getByRole({ name }) cannot reach them — hence the structural locator.
   await page.locator('app-admin-groups th.mat-column-actions button').first().click();
 
-  const dialog = page.getByRole('dialog', { name: 'Create New Group?' });
+  const dialog = page.getByRole('dialog', { name: 'Add Group' });
   await expect(dialog).toBeVisible();
   await dialog.getByRole('textbox', { name: 'Name' }).fill(name);
   await dialog.getByRole('button', { name: 'Save' }).click();
@@ -1173,20 +1213,8 @@ export type GalleryFixtures = {
  */
 export type GalleryWorkerFixtures = {
   seededExhibit: SeededExhibitData;
+  seededCollection: SeededCollectionData;
 };
-
-/**
- * Path to the Gallery storageState saved by global-setup.ts. May not exist if the
- * global setup failed to provision (stack down at startup) — handled below.
- */
-const galleryStatePath = authStatePath('gallery');
-
-/**
- * True when global-setup successfully wrote the Gallery auth state this run.
- * Evaluated once at module load. Specs that want a clean unauthenticated context
- * still override this with `test.use({ storageState: { cookies: [], origins: [] } })`.
- */
-const galleryStateExists = fs.existsSync(galleryStatePath);
 
 /**
  * The topbar user-menu button renders only once the OIDC client has resolved a
@@ -1201,33 +1229,20 @@ const GALLERY_APP_SHELL = 'app-topbar .options-text button';
  * full Keycloak login when the saved storageState is missing or expired.
  *
  * Prefer the `galleryAuthenticatedPage` fixture in specs; this is exported for the
- * few specs that need to control navigation themselves.
+ * few specs that need to control navigation themselves. Pass `fromSavedState` only
+ * when the context was created from the saved state, so a rejected state is rewritten.
  */
-export async function ensureGalleryAuthenticated(page: Page): Promise<void> {
-  await page.goto(Services.Gallery.UI, { waitUntil: 'domcontentloaded' });
-
-  const appShell = page.locator(GALLERY_APP_SHELL).first();
-  const keycloakField = page.locator('input[name="username"]');
-
-  // Race the authenticated shell against a Keycloak login form. The form appears
-  // only if the saved state is missing/expired — in that case fall back to the
-  // full interactive login so the test still proceeds (just not as fast).
-  // waitForFirstVisible is cancellation-safe: a plain Promise.race leaves the
-  // losing waitFor() running to its full timeout in the background.
-  const winner = await waitForFirstVisible(
-    page,
-    [
-      { key: 'shell', locator: appShell },
-      { key: 'keycloak', locator: keycloakField },
-    ],
-    { timeout: 20000 }
-  );
-
-  if (winner !== 'shell') {
-    // Either Keycloak appeared or neither did within the window — do a full login.
-    await authenticateGalleryWithKeycloak(page);
-    await appShell.waitFor({ state: 'visible', timeout: 30000 });
-  }
+export async function ensureGalleryAuthenticated(
+  page: Page,
+  options: { fromSavedState?: boolean } = {},
+): Promise<void> {
+  await ensureAuthenticatedShell(page, {
+    app: 'gallery',
+    url: Services.Gallery.UI,
+    shell: page.locator(GALLERY_APP_SHELL).first(),
+    login: authenticateGalleryWithKeycloak,
+    fromSavedState: options.fromSavedState,
+  });
 }
 
 /**
@@ -1277,8 +1292,19 @@ export async function openGalleryUserMenu(
  * so it only exists once `permissionDataService.load()` has resolved.
  */
 export async function gotoGalleryAdmin(page: Page): Promise<void> {
-  await page.getByRole('button', { name: 'Administration' }).click();
-  await expect(page).toHaveTitle('Gallery Admin');
+  // AdminContainerComponent sets this title in its constructor, so a title that never
+  // changes means the lazy `/admin` route never loaded. That was seen once under
+  // full-suite load (user-role-assignment.spec.ts): the click landed, and the title was
+  // still "Gallery" ten seconds later. It did not reproduce in isolation or under four
+  // parallel workers, so the cause is not known. Clicking again re-issues the
+  // navigation, which is harmless when the first one is merely slow, as both go to the
+  // same route. `exact` keeps a retried click off "Exit Administration".
+  await expect(async () => {
+    if ((await page.title()) !== 'Gallery Admin') {
+      await page.getByRole('button', { name: 'Administration', exact: true }).click({ timeout: 5000 });
+    }
+    await expect(page).toHaveTitle('Gallery Admin', { timeout: 5000 });
+  }).toPass({ timeout: 20000 });
 }
 
 /**
@@ -1301,24 +1327,64 @@ export async function galleryIsDarkTheme(page: Page): Promise<boolean> {
 }
 
 /**
- * Switch Gallery between light and dark theme through the topbar user menu's
- * "Dark Theme" switch, and wait for the change to land on `document.body`.
+ * Switch Gallery between light and dark theme by writing the persisted preference
+ * and reloading, then wait for the topbar user menu and `document.body` to reflect
+ * it. No menu clicks.
  *
- * Gallery persists the selected theme in the `auth.ui` slice of its Akita store,
- * saved to localStorage under 'akita-cite-ui' (`main.ts`; the key name is shared
- * with CITE, but each app has its own origin). So a theme set here survives the
- * reloads and `page.goto` calls a test performs afterward, and only needs applying
- * once, right after authentication. The preference never reaches the server, so
- * every test's fresh browser context starts light.
- *
- * Use the switch rather than the `?theme=dark` query param: once the param has been
- * seen, `AppComponent` writes it back onto the URL on every later theme change,
- * which would leak it into the URL assertions many specs make.
+ * Gallery's theme lives only in the browser (no server-side user preference), in two
+ * localStorage entries, and both must be written:
+ * - `uiState` (UIDataService, `selectedTheme`) — the bootstrap source of truth:
+ *   TopbarComponent's constructor calls `authService.setUserTheme(uiDataService
+ *   .getTheme() || LIGHT)`, overriding whatever the Akita store rehydrated. Writing
+ *   only the Akita key is therefore reverted to light as soon as the top bar renders.
+ * - 'akita-cite-ui' (Akita persistState of `auth.ui`, `main.ts`; the key name is shared
+ *   with CITE, but each app has its own origin) — what AppComponent applies before the
+ *   top bar renders. Akita stores the slice under the store name, so the shape is
+ *   `{"auth":{"theme":"dark-theme"},"$cache":{"auth":false}}` (captured from gallery.ui
+ *   after a UI toggle, crucible-common 0.8.0) — NOT `{"auth":{"ui":...}}`.
+ * Both are merged into, not replaced. Every test's fresh browser context starts light.
+ * `?theme=` is not used: once seen, AppComponent writes it back onto the URL on every
+ * later theme change, which would leak it into the URL assertions many specs make.
  *
  * No-ops when the requested theme is already active, so callers can use it to
- * restore state unconditionally.
+ * restore state unconditionally. Specs whose subject is the toggle control use
+ * `toggleGalleryThemeViaMenu`.
  */
 export async function setGalleryTheme(page: Page, theme: GalleryTheme): Promise<void> {
+  const want = theme === 'dark';
+  if ((await galleryIsDarkTheme(page)) === want) return;
+
+  await page.evaluate((value) => {
+    const merge = (key: string, patch: (s: Record<string, any>) => void) => {
+      let state: Record<string, any> = {};
+      try {
+        state = JSON.parse(localStorage.getItem(key) ?? '{}') ?? {};
+      } catch {
+        state = {};
+      }
+      patch(state);
+      localStorage.setItem(key, JSON.stringify(state));
+    };
+    merge('uiState', (s) => {
+      s.selectedTheme = value;
+    });
+    merge('akita-cite-ui', (s) => {
+      s.auth = { ...(s.auth ?? {}), theme: value };
+    });
+  }, want ? 'dark-theme' : 'light-theme');
+
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('button', { name: 'Admin User', exact: true })).toBeVisible({ timeout: 15000 });
+  await expect.poll(() => galleryIsDarkTheme(page), { timeout: 10000 }).toBe(want);
+}
+
+/**
+ * Switch Gallery between light and dark theme through the topbar user menu's
+ * "Dark Theme" switch, and wait for the change to land on `document.body`. For specs
+ * whose subject is the toggle control itself; everything else uses `setGalleryTheme`.
+ * No-ops when the requested theme is already active.
+ */
+export async function toggleGalleryThemeViaMenu(page: Page, theme: GalleryTheme): Promise<void> {
   const want = theme === 'dark';
   if ((await galleryIsDarkTheme(page)) === want) return;
 
@@ -1349,13 +1415,12 @@ export async function setGalleryTheme(page: Page, theme: GalleryTheme): Promise<
  * opt out with `test.use({ storageState: { cookies: [], origins: [] } })`.
  */
 export const test = base.extend<GalleryFixtures, GalleryWorkerFixtures>({
-  // Default the context to the saved auth state when it exists. When it doesn't
-  // (provisioning failed), leave Playwright's default and rely on the fixture's
-  // interactive-login fallback below.
-  storageState: galleryStateExists ? galleryStatePath : undefined,
+  // `undefined` when global-setup could not provision Gallery; the shell check
+  // then falls back to an interactive login.
+  storageState: async ({ browser }, use) => use(await freshAuthStatePath('gallery', browser)),
 
-  galleryAuthenticatedPage: async ({ page }, use) => {
-    await ensureGalleryAuthenticated(page);
+  galleryAuthenticatedPage: async ({ page, storageState }, use) => {
+    await ensureGalleryAuthenticated(page, { fromSavedState: storageState === authStatePath('gallery') });
     await use(page);
   },
 
@@ -1365,6 +1430,14 @@ export const test = base.extend<GalleryFixtures, GalleryWorkerFixtures>({
     await use(seededData);
     // Clean up after all tests in this worker are done
     await cleanupSeededExhibit(seededData);
+  }, { scope: 'worker' }],
+
+  seededCollection: [async ({}, use, testInfo) => {
+    // Worker-scoped: seed once per worker with deterministic name
+    const seededData = await seedSharedCollection(testInfo.parallelIndex);
+    await use(seededData);
+    // Clean up after all tests in this worker are done
+    await cleanupSeededCollection(seededData);
   }, { scope: 'worker' }],
 });
 
@@ -1395,6 +1468,16 @@ export interface SeededExhibitData {
 }
 
 /**
+ * Seeded data structure for shared collection + exhibit (worker-scoped).
+ */
+export interface SeededCollectionData {
+  collectionId: string;
+  collectionName: string;
+  exhibitId: string;
+  exhibitName: string;
+}
+
+/**
  * Seed a complete exhibit structure for the admin user:
  * - Create a Collection
  * - Create an Exhibit in that Collection
@@ -1413,23 +1496,12 @@ export async function seedExhibitForAdmin(
   exhibitNamePrefix: string = 'Test Exhibit',
   teamNamePrefix: string = 'Test Team'
 ): Promise<SeededExhibitData> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getGalleryApiToken(apiContext);
 
-    // Step 1: Get the admin user's ID
-    const usersResponse = await apiContext.get(`${Services.Gallery.API}/api/users`, {
-      headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-    });
-    if (!usersResponse.ok()) {
-      throw new Error(`Failed to get users: ${usersResponse.status()} ${await usersResponse.text()}`);
-    }
-    const users: Array<{ id: string; name: string }> = await usersResponse.json();
-    const adminUser = users.find(u => u.name?.toLowerCase().includes('admin'));
-    if (!adminUser) {
-      throw new Error('Admin user not found in the Gallery database');
-    }
-    const userId = adminUser.id;
+    // Step 1: Get the admin user's ID (cached per worker)
+    const userId = await apiGetAdminUserId();
 
     // Step 2: Create a Collection
     // Include a random suffix in addition to the timestamp: parallel workers can
@@ -1659,8 +1731,6 @@ export async function seedExhibitForAdmin(
       articleIds,
       teamArticleIds,
     };
-  } finally {
-    await apiContext.dispose();
   }
 }
 
@@ -1672,8 +1742,8 @@ export async function seedExhibitForAdmin(
  * @param seededData - The SeededExhibitData returned by seedExhibitForAdmin
  */
 export async function cleanupSeededExhibit(seededData: SeededExhibitData): Promise<void> {
-  const apiContext = await pwRequest.newContext({ ignoreHTTPSErrors: true });
-  try {
+  const apiContext = await sharedRequestContext();
+  {
     const token = await getGalleryApiToken(apiContext);
 
     // Delete TeamArticles
@@ -1733,7 +1803,108 @@ export async function cleanupSeededExhibit(seededData: SeededExhibitData): Promi
     // Delete Collection (will also cascade delete if API supports it)
     await deleteCollectionViaApi(apiContext, token, seededData.collectionId, seededData.collectionName);
 
-  } finally {
-    await apiContext.dispose();
   }
+}
+
+/**
+ * Seed a shared collection + exhibit for read-only tests (worker-scoped).
+ * Uses a deterministic name based on parallelIndex to avoid collisions.
+ *
+ * @param parallelIndex - Worker's parallel index from testInfo
+ * @returns SeededCollectionData containing collection and exhibit IDs
+ */
+export async function seedSharedCollection(parallelIndex: number): Promise<SeededCollectionData> {
+  const apiContext = await sharedRequestContext();
+  const token = await getGalleryApiToken(apiContext);
+  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+  const collectionName = `E2E Shared Collection [w${parallelIndex}]`;
+  const exhibitName = `E2E Shared Exhibit [w${parallelIndex}]`;
+
+  // A worker that died in this slot before its teardown left these behind; a second
+  // same-name collection would make the read-only specs' name lookups ambiguous
+  // (strict-mode failures). Only one live worker owns a parallelIndex, so whatever
+  // carries this slot's names is stale: delete every match before creating.
+  await deleteAllNamed(apiContext, token, 'exhibits', exhibitName);
+  await deleteAllNamed(apiContext, token, 'collections', collectionName);
+
+  // Create Collection
+  const collectionResponse = await apiContext.post(`${Services.Gallery.API}/api/collections`, {
+    headers,
+    data: {
+      name: collectionName,
+      description: 'Worker-scoped collection for read-only E2E tests',
+    },
+  });
+  if (!collectionResponse.ok()) {
+    throw new Error(`Failed to create collection: ${collectionResponse.status()} ${await collectionResponse.text()}`);
+  }
+  const collection: { id: string; name: string } = await collectionResponse.json();
+  console.log(`Seeded shared collection: ${collection.name} (${collection.id})`);
+
+  // Create Exhibit in that Collection. If this fails, the collection is deleted
+  // again so the failed seed leaves nothing behind.
+  try {
+    const exhibitResponse = await apiContext.post(`${Services.Gallery.API}/api/exhibits`, {
+      headers,
+      data: {
+        name: exhibitName,
+        description: 'Worker-scoped exhibit for read-only E2E tests',
+        collectionId: collection.id,
+        showAdvanceButton: true,
+      },
+    });
+    if (!exhibitResponse.ok()) {
+      throw new Error(`Failed to create exhibit: ${exhibitResponse.status()} ${await exhibitResponse.text()}`);
+    }
+    const exhibit: { id: string; name: string } = await exhibitResponse.json();
+    console.log(`Seeded shared exhibit: ${exhibit.name} (${exhibit.id})`);
+
+    return {
+      collectionId: collection.id,
+      collectionName: collection.name,
+      exhibitId: exhibit.id,
+      exhibitName: exhibit.name,
+    };
+  } catch (error) {
+    await deleteCollectionViaApi(apiContext, token, collection.id, collection.name);
+    throw error;
+  }
+}
+
+/** Delete every Gallery `collections`/`exhibits` record named exactly `name`. */
+async function deleteAllNamed(
+  apiContext: APIRequestContext,
+  token: string,
+  kind: 'collections' | 'exhibits',
+  name: string,
+): Promise<void> {
+  const listResponse = await apiContext.get(`${Services.Gallery.API}/api/${kind}`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+  });
+  if (!listResponse.ok()) {
+    throw new Error(`Failed to list ${kind}: ${listResponse.status()} ${await listResponse.text()}`);
+  }
+  const records: Array<{ id: string; name: string }> = await listResponse.json();
+  for (const record of records.filter(r => r.name === name)) {
+    if (kind === 'exhibits') {
+      await deleteExhibitViaApi(apiContext, token, record.id, record.name);
+    } else {
+      await deleteCollectionViaApi(apiContext, token, record.id, record.name);
+    }
+  }
+}
+
+/**
+ * Clean up a shared collection and its exhibit.
+ */
+export async function cleanupSeededCollection(seededData: SeededCollectionData): Promise<void> {
+  const apiContext = await sharedRequestContext();
+  const token = await getGalleryApiToken(apiContext);
+
+  // Delete Exhibit
+  await deleteExhibitViaApi(apiContext, token, seededData.exhibitId, seededData.exhibitName);
+
+  // Delete Collection
+  await deleteCollectionViaApi(apiContext, token, seededData.collectionId, seededData.collectionName);
 }

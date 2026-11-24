@@ -17,11 +17,11 @@ for (const theme of STEAMFITTER_THEMES) {
   test.describe(`${theme} theme › Group Management in Admin`, () => {
     const GROUP_NAME = `E2E View Group ${Date.now()}`;
 
-    test.beforeEach(async () => {
+    test.beforeAll(async () => {
       await seedGroup(GROUP_NAME);
     });
 
-    test.afterEach(async () => {
+    test.afterAll(async () => {
       await deleteGroupsByPrefix(['E2E View Group']);
     });
 

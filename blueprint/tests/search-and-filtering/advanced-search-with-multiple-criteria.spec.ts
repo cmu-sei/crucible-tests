@@ -5,9 +5,25 @@
 // seed: tests/seed.spec.ts
 
 import { test, expect, Services, serviceUrlPattern, BLUEPRINT_THEMES, applyBlueprintTheme } from '../../fixtures';
+import { getBlueprintToken, createMsel, deleteMsel, tempBlueprintName } from '../../test-helpers';
 
 for (const theme of BLUEPRINT_THEMES) {
     test.describe(`${theme} theme › Search and Filtering`, () => {
+    // The MSEL list must not be empty for the counts below to mean anything, and other
+    // tests' MSELs come and go, so the test seeds one of its own.
+    let seededMselId: string | undefined;
+    let seededMselName: string;
+
+    test.beforeEach(async () => {
+      seededMselName = tempBlueprintName('TestBP-AdvancedSearch');
+      seededMselId = (await createMsel(await getBlueprintToken(), { name: seededMselName })).id;
+    });
+
+    test.afterEach(async () => {
+      if (seededMselId) await deleteMsel(await getBlueprintToken(), seededMselId);
+      seededMselId = undefined;
+    });
+
     test('Advanced Search with Multiple Criteria', async ({ blueprintAuthenticatedPage: page }) => {
     await applyBlueprintTheme(page, theme);
 
@@ -23,8 +39,10 @@ for (const theme of BLUEPRINT_THEMES) {
       const mselList = page.locator('mat-table').first();
       await expect(mselList).toBeVisible({ timeout: 20000 });
 
-      // Count initial MSELs - data rows are <mat-row> elements
+      // Count initial MSELs - data rows are <mat-row> elements. Wait for the seeded row so
+      // the count is taken after the list has loaded.
       const mselItems = page.locator('mat-row');
+      await expect(mselItems.filter({ hasText: seededMselName })).toHaveCount(1);
       const initialCount = await mselItems.count();
       expect(initialCount).toBeGreaterThan(0);
       

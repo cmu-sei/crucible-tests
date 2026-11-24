@@ -142,7 +142,7 @@ for (const theme of PLAYERVM_THEMES) {
       );
 
     /** Poll intervals for a delivery: fast at first, then patient enough for one retry. */
-    const deliveryPoll = { timeout: 90000, intervals: [500, 1000, 2000, 3000, 5000, 10000] };
+    const deliveryPoll = { timeout: 30000, intervals: [500, 1000, 2000, 3000, 5000, 10000] };
 
     /**
      * Run a wait for something a callback should have done, and if it never happens say
@@ -172,6 +172,7 @@ for (const theme of PLAYERVM_THEMES) {
     };
 
     test("A view cloned from a parent is given the parent's maps, on its own team", async () => {
+      test.slow(); // Callback delivery with background retry can take up to 60s
       requireSubscription();
 
       const stamp = Date.now();
@@ -226,6 +227,7 @@ for (const theme of PLAYERVM_THEMES) {
     });
 
     test('A cloned view is given a usage-logging session of its own, named after it', async () => {
+      test.slow(); // Callback delivery with background retry can take up to 60s
       requireSubscription();
       requirePrecondition(
         usageLoggingEnabled,
@@ -273,6 +275,7 @@ for (const theme of PLAYERVM_THEMES) {
     });
 
     test('Deleting a view removes the maps filed under it', async () => {
+      test.slow(); // Callback delivery with background retry can take up to 60s
       requireSubscription();
 
       const stamp = Date.now();
@@ -298,6 +301,7 @@ for (const theme of PLAYERVM_THEMES) {
     });
 
     test('Deleting a view closes a usage-logging session that is still running', async () => {
+      test.slow(); // Callback delivery with background retry can take up to 60s
       requireSubscription();
       requirePrecondition(
         usageLoggingEnabled,

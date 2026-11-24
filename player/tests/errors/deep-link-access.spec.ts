@@ -19,7 +19,7 @@ for (const theme of PLAYER_THEMES) {
       await page.goto(deepLinkUrl);
 
       // expect: User is redirected to login
-      await page.getByText('Sign in to your account').first().waitFor({ state: 'visible', timeout: 70000 });
+      await page.getByText('Sign in to your account').first().waitFor({ state: 'visible', timeout: 30000 });
       await expect(page).toHaveURL(serviceUrlPattern(Services.Keycloak));
 
       // 3. After login, user is redirected back to intended deep link

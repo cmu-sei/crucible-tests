@@ -7,66 +7,52 @@
 // What a signed-in user with no Blueprint permissions *sees*. That the API refuses them
 // (401/403 per route) is Blueprint.Api.Tests' job — RouteAuthorizationTests tables every route —
 // so this spec asserts only the UI's gating: the controls a permission-less user is shown, and
-// the ones withheld. A fresh Keycloak user with no realm roles has an empty
-// `/api/me/systempermissions`, so every permission-gated control must be absent or disabled.
+// the ones withheld. The signed-in user is one of the worker's pool users (`user-pool.ts`):
+// no realm roles and a role-less Blueprint row, so `/api/me/systempermissions` is empty and
+// every permission-gated control must be absent or disabled.
 
 import { test, expect, Services } from '../../fixtures';
-import {
-  getKeycloakAdminToken,
-  createKeycloakUser,
-  deleteKeycloakUser,
-  tempUsername,
-} from '../../../keycloak-admin';
+import { dashboardCard } from '../../test-helpers';
 
 test.describe('Error Handling and Validation', () => {
   test.describe('Unauthorized Action Handling', () => {
     // Unauthorized-access specs own their browser context — the shared storage state is admin.
     test.use({ storageState: { cookies: [], origins: [] } });
 
-    let adminToken: string;
-    let userId: string | undefined;
-    let username: string;
-    const password = 'TestPassword123!';
-
-    test.beforeEach(async () => {
-      adminToken = await getKeycloakAdminToken();
-      username = tempUsername('blueprinttest');
-      const user = await createKeycloakUser(adminToken, {
-        username,
-        password,
-        email: `${username}@test.local`,
-        realmRoles: [],
-      });
-      userId = user.id;
-    });
-
-    test.afterEach(async () => {
-      if (userId) await deleteKeycloakUser(adminToken, userId);
-    });
-
-    test('User without permissions is shown no privileged controls', async ({ page }) => {
+    // Nothing to reset: the test only reads.
+    test('User without permissions is shown no privileged controls', async ({ page, nonAdminUser }) => {
       // 1. Sign in as the permission-less user.
       await page.goto(Services.Blueprint.UI);
       const usernameField = page.getByRole('textbox', { name: /username/i });
       await expect(usernameField).toBeVisible({ timeout: 20000 });
-      await usernameField.fill(username);
-      await page.getByRole('textbox', { name: /password/i }).fill(password);
+      await usernameField.fill(nonAdminUser.username);
+      await page.getByRole('textbox', { name: /password/i }).fill(nonAdminUser.password);
 
       // The topbar's Administration item is decided by this response, so it is awaited before
       // the menu is opened: an absent item is then a gating decision, not a load still pending.
       const permissionsLoaded = page.waitForResponse(
         (r) => r.url().includes('/api/me/systempermissions') && r.ok(),
-        { timeout: 60000 }
+        { timeout: 30000 }
       );
       await page.getByRole('button', { name: /sign in/i }).click();
       await expect(page.locator('app-root mat-toolbar').first()).toBeVisible({ timeout: 30000 });
       await permissionsLoaded;
 
-      // expect: the dashboard offers nothing to do — no Join/Start/Manage card.
-      await expect(page.getByText('Nothing to see here!')).toBeVisible({ timeout: 15000 });
-      await expect(page.getByText('Manage an Event')).toHaveCount(0);
-      await expect(page.getByText('Start an Event')).toHaveCount(0);
-      await expect(page.getByText('Join an Event')).toHaveCount(0);
+      // expect: the dashboard offers nothing to do. It shows its NO ACCESS card, and no
+      // LAUNCH, BUILD or ASSESS card.
+      await expect(dashboardCard(page, 'NO ACCESS')).toBeVisible({ timeout: 15000 });
+      await expect(dashboardCard(page, 'NO ACCESS')).toContainText('Authorization Required');
+      await expect(dashboardCard(page, 'LAUNCH')).toHaveCount(0);
+      await expect(dashboardCard(page, 'BUILD')).toHaveCount(0);
+      await expect(dashboardCard(page, 'ASSESS')).toHaveCount(0);
+
+      // expect: the JOIN card is always shown, but with nothing to join it is greyed out and its
+      // button is disabled.
+      const joinCard = dashboardCard(page, 'JOIN');
+      await expect(joinCard).toBeVisible();
+      await expect(joinCard).toHaveClass(/disabled-card/);
+      await expect(joinCard).toContainText('No active events available to join');
+      await expect(joinCard.getByRole('button', { name: 'Join Event' })).toBeDisabled();
 
       // expect: the user menu has Logout but no Administration entry.
       await page.locator('app-root mat-toolbar button strong').first().click();

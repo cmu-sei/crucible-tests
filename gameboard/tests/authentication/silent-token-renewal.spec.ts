@@ -13,13 +13,15 @@
 
 import { test, expect, Services, serviceUrlPattern } from '../../fixtures';
 
+// Override the fixture's saved storageState so this test starts from a fresh unauthenticated state.
+test.use({ storageState: { cookies: [], origins: [] } });
+
 test.describe('Authentication', () => {
   test('OIDC Silent Token Renewal Smoke', async ({ gameboardAuthenticatedPage: page }) => {
     await page.goto(Services.Gameboard.UI);
     await expect(page.locator('a:has-text("Log out"), button:has-text("Log out")').first()).toBeVisible({ timeout: 15000 });
 
-    // Wait briefly to allow background OIDC activity, then verify session is intact.
-    await page.waitForTimeout(5000);
+    // Verify session remains intact across a reload.
     await page.reload();
     await expect(page).not.toHaveURL(serviceUrlPattern(Services.Keycloak));
     await expect(page.locator('a:has-text("Log out"), button:has-text("Log out")').first()).toBeVisible({ timeout: 15000 });
