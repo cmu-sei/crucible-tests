@@ -34,11 +34,12 @@ function hubMessages(payload: string | Buffer): any[] {
 }
 
 /**
- * Resolves once the hub has answered this page's selectMsel for `mselId` without an error, which is when the server
- * has put the page's connection on the MSEL. Register it before the page navigates. It rejects, naming `who`, if the
- * hub gives no such answer within `timeoutMs`, which is counted from the call and so includes the page's navigation.
+ * Resolves once the hub has answered this page's selectMsel for `mselId`, which is when the server has put the page's
+ * connection on the MSEL. Register it before the page navigates. It rejects at once, with the hub's text, when the hub
+ * answers with an error, and naming `who` when there is no answer within `timeoutMs` of the call (which includes the
+ * page's navigation).
  */
-function selectMselAnswered(page: Page, who: string, mselId: string, timeoutMs = 60000): Promise<void> {
+function selectMselAnswered(page: Page, who: string, mselId: string, timeoutMs = 25000): Promise<void> {
   const answered = new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`the hub never answered ${who}'s selectMsel`)), timeoutMs);
     page.on('websocket', (ws) => {
@@ -57,9 +58,11 @@ function selectMselAnswered(page: Page, who: string, mselId: string, timeoutMs =
       });
       ws.on('framereceived', (frame) => {
         for (const message of hubMessages(frame.payload)) {
-          if (message.type === 3 && !message.error && pending.has(message.invocationId)) {
+          if (message.type === 3 && pending.has(message.invocationId)) {
             clearTimeout(timer);
-            resolve();
+            if (message.error)
+              reject(new Error(`the hub answered ${who}'s selectMsel with an error: ${message.error}`));
+            else resolve();
           }
         }
       });
