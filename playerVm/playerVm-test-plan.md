@@ -775,3 +775,43 @@ it:
 - **a schema is read as an object, an enum, or neither** — enum values as strings
   either way, since a union of string literals is what the generator emits; a
   formatted scalar is neither, and becomes a type alias with nothing to drift.
+
+## Proxmox API error reasons (`tests/proxmox/`)
+
+The VM API's Proxmox endpoints against a live Proxmox VM (vm.api #99 and #112):
+the state the console gates its options bar on, and the 400s and 409s, with the
+reason in the ProblemDetails `title`, that replaced the 500s a refused or failed
+Proxmox request used to produce. A request PVE refuses with its own 500 is a
+409; one it refuses with a 400, or a task it accepts and then fails, is a 400. The machine is the one `PROXMOX_CONSOLE_VMID` /
+`PROXMOX_CONSOLE_NODE` configure, resolved by `requireProxmoxConsoleVm()`; see
+"Proxmox console" in `console/console-test-plan.md` for why it is configured
+rather than seeded and what skips when it is missing. API-only, wrapped in the
+theme loop like every spec here, chromium only.
+
+Every request is one the API or Proxmox refuses, so the VM is not changed.
+There is deliberately no revert-to-current-snapshot case: on a VM with a
+snapshot it would succeed and roll the machine back.
+
+### Tests
+
+- **Proxmox VM state reports what the console gates on** —
+  `GET api/vms/proxmox/{id}` returns booleans for `guestAgentRunning`,
+  `hasSnapshot`, `vncClipboardEnabled`, `canResizeDisplay` and `canMountIso`;
+  `currentSnapshot` is a name exactly when `hasSnapshot` is true; and
+  `fileUploadMaxBytes` is a positive integer no larger than 46080, the cap PVE's
+  agent file-write sets.
+- **A snapshot named "current" returns Proxmox's reason as a 409** —
+  `Create Snapshot failed: ...`. PVE reserves `current`, so it refuses the name,
+  with its own 500.
+- **A snapshot name outside PVE's naming rule returns Proxmox's reason as a
+  400** — `1e2e` gets `Create Snapshot failed: ...`. The API passes PVE's own
+  reason through instead of copying PVE's naming rules, so the tests check only
+  the prefix, not PVE's wording.
+- **Reverting to a snapshot that doesn't exist returns Proxmox's reason as a
+  400** — a failed task,
+  `Revert to Snapshot failed: snapshot '{name}' does not exist`.
+- **Power On on a running VM returns Proxmox's reason as a 400** — a failed
+  task, `Power On failed: VM {vmid} already running`.
+- **Download File without a guest agent is a 400 that says why** — `Could not
+  read /etc/hostname from the virtual machine: ...`. A precondition: skips when
+  the machine has a guest agent running.

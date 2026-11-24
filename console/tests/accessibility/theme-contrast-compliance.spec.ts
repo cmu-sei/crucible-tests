@@ -217,8 +217,8 @@ for (const theme of CONSOLE_THEMES) {
 
     // Colors design spec §3b checks 1 and 3 (WCAG 1.4.3): `on-primary` on a filled
     // `primary` button (Send) and `primary` used as text on the dialog surface (the
-    // Cancel label) must each reach 4.5:1. Uses the gear menu's Keyboard › Send
-    // Text dialog (the shared crucible-dialog), filled in but never sent.
+    // Cancel label) must each reach 4.5:1. Uses the gear menu's Keyboard › Text
+    // dialog (the shared crucible-dialog), filled in but never sent.
     test('Primary and on-primary text contrast (WCAG 1.4.3)', async ({
       consoleAuthenticatedPage: page,
     }) => {
@@ -226,7 +226,7 @@ for (const theme of CONSOLE_THEMES) {
 
       await openGearMenu(page);
       await page.getByRole('menuitem', { name: 'Keyboard', exact: true }).click();
-      await page.getByRole('menuitem', { name: 'Send Text', exact: true }).click();
+      await page.getByRole('menuitem', { name: 'Text', exact: true }).click();
       const dialog = page.getByRole('dialog', { name: 'Enter Text to Send' });
       await expect(dialog).toBeVisible({ timeout: 5000 });
       await assertReadable(dialog.getByRole('heading', { name: 'Enter Text to Send' }), `${theme}: dialog title`);

@@ -214,5 +214,11 @@
     "title": "Admin Panel > Admin - Create API Key",
     "reason": "Test bug: its loose Create/New selector only matches leftover data, so it fails on a fresh database=.",
     "added": "2026-11-11"
+  },
+  {
+    "file": "topomojo/tests/realtime/workspace-updates.spec.ts",
+    "title": "Real-time Updates and Notifications > Real-time Workspace Updates - First Edit in an Empty Document",
+    "reason": "App bug: An edit sent without begin positions (typing into an empty document without moving the cursor) makes the receiving editor throw 'externalRange.getStartPosition is not a function'; it drops the edit and stops sending its own edits.",
+    "added": "2026-11-18"
   }
 ]

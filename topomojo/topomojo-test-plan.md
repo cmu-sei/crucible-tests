@@ -504,15 +504,14 @@ This updated test plan covers recent feature additions including: configurable b
 **File:** `topomojo/tests/workspace-editor/edit-document.spec.ts`
 
 **Steps:**
-  1. Navigate to workspace document tab
-    - expect: Document editor is displayed
-    - expect: Editor supports markdown or rich text
-  2. Enter or modify document content with instructions
+  1. Navigate to the document tab of a new workspace
+    - expect: Document editor (Monaco) is displayed and unlocks: Save replaces the lock icon
+  2. Enter document content with markdown (heading, quotes and dashes, block quote, table, emoji shortname)
     - expect: Editor accepts text input
-    - expect: Markdown formatting works
+    - expect: Markdown formatting works: the Preview toggle renders the heading, a striped table, a styled block quote, curly quotes and dashes, and the emoji
   3. Save document
-    - expect: Document is saved
-    - expect: Content persists
+    - expect: Document is saved: the Saved indicator appears
+    - expect: Content persists: the API returns the saved markdown
     - expect: Preview shows formatted content if applicable
 
 #### 4.10. Workspace Editor - Challenge Tab
@@ -684,22 +683,25 @@ This updated test plan covers recent feature additions including: configurable b
 **File:** `topomojo/tests/gamespace/gamespace-document-view.spec.ts`
 
 **Steps:**
-  1. Navigate to active gamespace
+  1. Navigate to the gamespace of a workspace with a document and no VM templates
     - expect: Gamespace page displays
-  2. Look for document/instructions tab or panel
-    - expect: Document section is accessible
-    - expect: Workspace instructions/document content is displayed
+    - expect: Workspace document is rendered from markdown (heading, striped table, curly quotes and dashes)
+  2. Start the gamespace
+    - expect: The document stays displayed while the gamespace runs
 
 #### 5.8. Gamespace Challenge View
 
 **File:** `topomojo/tests/gamespace/gamespace-challenge-view.spec.ts`
 
 **Steps:**
-  1. Navigate to active gamespace with challenges
-    - expect: Challenge or quiz section is accessible
+  1. Start a gamespace for a workspace with a challenge and no VM templates
+    - expect: Challenge or quiz section is accessible, with the challenge text rendered from markdown
   2. View challenge questions
     - expect: Challenge questions are displayed
     - expect: Answer input fields are available
+    - expect: The session countdown changes without interaction
+  3. End the gamespace
+    - expect: The page shows Game Over
 
 #### 5.9. Gamespace Challenge Submission
 
@@ -996,15 +998,13 @@ This updated test plan covers recent feature additions including: configurable b
 **Steps:**
   1. Navigate to admin user browser
     - expect: User list displays
-  2. Click on a user or view user details
+  2. Search for a new user and view its details
     - expect: User details form opens
-    - expect: User role badge is displayed showing current role
-  3. Modify user appRole (e.g., grant creator or admin role)
+    - expect: The role buttons show the current role (User) as active
+  3. Change the role to Creator (the change saves as soon as it is clicked)
     - expect: Role selection accepts changes
-    - expect: Role change updates the user's appRole field
-  4. Save changes
-    - expect: User role is updated
-    - expect: Changes are reflected in user list
+    - expect: Role change updates the user's role (checked through the API)
+    - expect: Changes are reflected in user list (the row takes the creator highlight)
 
 #### 8.5. Admin - User Role Badge and IDP Conflict Warning
 
@@ -1498,10 +1498,13 @@ This updated test plan covers recent feature additions including: configurable b
 **File:** `topomojo/tests/realtime/workspace-updates.spec.ts`
 
 **Steps:**
-  1. Open workspace in two browser windows for same user
-    - expect: Both windows show same workspace
-  2. Make change in one window (e.g., update description)
-    - expect: Change is reflected in second window in real-time via SignalR
+  1. Open a workspace document in two browser windows for same user
+    - expect: Both windows show the same document
+  2. Move to the end of the text in one window and type a line
+    - expect: Change is reflected in second window in real-time via SignalR, without a reload or a click
+    - expect: A line typed in the second window reaches the first the same way
+
+**Also:** "First Edit in an Empty Document" types into an empty document without moving the cursor first, then checks the same two directions. Known failure: the receiving editor throws on an edit sent without begin positions.
 
 #### 11.2. Real-time Gamespace Status Updates
 
