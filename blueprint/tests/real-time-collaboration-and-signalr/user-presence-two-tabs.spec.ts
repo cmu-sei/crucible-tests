@@ -15,6 +15,7 @@ import {
   removeUnitFromMsel,
   addUserToUnit,
   navigateToMsel,
+  signInToBlueprintAs,
   tempBlueprintName,
 } from "../../test-helpers";
 
@@ -77,21 +78,8 @@ test.describe("Real-time Collaboration and SignalR › presence with two tabs", 
         storageState: { cookies: [], origins: [] },
       });
       const firstTab = await context.newPage();
-      await firstTab.goto(Services.Blueprint.UI, {
-        waitUntil: "domcontentloaded",
-      });
-      const usernameField = firstTab.getByRole("textbox", {
-        name: /username/i,
-      });
-      await expect(usernameField).toBeVisible({ timeout: 30000 });
-      await usernameField.fill(nonAdminUser.username);
-      await firstTab
-        .getByRole("textbox", { name: /password/i })
-        .fill(nonAdminUser.password);
-      await firstTab.getByRole("button", { name: /sign in/i }).click();
-      await expect(
-        firstTab.locator("app-root mat-toolbar").first(),
-      ).toBeVisible({ timeout: 30000 });
+      await signInToBlueprintAs(firstTab, nonAdminUser.username, nonAdminUser.password);
+      await expect(firstTab.locator('app-root mat-toolbar').first()).toBeVisible({ timeout: 30000 });
       await navigateToMsel(firstTab, mselId);
 
       const secondTab = await context.newPage();
