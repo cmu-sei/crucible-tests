@@ -89,5 +89,40 @@
     "requires": "terraform",
     "reason": "Sets the directory Terraform version from GET terraform/versions; CI has no Terraform binaries.",
     "added": "2026-11-11"
+  },
+  {
+    "file": "console/tests/proxmox/options-menus.spec.ts",
+    "title": "*",
+    "requires": "hypervisor",
+    "reason": "Drives a running Proxmox VM through the VM API (PROXMOX_CONSOLE_VMID/PROXMOX_CONSOLE_NODE); CI has no Proxmox host. Passed against a local Proxmox VM.",
+    "added": "2026-11-24"
+  },
+  {
+    "file": "console/tests/proxmox/power-error-reason.spec.ts",
+    "title": "*",
+    "requires": "hypervisor",
+    "reason": "Drives a running Proxmox VM through the VM API (PROXMOX_CONSOLE_VMID/PROXMOX_CONSOLE_NODE); CI has no Proxmox host. Passed against a local Proxmox VM.",
+    "added": "2026-11-24"
+  },
+  {
+    "file": "console/tests/proxmox/read-only.spec.ts",
+    "title": "*",
+    "requires": "hypervisor",
+    "reason": "Drives a running Proxmox VM through the VM API (PROXMOX_CONSOLE_VMID/PROXMOX_CONSOLE_NODE); CI has no Proxmox host. Passed against a local Proxmox VM.",
+    "added": "2026-11-24"
+  },
+  {
+    "file": "console/tests/proxmox/resolution.spec.ts",
+    "title": "*",
+    "requires": "hypervisor",
+    "reason": "Drives a running Proxmox VM through the VM API (PROXMOX_CONSOLE_VMID/PROXMOX_CONSOLE_NODE); CI has no Proxmox host. Passed against a local Proxmox VM.",
+    "added": "2026-11-24"
+  },
+  {
+    "file": "playerVm/tests/proxmox/proxmox-error-reasons.spec.ts",
+    "title": "*",
+    "requires": "hypervisor",
+    "reason": "Drives a running Proxmox VM through the VM API (PROXMOX_CONSOLE_VMID/PROXMOX_CONSOLE_NODE); CI has no Proxmox host. Passed against a local Proxmox VM.",
+    "added": "2026-11-24"
   }
 ]
