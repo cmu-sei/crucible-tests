@@ -130,12 +130,24 @@ export async function gotoProxmoxConsole(page: Page, vmId: string, theme: Consol
 }
 
 /**
- * Assert that an options bar control is enabled when the VM supports it, and
- * otherwise disabled with `reason` as its tooltip.
+ * Assert that hovering an options bar control shows `text` as its tooltip.
  *
- * The Proxmox bar wraps such a control in an element that carries the tooltip,
+ * The Proxmox bar puts the tooltip on an element wrapped around the control,
  * because a disabled button gets no pointer events and could not show one
- * itself; hovering that wrapper is how a user reads the reason.
+ * itself; hovering that wrapper is how a user reads it, enabled or not.
+ */
+export async function expectTooltip(page: Page, control: Locator, text: string): Promise<void> {
+  await control.locator('..').hover();
+  // The newest tooltip is the hovered control's: the previous control's (which
+  // may carry the same text) can still be fading out.
+  const tooltip = page.locator('.mat-mdc-tooltip').last();
+  await expect(tooltip).toHaveText(text);
+  await expect(tooltip).toBeVisible();
+}
+
+/**
+ * Assert that an options bar control is enabled when the VM supports it, and
+ * otherwise disabled with `reason` as its tooltip (see {@link expectTooltip}).
  */
 export async function expectGatedControl(
   page: Page,
@@ -148,11 +160,7 @@ export async function expectGatedControl(
     return;
   }
   await expect(control).toBeDisabled();
-  await control.locator('..').hover();
-  // The newest tooltip is the hovered control's: the previous control's (which
-  // may carry the same text) can still be fading out.
-  await expect(page.locator('.mat-mdc-tooltip').last()).toHaveText(reason);
-  await expect(page.locator('.mat-mdc-tooltip').last()).toBeVisible();
+  await expectTooltip(page, control, reason);
 }
 
 // Console specs get their VM id from `playerVm/vm-helpers.ts` (`seedViewWithVm`),

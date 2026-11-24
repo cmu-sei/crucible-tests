@@ -865,7 +865,7 @@ export async function findProxmoxVmRecord(
 }
 
 /**
- * `GET api/vms/proxmox/{id}` — the console's view of a Proxmox VM. The four
+ * `GET api/vms/proxmox/{id}` — the console's view of a Proxmox VM. The
  * capability flags come from the machine's Proxmox config, and the console's
  * options bar enables or disables its items from them.
  */
@@ -879,8 +879,12 @@ export interface ProxmoxVmState {
   /** Snapshots is enabled only when the machine has one. */
   hasSnapshot: boolean;
   currentSnapshot: string | null;
-  /** Copy needs `clipboard=vnc` on the machine's `vga` config. */
+  /** Copy and Paste need `clipboard=vnc` on the machine's `vga` config. */
   vncClipboardEnabled: boolean;
+  /** Match Window Size needs a `vga` of `virtio` or `virtio-gl`. */
+  canResizeDisplay: boolean;
+  /** The largest file Send File To VM accepts, in bytes. */
+  fileUploadMaxBytes: number;
 }
 
 /**

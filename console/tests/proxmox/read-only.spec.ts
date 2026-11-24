@@ -9,6 +9,7 @@ import {
   expect,
   CONSOLE_THEMES,
   closeConsoleMenus,
+  expectGatedControl,
   gotoProxmoxConsole,
   openConsoleMenu,
 } from '../../fixtures';
@@ -53,7 +54,7 @@ for (const theme of CONSOLE_THEMES) {
 
       // 2. The bar says so, and the toolbar's Copy / Paste / Ctrl-Alt-Del are gone.
       await expect(bar.getByText(`${vm.record.name} (Read Only)`, { exact: true })).toBeVisible();
-      for (const name of ['Copy', 'Paste', 'Ctrl-Alt-Del']) {
+      for (const name of ['Copy', 'Paste', 'Paste *', 'Ctrl-Alt-Del']) {
         await expect(bar.getByRole('button', { name, exact: true }), name).toHaveCount(0);
       }
 
@@ -70,15 +71,16 @@ for (const theme of CONSOLE_THEMES) {
       await closeConsoleMenus(page);
 
       // 4. Resolution still scales, but Match Window Size is disabled. Its reason
-      //    is the read-only one, unless noVNC has not (yet) seen the server accept
-      //    resize requests, in which case the adapter reason takes precedence.
+      //    is the read-only one where the VM's display could resize; elsewhere
+      //    the adapter's reason comes first.
       const resolution = await openConsoleMenu(page, 'Resolution');
       const match = resolution.getByRole('menuitem', { name: /Match Window Size/ });
       await expect(resolution.getByRole('menuitem', { name: /Scale to Fit/ })).toBeEnabled();
-      await expect(match).toBeDisabled();
-      await match.locator('..').hover();
-      await expect(page.locator('.mat-mdc-tooltip').last()).toHaveText(
-        new RegExp(`^(${RESIZE_READ_ONLY_TOOLTIP}|${RESIZE_UNSUPPORTED_TOOLTIP})$`)
+      await expectGatedControl(
+        page,
+        match,
+        false,
+        vm.state.canResizeDisplay ? RESIZE_READ_ONLY_TOOLTIP : RESIZE_UNSUPPORTED_TOOLTIP
       );
       await closeConsoleMenus(page);
 
@@ -87,7 +89,7 @@ for (const theme of CONSOLE_THEMES) {
       await menu.getByRole('switch', { name: 'Read Only' }).click();
       await expect(page).toHaveURL(/[?&]readOnly=false/);
       await closeConsoleMenus(page);
-      await expect(bar.getByRole('button', { name: 'Paste', exact: true })).toBeVisible();
+      await expect(bar.getByRole('button', { name: 'Ctrl-Alt-Del', exact: true })).toBeVisible();
       menu = await openConsoleMenu(page);
       for (const name of WRITE_ITEMS) {
         await expect(menu.getByRole('menuitem', { name, exact: true }), name).toBeVisible();

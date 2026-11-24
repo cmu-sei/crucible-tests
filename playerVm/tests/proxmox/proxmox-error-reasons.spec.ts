@@ -15,10 +15,15 @@ import {
 
 /**
  * The VM API's Proxmox endpoints, against a live Proxmox VM: the state the
- * console gates its options bar on, and the 400s that replaced the 500s a
- * refused or failed Proxmox request used to produce. Each error carries the
- * reason in the ProblemDetails `title`, phrased with the console's own label
+ * console gates its options bar on, and the 400s and 409s that replaced the
+ * 500s a refused or failed Proxmox request used to produce. Each error carries
+ * the reason in the ProblemDetails `title`, phrased with the console's own label
  * ("Power On failed: ...") so the console can show it as it is.
+ *
+ * Which of the two a refusal gets follows how PVE answered: a request PVE
+ * refuses with its own 500 is a 409, one it refuses with a 400 stays a 400, and
+ * a task PVE accepts and then fails (Power On on a running VM, a revert to a
+ * missing snapshot) is a 400.
  *
  * Every request here is one that the API or Proxmox refuses, so the VM is not
  * changed: snapshot names Proxmox rejects, a revert to a snapshot that doesn't
@@ -42,16 +47,24 @@ for (const theme of PLAYERVM_THEMES) {
     });
 
     test('Proxmox VM state reports what the console gates on', async () => {
-      // guestAgentRunning, hasSnapshot, currentSnapshot and vncClipboardEnabled
-      // come from the VM config call the API already makes, and the console reads
-      // them to enable or disable Files, Snapshots and Copy.
+      // guestAgentRunning, hasSnapshot, currentSnapshot, vncClipboardEnabled and
+      // canResizeDisplay come from the VM's Proxmox state, and the console reads
+      // them to enable or disable Files, Snapshots, Copy and Paste, and Match
+      // Window Size. fileUploadMaxBytes is the deployment's upload limit, which
+      // the console checks a file against before sending it.
       const r = await getProxmoxVm(vm.token, vm.record.id);
       expect(r.status).toBe(200);
       expect(r.data.id).toBe(vm.record.id);
       expect(typeof r.data.guestAgentRunning).toBe('boolean');
       expect(typeof r.data.hasSnapshot).toBe('boolean');
       expect(typeof r.data.vncClipboardEnabled).toBe('boolean');
+      expect(typeof r.data.canResizeDisplay).toBe('boolean');
       expect(typeof r.data.canMountIso).toBe('boolean');
+      // Configurable, but never above the 46080 bytes PVE's agent file-write
+      // takes once the file is base64-encoded.
+      expect(Number.isInteger(r.data.fileUploadMaxBytes)).toBe(true);
+      expect(r.data.fileUploadMaxBytes).toBeGreaterThan(0);
+      expect(r.data.fileUploadMaxBytes).toBeLessThanOrEqual(46080);
       // A current snapshot is named exactly when there is one.
       if (r.data.hasSnapshot) {
         expect(typeof r.data.currentSnapshot).toBe('string');
@@ -60,24 +73,26 @@ for (const theme of PLAYERVM_THEMES) {
       }
     });
 
-    test('A snapshot named "current" returns Proxmox\'s reason as a 400', async () => {
+    test('A snapshot named "current" returns Proxmox\'s reason as a 409', async () => {
       // "current" is PVE's pseudo-snapshot for the running state, so PVE refuses
-      // the name and no snapshot is taken. The API passes PVE's own reason through
+      // the name and no snapshot is taken. PVE answers that with its own 500,
+      // which the API reports as a 409. The API passes PVE's own reason through
       // rather than keeping a copy of PVE's naming rules, so only the prefix is fixed.
       const r = await postProxmoxAction(vm.token, vm.record.id, 'snapshots', { snapshotName: 'current' });
-      expect(r.status).toBe(400);
+      expect(r.status).toBe(409);
       expect(r.data?.title).toMatch(/^Create Snapshot failed: .+/);
     });
 
     test("A snapshot name outside PVE's naming rule returns Proxmox's reason as a 400", async () => {
       // PVE wants a name starting with a letter; this one starts with a digit, so
-      // PVE refuses it and nothing is created.
+      // PVE refuses it with a 400 ("Parameter verification failed") and nothing
+      // is created.
       const r = await postProxmoxAction(vm.token, vm.record.id, 'snapshots', { snapshotName: '1e2e' });
       expect(r.status).toBe(400);
       expect(r.data?.title).toMatch(/^Create Snapshot failed: .+/);
     });
 
-    test("Reverting to a snapshot that doesn't exist returns Proxmox's reason", async () => {
+    test("Reverting to a snapshot that doesn't exist returns Proxmox's reason as a 400", async () => {
       // A name no one would take, so Proxmox is sure to refuse the rollback.
       const name = `e2e-missing-${Date.now()}`;
       const r = await postProxmoxAction(vm.token, vm.record.id, `snapshots/${name}/revert`);
