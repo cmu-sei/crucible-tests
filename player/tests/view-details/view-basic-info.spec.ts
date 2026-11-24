@@ -20,7 +20,7 @@ for (const theme of PLAYER_THEMES) {
 
       // 2. Observe the view header
       // expect: View name is displayed
-      await expect(page.getByText(primaryViewName, { exact: true })).toBeVisible();
+      await expect(page.locator('app-topbar').getByText(primaryViewName, { exact: true })).toBeVisible();
 
       // expect: Current team is shown with 'Team:' label
       await expect(page.getByText('Team:')).toBeVisible();
