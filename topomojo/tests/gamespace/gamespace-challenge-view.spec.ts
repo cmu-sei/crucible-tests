@@ -4,51 +4,78 @@
 // spec: topomojo/topomojo-test-plan.md
 // seed: tests/seed.spec.ts
 
-import { test, expect } from '../../fixtures';
+import { test, expect, Services } from '../../fixtures';
+import {
+  createWorkspace,
+  deleteGamespace,
+  deleteWorkspace,
+  getTopoMojoAdminToken,
+  setWorkspaceChallenge,
+} from '../../../topomojo-helpers';
 
-test.describe('Gamespace Management', () => {
+test.describe('Gamespace Operations', () => {
+  let workspaceId: string | undefined;
+  let gamespaceId: string | undefined;
+  const question = `What port does the web server use? ${Date.now()}`;
+
+  test.beforeEach(async () => {
+    // No VM templates, so starting the gamespace boots nothing.
+    const token = await getTopoMojoAdminToken();
+    workspaceId = (await createWorkspace(token, {
+      name: `E2E Gamespace Challenge ${Date.now()}`,
+      audience: 'everyone',
+    })).id;
+    await setWorkspaceChallenge(token, workspaceId, {
+      text: 'Answer the **questions** below.',
+      variants: [{
+        text: 'Variant 1',
+        sections: [{ name: 'Main', text: '', questions: [{ text: question, answer: '80', penalty: 0 }] }],
+      }],
+    });
+  });
+
+  test.afterEach(async () => {
+    const token = await getTopoMojoAdminToken();
+    if (gamespaceId) await deleteGamespace(token, gamespaceId);
+    if (workspaceId) await deleteWorkspace(token, workspaceId);
+    gamespaceId = undefined;
+    workspaceId = undefined;
+  });
+
   test('Gamespace Challenge View', async ({ topomojoAuthenticatedPage: page }) => {
+    // 1. Navigate to the gamespace and start it
+    await page.goto(`${Services.TopoMojo.UI}/mojo/${workspaceId}`, { waitUntil: 'domcontentloaded' });
+    await page.getByRole('button', { name: 'Start', exact: true }).click();
+    const registered = page.waitForResponse(
+      (r) => r.request().method() === 'POST' && /\/api\/gamespace$/.test(new URL(r.url()).pathname),
+    );
+    await page.getByRole('button', { name: 'Confirm', exact: true }).click();
+    const response = await registered;
+    expect(response.ok()).toBe(true);
+    gamespaceId = (await response.json()).id;
 
-    // 1. Navigate to active gamespace with challenges
-    const sidebarToggle = page.locator('button[aria-label="Toggle sidebar"], button:has(mat-icon:text("menu"))').first();
-    const sidebar = page.locator('mat-sidenav, mat-drawer, [class*="sidebar"]').first();
-    const hasSidebarToggle = await sidebarToggle.isVisible({ timeout: 10000 }).catch(() => false);
-    if (hasSidebarToggle) {
-      await sidebarToggle.click();
-      await expect(sidebar).toBeVisible({ timeout: 5000 });
-    }
+    // expect: Challenge section is accessible, with its markdown text rendered
+    const quiz = page.locator('app-gamespace-quiz');
+    await expect(quiz.locator('markdown strong')).toHaveText('questions');
 
-    const gamespaceTab = page.locator('mat-button-toggle:has-text("Gamespace"), button:has-text("Gamespace")').first();
-    const activeGamespaces = page.locator('[class*="gamespace-card"], [class*="item-card"], mat-list-item');
-    const hasTab = await gamespaceTab.isVisible({ timeout: 5000 }).catch(() => false);
-    if (hasTab) {
-      await gamespaceTab.click();
-      await expect(activeGamespaces.first()).toBeVisible({ timeout: 5000 });
-    }
+    // 2. View challenge questions
+    // expect: Challenge questions are displayed
+    // expect: Answer input fields are available
+    const questionGroup = quiz.locator('.form-group').filter({ hasText: question });
+    await expect(questionGroup).toBeVisible();
+    await expect(questionGroup.getByRole('textbox')).toBeEditable();
 
-    const activeCount = await activeGamespaces.count();
+    // expect: The session countdown runs: it changes without any interaction, which
+    // also shows the view refreshes from its timer.
+    const clock = page.locator('.clock').first();
+    await expect(clock).toHaveText(/\d{2}:\d{2}:\d{2}/);
+    const startedAt = await clock.innerText();
+    await expect(clock).not.toHaveText(startedAt);
 
-    if (activeCount > 0) {
-      const challengeTab = page.locator('mat-tab:has-text("Challenge"), button:has-text("Challenge"), [class*="challenge"]').first();
-      await activeGamespaces.first().click();
-      await expect(challengeTab).toBeVisible({ timeout: 10000 });
-
-      // expect: Challenge or quiz section is accessible
-      const hasChallenge = await challengeTab.isVisible({ timeout: 5000 }).catch(() => false);
-
-      if (hasChallenge) {
-        const questionContent = page.locator('[class*="question"], [class*="challenge"], input[type="text"], textarea').first();
-        await challengeTab.click();
-        await expect(questionContent).toBeVisible({ timeout: 5000 });
-
-        // 2. View challenge questions
-        // expect: Challenge questions are displayed
-        // expect: Answer input fields are available
-        const hasQuestions = await questionContent.isVisible({ timeout: 5000 }).catch(() => false);
-        if (hasQuestions) {
-          await expect(questionContent).toBeVisible();
-        }
-      }
-    }
+    // 3. End the gamespace
+    // expect: The page shows Game Over
+    await page.getByRole('button', { name: 'End', exact: true }).first().click();
+    await page.getByRole('button', { name: 'Confirm', exact: true }).click();
+    await expect(page.getByText('Game Over').first()).toBeVisible();
   });
 });

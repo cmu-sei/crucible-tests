@@ -102,30 +102,6 @@
     "added": "2026-11-11"
   },
   {
-    "file": "player/tests/accessibility/color-contrast.spec.ts",
-    "title": "dark theme > Responsive Design and Accessibility > Color Contrast",
-    "reason": "Test out of date with :main: Player.Ui PR 758 gave the top-bar view title a tooltip, so getByText matches the title and its aria-describedby message (strict mode violation).",
-    "added": "2026-11-11"
-  },
-  {
-    "file": "player/tests/accessibility/color-contrast.spec.ts",
-    "title": "light theme > Responsive Design and Accessibility > Color Contrast",
-    "reason": "Test out of date with :main: Player.Ui PR 758 gave the top-bar view title a tooltip, so getByText matches the title and its aria-describedby message (strict mode violation).",
-    "added": "2026-11-11"
-  },
-  {
-    "file": "player/tests/accessibility/screen-reader.spec.ts",
-    "title": "dark theme > Responsive Design and Accessibility > Screen Reader Compatibility",
-    "reason": "Test out of date with :main: Player.Ui PR 758 gave the top-bar view title a tooltip, so getByText matches the title and its aria-describedby message (strict mode violation).",
-    "added": "2026-11-11"
-  },
-  {
-    "file": "player/tests/accessibility/screen-reader.spec.ts",
-    "title": "light theme > Responsive Design and Accessibility > Screen Reader Compatibility",
-    "reason": "Test out of date with :main: Player.Ui PR 758 gave the top-bar view title a tooltip, so getByText matches the title and its aria-describedby message (strict mode violation).",
-    "added": "2026-11-11"
-  },
-  {
     "file": "player/tests/accessibility/theme-contrast-compliance.spec.ts",
     "title": "dark theme > Responsive Design and Accessibility > Primary and on-primary text contrast (WCAG 1.4.3)",
     "reason": "App bug: Dark theme primary-colored button labels are below WCAG 1.4.3 contrast.",
@@ -141,54 +117,6 @@
     "file": "player/tests/errors/non-existent-view.spec.ts",
     "title": "light theme > Error Handling and Edge Cases > Navigate to Non-Existent View",
     "reason": "App bug: Intermittent. Opening a view that does not exist runs the failed lookup twice and opens two View Not Found bottom sheets, so the heading is briefly duplicated (strict mode violation). Seen in both themes.",
-    "added": "2026-11-11"
-  },
-  {
-    "file": "player/tests/home/navigate-to-view.spec.ts",
-    "title": "dark theme > Home Page - My Views > Navigate to View",
-    "reason": "Test out of date with :main: Player.Ui PR 758 gave the top-bar view title a tooltip, so getByText matches the title and its aria-describedby message (strict mode violation).",
-    "added": "2026-11-11"
-  },
-  {
-    "file": "player/tests/home/navigate-to-view.spec.ts",
-    "title": "light theme > Home Page - My Views > Navigate to View",
-    "reason": "Test out of date with :main: Player.Ui PR 758 gave the top-bar view title a tooltip, so getByText matches the title and its aria-describedby message (strict mode violation).",
-    "added": "2026-11-11"
-  },
-  {
-    "file": "player/tests/performance/view-player-load-time.spec.ts",
-    "title": "dark theme > Performance > Page Load Performance - View Player",
-    "reason": "Test out of date with :main: Player.Ui PR 758 gave the top-bar view title a tooltip, so getByText matches the title and its aria-describedby message (strict mode violation).",
-    "added": "2026-11-11"
-  },
-  {
-    "file": "player/tests/performance/view-player-load-time.spec.ts",
-    "title": "light theme > Performance > Page Load Performance - View Player",
-    "reason": "Test out of date with :main: Player.Ui PR 758 gave the top-bar view title a tooltip, so getByText matches the title and its aria-describedby message (strict mode violation).",
-    "added": "2026-11-11"
-  },
-  {
-    "file": "player/tests/view-details/view-basic-info.spec.ts",
-    "title": "dark theme > View Details > View Basic Information",
-    "reason": "Test out of date with :main: Player.Ui PR 758 gave the top-bar view title a tooltip, so getByText matches the title and its aria-describedby message (strict mode violation).",
-    "added": "2026-11-11"
-  },
-  {
-    "file": "player/tests/view-details/view-basic-info.spec.ts",
-    "title": "light theme > View Details > View Basic Information",
-    "reason": "Test out of date with :main: Player.Ui PR 758 gave the top-bar view title a tooltip, so getByText matches the title and its aria-describedby message (strict mode violation).",
-    "added": "2026-11-11"
-  },
-  {
-    "file": "player/tests/view-player/applications-list.spec.ts",
-    "title": "dark theme > View Player Interface > View Player Sidebar - Applications List",
-    "reason": "Test out of date with :main: Player.Ui PR 758 gave the top-bar view title a tooltip, so getByText matches the title and its aria-describedby message (strict mode violation).",
-    "added": "2026-11-11"
-  },
-  {
-    "file": "player/tests/view-player/applications-list.spec.ts",
-    "title": "light theme > View Player Interface > View Player Sidebar - Applications List",
-    "reason": "Test out of date with :main: Player.Ui PR 758 gave the top-bar view title a tooltip, so getByText matches the title and its aria-describedby message (strict mode violation).",
     "added": "2026-11-11"
   },
   {
@@ -214,5 +142,11 @@
     "title": "Admin Panel > Admin - Create API Key",
     "reason": "Test bug: its loose Create/New selector only matches leftover data, so it fails on a fresh database=.",
     "added": "2026-11-11"
+  },
+  {
+    "file": "topomojo/tests/realtime/workspace-updates.spec.ts",
+    "title": "Real-time Updates and Notifications > Real-time Workspace Updates - First Edit in an Empty Document",
+    "reason": "App bug: An edit sent without begin positions (typing into an empty document without moving the cursor) makes the receiving editor throw 'externalRange.getStartPosition is not a function'; it drops the edit and stops sending its own edits.",
+    "added": "2026-11-18"
   }
 ]

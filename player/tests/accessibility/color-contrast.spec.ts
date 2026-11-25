@@ -22,8 +22,8 @@ for (const theme of PLAYER_THEMES) {
       await expectBodyTheme(page, theme);
 
       // Key elements are visible in this theme
-      await expect(page.getByText('Player')).toBeVisible();
-      await expect(page.getByText('Admin User', { exact: true })).toBeVisible();
+      await expect(page.locator('app-topbar').getByText('Player', { exact: true })).toBeVisible();
+      await expect(page.locator('app-topbar').getByText('Admin User', { exact: true })).toBeVisible();
       await expect(page.getByRole('table')).toBeVisible();
 
       // expect: Text and background colors meet WCAG contrast requirements

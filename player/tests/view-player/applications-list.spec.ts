@@ -18,8 +18,8 @@ for (const theme of PLAYER_THEMES) {
       // expect: Sidebar displays list of applications available in the view
       await expect(page).toHaveURL(/\/view\//, { timeout: 10000 });
 
-      // The sidebar should contain the view name and navigation elements
-      await expect(page.getByText(primaryViewName, { exact: true })).toBeVisible();
+      // The top bar shows the view name; the sidebar holds the navigation elements
+      await expect(page.locator('app-topbar').getByText(primaryViewName, { exact: true })).toBeVisible();
 
       // expect: Each application shows name/icon
       // The sidebar contains the "Player" link and collapse/expand buttons

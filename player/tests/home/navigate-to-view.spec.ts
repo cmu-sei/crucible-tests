@@ -24,7 +24,7 @@ for (const theme of PLAYER_THEMES) {
       await expect(page).toHaveURL(/\/view\//, { timeout: 10000 });
 
       // expect: The page displays the view name in the header
-      await expect(page.getByText(primaryViewName, { exact: true })).toBeVisible();
+      await expect(page.locator('app-topbar').getByText(primaryViewName, { exact: true })).toBeVisible();
 
       // expect: The page shows team selector and view content
       await expect(page.getByRole('button', { name: 'Select a Team' })).toBeVisible();

@@ -117,8 +117,117 @@ skipped).
   checked); `--mat-sys-primary` / `--mat-sys-on-primary` equal the active mode's
   settings verbatim, with dark falling back to light.
 - **Primary and on-primary text contrast (WCAG 1.4.3)** — via gear menu ›
-  Keyboard › Send Text (filled in, then cancelled, never sent): the filled Send
+  Keyboard › Text (filled in, then cancelled, never sent): the filled Send
   button's on-primary label, the Cancel label (primary as text) on the dialog
   surface, and the options bar's outlined Copy / Paste / Ctrl-Alt-Del labels.
   Primary-as-text checks are soft so every pair is reported. Expected to fail in
   dark (3.89:1, see above).
+
+## Proxmox console (`proxmox/`)
+
+The Proxmox console's options bar (`app-options-bar2`) against a live Proxmox
+VM: the controls that bring it up to the vSphere console, the items it disables
+(with a reason) when the VM can't support them, and the API's reason on a
+refused operation (console.ui #756, vm.api #99 and #112).
+
+### Test data: a configured machine, not a seeded record
+
+The VM API keys `proxmox_vm_info` on the Proxmox vmid, so a machine can back
+only one record and a test cannot seed its own record for it (a second create
+fails with a duplicate key). These specs therefore use the existing VM API
+record for one configured machine:
+
+- `PROXMOX_CONSOLE_VMID` and `PROXMOX_CONSOLE_NODE` (set them in `.env.local`;
+  the vmid is whatever the local Proxmox host assigned) name a running QEMU VM.
+- `requireProxmoxConsoleVm()` (`playerVm/vm-helpers.ts`) resolves it to its
+  record and reads `GET api/vms/proxmox/{id}`. Each step is a
+  `requirePrecondition`: the variables unset, no record for the machine, the
+  API unable to read it from Proxmox, or the machine not running all skip with
+  the reason (and fail under `CI`/`CRUCIBLE_STRICT`).
+
+Nothing changes the VM. Menus are opened and closed, the Send Text dialog is
+cancelled, Read Only is a page query parameter, and the only power request is
+Power On on a running VM, which Proxmox refuses. The specs never power off,
+reboot, revert or snapshot. They run on the chromium project only, as the other
+live-VM specs do.
+
+Items gated on the machine's Proxmox config are asserted against what the API
+reports for it, so the same spec holds for a machine with or without a guest
+agent, a snapshot, `clipboard=vnc`, a resizable (`virtio`) display or an ISO
+source. A tooltip is read by hovering the wrapper the bar puts around its
+control, since a disabled button can't be hovered (`expectTooltip` and
+`expectGatedControl` in `fixtures.ts`). The Keyboard items carry their tooltips
+themselves and are read as their accessible descriptions.
+
+### Tests
+
+`options-menus.spec.ts`:
+
+- **Console options lists the vSphere console controls** — the main menu has
+  Fullscreen, Reconnect, Resolution, Power, Snapshots, Files, Keyboard and
+  Clipboard, plus the Read Only and Dark Theme switches; the toolbar has Copy,
+  Paste (labelled "Paste \*" without `clipboard=vnc`) and Ctrl-Alt-Del.
+- **Power menu offers Shutdown OS, as the vSphere console names it** — exactly
+  Power On, Power Off, Reboot, Shutdown OS.
+- **Keyboard menu offers Ctrl-Alt-Del and Text, which opens the Send Text
+  dialog** — exactly Ctrl-Alt-Del and Text, each described by its tooltip
+  ("Sends Ctrl-Alt-Del to the VM.", and the Text tooltip). Text opens "Enter
+  Text to Send", which Cancel closes without sending.
+- **Files menu needs the guest agent to send or download a file** — Send File
+  To VM and Download File From VM are enabled when `guestAgentRunning`, and
+  otherwise disabled with "Requires the QEMU guest agent". Mount ISO is offered,
+  enabled, when `canMountIso` (an ISO source is configured), and not at all
+  otherwise.
+- **Copy and Paste follow the VM's VNC clipboard** — against
+  `vncClipboardEnabled`:
+  - Toolbar Copy is enabled, with its tooltip, or disabled with "Disabled:
+    copying from the VM's clipboard works only when ...".
+  - Toolbar Paste is always enabled. With the VNC clipboard it reads "Paste" and
+    its tooltip says it fills the VM's clipboard; without, it reads "Paste \*"
+    and its tooltip says it opens a dialog to type the text.
+  - The Clipboard menu has exactly Copy and Paste, both enabled with their
+    tooltips or both disabled with their "Disabled: ..." reasons. Paste's reason
+    points to Keyboard > Text.
+- **Snapshots is available only when the VM has a snapshot** — disabled with
+  "No snapshots available" when `hasSnapshot` is false, otherwise enabled with
+  "Select a snapshot to revert to".
+
+`power-error-reason.spec.ts`:
+
+- **Power On on a running VM shows Proxmox's reason once** — the POST to
+  `actions/power-on` answers 400 and the snackbar reads exactly "Power On
+  failed: VM {vmid} already running": one prefix, not "Power On failed: Power
+  On failed: ...", and not "Http failure response for ...".
+
+`resolution.spec.ts`:
+
+- **Resolution starts on Scale to Fit** — two items, Scale to Fit checked.
+- **Match Window Size is offered only where the VM's display can resize** —
+  against `canResizeDisplay` (a `vga` of `virtio` or `virtio-gl`), recorded as
+  an annotation. Without it, Match Window Size is disabled with "This VM's
+  display adapter can't change resolution from the console". With it, choosing
+  Match Window Size checks it, and the spec switches back to Scale to Fit.
+
+`read-only.spec.ts`:
+
+- **Read Only hides the controls that change the VM** — turning the switch on
+  sets `?readOnly=true`, adds "(Read Only)" to the VM name, removes the
+  toolbar's Copy / Paste / Ctrl-Alt-Del and the Power, Snapshots, Files,
+  Keyboard and Clipboard items, keeps Fullscreen, Reconnect and Resolution, and
+  disables Match Window Size: "A read-only console can't change this VM's
+  resolution" when `canResizeDisplay`, otherwise the adapter reason. Turning it
+  off brings the controls back.
+
+### Not covered here
+
+- **Sending text, files or clipboard contents to the guest, and downloading a
+  file** — they change the guest, and the configured machine has no guest agent;
+  the API's refusal of a download is covered in `playerVm`. That includes Send
+  File To VM refusing a file over `fileUploadMaxBytes` before sending it, which
+  is only reachable with a guest agent running.
+- **Reverting to a snapshot and bulk revert** — they roll the machine back.
+- **Power Off, Reboot, Shutdown OS** — they change the machine's state.
+- **Mount ISO** beyond the item being enabled — mounting changes the VM's
+  config.
+- **Task progress** in the bar — it needs a running Proxmox task, which only a
+  state-changing operation starts.
