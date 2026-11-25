@@ -26,7 +26,7 @@
 //     unconditionally and the spec's named behaviour went entirely untested.
 //
 // MselRole values come from Blueprint.Api.Data/Enumerations.cs:
-//   Owner=10, Editor=20, Approver=30, MoveEditor=40, Viewer=50, Evaluator=60
+//   Owner=10, Editor=20, Approver=30, MoveEditor=40, Viewer=50, Evaluator=60, Facilitator=70
 //
 // Coverage: seed a MSEL, a unit and a user; put the user in the unit; add the unit to the
 // MSEL; expand the unit row; assert the seeded user and the MSEL Roles control render;
@@ -180,6 +180,44 @@ for (const theme of BLUEPRINT_THEMES) {
         .getByRole('combobox', { name: /MSEL Roles/i })
         .first();
       await expect(reloadedRolesSelect).toContainText('Editor', { timeout: 10000 });
+    });
+
+    test('The Facilitator role can be given, and there is no Steamfitter role', async ({
+      blueprintAuthenticatedPage: page,
+    }) => {
+      await applyBlueprintTheme(page, theme);
+      await navigateToMselSection(page, mselId, 'Contributors');
+
+      const unitRow = page.locator('table tbody tr, mat-row').filter({ hasText: unitShortName }).first();
+      await expect(unitRow).toBeVisible({ timeout: 10000 });
+      await unitRow.click();
+      const userDetail = page
+        .locator('.expanded-detail-div')
+        .first()
+        .locator('.unit-detail')
+        .filter({ hasText: userName })
+        .first();
+      const rolesSelect = userDetail.getByRole('combobox', { name: /MSEL Roles/i }).first();
+      await expect(rolesSelect).toBeVisible({ timeout: 10000 });
+
+      // expect: Blueprint no longer gives a Steamfitter role alongside the MSEL roles
+      await expect(userDetail.getByRole('combobox', { name: /Steamfitter/i })).toHaveCount(0);
+
+      await rolesSelect.click();
+      const facilitator = page.getByRole('option', { name: 'Facilitator', exact: true }).first();
+      await expect(facilitator).toBeVisible({ timeout: 10000 });
+      const roleAdded = page.waitForResponse(
+        (r) => r.request().method() === 'POST' && /\/api\/usermselroles/i.test(new URL(r.url()).pathname),
+        { timeout: 15000 }
+      );
+      await facilitator.click();
+      const response = await roleAdded;
+
+      // expect: the role is saved as the Facilitator MSEL role
+      expect(response.ok()).toBe(true);
+      expect((await response.json()).role).toBe('Facilitator');
+      await page.keyboard.press('Escape');
+      await expect(rolesSelect).toContainText('Facilitator', { timeout: 10000 });
     });
     });
 }

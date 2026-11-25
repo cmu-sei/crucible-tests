@@ -31,7 +31,6 @@ for (const theme of BLUEPRINT_THEMES) {
           usePlayer: true,
           useGallery: true,
           useCite: true,
-          useSteamfitter: true,
           startTime: new Date().toISOString(),
           durationSeconds: 3600,
         };
@@ -83,11 +82,8 @@ for (const theme of BLUEPRINT_THEMES) {
       const citeCheckbox = page.getByRole('checkbox', { name: 'CITE' });
       await expect(citeCheckbox).toBeChecked();
 
-      const steamfitterCheckbox = page.getByRole('checkbox', { name: 'Steamfitter' });
-      await expect(steamfitterCheckbox).toBeChecked();
-
       // Note: The test plan calls for actually pushing integrations and then testing pull,
-      // but this requires all downstream services (Player, Gallery, CITE, Steamfitter) to
+      // but this requires all downstream services (Player, Gallery, CITE) to
       // be healthy and would create real objects that need cleanup. The UI contract verified
       // above confirms the integration flags are properly reflected in the checkbox state
       // and the Push Integrations button is available when integrations are enabled.

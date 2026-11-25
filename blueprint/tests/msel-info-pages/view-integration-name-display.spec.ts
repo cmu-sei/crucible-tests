@@ -31,7 +31,6 @@ for (const theme of BLUEPRINT_THEMES) {
           usePlayer: true,
           useGallery: true,
           useCite: true,
-          useSteamfitter: true,
           startTime: new Date().toISOString(),
           durationSeconds: 3600,
         };
@@ -86,11 +85,6 @@ for (const theme of BLUEPRINT_THEMES) {
       const citeCheckbox = page.getByRole('checkbox', { name: 'CITE' });
       await expect(citeCheckbox).toBeVisible({ timeout: 5000 });
       await expect(citeCheckbox).toBeChecked();
-
-      // 4. Verify Steamfitter integration checkbox is enabled
-      const steamfitterCheckbox = page.getByRole('checkbox', { name: 'Steamfitter' });
-      await expect(steamfitterCheckbox).toBeVisible({ timeout: 5000 });
-      await expect(steamfitterCheckbox).toBeChecked();
     });
     });
 }
